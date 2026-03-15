@@ -357,6 +357,22 @@ LOCATIONS.forEach((loc) => {
   locationIndex.set(loc.name.toLowerCase(), loc);
 });
 
+// Pre-sorted country names (longest first) to avoid substring issues
+// e.g. "Nigeria" must match before "Niger", "South Korea" before "Korea"
+const SORTED_COUNTRIES = Object.keys(COUNTRY_CENTROIDS)
+  .sort((a, b) => b.length - a.length);
+
+/**
+ * Check if a name match is a whole-word boundary match.
+ * Prevents "Niger" from matching inside "Nigeria".
+ */
+function isWordBoundary(text, idx, matchLen) {
+  const before = idx > 0 ? text[idx - 1] : ' ';
+  const after = idx + matchLen < text.length ? text[idx + matchLen] : ' ';
+  const wordChar = /[a-z0-9]/i;
+  return !wordChar.test(before) && !wordChar.test(after);
+}
+
 /**
  * Attempt to geocode an article from its title and source country.
  * Returns { lat, lng, locality, region } or null.
@@ -366,15 +382,15 @@ export function geocodeArticle(title, sourcecountry) {
 
   // 1. Try to find a known city/region in the title
   let bestMatch = null;
-  let bestPos = Infinity;
+  let bestLen = 0;
 
   for (const [name, loc] of locationIndex) {
     const idx = titleLower.indexOf(name);
-    if (idx !== -1 && idx < bestPos) {
+    if (idx !== -1 && isWordBoundary(titleLower, idx, name.length)) {
       // Prefer longer matches (e.g. "New York" over "York")
-      if (!bestMatch || name.length > bestMatch.name.toLowerCase().length) {
+      if (name.length > bestLen) {
         bestMatch = loc;
-        bestPos = idx;
+        bestLen = name.length;
       }
     }
   }
@@ -402,9 +418,12 @@ export function geocodeArticle(title, sourcecountry) {
     };
   }
 
-  // 3. Try to match any country name in the title
-  for (const [country, centroid] of Object.entries(COUNTRY_CENTROIDS)) {
-    if (titleLower.includes(country.toLowerCase())) {
+  // 3. Try to match any country name in the title (longest first)
+  for (const country of SORTED_COUNTRIES) {
+    const lower = country.toLowerCase();
+    const idx = titleLower.indexOf(lower);
+    if (idx !== -1 && isWordBoundary(titleLower, idx, lower.length)) {
+      const centroid = COUNTRY_CENTROIDS[country];
       return {
         lat: centroid[0],
         lng: centroid[1],

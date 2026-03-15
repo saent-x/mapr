@@ -16,6 +16,16 @@ function parseGdeltDate(seendate) {
   return new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`).toISOString();
 }
 
+// Multiple query themes to maximize global coverage
+const GDELT_QUERIES = [
+  // Crisis & conflict
+  '(crisis OR disaster OR conflict OR earthquake OR flood OR war OR attack OR protest OR explosion) sourcelang:english',
+  // Politics & governance
+  '(government OR president OR minister OR parliament OR election OR policy OR law OR summit) sourcelang:english',
+  // Economy & development
+  '(economy OR trade OR inflation OR market OR investment OR infrastructure OR energy OR climate) sourcelang:english',
+];
+
 // Cache and throttle state
 let cachedArticles = null;
 let cacheTimestamp = 0;
@@ -24,24 +34,15 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const THROTTLE_MS = 5500; // 5.5 seconds between requests (GDELT asks for 5s)
 
 /**
- * Fetch live news articles from GDELT DOC API.
- * Returns an array of normalized article objects matching the app's data format.
+ * Fetch a single GDELT query with throttling.
  */
-export async function fetchLiveNews({ query = '', timespan = '24h', maxRecords = 150 } = {}) {
-  const now = Date.now();
-
-  // Return cache if fresh
-  if (cachedArticles && (now - cacheTimestamp) < CACHE_TTL) {
-    return cachedArticles;
-  }
-
+async function fetchGdeltQuery(searchQuery, timespan, maxRecords) {
   // Throttle requests
+  const now = Date.now();
   const timeSinceLastFetch = now - lastFetchTime;
   if (timeSinceLastFetch < THROTTLE_MS) {
     await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS - timeSinceLastFetch));
   }
-
-  const searchQuery = query || '(crisis OR disaster OR conflict OR earthquake OR flood OR war) sourcelang:english';
 
   const params = new URLSearchParams({
     query: searchQuery,
@@ -53,7 +54,6 @@ export async function fetchLiveNews({ query = '', timespan = '24h', maxRecords =
   });
 
   const url = `${GDELT_DOC_URL}?${params}`;
-
   lastFetchTime = Date.now();
 
   const response = await fetch(url);
@@ -63,7 +63,6 @@ export async function fetchLiveNews({ query = '', timespan = '24h', maxRecords =
     throw new Error(`GDELT API returned ${response.status}: ${text.slice(0, 100)}`);
   }
 
-  // GDELT sometimes returns text errors with 200 status
   const text = await response.text();
   let data;
   try {
@@ -71,13 +70,41 @@ export async function fetchLiveNews({ query = '', timespan = '24h', maxRecords =
   } catch {
     throw new Error(`GDELT returned non-JSON: ${text.slice(0, 80)}`);
   }
-  const articles = data?.articles || [];
+  return data?.articles || [];
+}
+
+/**
+ * Fetch live news articles from GDELT DOC API using multiple query themes.
+ * Returns an array of normalized article objects matching the app's data format.
+ */
+export async function fetchLiveNews({ query = '', timespan = '24h', maxRecords = 200 } = {}) {
+  const now = Date.now();
+
+  // Return cache if fresh
+  if (cachedArticles && (now - cacheTimestamp) < CACHE_TTL) {
+    return cachedArticles;
+  }
+
+  // If custom query, use single fetch
+  const queries = query ? [query] : GDELT_QUERIES;
+  const perQuery = Math.ceil(maxRecords / queries.length);
+
+  // Fetch all queries sequentially (GDELT requires throttling)
+  const allRaw = [];
+  for (const q of queries) {
+    try {
+      const articles = await fetchGdeltQuery(q, timespan, perQuery);
+      allRaw.push(...articles);
+    } catch {
+      // Continue with other queries if one fails
+    }
+  }
 
   // Transform and geocode articles
   const normalized = [];
   const seenTitles = new Set();
 
-  for (const article of articles) {
+  for (const article of allRaw) {
     // Skip duplicates by title
     const titleKey = (article.title || '').toLowerCase().trim();
     if (seenTitles.has(titleKey) || !titleKey) continue;

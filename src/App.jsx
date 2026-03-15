@@ -48,7 +48,7 @@ function App() {
   const loadLiveData = useCallback(async () => {
     try {
       // Start both fetches
-      const gdeltPromise = fetchLiveNews({ timespan: '24h', maxRecords: 200 }).catch(() => []);
+      const gdeltPromise = fetchLiveNews({ timespan: '24h', maxRecords: 250 }).catch(() => []);
       const rssPromise = fetchRssNews().catch(() => []);
 
       // Show GDELT data as soon as it arrives
