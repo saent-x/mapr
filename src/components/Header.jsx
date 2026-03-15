@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map, RefreshCw, Search, Languages } from 'lucide-react';
+import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X } from 'lucide-react';
+import { getSeverityMeta } from '../utils/mockData';
 
 const LANGUAGES = [
   { code: 'en', label: 'EN' },
@@ -21,6 +22,9 @@ const AI_STATUS_LABELS = {
 const Header = ({
   searchQuery,
   onSearchChange,
+  onSearchSelect,
+  newsList = [],
+  regionSeverities = {},
   storyCount,
   regionCount,
   criticalCount,
@@ -32,10 +36,114 @@ const Header = ({
   aiProgress = { done: 0, total: 0 }
 }) => {
   const { t, i18n } = useTranslation();
+  const [showResults, setShowResults] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const searchRef = useRef(null);
+  const resultsRef = useRef(null);
 
   const changeLanguage = (lang) => {
     i18n.changeLanguage(lang);
     localStorage.setItem('mapr-lang', lang);
+  };
+
+  // Build search results: regions + stories
+  const searchResults = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase();
+    if (q.length < 2) return [];
+
+    const results = [];
+
+    // Region matches — deduplicate by isoA2, match on region name
+    const regionMatches = new Map();
+    for (const story of newsList) {
+      if (regionMatches.has(story.isoA2)) continue;
+      const regionName = (story.region || '').toLowerCase();
+      if (regionName.includes(q)) {
+        const rd = regionSeverities[story.isoA2];
+        regionMatches.set(story.isoA2, {
+          type: 'region',
+          iso: story.isoA2,
+          name: story.region,
+          count: rd?.count || 0,
+          severity: rd?.peakSeverity || 0,
+        });
+      }
+    }
+    // Sort regions by story count desc
+    const regions = [...regionMatches.values()].sort((a, b) => b.count - a.count);
+    results.push(...regions.slice(0, 5));
+
+    // Story matches — match on title, summary, locality, category
+    const storyMatches = [];
+    for (const story of newsList) {
+      const haystack = [story.title, story.summary, story.locality, story.category]
+        .join(' ').toLowerCase();
+      if (haystack.includes(q)) {
+        storyMatches.push({ type: 'story', story });
+      }
+      if (storyMatches.length >= 8) break;
+    }
+    results.push(...storyMatches);
+
+    return results;
+  }, [searchQuery, newsList, regionSeverities]);
+
+  // Show/hide dropdown
+  useEffect(() => {
+    setShowResults(searchResults.length > 0 && searchQuery.trim().length >= 2);
+    setActiveIndex(-1);
+  }, [searchResults, searchQuery]);
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const handleSelect = useCallback((result) => {
+    if (result.type === 'region') {
+      onSearchSelect({ type: 'region', iso: result.iso });
+    } else {
+      onSearchSelect({ type: 'story', story: result.story });
+    }
+    setShowResults(false);
+    onSearchChange('');
+  }, [onSearchSelect, onSearchChange]);
+
+  // Keyboard navigation
+  const handleKeyDown = useCallback((e) => {
+    if (!showResults || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((prev) => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      handleSelect(searchResults[activeIndex]);
+    } else if (e.key === 'Escape') {
+      setShowResults(false);
+    }
+  }, [showResults, searchResults, activeIndex, handleSelect]);
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (activeIndex >= 0 && resultsRef.current) {
+      const item = resultsRef.current.children[activeIndex];
+      if (item) item.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIndex]);
+
+  const handleClear = () => {
+    onSearchChange('');
+    setShowResults(false);
   };
 
   return (
@@ -62,15 +170,71 @@ const Header = ({
         )}
       </div>
 
-      <label className="search-bar">
-        <Search size={15} />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={t('header.searchPlaceholder')}
-        />
-      </label>
+      <div className="search-wrapper" ref={searchRef}>
+        <label className="search-bar">
+          <Search size={15} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            onFocus={() => searchResults.length > 0 && setShowResults(true)}
+            onKeyDown={handleKeyDown}
+            placeholder={t('header.searchPlaceholder')}
+          />
+          {searchQuery && (
+            <button className="search-clear" onClick={handleClear} aria-label="Clear search">
+              <X size={13} />
+            </button>
+          )}
+        </label>
+
+        {showResults && (
+          <div className="search-results" ref={resultsRef}>
+            {searchResults.map((result, idx) => {
+              if (result.type === 'region') {
+                const meta = getSeverityMeta(result.severity);
+                return (
+                  <button
+                    key={`r-${result.iso}`}
+                    className={`search-result ${idx === activeIndex ? 'is-active' : ''}`}
+                    onClick={() => handleSelect(result)}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                  >
+                    <MapPin size={13} style={{ color: meta.accent, flexShrink: 0 }} />
+                    <div className="search-result-text">
+                      <span className="search-result-title">{result.name}</span>
+                      <span className="search-result-meta">
+                        <span className="search-result-dot" style={{ background: meta.accent }} />
+                        {result.count} stories
+                      </span>
+                    </div>
+                  </button>
+                );
+              } else {
+                const { story } = result;
+                const meta = getSeverityMeta(story.severity);
+                return (
+                  <button
+                    key={`s-${story.id}`}
+                    className={`search-result ${idx === activeIndex ? 'is-active' : ''}`}
+                    onClick={() => handleSelect(result)}
+                    onMouseEnter={() => setActiveIndex(idx)}
+                  >
+                    <Newspaper size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                    <div className="search-result-text">
+                      <span className="search-result-title">{story.title}</span>
+                      <span className="search-result-meta">
+                        <span className="search-result-dot" style={{ background: meta.accent }} />
+                        {story.locality || story.region}
+                      </span>
+                    </div>
+                  </button>
+                );
+              }
+            })}
+          </div>
+        )}
+      </div>
 
       <div className="header-controls">
         <div className="map-toggle" role="tablist" aria-label="Map mode">
@@ -91,7 +255,7 @@ const Header = ({
             className={`map-toggle-btn ${mapMode === 'flat' ? 'is-active' : ''}`}
             onClick={() => onMapModeChange('flat')}
           >
-            <Map size={13} />
+            <MapIcon size={13} />
             {t('header.flat')}
           </button>
         </div>

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal } from 'lucide-react';
 import Header from './components/Header';
@@ -141,9 +141,6 @@ function App() {
     return mergeAiSeverity(raw, aiScores);
   }, [liveNews, aiScores]);
 
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const deferredSearch = useDeferredValue(normalizedSearch);
-
   const dateFloor = useMemo(
     () => resolveDateFloor(dateWindow, startDate),
     [dateWindow, startDate]
@@ -153,13 +150,7 @@ function App() {
     const filtered = baseNews.filter((story) => {
       if (story.severity < minSeverity) return false;
       if (dateFloor && new Date(story.publishedAt) < dateFloor) return false;
-      if (!deferredSearch) return true;
-
-      const haystack = [
-        story.title, story.summary, story.region, story.locality, story.category
-      ].join(' ').toLowerCase();
-
-      return haystack.includes(deferredSearch);
+      return true;
     });
 
     filtered.sort((a, b) => {
@@ -168,7 +159,7 @@ function App() {
     });
 
     return filtered;
-  }, [baseNews, dateFloor, deferredSearch, minSeverity, sortMode]);
+  }, [baseNews, dateFloor, minSeverity, sortMode]);
 
   const regionSeverities = useMemo(
     () => calculateRegionSeverity(activeNews),
@@ -208,6 +199,16 @@ function App() {
     setSelectedStoryId(null);
   };
 
+  const handleSearchSelect = useCallback((result) => {
+    if (result.type === 'region') {
+      setSelectedRegion(result.iso);
+      setSelectedStoryId(null);
+    } else if (result.type === 'story') {
+      setSelectedStoryId(result.story.id);
+      setSelectedRegion(result.story.isoA2);
+    }
+  }, []);
+
   const handleRefresh = () => {
     clearCache();
     clearRssCache();
@@ -245,6 +246,9 @@ function App() {
       <Header
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onSearchSelect={handleSearchSelect}
+        newsList={baseNews}
+        regionSeverities={regionSeverities}
         storyCount={activeNews.length}
         regionCount={activeRegions}
         criticalCount={criticalCount}
