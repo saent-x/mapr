@@ -7,6 +7,7 @@ import NewsPanel from './components/NewsPanel';
 import { fetchLiveNews, clearCache } from './services/gdeltService';
 import { fetchRssNews, clearRssCache } from './services/rssService';
 import { deduplicateArticles } from './utils/articleUtils';
+import { classifyArticles, mergeAiSeverity } from './services/aiService';
 import {
   MOCK_NEWS,
   calculateRegionSeverity,
@@ -43,6 +44,12 @@ function App() {
   const [dataSource, setDataSource] = useState('loading'); // 'loading' | 'live' | 'mock'
   const [dataError, setDataError] = useState(null);
   const refreshTimerRef = useRef(null);
+
+  // AI classification state
+  const [aiScores, setAiScores] = useState(null);
+  const [aiStatus, setAiStatus] = useState('idle'); // 'idle' | 'loading' | 'analyzing' | 'done' | 'error'
+  const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
+  const classifiedIdsRef = useRef(new Set());
 
   // Fetch live data from GDELT + RSS (progressive: show GDELT immediately, merge RSS when ready)
   const loadLiveData = useCallback(async () => {
@@ -87,8 +94,52 @@ function App() {
     return () => clearInterval(refreshTimerRef.current);
   }, [loadLiveData]);
 
-  // Base news: live data or fallback to mock
-  const baseNews = liveNews || MOCK_NEWS;
+  // AI classification: runs in background after articles load
+  useEffect(() => {
+    if (!liveNews || liveNews.length === 0) return;
+
+    // Find articles not yet classified
+    const unclassified = liveNews.filter((a) => !classifiedIdsRef.current.has(a.id));
+    if (unclassified.length === 0) return;
+
+    let cancelled = false;
+
+    setAiStatus((prev) => (prev === 'done' ? 'analyzing' : 'loading'));
+
+    classifyArticles(unclassified, (done, total) => {
+      if (!cancelled) {
+        setAiStatus('analyzing');
+        setAiProgress({ done, total });
+      }
+    })
+      .then((newScores) => {
+        if (cancelled) return;
+        unclassified.forEach((a) => classifiedIdsRef.current.add(a.id));
+        setAiScores((prev) => {
+          const merged = new Map(prev || []);
+          for (const [id, score] of newScores) {
+            merged.set(id, score);
+          }
+          return merged;
+        });
+        setAiStatus('done');
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.warn('AI classification failed:', err.message);
+          setAiStatus('error');
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [liveNews]);
+
+  // Base news: live data or fallback to mock — enhanced with AI severity when available
+  const baseNews = useMemo(() => {
+    const raw = liveNews || MOCK_NEWS;
+    if (!aiScores || aiScores.size === 0) return raw;
+    return mergeAiSeverity(raw, aiScores);
+  }, [liveNews, aiScores]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const deferredSearch = useDeferredValue(normalizedSearch);
@@ -161,6 +212,9 @@ function App() {
     clearCache();
     clearRssCache();
     setDataSource('loading');
+    setAiScores(null);
+    setAiStatus('idle');
+    classifiedIdsRef.current.clear();
     loadLiveData();
   };
 
@@ -198,6 +252,8 @@ function App() {
         onMapModeChange={setMapMode}
         dataSource={dataSource}
         onRefresh={handleRefresh}
+        aiStatus={aiStatus}
+        aiProgress={aiProgress}
       />
 
       <button

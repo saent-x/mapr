@@ -10,6 +10,14 @@ const LANGUAGES = [
   { code: 'zh', label: 'ZH' }
 ];
 
+const AI_STATUS_LABELS = {
+  idle: null,
+  loading: 'AI loading…',
+  analyzing: 'AI analyzing',
+  done: 'AI',
+  error: null
+};
+
 const Header = ({
   searchQuery,
   onSearchChange,
@@ -19,7 +27,9 @@ const Header = ({
   mapMode,
   onMapModeChange,
   dataSource,
-  onRefresh
+  onRefresh,
+  aiStatus = 'idle',
+  aiProgress = { done: 0, total: 0 }
 }) => {
   const { t, i18n } = useTranslation();
 
@@ -39,6 +49,17 @@ const Header = ({
           <span className="brand-live-dot" />
           {dataSource === 'live' ? t('header.live') : dataSource === 'loading' ? t('header.loading') : t('header.offline')}
         </span>
+        {AI_STATUS_LABELS[aiStatus] && (
+          <span className={`brand-ai ${aiStatus === 'done' ? 'is-done' : 'is-busy'}`}>
+            <span className="brand-ai-icon">⚡</span>
+            {AI_STATUS_LABELS[aiStatus]}
+            {aiStatus === 'analyzing' && aiProgress.total > 0 && (
+              <span className="brand-ai-progress">
+                {Math.round((aiProgress.done / aiProgress.total) * 100)}%
+              </span>
+            )}
+          </span>
+        )}
       </div>
 
       <label className="search-bar">

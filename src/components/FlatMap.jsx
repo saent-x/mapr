@@ -105,68 +105,73 @@ const FlatMap = ({
         <MarkerClusterGroup
           chunkedLoading
           maxClusterRadius={50}
-          spiderfyOnMaxZoom
+          spiderfyOnMaxZoom={false}
+          disableClusteringAtZoom={10}
           showCoverageOnHover={false}
           iconCreateFunction={createClusterIcon}
         >
-          {markers.map((story) => (
-            <CircleMarker
-              key={story.id}
-              center={[story.coordinates[0], story.coordinates[1]]}
-              radius={selectedStory?.id === story.id ? 10 : 6 + story.severity / 25}
-              pathOptions={{
-                fillColor: selectedStory?.id === story.id ? '#ffffff' : story.meta.accent,
-                fillOpacity: 0.85,
-                color: selectedStory?.id === story.id ? '#ffffff' : story.meta.accent,
-                weight: selectedStory?.id === story.id ? 3 : 1.5,
-                opacity: 0.9
-              }}
-              data={story}
-              eventHandlers={{
-                click: () => onStorySelect(story)
-              }}
-            >
-              <Tooltip
-                direction="top"
-                offset={[0, -8]}
-                className="flatmap-tooltip"
+          {markers.map((story) => {
+            const isSelected = selectedStory?.id === story.id;
+            return (
+              <CircleMarker
+                key={story.id}
+                center={[story.coordinates[0], story.coordinates[1]]}
+                radius={isSelected ? 10 : 6 + story.severity / 25}
+                pathOptions={{
+                  fillColor: isSelected ? '#ffffff' : story.meta.accent,
+                  fillOpacity: isSelected ? 1 : 0.85,
+                  color: isSelected ? '#ffffff' : story.meta.accent,
+                  weight: isSelected ? 2.5 : 1.5,
+                  opacity: 0.9,
+                  className: isSelected ? 'flatmap-marker-selected' : ''
+                }}
+                data={story}
+                eventHandlers={{
+                  click: () => onStorySelect(story)
+                }}
               >
-                <strong>{story.title}</strong>
-                <br />
-                <span style={{ color: story.meta.accent }}>{story.meta.label}</span>
-                {' · '}
-                {story.locality}
-              </Tooltip>
+                <Tooltip
+                  direction="top"
+                  offset={[0, -8]}
+                  className="flatmap-tooltip"
+                >
+                  <strong>{story.title}</strong>
+                  <br />
+                  <span style={{ color: story.meta.accent }}>{story.meta.label}</span>
+                  {' · '}
+                  {story.locality}
+                </Tooltip>
 
-              <Popup className="flatmap-popup">
-                <div className="flatmap-popup-content">
-                  <div
-                    className="flatmap-popup-severity"
-                    style={{ background: story.meta.muted, color: story.meta.accent }}
-                  >
-                    {story.meta.label}
-                  </div>
-                  <h3>{story.title}</h3>
-                  <p>{story.summary}</p>
-                  <div className="flatmap-popup-meta">
-                    <span>{story.locality}</span>
-                    <span>{story.category}</span>
-                    {story.source && <span>{story.source}</span>}
-                  </div>
-                  {story.url && (
-                    <a
-                      href={story.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flatmap-popup-link"
+                <Popup className="flatmap-popup">
+                  <div className="flatmap-popup-content">
+                    <div
+                      className="flatmap-popup-severity"
+                      style={{ background: story.meta.muted, color: story.meta.accent }}
                     >
-                      Read full article
-                    </a>
-                  )}
-                </div>
-              </Popup>
-            </CircleMarker>
-          ))}
+                      {story.meta.label}
+                    </div>
+                    <h3>{story.title}</h3>
+                    <p>{story.summary}</p>
+                    <div className="flatmap-popup-meta">
+                      <span>{story.locality}</span>
+                      <span>{story.category}</span>
+                      {story.source && <span>{story.source}</span>}
+                    </div>
+                    {story.url && (
+                      <a
+                        href={story.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flatmap-popup-link"
+                      >
+                        Read full article
+                      </a>
+                    )}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            );
+          })}
         </MarkerClusterGroup>
       </MapContainer>
     </div>
