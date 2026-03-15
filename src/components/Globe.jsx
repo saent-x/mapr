@@ -182,8 +182,8 @@ const Globe = ({
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
 
-            if (isSel) return sev ? Math.max(0.06, 0.02 + sev / 600) : 0.04;
-            if (isHov) return sev ? Math.max(0.04, 0.015 + sev / 800) : 0.025;
+            if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
+            if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
             return 0;
           }}
 
@@ -250,9 +250,9 @@ const Globe = ({
           pointLat={(s) => s.coordinates[0]}
           pointLng={(s) => s.coordinates[1]}
           pointAltitude={(s) => {
-            if (selectedStory?.id === s.id) return 0.03;
-            if (isActivePoint(s)) return 0.015 + s.severity / 1400;
-            return 0.005;
+            if (selectedStory?.id === s.id) return 0.015;
+            if (isActivePoint(s)) return 0.0075 + s.severity / 2800;
+            return 0.0025;
           }}
           pointRadius={(s) => {
             if (selectedStory?.id === s.id) return 0.35;

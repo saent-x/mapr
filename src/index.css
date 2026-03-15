@@ -1021,25 +1021,9 @@ button {
   color: var(--text-secondary) !important;
 }
 
-/* Cluster icons */
-.cluster-icon-wrapper {
-  background: none !important;
-  border: none !important;
-}
-
-.cluster-icon {
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  transition: transform 0.2s var(--ease);
-}
-
-.cluster-icon:hover {
-  transform: scale(1.15);
+/* Country polygon hover cursor */
+.flatmap-container .leaflet-interactive {
+  cursor: pointer;
 }
 
 /* Flat map tooltip */
@@ -1244,7 +1228,15 @@ button {
 
 @media (max-width: 900px) {
   .header-stats {
-    display: none;
+    order: 4;
+    width: 100%;
+    justify-content: center;
+    gap: 0.3rem;
+  }
+
+  .stat-chip {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.6rem;
   }
 
   .news-panel {

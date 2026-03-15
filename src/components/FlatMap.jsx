@@ -1,41 +1,19 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, useMap } from 'react-leaflet';
-import MarkerClusterGroup from 'react-leaflet-cluster';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, TileLayer, GeoJSON, CircleMarker, Tooltip, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 import { getSeverityMeta } from '../utils/mockData';
 
-// Dark tile layer from CartoDB
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
 const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-// Custom cluster icon creator
-const createClusterIcon = (cluster) => {
-  const markers = cluster.getAllChildMarkers();
-  const count = markers.length;
-  let worstSeverity = 0;
-
-  markers.forEach((m) => {
-    const sev = m.options?.data?.severity || 0;
-    if (sev > worstSeverity) worstSeverity = sev;
-  });
-
-  const meta = getSeverityMeta(worstSeverity);
-  const size = count < 10 ? 36 : count < 50 ? 44 : 52;
-
-  return L.divIcon({
-    html: `<div class="cluster-icon" style="
-      width: ${size}px;
-      height: ${size}px;
-      background: ${meta.muted};
-      border: 2px solid ${meta.accent};
-      color: ${meta.accent};
-    ">${count}</div>`,
-    className: 'cluster-icon-wrapper',
-    iconSize: [size, size]
-  });
+const getIso = (f) => {
+  const iso = f?.properties?.ISO_A2;
+  if (iso && iso !== '-99') return iso;
+  return f?.properties?.WB_A2 || f?.properties?.ADM0_A3_US || null;
 };
 
-// Component to sync map view with selected story
+// Sync map view with selected story/region
 const MapController = ({ selectedStory, selectedRegion, regionSeverities, newsList }) => {
   const map = useMap();
   const prevStoryRef = useRef(null);
@@ -75,6 +53,80 @@ const FlatMap = ({
   onRegionSelect,
   onStorySelect
 }) => {
+  const [countries, setCountries] = useState(null);
+  const [hoveredIso, setHoveredIso] = useState(null);
+  const geoJsonRef = useRef(null);
+
+  // Fetch country GeoJSON
+  useEffect(() => {
+    fetch(countriesUrl)
+      .then((r) => r.json())
+      .then(setCountries)
+      .catch(() => {});
+  }, []);
+
+  // Style each country polygon based on severity
+  const countryStyle = useCallback((feature) => {
+    const iso = getIso(feature);
+    const regionData = iso ? regionSeverities[iso] : null;
+    const isHovered = iso === hoveredIso;
+    const isSelected = iso === selectedRegion;
+
+    if (regionData) {
+      const meta = getSeverityMeta(regionData.peakSeverity);
+      return {
+        fillColor: meta.accent,
+        fillOpacity: isSelected ? 0.45 : isHovered ? 0.35 : 0.2,
+        color: isSelected ? meta.accent : isHovered ? meta.accent : 'rgba(255,255,255,0.08)',
+        weight: isSelected ? 2 : isHovered ? 1.5 : 0.5,
+        opacity: 1,
+      };
+    }
+
+    // No news for this country
+    return {
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      color: 'rgba(255,255,255,0.05)',
+      weight: 0.5,
+      opacity: 1,
+    };
+  }, [regionSeverities, selectedRegion, hoveredIso]);
+
+  // Handlers for each country feature
+  const onEachCountry = useCallback((feature, layer) => {
+    const iso = getIso(feature);
+    const regionData = iso ? regionSeverities[iso] : null;
+
+    if (regionData) {
+      const meta = getSeverityMeta(regionData.peakSeverity);
+      const name = feature.properties?.NAME || feature.properties?.ADMIN || iso;
+      layer.bindTooltip(
+        `<strong>${name}</strong><br/><span style="color:${meta.accent}">${meta.label}</span> · ${regionData.count} stories`,
+        {
+          className: 'flatmap-tooltip',
+          direction: 'top',
+          sticky: true,
+        }
+      );
+    }
+
+    layer.on({
+      mouseover: () => setHoveredIso(iso),
+      mouseout: () => setHoveredIso(null),
+      click: () => {
+        if (iso) onRegionSelect(iso);
+      },
+    });
+  }, [regionSeverities, onRegionSelect]);
+
+  // Force GeoJSON re-render when styles change
+  const geoJsonKey = useMemo(() => {
+    const sevKeys = Object.keys(regionSeverities).sort().join(',');
+    return `${sevKeys}-${selectedRegion}-${hoveredIso}`;
+  }, [regionSeverities, selectedRegion, hoveredIso]);
+
+  // Article dot markers
   const markers = useMemo(() => {
     return newsList.map((story) => {
       const meta = getSeverityMeta(story.severity);
@@ -102,77 +154,79 @@ const FlatMap = ({
           newsList={newsList}
         />
 
-        <MarkerClusterGroup
-          chunkedLoading
-          maxClusterRadius={50}
-          spiderfyOnMaxZoom={false}
-          disableClusteringAtZoom={10}
-          showCoverageOnHover={false}
-          iconCreateFunction={createClusterIcon}
-        >
-          {markers.map((story) => {
-            const isSelected = selectedStory?.id === story.id;
-            return (
-              <CircleMarker
-                key={story.id}
-                center={[story.coordinates[0], story.coordinates[1]]}
-                radius={isSelected ? 10 : 6 + story.severity / 25}
-                pathOptions={{
-                  fillColor: isSelected ? '#ffffff' : story.meta.accent,
-                  fillOpacity: isSelected ? 1 : 0.85,
-                  color: isSelected ? '#ffffff' : story.meta.accent,
-                  weight: isSelected ? 2.5 : 1.5,
-                  opacity: 0.9,
-                  className: isSelected ? 'flatmap-marker-selected' : ''
-                }}
-                data={story}
-                eventHandlers={{
-                  click: () => onStorySelect(story)
-                }}
-              >
-                <Tooltip
-                  direction="top"
-                  offset={[0, -8]}
-                  className="flatmap-tooltip"
-                >
-                  <strong>{story.title}</strong>
-                  <br />
-                  <span style={{ color: story.meta.accent }}>{story.meta.label}</span>
-                  {' · '}
-                  {story.locality}
-                </Tooltip>
+        {/* Country polygons colored by severity */}
+        {countries && (
+          <GeoJSON
+            key={geoJsonKey}
+            ref={geoJsonRef}
+            data={countries}
+            style={countryStyle}
+            onEachFeature={onEachCountry}
+          />
+        )}
 
-                <Popup className="flatmap-popup">
-                  <div className="flatmap-popup-content">
-                    <div
-                      className="flatmap-popup-severity"
-                      style={{ background: story.meta.muted, color: story.meta.accent }}
-                    >
-                      {story.meta.label}
-                    </div>
-                    <h3>{story.title}</h3>
-                    <p>{story.summary}</p>
-                    <div className="flatmap-popup-meta">
-                      <span>{story.locality}</span>
-                      <span>{story.category}</span>
-                      {story.source && <span>{story.source}</span>}
-                    </div>
-                    {story.url && (
-                      <a
-                        href={story.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flatmap-popup-link"
-                      >
-                        Read full article
-                      </a>
-                    )}
+        {/* Individual article dots */}
+        {markers.map((story) => {
+          const isSelected = selectedStory?.id === story.id;
+          return (
+            <CircleMarker
+              key={story.id}
+              center={[story.coordinates[0], story.coordinates[1]]}
+              radius={isSelected ? 7 : 3.5}
+              pathOptions={{
+                fillColor: isSelected ? '#ffffff' : story.meta.accent,
+                fillOpacity: isSelected ? 1 : 0.8,
+                color: isSelected ? '#ffffff' : story.meta.accent,
+                weight: isSelected ? 2 : 0.8,
+                opacity: 0.9,
+                className: isSelected ? 'flatmap-marker-selected' : ''
+              }}
+              eventHandlers={{
+                click: () => onStorySelect(story)
+              }}
+            >
+              <Tooltip
+                direction="top"
+                offset={[0, -6]}
+                className="flatmap-tooltip"
+              >
+                <strong>{story.title}</strong>
+                <br />
+                <span style={{ color: story.meta.accent }}>{story.meta.label}</span>
+                {' · '}
+                {story.locality}
+              </Tooltip>
+
+              <Popup className="flatmap-popup">
+                <div className="flatmap-popup-content">
+                  <div
+                    className="flatmap-popup-severity"
+                    style={{ background: story.meta.muted, color: story.meta.accent }}
+                  >
+                    {story.meta.label}
                   </div>
-                </Popup>
-              </CircleMarker>
-            );
-          })}
-        </MarkerClusterGroup>
+                  <h3>{story.title}</h3>
+                  <p>{story.summary}</p>
+                  <div className="flatmap-popup-meta">
+                    <span>{story.locality}</span>
+                    <span>{story.category}</span>
+                    {story.source && <span>{story.source}</span>}
+                  </div>
+                  {story.url && (
+                    <a
+                      href={story.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flatmap-popup-link"
+                    >
+                      Read full article
+                    </a>
+                  )}
+                </div>
+              </Popup>
+            </CircleMarker>
+          );
+        })}
       </MapContainer>
     </div>
   );
