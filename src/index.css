@@ -523,6 +523,7 @@ button {
   transition: border-color 0.2s, background 0.2s, transform 0.15s;
   width: 100%;
   animation: cardEnter 0.3s var(--ease) both;
+  cursor: pointer;
 }
 
 .news-card:nth-child(2) { animation-delay: 0.05s; }
@@ -641,6 +642,7 @@ button {
   font-size: 0.78rem;
   text-decoration: none;
   transition: background 0.15s, transform 0.1s;
+  cursor: pointer;
 }
 
 .news-card-read-more:hover {
@@ -702,8 +704,8 @@ button {
 
 .story-bar {
   position: absolute;
-  bottom: 0.75rem;
-  left: 11rem;
+  bottom: 2.8rem;
+  left: 0.75rem;
   right: 0.75rem;
   z-index: 10;
   display: flex;
@@ -725,7 +727,7 @@ button {
 }
 
 .story-bar.is-shifted {
-  right: 23.5rem;
+  right: 23rem;
 }
 
 .story-chip {
@@ -740,6 +742,7 @@ button {
   text-align: left;
   transition: all 0.15s var(--ease);
   max-width: 15rem;
+  cursor: pointer;
 }
 
 .story-chip:hover {
@@ -1252,56 +1255,165 @@ button {
     border-radius: 0;
   }
 
-  .story-bar {
-    left: 0.75rem;
-  }
-
   .story-bar.is-shifted {
-    right: 0.75rem;
     display: none;
   }
 
   .legend {
-    bottom: 4.5rem;
+    bottom: 0.75rem;
+  }
+
+  .story-bar {
+    bottom: 2.8rem;
   }
 }
 
 @media (max-width: 600px) {
   .header {
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.4rem;
+    padding: 0.5rem 0.65rem;
+    top: 0;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+  }
+
+  .brand {
+    gap: 0.35rem;
+  }
+
+  .brand-mark {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .brand-name {
+    font-size: 0.95rem;
+  }
+
+  .brand-live {
+    font-size: 0.5rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .brand-ai {
+    font-size: 0.45rem;
+    padding: 0.1rem 0.3rem;
   }
 
   .search-bar {
     order: 3;
     flex-basis: 100%;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
   }
 
   .header-controls {
     order: 2;
     margin-left: auto;
+    gap: 0.3rem;
   }
 
-  .brand-live {
-    display: none;
+  .map-toggle-btn {
+    padding: 0.35rem 0.55rem;
+    font-size: 0.7rem;
+  }
+
+  .lang-switcher {
+    font-size: 0.7rem;
   }
 
   .story-bar {
+    bottom: 2.4rem;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding: 0.3rem;
+    gap: 0.3rem;
+  }
+
+  .story-bar.is-shifted {
     display: none;
+  }
+
+  .story-chip {
+    padding: 0.3rem 0.5rem;
+    max-width: 12rem;
+  }
+
+  .story-chip-title {
+    font-size: 0.7rem;
+  }
+
+  .story-chip-location {
+    font-size: 0.6rem;
+  }
+
+  .legend {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    justify-content: center;
+    padding: 0.35rem 0.5rem;
+    gap: 0.4rem;
+  }
+
+  .legend-label {
+    font-size: 0.55rem;
+  }
+
+  .legend-item {
+    font-size: 0.6rem;
+  }
+
+  .legend-dot {
+    width: 6px;
+    height: 6px;
   }
 
   .filter-toggle {
     top: auto;
-    bottom: 0.75rem;
-    left: 0.75rem;
+    bottom: 5.2rem;
+    left: 0.5rem;
+    font-size: 0.7rem;
+    padding: 0.35rem 0.55rem;
   }
 
   .filter-drawer {
     top: auto;
-    bottom: 3.75rem;
+    bottom: 7.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    max-width: none;
   }
 
-  .legend {
-    display: none;
+  .news-panel {
+    width: 100%;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 0;
+  }
+
+  .news-panel-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .news-card {
+    padding: 0.6rem;
+  }
+
+  .news-card h3 {
+    font-size: 0.85rem;
   }
 }
