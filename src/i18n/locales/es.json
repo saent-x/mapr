@@ -1,0 +1,50 @@
+{
+  "header": {
+    "live": "En vivo",
+    "loading": "Cargando",
+    "offline": "Sin conexión",
+    "searchPlaceholder": "Buscar regiones, noticias o ubicaciones...",
+    "globe": "Globo",
+    "flat": "Plano",
+    "refreshLabel": "Actualizar datos",
+    "regions": "regiones",
+    "stories": "noticias",
+    "critical": "críticas"
+  },
+  "filters": {
+    "label": "Filtros",
+    "timeRange": "Periodo",
+    "sortBy": "Ordenar por",
+    "minSeverity": "Severidad mín.",
+    "24h": "24h",
+    "3days": "3 días",
+    "7days": "7 días",
+    "30days": "30 días",
+    "all": "Todo",
+    "severity": "Severidad",
+    "recent": "Reciente"
+  },
+  "panel": {
+    "closePanel": "Cerrar panel",
+    "report": "informe",
+    "reports": "informes",
+    "avg": "Prom"
+  },
+  "legend": {
+    "severity": "Severidad",
+    "critical": "Crítica",
+    "elevated": "Elevada",
+    "watch": "Alerta",
+    "low": "Baja"
+  },
+  "errors": {
+    "fallbackData": "Usando datos de respaldo"
+  },
+  "article": {
+    "readFull": "Leer artículo completo",
+    "source": "Fuente",
+    "published": "Publicado",
+    "category": "Categoría",
+    "severity": "Severidad"
+  }
+}

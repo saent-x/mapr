@@ -1,0 +1,50 @@
+{
+  "header": {
+    "live": "مباشر",
+    "loading": "جارٍ التحميل",
+    "offline": "غير متصل",
+    "searchPlaceholder": "ابحث عن مناطق أو أخبار أو مواقع...",
+    "globe": "كرة",
+    "flat": "خريطة",
+    "refreshLabel": "تحديث البيانات",
+    "regions": "مناطق",
+    "stories": "أخبار",
+    "critical": "حرجة"
+  },
+  "filters": {
+    "label": "تصفية",
+    "timeRange": "الفترة",
+    "sortBy": "ترتيب حسب",
+    "minSeverity": "الحد الأدنى للخطورة",
+    "24h": "٢٤ س",
+    "3days": "٣ أيام",
+    "7days": "٧ أيام",
+    "30days": "٣٠ يوم",
+    "all": "الكل",
+    "severity": "الخطورة",
+    "recent": "الأحدث"
+  },
+  "panel": {
+    "closePanel": "إغلاق اللوحة",
+    "report": "تقرير",
+    "reports": "تقارير",
+    "avg": "متوسط"
+  },
+  "legend": {
+    "severity": "الخطورة",
+    "critical": "حرجة",
+    "elevated": "مرتفعة",
+    "watch": "مراقبة",
+    "low": "منخفضة"
+  },
+  "errors": {
+    "fallbackData": "استخدام بيانات احتياطية"
+  },
+  "article": {
+    "readFull": "قراءة المقال كاملاً",
+    "source": "المصدر",
+    "published": "تاريخ النشر",
+    "category": "الفئة",
+    "severity": "الخطورة"
+  }
+}

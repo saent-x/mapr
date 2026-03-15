@@ -1,0 +1,50 @@
+{
+  "header": {
+    "live": "实时",
+    "loading": "加载中",
+    "offline": "离线",
+    "searchPlaceholder": "搜索地区、新闻或地点...",
+    "globe": "地球",
+    "flat": "地图",
+    "refreshLabel": "刷新数据",
+    "regions": "个地区",
+    "stories": "条新闻",
+    "critical": "条紧急"
+  },
+  "filters": {
+    "label": "筛选",
+    "timeRange": "时间范围",
+    "sortBy": "排序方式",
+    "minSeverity": "最低严重性",
+    "24h": "24小时",
+    "3days": "3天",
+    "7days": "7天",
+    "30days": "30天",
+    "all": "全部",
+    "severity": "严重性",
+    "recent": "最新"
+  },
+  "panel": {
+    "closePanel": "关闭面板",
+    "report": "条报道",
+    "reports": "条报道",
+    "avg": "均值"
+  },
+  "legend": {
+    "severity": "严重性",
+    "critical": "紧急",
+    "elevated": "高",
+    "watch": "关注",
+    "low": "低"
+  },
+  "errors": {
+    "fallbackData": "正在使用备用数据"
+  },
+  "article": {
+    "readFull": "阅读全文",
+    "source": "来源",
+    "published": "发布时间",
+    "category": "类别",
+    "severity": "严重性"
+  }
+}

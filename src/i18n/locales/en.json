@@ -1,0 +1,50 @@
+{
+  "header": {
+    "live": "Live",
+    "loading": "Loading",
+    "offline": "Offline",
+    "searchPlaceholder": "Search regions, stories, or locations...",
+    "globe": "Globe",
+    "flat": "Flat",
+    "refreshLabel": "Refresh live data",
+    "regions": "regions",
+    "stories": "stories",
+    "critical": "critical"
+  },
+  "filters": {
+    "label": "Filters",
+    "timeRange": "Time range",
+    "sortBy": "Sort by",
+    "minSeverity": "Min severity",
+    "24h": "24h",
+    "3days": "3 days",
+    "7days": "7 days",
+    "30days": "30 days",
+    "all": "All",
+    "severity": "Severity",
+    "recent": "Recent"
+  },
+  "panel": {
+    "closePanel": "Close panel",
+    "report": "report",
+    "reports": "reports",
+    "avg": "Avg"
+  },
+  "legend": {
+    "severity": "Severity",
+    "critical": "Critical",
+    "elevated": "Elevated",
+    "watch": "Watch",
+    "low": "Low"
+  },
+  "errors": {
+    "fallbackData": "Using fallback data"
+  },
+  "article": {
+    "readFull": "Read full article",
+    "source": "Source",
+    "published": "Published",
+    "category": "Category",
+    "severity": "Severity"
+  }
+}
