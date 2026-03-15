@@ -11,11 +11,11 @@ const LANGUAGES = [
   { code: 'zh', label: 'ZH' }
 ];
 
-const AI_STATUS_LABELS = {
+const AI_STATUS_CONFIG = {
   idle: null,
-  loading: 'AI loading…',
-  analyzing: 'AI analyzing',
-  done: 'AI',
+  loading: { label: 'AI loading', icon: '⚡' },
+  analyzing: { label: 'AI analyzing', icon: '⚡' },
+  done: { label: 'AI', icon: '✓' },
   error: null
 };
 
@@ -89,10 +89,12 @@ const Header = ({
   }, [searchQuery, newsList, regionSeverities]);
 
   // Show/hide dropdown
+  const queryLen = (searchQuery || '').trim().length;
+  const showEmpty = queryLen >= 2 && searchResults.length === 0;
   useEffect(() => {
-    setShowResults(searchResults.length > 0 && searchQuery.trim().length >= 2);
+    setShowResults(queryLen >= 2);
     setActiveIndex(-1);
-  }, [searchResults, searchQuery]);
+  }, [searchResults, queryLen]);
 
   // Click outside to close
   useEffect(() => {
@@ -157,17 +159,20 @@ const Header = ({
           <span className="brand-live-dot" />
           {dataSource === 'live' ? t('header.live') : dataSource === 'loading' ? t('header.loading') : t('header.offline')}
         </span>
-        {AI_STATUS_LABELS[aiStatus] && (
-          <span className={`brand-ai ${aiStatus === 'done' ? 'is-done' : 'is-busy'}`}>
-            <span className="brand-ai-icon">⚡</span>
-            {AI_STATUS_LABELS[aiStatus]}
-            {aiStatus === 'analyzing' && aiProgress.total > 0 && (
-              <span className="brand-ai-progress">
-                {Math.round((aiProgress.done / aiProgress.total) * 100)}%
-              </span>
-            )}
-          </span>
-        )}
+        {AI_STATUS_CONFIG[aiStatus] && (() => {
+          const cfg = AI_STATUS_CONFIG[aiStatus];
+          return (
+            <span className={`brand-ai ${aiStatus === 'done' ? 'is-done' : 'is-busy'}`}>
+              <span className="brand-ai-icon">{cfg.icon}</span>
+              {cfg.label}
+              {aiStatus === 'analyzing' && aiProgress.total > 0 && (
+                <span className="brand-ai-progress">
+                  {Math.round((aiProgress.done / aiProgress.total) * 100)}%
+                </span>
+              )}
+            </span>
+          );
+        })()}
       </div>
 
       <div className="search-wrapper" ref={searchRef}>
@@ -190,6 +195,11 @@ const Header = ({
 
         {showResults && (
           <div className="search-results" ref={resultsRef}>
+            {showEmpty && (
+              <div className="search-empty">
+                No results for &ldquo;{searchQuery.trim()}&rdquo;
+              </div>
+            )}
             {searchResults.map((result, idx) => {
               if (result.type === 'region') {
                 const meta = getSeverityMeta(result.severity);

@@ -357,9 +357,65 @@ LOCATIONS.forEach((loc) => {
   locationIndex.set(loc.name.toLowerCase(), loc);
 });
 
+// Demonyms / adjective forms → country name
+// Allows matching "Indonesian economy" → Indonesia, "Iranian missile" → Iran, etc.
+const DEMONYMS = {
+  'afghan': 'Afghanistan', 'albanian': 'Albania', 'algerian': 'Algeria',
+  'angolan': 'Angola', 'argentine': 'Argentina', 'argentinian': 'Argentina',
+  'armenian': 'Armenia', 'australian': 'Australia', 'austrian': 'Austria',
+  'azerbaijani': 'Azerbaijan', 'bahraini': 'Bahrain', 'bangladeshi': 'Bangladesh',
+  'belarusian': 'Belarus', 'belgian': 'Belgium', 'bolivian': 'Bolivia',
+  'bosnian': 'Bosnia', 'brazilian': 'Brazil', 'british': 'United Kingdom',
+  'bulgarian': 'Bulgaria', 'burkinabe': 'Burkina Faso', 'burmese': 'Myanmar',
+  'cambodian': 'Cambodia', 'cameroonian': 'Cameroon', 'canadian': 'Canada',
+  'chadian': 'Chad', 'chilean': 'Chile', 'chinese': 'China',
+  'colombian': 'Colombia', 'congolese': 'Dem. Rep. Congo', 'costa rican': 'Costa Rica',
+  'croatian': 'Croatia', 'cuban': 'Cuba', 'cypriot': 'Cyprus',
+  'czech': 'Czech Republic', 'danish': 'Denmark', 'dominican': 'Dominican Republic',
+  'dutch': 'Netherlands', 'ecuadorian': 'Ecuador', 'egyptian': 'Egypt',
+  'salvadoran': 'El Salvador', 'estonian': 'Estonia', 'ethiopian': 'Ethiopia',
+  'finnish': 'Finland', 'french': 'France', 'gabonese': 'Gabon',
+  'georgian': 'Georgia', 'german': 'Germany', 'ghanaian': 'Ghana',
+  'greek': 'Greece', 'guatemalan': 'Guatemala', 'guinean': 'Guinea',
+  'haitian': 'Haiti', 'honduran': 'Honduras', 'hungarian': 'Hungary',
+  'icelandic': 'Iceland', 'indian': 'India', 'indonesian': 'Indonesia',
+  'iranian': 'Iran', 'iraqi': 'Iraq', 'irish': 'Ireland',
+  'israeli': 'Israel', 'italian': 'Italy', 'ivorian': 'Ivory Coast',
+  'jamaican': 'Jamaica', 'japanese': 'Japan', 'jordanian': 'Jordan',
+  'kazakh': 'Kazakhstan', 'kenyan': 'Kenya', 'kuwaiti': 'Kuwait',
+  'laotian': 'Laos', 'latvian': 'Latvia', 'lebanese': 'Lebanon',
+  'libyan': 'Libya', 'lithuanian': 'Lithuania', 'malagasy': 'Madagascar',
+  'malawian': 'Malawi', 'malaysian': 'Malaysia', 'malian': 'Mali',
+  'mexican': 'Mexico', 'moldovan': 'Moldova', 'mongolian': 'Mongolia',
+  'montenegrin': 'Montenegro', 'moroccan': 'Morocco', 'mozambican': 'Mozambique',
+  'namibian': 'Namibia', 'nepalese': 'Nepal', 'nepali': 'Nepal',
+  'nicaraguan': 'Nicaragua', 'nigerian': 'Nigeria', 'nigerien': 'Niger',
+  'north korean': 'North Korea', 'norwegian': 'Norway', 'omani': 'Oman',
+  'pakistani': 'Pakistan', 'palestinian': 'Palestine', 'panamanian': 'Panama',
+  'paraguayan': 'Paraguay', 'peruvian': 'Peru', 'filipino': 'Philippines',
+  'philippine': 'Philippines', 'polish': 'Poland', 'portuguese': 'Portugal',
+  'qatari': 'Qatar', 'romanian': 'Romania', 'russian': 'Russia',
+  'rwandan': 'Rwanda', 'saudi': 'Saudi Arabia', 'senegalese': 'Senegal',
+  'serbian': 'Serbia', 'singaporean': 'Singapore', 'slovak': 'Slovakia',
+  'slovenian': 'Slovenia', 'somali': 'Somalia', 'south african': 'South Africa',
+  'south korean': 'South Korea', 'south sudanese': 'South Sudan',
+  'spanish': 'Spain', 'sri lankan': 'Sri Lanka', 'sudanese': 'Sudan',
+  'swedish': 'Sweden', 'swiss': 'Switzerland', 'syrian': 'Syria',
+  'taiwanese': 'Taiwan', 'tanzanian': 'Tanzania', 'thai': 'Thailand',
+  'tunisian': 'Tunisia', 'turkish': 'Turkey', 'ugandan': 'Uganda',
+  'ukrainian': 'Ukraine', 'emirati': 'United Arab Emirates',
+  'american': 'United States', 'uruguayan': 'Uruguay', 'uzbek': 'Uzbekistan',
+  'venezuelan': 'Venezuela', 'vietnamese': 'Vietnam', 'yemeni': 'Yemen',
+  'zambian': 'Zambia', 'zimbabwean': 'Zimbabwe',
+};
+
 // Pre-sorted country names (longest first) to avoid substring issues
 // e.g. "Nigeria" must match before "Niger", "South Korea" before "Korea"
 const SORTED_COUNTRIES = Object.keys(COUNTRY_CENTROIDS)
+  .sort((a, b) => b.length - a.length);
+
+// Pre-sorted demonyms (longest first)
+const SORTED_DEMONYMS = Object.keys(DEMONYMS)
   .sort((a, b) => b.length - a.length);
 
 /**
@@ -374,20 +430,41 @@ function isWordBoundary(text, idx, matchLen) {
 }
 
 /**
- * Attempt to geocode an article from its title and source country.
- * Returns { lat, lng, locality, region } or null.
+ * Try to find a country in text via country names + demonyms.
+ * Returns country name or null.
  */
-export function geocodeArticle(title, sourcecountry) {
-  const titleLower = (title || '').toLowerCase();
+function findCountryInText(text) {
+  // Check country names first (longest first)
+  for (const country of SORTED_COUNTRIES) {
+    const lower = country.toLowerCase();
+    const idx = text.indexOf(lower);
+    if (idx !== -1 && isWordBoundary(text, idx, lower.length)) {
+      return country;
+    }
+  }
 
-  // 1. Try to find a known city/region in the title
+  // Check demonyms (e.g. "Indonesian", "Iranian")
+  for (const demonym of SORTED_DEMONYMS) {
+    const idx = text.indexOf(demonym);
+    if (idx !== -1 && isWordBoundary(text, idx, demonym.length)) {
+      return DEMONYMS[demonym];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Try to find a city/region in text.
+ * Returns the best (longest) LOCATIONS match or null.
+ */
+function findCityInText(text) {
   let bestMatch = null;
   let bestLen = 0;
 
   for (const [name, loc] of locationIndex) {
-    const idx = titleLower.indexOf(name);
-    if (idx !== -1 && isWordBoundary(titleLower, idx, name.length)) {
-      // Prefer longer matches (e.g. "New York" over "York")
+    const idx = text.indexOf(name);
+    if (idx !== -1 && isWordBoundary(text, idx, name.length)) {
       if (name.length > bestLen) {
         bestMatch = loc;
         bestLen = name.length;
@@ -395,42 +472,50 @@ export function geocodeArticle(title, sourcecountry) {
     }
   }
 
-  if (bestMatch) {
-    return {
-      lat: bestMatch.lat,
-      lng: bestMatch.lng,
-      locality: bestMatch.name,
-      region: bestMatch.country
-    };
+  return bestMatch;
+}
+
+/**
+ * Attempt to geocode an article from its title, summary, and source country.
+ * Scans title first (highest signal), then summary, then falls back to source country.
+ * Returns { lat, lng, locality, region } or null.
+ */
+export function geocodeArticle(title, sourcecountry, summary) {
+  const titleLower = (title || '').toLowerCase();
+  const summaryLower = (summary || '').toLowerCase().slice(0, 300);
+
+  // 1. City/region match in title (highest precision)
+  const titleCity = findCityInText(titleLower);
+  if (titleCity) {
+    return { lat: titleCity.lat, lng: titleCity.lng, locality: titleCity.name, region: titleCity.country };
   }
 
-  // 2. Try country name from sourcecountry field
-  const countryName = SOURCE_COUNTRY_MAP[sourcecountry] || sourcecountry;
+  // 2. Country name or demonym in title
+  const titleCountry = findCountryInText(titleLower);
+  if (titleCountry) {
+    const centroid = COUNTRY_CENTROIDS[titleCountry];
+    return { lat: centroid[0], lng: centroid[1], locality: titleCountry, region: titleCountry };
+  }
 
-  // Check if country name appears in the title to confirm relevance
+  // 3. City/region match in summary
+  const summaryCity = findCityInText(summaryLower);
+  if (summaryCity) {
+    return { lat: summaryCity.lat, lng: summaryCity.lng, locality: summaryCity.name, region: summaryCity.country };
+  }
+
+  // 4. Country name or demonym in summary
+  const summaryCountry = findCountryInText(summaryLower);
+  if (summaryCountry) {
+    const centroid = COUNTRY_CENTROIDS[summaryCountry];
+    return { lat: centroid[0], lng: centroid[1], locality: summaryCountry, region: summaryCountry };
+  }
+
+  // 5. Fall back to source country (the outlet's country)
+  //    Only used when neither title nor summary mention a recognizable location.
+  const countryName = SOURCE_COUNTRY_MAP[sourcecountry] || sourcecountry;
   const coords = COUNTRY_CENTROIDS[countryName];
   if (coords) {
-    return {
-      lat: coords[0],
-      lng: coords[1],
-      locality: countryName,
-      region: countryName
-    };
-  }
-
-  // 3. Try to match any country name in the title (longest first)
-  for (const country of SORTED_COUNTRIES) {
-    const lower = country.toLowerCase();
-    const idx = titleLower.indexOf(lower);
-    if (idx !== -1 && isWordBoundary(titleLower, idx, lower.length)) {
-      const centroid = COUNTRY_CENTROIDS[country];
-      return {
-        lat: centroid[0],
-        lng: centroid[1],
-        locality: country,
-        region: country
-      };
-    }
+    return { lat: coords[0], lng: coords[1], locality: countryName, region: countryName };
   }
 
   return null;

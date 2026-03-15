@@ -1,20 +1,27 @@
 /**
- * AI-powered severity classification using Transformers.js v3.
- * Runs a sentiment analysis model (DistilBERT) entirely in the browser.
- * Model downloads once (~5MB q4 quantized) and is cached by the browser.
- * No API keys, no server — fully client-side AI.
+ * AI-powered severity classification + location inference using Transformers.js v3.
+ *
+ * Two models, both client-side, no API keys:
+ * 1. Sentiment (DistilBERT, ~5MB q4) — severity scoring
+ * 2. NER (DistilBERT-NER, ~65MB q8) — location entity extraction for misclassified articles
  */
 
-const MODEL_ID = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
+import { geocodeArticle, countryToIso } from '../utils/geocoder';
+
+const SENTIMENT_MODEL = 'Xenova/distilbert-base-uncased-finetuned-sst-2-english';
+const NER_MODEL = 'Xenova/bert-base-NER';
 const BATCH_SIZE = 32;
-const MAX_ARTICLES = 500; // Cap to keep classification fast
-const TITLE_MAX_LEN = 100; // Shorter = faster inference
+const MAX_ARTICLES = 500;
+const TITLE_MAX_LEN = 100;
 
 let classifierInstance = null;
-let loadingPromise = null;
+let classifierPromise = null;
+let nerInstance = null;
+let nerPromise = null;
 
-// In-memory cache: title hash → severity score (survives across data refreshes)
+// In-memory caches (survive across data refreshes)
 const scoreCache = new Map();
+const nerCache = new Map(); // title hash → { region, isoA2, coordinates, locality } | null
 
 function hashTitle(title) {
   const s = (title || '').toLowerCase().trim().slice(0, 80);
@@ -25,70 +32,195 @@ function hashTitle(title) {
   return h;
 }
 
-/**
- * Lazy-load the sentiment analysis model via dynamic import.
- * Uses q4 quantization (~5MB) for fastest download and inference.
- */
+/* ── Sentiment classifier ── */
+
 async function getClassifier() {
   if (classifierInstance) return classifierInstance;
-  if (loadingPromise) return loadingPromise;
+  if (classifierPromise) return classifierPromise;
 
-  loadingPromise = (async () => {
+  classifierPromise = (async () => {
     const { pipeline, env } = await import('@huggingface/transformers');
     env.allowLocalModels = false;
-
-    const classifier = await pipeline('sentiment-analysis', MODEL_ID, {
-      dtype: 'q4', // ~5MB download, fastest inference
-    });
-
-    classifierInstance = classifier;
-    return classifier;
+    const c = await pipeline('sentiment-analysis', SENTIMENT_MODEL, { dtype: 'q4' });
+    classifierInstance = c;
+    return c;
   })();
 
-  try {
-    return await loadingPromise;
-  } finally {
-    loadingPromise = null;
-  }
+  try { return await classifierPromise; }
+  finally { classifierPromise = null; }
 }
 
-/**
- * Map sentiment analysis result to a severity score.
- */
 function sentimentToSeverity(label, score) {
-  if (label === 'NEGATIVE') {
-    return Math.round(50 + score * 45); // 50-95
-  }
-  return Math.round(15 + (1 - score) * 30); // 15-45
+  if (label === 'NEGATIVE') return Math.round(50 + score * 45);
+  return Math.round(15 + (1 - score) * 30);
 }
 
-/**
- * Prioritize articles that benefit most from AI classification.
- * Articles with ambiguous keyword severity (25-75) get priority.
- * Clearly critical (85+) or clearly low (<25) are fine with keywords.
- */
 function prioritizeForClassification(articles) {
   const sorted = [...articles].sort((a, b) => {
     const aAmb = Math.abs(a.severity - 50);
     const bAmb = Math.abs(b.severity - 50);
-    return aAmb - bAmb; // Most ambiguous first
+    return aAmb - bAmb;
   });
   return sorted.slice(0, MAX_ARTICLES);
 }
 
+/* ── NER model for location inference ── */
+
+async function getNerModel() {
+  if (nerInstance) return nerInstance;
+  if (nerPromise) return nerPromise;
+
+  nerPromise = (async () => {
+    const { pipeline, env } = await import('@huggingface/transformers');
+    env.allowLocalModels = false;
+    const ner = await pipeline('token-classification', NER_MODEL, {
+      dtype: 'q8',
+    });
+    nerInstance = ner;
+    return ner;
+  })();
+
+  try { return await nerPromise; }
+  finally { nerPromise = null; }
+}
+
+/**
+ * Extract location entities from NER results.
+ * NER returns tokens like B-LOC, I-LOC which we merge into full location names.
+ */
+function extractLocations(nerResults) {
+  const locations = [];
+  let current = '';
+
+  for (const token of nerResults) {
+    if (token.entity === 'B-LOC' || token.entity_group === 'LOC') {
+      if (current) locations.push(current.trim());
+      current = token.word;
+    } else if (token.entity === 'I-LOC') {
+      // Handle subword tokens (##prefix)
+      if (token.word.startsWith('##')) {
+        current += token.word.slice(2);
+      } else {
+        current += ' ' + token.word;
+      }
+    } else {
+      if (current) locations.push(current.trim());
+      current = '';
+    }
+  }
+  if (current) locations.push(current.trim());
+
+  return locations;
+}
+
+/**
+ * Use NER to re-geocode articles that may be assigned to the wrong country.
+ * Targets articles where locality === region (source-country fallback was used).
+ *
+ * @param {Array} articles - Articles to check
+ * @param {Function} onProgress - Callback (processed, total)
+ * @returns {Map<string, Object>} Map of articleId → { region, isoA2, coordinates, locality }
+ */
+export async function inferLocations(articles, onProgress) {
+  // Only process articles that used the source-country fallback
+  // (identified by locality === region, meaning no specific city/location was found)
+  const candidates = articles.filter((a) => {
+    if (nerCache.has(hashTitle(a.title))) return false;
+    return a.locality === a.region; // Fallback indicator
+  }).slice(0, 200); // Cap for performance
+
+  const locationMap = new Map();
+
+  if (candidates.length === 0) {
+    if (onProgress) onProgress(0, 0);
+    return locationMap;
+  }
+
+  const ner = await getNerModel();
+  const total = candidates.length;
+
+  for (let i = 0; i < total; i += BATCH_SIZE) {
+    const batch = candidates.slice(i, i + BATCH_SIZE);
+
+    for (const article of batch) {
+      const h = hashTitle(article.title);
+      if (nerCache.has(h)) {
+        const cached = nerCache.get(h);
+        if (cached) locationMap.set(article.id, cached);
+        continue;
+      }
+
+      try {
+        const text = (article.title || '').slice(0, 150);
+        const results = await ner(text, { ignore_labels: ['O'] });
+        const locations = extractLocations(results);
+
+        // Try to geocode each location entity until we find one
+        let resolved = null;
+        for (const loc of locations) {
+          // Use geocodeArticle with the NER-extracted location as the "title"
+          const geo = geocodeArticle(loc, null, '');
+          if (geo) {
+            const iso = countryToIso(geo.region);
+            // Only update if the AI found a DIFFERENT country
+            if (iso && iso !== article.isoA2) {
+              resolved = {
+                region: geo.region,
+                isoA2: iso,
+                coordinates: [geo.lat, geo.lng],
+                locality: geo.locality,
+              };
+              break;
+            }
+          }
+        }
+
+        nerCache.set(h, resolved);
+        if (resolved) locationMap.set(article.id, resolved);
+      } catch (err) {
+        console.warn('NER failed for article:', err.message);
+        nerCache.set(h, null);
+      }
+    }
+
+    if (onProgress) {
+      onProgress(Math.min(i + BATCH_SIZE, total), total);
+    }
+
+    // Yield to main thread
+    await new Promise((r) => setTimeout(r, 0));
+  }
+
+  return locationMap;
+}
+
+/**
+ * Apply NER-inferred location corrections to articles.
+ */
+export function mergeAiLocations(articles, locationMap) {
+  if (!locationMap || locationMap.size === 0) return articles;
+
+  return articles.map((article) => {
+    const loc = locationMap.get(article.id);
+    if (!loc) return article;
+    return {
+      ...article,
+      region: loc.region,
+      isoA2: loc.isoA2,
+      coordinates: loc.coordinates,
+      locality: loc.locality,
+    };
+  });
+}
+
+/* ── Severity classification (unchanged) ── */
+
 /**
  * Classify articles using AI sentiment analysis.
- * Uses cached results when available, only runs inference on uncached titles.
- *
- * @param {Array} articles - Articles to classify
- * @param {Function} onProgress - Callback (processed, total)
- * @returns {Map<string, number>} Map of articleId → AI severity score
  */
 export async function classifyArticles(articles, onProgress) {
-  // Prioritize ambiguous articles, cap total
   const toProcess = prioritizeForClassification(articles);
 
-  // Check cache first — resolve cached articles instantly
   const severityMap = new Map();
   const uncached = [];
 
@@ -101,13 +233,11 @@ export async function classifyArticles(articles, onProgress) {
     }
   }
 
-  // If everything was cached, we're done instantly
   if (uncached.length === 0) {
     if (onProgress) onProgress(toProcess.length, toProcess.length);
     return severityMap;
   }
 
-  // Load model and classify uncached articles
   const classifier = await getClassifier();
   const total = uncached.length;
 
@@ -117,12 +247,11 @@ export async function classifyArticles(articles, onProgress) {
 
     try {
       const results = await classifier(titles);
-
       batch.forEach((article, idx) => {
         const { label, score } = results[idx];
         const severity = sentimentToSeverity(label, score);
         severityMap.set(article.id, severity);
-        scoreCache.set(hashTitle(article.title), severity); // Cache it
+        scoreCache.set(hashTitle(article.title), severity);
       });
     } catch (err) {
       console.warn('AI batch failed:', err.message);
@@ -133,7 +262,6 @@ export async function classifyArticles(articles, onProgress) {
       onProgress(cached + Math.min(i + BATCH_SIZE, total), toProcess.length);
     }
 
-    // Yield to main thread
     await new Promise((r) => setTimeout(r, 0));
   }
 

@@ -7,7 +7,7 @@ import NewsPanel from './components/NewsPanel';
 import { fetchLiveNews, clearCache } from './services/gdeltService';
 import { fetchRssNews, clearRssCache } from './services/rssService';
 import { deduplicateArticles } from './utils/articleUtils';
-import { classifyArticles, mergeAiSeverity } from './services/aiService';
+import { classifyArticles, mergeAiSeverity, inferLocations, mergeAiLocations } from './services/aiService';
 import {
   MOCK_NEWS,
   calculateRegionSeverity,
@@ -47,9 +47,11 @@ function App() {
 
   // AI classification state
   const [aiScores, setAiScores] = useState(null);
+  const [aiLocations, setAiLocations] = useState(null);
   const [aiStatus, setAiStatus] = useState('idle'); // 'idle' | 'loading' | 'analyzing' | 'done' | 'error'
   const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
   const classifiedIdsRef = useRef(new Set());
+  const nerDoneRef = useRef(false);
 
   // Fetch live data from GDELT + RSS (progressive: show GDELT immediately, merge RSS when ready)
   const loadLiveData = useCallback(async () => {
@@ -134,12 +136,37 @@ function App() {
     return () => { cancelled = true; };
   }, [liveNews]);
 
-  // Base news: live data or fallback to mock — enhanced with AI severity when available
+  // AI NER pass: runs after sentiment classification completes
+  // Corrects articles that were assigned to the wrong country
+  useEffect(() => {
+    if (aiStatus !== 'done' || !liveNews || nerDoneRef.current) return;
+
+    let cancelled = false;
+    nerDoneRef.current = true;
+
+    inferLocations(liveNews, () => {})
+      .then((locMap) => {
+        if (cancelled || locMap.size === 0) return;
+        setAiLocations(locMap);
+      })
+      .catch((err) => {
+        console.warn('NER location inference failed:', err.message);
+      });
+
+    return () => { cancelled = true; };
+  }, [aiStatus, liveNews]);
+
+  // Base news: live data or fallback to mock — enhanced with AI severity + locations
   const baseNews = useMemo(() => {
-    const raw = liveNews || MOCK_NEWS;
-    if (!aiScores || aiScores.size === 0) return raw;
-    return mergeAiSeverity(raw, aiScores);
-  }, [liveNews, aiScores]);
+    let news = liveNews || MOCK_NEWS;
+    if (aiLocations && aiLocations.size > 0) {
+      news = mergeAiLocations(news, aiLocations);
+    }
+    if (aiScores && aiScores.size > 0) {
+      news = mergeAiSeverity(news, aiScores);
+    }
+    return news;
+  }, [liveNews, aiScores, aiLocations]);
 
   const dateFloor = useMemo(
     () => resolveDateFloor(dateWindow, startDate),
@@ -214,8 +241,10 @@ function App() {
     clearRssCache();
     setDataSource('loading');
     setAiScores(null);
+    setAiLocations(null);
     setAiStatus('idle');
     classifiedIdsRef.current.clear();
+    nerDoneRef.current = false;
     loadLiveData();
   };
 

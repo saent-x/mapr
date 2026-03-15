@@ -130,7 +130,7 @@ function normalizeRssArticle(item, feedConfig, index) {
   const link = getTextContent(item, 'link');
   const pubDate = getTextContent(item, 'pubDate');
 
-  const geo = geocodeArticle(title, feedConfig.country);
+  const geo = geocodeArticle(title, feedConfig.country, description);
   if (!geo) return null;
 
   const severity = deriveSeverity(title);

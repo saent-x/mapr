@@ -337,6 +337,14 @@ button {
   flex-shrink: 0;
 }
 
+.search-empty {
+  padding: 0.8rem 0.6rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
 .header-stats {
   display: flex;
   gap: 0.4rem;
@@ -355,11 +363,15 @@ button {
   font-size: 0.72rem;
   color: var(--text-secondary);
   white-space: nowrap;
+  transition: all 0.3s var(--ease);
 }
 
 .stat-chip strong {
   color: var(--text);
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.2em;
+  text-align: right;
 }
 
 .stat-chip.is-critical {

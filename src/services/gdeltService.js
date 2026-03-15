@@ -111,7 +111,7 @@ export async function fetchLiveNews({ query = '', timespan = '24h', maxRecords =
     seenTitles.add(titleKey);
 
     // Geocode from title + source country
-    const geo = geocodeArticle(article.title, article.sourcecountry);
+    const geo = geocodeArticle(article.title, article.sourcecountry, article.title);
     if (!geo) continue; // Skip articles we can't locate
 
     const severity = deriveSeverity(article.title);
