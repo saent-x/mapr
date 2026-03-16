@@ -11,6 +11,25 @@ import { normalizeArticleText } from '../utils/articleText';
 import ExpandableText from './ExpandableText';
 
 const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
+
+/** Parse a date string safely — returns a valid Date or null. */
+function safeDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** formatDistanceToNow but returns '—' for invalid dates. */
+function safeTimeAgo(value, opts) {
+  const d = safeDate(value);
+  return d ? formatDistanceToNow(d, opts) : '—';
+}
+
+/** format() but returns '—' for invalid dates. */
+function safeFormat(value, fmt, opts) {
+  const d = safeDate(value);
+  return d ? format(d, fmt, opts) : '—';
+}
 const LANGUAGE_LABELS = {
   en: 'EN',
   es: 'ES',
@@ -261,7 +280,7 @@ const NewsPanel = ({
                       className={`news-panel-transition-item ${entry.direction === 'down' ? 'is-risk' : 'is-positive'}`}
                     >
                       <span className="news-panel-transition-time">
-                        {formatDistanceToNow(new Date(entry.at), { locale, addSuffix: true })}
+                        {safeTimeAgo(entry.at, { locale, addSuffix: true })}
                       </span>
                       <strong>
                         {t(`coverageStatus.${COVERAGE_LABEL_KEYS[entry.fromStatus] || 'uncovered'}`)}
@@ -286,7 +305,7 @@ const NewsPanel = ({
                       return (
                         <div key={`${entry.at}-${entry.status}`} className="news-panel-checkpoint-item">
                           <div className="news-panel-checkpoint-head">
-                            <strong>{formatDistanceToNow(new Date(entry.at), { locale, addSuffix: true })}</strong>
+                            <strong>{safeTimeAgo(entry.at, { locale, addSuffix: true })}</strong>
                             <span
                               className="news-panel-checkpoint-status"
                               style={{ background: checkpointMeta.fill, color: checkpointMeta.accent }}
@@ -435,7 +454,7 @@ const NewsPanel = ({
                   {t(`legend.${meta.labelKey}`)}
                 </span>
                 <span className="news-card-time">
-                  {formatDistanceToNow(new Date(story.publishedAt), { locale, addSuffix: true })}
+                  {safeTimeAgo(story.publishedAt, { locale, addSuffix: true })}
                 </span>
               </div>
               <h3>{story.title}</h3>
@@ -485,7 +504,7 @@ const NewsPanel = ({
                   </div>
                   <div className="news-card-detail-row">
                     <span className="news-card-detail-label">{t('article.published')}</span>
-                    <span>{format(new Date(story.publishedAt), 'PPp', { locale })}</span>
+                    <span>{safeFormat(story.publishedAt, 'PPp', { locale })}</span>
                   </div>
                   <div className="news-card-detail-row">
                     <span className="news-card-detail-label">{t('article.category')}</span>
@@ -535,13 +554,13 @@ const NewsPanel = ({
                   {story.firstSeenAt && (
                     <div className="news-card-detail-row">
                       <span className="news-card-detail-label">{t('article.firstSeen')}</span>
-                      <span>{format(new Date(story.firstSeenAt), 'PPp', { locale })}</span>
+                      <span>{safeFormat(story.firstSeenAt, 'PPp', { locale })}</span>
                     </div>
                   )}
                   {story.lastSeenAt && (
                     <div className="news-card-detail-row">
                       <span className="news-card-detail-label">{t('article.lastSeen')}</span>
-                      <span>{format(new Date(story.lastSeenAt), 'PPp', { locale })}</span>
+                      <span>{safeFormat(story.lastSeenAt, 'PPp', { locale })}</span>
                     </div>
                   )}
                   <div className="news-card-detail-row">
@@ -586,12 +605,12 @@ const NewsPanel = ({
                               rel="noopener noreferrer"
                             >
                               <span>{item.source || t('article.source')}</span>
-                              <strong>{formatDistanceToNow(new Date(item.publishedAt), { locale, addSuffix: true })}</strong>
+                              <strong>{safeTimeAgo(item.publishedAt, { locale, addSuffix: true })}</strong>
                             </a>
                           ) : (
                             <div key={`${item.source}-${item.title}`} className="news-card-source-item is-static">
                               <span>{item.source || t('article.source')}</span>
-                              <strong>{formatDistanceToNow(new Date(item.publishedAt), { locale, addSuffix: true })}</strong>
+                              <strong>{safeTimeAgo(item.publishedAt, { locale, addSuffix: true })}</strong>
                             </div>
                           )
                         ))}
