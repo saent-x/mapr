@@ -338,9 +338,13 @@ const NewsPanel = ({
         )}
 
         {news.length === 0 && regionBackfillStatus === 'loading' && (
-          <div className="news-panel-empty">
-            <strong>{t('panel.searchingRegionNews')}</strong>
-            <span>{t('panel.searchingRegionNewsHint')}</span>
+          <div className="news-panel-skeleton">
+            <div className="skeleton skeleton-header" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton skeleton-card" />
+            ))}
+            <div className="skeleton skeleton-line w-60" />
+            <div className="skeleton skeleton-line w-40" />
           </div>
         )}
         {news.length === 0 && regionBackfillStatus !== 'loading' && (

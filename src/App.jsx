@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal } from 'lucide-react';
+import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
@@ -60,6 +61,13 @@ function App() {
   }, [i18n.language]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input (250ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   const [dateWindow, setDateWindow] = useState('168h');
   const [minSeverity, setMinSeverity] = useState(0);
   const [minConfidence, setMinConfidence] = useState(0);
@@ -396,10 +404,10 @@ function App() {
     setSelectedRegion(story.isoA2);
   };
 
-  const handleClosePanel = () => {
+  const handleClosePanel = useCallback(() => {
     setSelectedRegion(null);
     setSelectedStoryId(null);
-  };
+  }, []);
 
   const handleSearchSelect = useCallback((result) => {
     if (result.type === 'region') {
@@ -411,7 +419,7 @@ function App() {
     }
   }, []);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setDataSource('loading');
     setSourceHealth({ gdelt: null, rss: null, backend: null });
     setCoverageTrends(null);
@@ -420,9 +428,71 @@ function App() {
     setRegionBackfills({});
     setOpsHealth(null);
     loadLiveData({ forceRefresh: true });
-  };
+  }, [loadLiveData]);
+
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignore when typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+        return;
+      }
+
+      switch (e.key) {
+        case 'r':
+          handleRefresh();
+          break;
+        case '/':
+          e.preventDefault();
+          document.querySelector('.search-input')?.focus();
+          break;
+        case 'Escape':
+          if (panelOpen) {
+            handleClosePanel();
+          } else if (filtersOpen) {
+            setFiltersOpen(false);
+          }
+          break;
+        case 'g':
+          setMapMode((prev) => (prev === 'globe' ? 'flat' : 'globe'));
+          break;
+        case 'f':
+          setFiltersOpen((prev) => !prev);
+          break;
+        default:
+          break;
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [panelOpen, filtersOpen, handleRefresh, handleClosePanel]);
+
+  // ── URL deep linking ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const regionParam = params.get('region');
+    const storyParam = params.get('story');
+    if (regionParam) {
+      setSelectedRegion(regionParam.toUpperCase());
+    }
+    if (storyParam) {
+      setSelectedStoryId(storyParam);
+    }
+  }, []);
+
+  // Sync state → URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedRegion) params.set('region', selectedRegion);
+    if (selectedStoryId) params.set('story', selectedStoryId);
+    const search = params.toString();
+    const url = search ? `${window.location.pathname}?${search}` : window.location.pathname;
+    window.history.replaceState(null, '', url);
+  }, [selectedRegion, selectedStoryId]);
 
   return (
+    <ErrorBoundary>
     <div className="app">
       <Suspense fallback={null}>
         {mapMode === 'globe' ? (
@@ -452,6 +522,7 @@ function App() {
 
       <Header
         searchQuery={searchQuery}
+        debouncedSearch={debouncedSearch}
         onSearchChange={setSearchQuery}
         onSearchSelect={handleSearchSelect}
         newsList={activeNews}
@@ -597,6 +668,7 @@ function App() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }
 

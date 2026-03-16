@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink } from 'lucide-react';
+import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon } from 'lucide-react';
 import { getSeverityMeta } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 
@@ -20,6 +20,7 @@ const BACKEND_STATUS_CONFIG = {
 
 const Header = ({
   searchQuery,
+  debouncedSearch,
   onSearchChange,
   onSearchSelect,
   newsList = [],
@@ -37,6 +38,7 @@ const Header = ({
   const { t, i18n } = useTranslation();
   const [showResults, setShowResults] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [theme, setTheme] = useState(() => localStorage.getItem('mapr-theme') || 'dark');
   const searchRef = useRef(null);
   const resultsRef = useRef(null);
 
@@ -45,9 +47,21 @@ const Header = ({
     localStorage.setItem('mapr-lang', lang);
   };
 
-  // Build search results: regions + stories
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('mapr-theme', next);
+  };
+
+  // Apply saved theme on mount
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, []);
+
+  // Build search results: regions + stories (uses debounced query for performance)
   const searchResults = useMemo(() => {
-    const q = (searchQuery || '').trim().toLowerCase();
+    const q = (debouncedSearch || '').trim().toLowerCase();
     if (q.length < 2) return [];
 
     const results = [];
@@ -85,7 +99,7 @@ const Header = ({
     results.push(...storyMatches);
 
     return results;
-  }, [searchQuery, newsList, regionSeverities]);
+  }, [debouncedSearch, newsList, regionSeverities]);
 
   // Show/hide dropdown
   const queryLen = (searchQuery || '').trim().length;
@@ -173,6 +187,7 @@ const Header = ({
           <Search size={15} />
           <input
             type="text"
+            className="search-input"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             onFocus={() => searchResults.length > 0 && setShowResults(true)}
@@ -293,6 +308,15 @@ const Header = ({
             ))}
           </select>
         </div>
+
+        <button
+          className="refresh-btn"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          title="Toggle theme"
+        >
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
 
         <button
           className="refresh-btn"

@@ -9,7 +9,8 @@ import { getConfidenceReasonLabel } from '../utils/confidenceReasons';
 import { normalizeArticleText } from '../utils/articleText';
 import ExpandableText from './ExpandableText';
 
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png';
 const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 const LANGUAGE_LABELS = {
   en: 'EN',
@@ -90,6 +91,19 @@ const FlatMap = ({
   const { t } = useTranslation();
   const [countries, setCountries] = useState(null);
   const [hoveredIso, setHoveredIso] = useState(null);
+  const [tileUrl, setTileUrl] = useState(() => (
+    document.documentElement.getAttribute('data-theme') === 'light' ? TILE_LIGHT : TILE_DARK
+  ));
+
+  // Watch for theme changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const theme = document.documentElement.getAttribute('data-theme');
+      setTileUrl(theme === 'light' ? TILE_LIGHT : TILE_DARK);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
   const geoJsonRef = useRef(null);
 
   // Disable hover on touch devices
@@ -226,7 +240,7 @@ const FlatMap = ({
         className="flatmap-container"
         worldCopyJump
       >
-        <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
+        <TileLayer key={tileUrl} url={tileUrl} attribution={TILE_ATTRIBUTION} />
 
         <MapController
           selectedStory={selectedStory}
