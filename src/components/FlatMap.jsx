@@ -213,7 +213,7 @@ const FlatMap = ({
     layer.on(events);
   }, [coverageStatusByIso, isTouchDevice, mapOverlay, onRegionSelect, regionSeverities, t]);
 
-  // Force GeoJSON re-render when styles change
+  // Full GeoJSON re-render only when DATA changes (not hover/selection)
   const geoJsonKey = useMemo(() => {
     const sevKeys = Object.entries(regionSeverities)
       .sort(([leftIso], [rightIso]) => leftIso.localeCompare(rightIso))
@@ -223,8 +223,52 @@ const FlatMap = ({
       .sort(([leftIso], [rightIso]) => leftIso.localeCompare(rightIso))
       .map(([iso, entry]) => `${iso}:${entry.status}:${entry.maxConfidence}`)
       .join('|');
-    return `${mapOverlay}-${theme}-${sevKeys}-${coverageKeys}-${selectedRegion}-${hoveredIso}`;
-  }, [coverageStatusByIso, hoveredIso, mapOverlay, regionSeverities, selectedRegion, theme]);
+    return `${mapOverlay}-${theme}-${sevKeys}-${coverageKeys}`;
+  }, [coverageStatusByIso, mapOverlay, regionSeverities, theme]);
+
+  // In-place style updates for hover/selection (no re-mount needed)
+  useEffect(() => {
+    const geoLayer = geoJsonRef.current;
+    if (!geoLayer) return;
+    geoLayer.eachLayer((layer) => {
+      const iso = getIso(layer.feature);
+      if (!iso) return;
+      const regionData = regionSeverities[iso];
+      const coverageEntry = coverageStatusByIso[iso];
+      const covMeta = getCoverageMeta(coverageEntry?.status || 'uncovered');
+      const isHovered = iso === hoveredIso;
+      const isSelected = iso === selectedRegion;
+
+      let style;
+      if (mapOverlay === 'coverage') {
+        style = {
+          fillColor: covMeta.accent,
+          fillOpacity: isSelected ? 0.42 : isHovered ? 0.3 : coverageEntry ? 0.2 : 0.08,
+          color: isSelected ? selectedStroke : isHovered ? covMeta.accent : covMeta.stroke,
+          weight: isSelected ? 2 : isHovered ? 1.5 : 0.8,
+          opacity: 1,
+        };
+      } else if (regionData) {
+        const meta = getSeverityMeta(regionData.peakSeverity);
+        style = {
+          fillColor: meta.accent,
+          fillOpacity: isSelected ? 0.45 : isHovered ? 0.35 : 0.2,
+          color: isSelected ? meta.accent : isHovered ? meta.accent : neutralBorder,
+          weight: isSelected ? 2 : isHovered ? 1.5 : 0.5,
+          opacity: 1,
+        };
+      } else {
+        style = {
+          fillColor: isHovered ? neutralFillHover : covMeta.accent,
+          fillOpacity: isSelected ? 0.2 : isHovered ? 0.12 : 0.04,
+          color: isSelected ? neutralBorderSelected : isHovered ? neutralBorderHover : neutralBorderFaint,
+          weight: isSelected ? 1.5 : isHovered ? 1 : 0.5,
+          opacity: 1,
+        };
+      }
+      layer.setStyle(style);
+    });
+  }, [hoveredIso, selectedRegion, regionSeverities, coverageStatusByIso, mapOverlay, isLight, neutralBorder, neutralBorderFaint, neutralBorderHover, neutralBorderSelected, neutralFillHover, selectedStroke]);
 
   // Article dot markers
   const markers = useMemo(() => {

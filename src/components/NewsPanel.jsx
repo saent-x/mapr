@@ -126,6 +126,13 @@ const NewsPanel = ({
     }
   }, [expandedId]);
 
+  // Auto-expand + scroll when a story is selected externally (e.g. search)
+  useEffect(() => {
+    if (selectedStoryId && news.some((story) => story.id === selectedStoryId)) {
+      setExpandedId(selectedStoryId);
+    }
+  }, [selectedStoryId, news]);
+
   useEffect(() => {
     setExpandedId(null);
   }, [regionName]);
