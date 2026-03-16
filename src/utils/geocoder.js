@@ -57,6 +57,12 @@ const LOCATIONS = [
   { name: 'Lilongwe', country: 'Malawi', lat: -13.96, lng: 33.79 },
   { name: 'Windhoek', country: 'Namibia', lat: -22.56, lng: 17.08 },
   { name: 'Gaborone', country: 'Botswana', lat: -24.65, lng: 25.91 },
+  { name: "N'Djamena", country: 'Chad', lat: 12.13, lng: 15.05 },
+  { name: 'Conakry', country: 'Guinea', lat: 9.64, lng: -13.58 },
+  { name: 'Ouagadougou', country: 'Burkina Faso', lat: 12.37, lng: -1.52 },
+  { name: 'Niamey', country: 'Niger', lat: 13.51, lng: 2.11 },
+  { name: 'Cotonou', country: 'Benin', lat: 6.37, lng: 2.39 },
+  { name: 'Porto-Novo', country: 'Benin', lat: 6.50, lng: 2.60 },
 
   // Middle East
   { name: 'Gaza', country: 'Palestine', lat: 31.5, lng: 34.47 },
@@ -273,6 +279,9 @@ const LOCATIONS = [
   { name: 'Adelaide', country: 'Australia', lat: -34.93, lng: 138.6 },
   { name: 'Canberra', country: 'Australia', lat: -35.28, lng: 149.13 },
   { name: 'Christchurch', country: 'New Zealand', lat: -43.53, lng: 172.64 },
+
+  // Caribbean
+  { name: 'Port of Spain', country: 'Trinidad and Tobago', lat: 10.66, lng: -61.51 },
 ];
 
 // Country centroids as fallback when no city match is found
@@ -327,7 +336,8 @@ const COUNTRY_CENTROIDS = {
   'United Kingdom': [55.4, -3.4], 'United States': [37.1, -95.7],
   'Uruguay': [-32.5, -55.8], 'Uzbekistan': [41.4, 64.6], 'Venezuela': [6.4, -66.6],
   'Vietnam': [14.1, 108.3], 'Yemen': [15.6, 48.5], 'Zambia': [-13.1, 27.8],
-  'Zimbabwe': [-19.0, 29.2]
+  'Zimbabwe': [-19.0, 29.2],
+  'Fiji': [-17.7, 178.0], 'Trinidad and Tobago': [10.5, -61.3]
 };
 
 // GDELT sourcecountry codes → country names
@@ -351,11 +361,96 @@ const SOURCE_COUNTRY_MAP = {
   'Romania': 'Romania', 'Hungary': 'Hungary', 'New Zealand': 'New Zealand',
 };
 
-// Build a search index: lowercase name → location entry
-const locationIndex = new Map();
-LOCATIONS.forEach((loc) => {
-  locationIndex.set(loc.name.toLowerCase(), loc);
-});
+const COUNTRY_ALIASES = {
+  'Czech Republic': ['czechia'],
+  'Dem. Rep. Congo': ['democratic republic of the congo', 'dr congo', 'drc', 'congo kinshasa'],
+  'Ivory Coast': ['cote d ivoire', 'cote divoire'],
+  'Myanmar': ['burma'],
+  'North Korea': ['dprk', 'democratic peoples republic of korea'],
+  'Russia': ['russian federation'],
+  'South Korea': ['republic of korea'],
+  'Turkey': ['turkiye'],
+  'United Arab Emirates': ['uae'],
+  'United Kingdom': ['uk', 'britain', 'great britain'],
+  'United States': ['us', 'usa', 'united states of america'],
+  'Vietnam': ['viet nam'],
+  'Trinidad and Tobago': ['trinidad', 'tobago']
+};
+
+const LOCATION_ALIASES = {
+  Kyiv: ['kiev'],
+  'Ho Chi Minh': ['ho chi minh city', 'saigon'],
+  'Port-au-Prince': ['port au prince'],
+  'Saint Petersburg': ['st petersburg'],
+  Bangkok: ['krung thep'],
+  Beijing: ['peking']
+};
+
+function normalizeGeoText(value) {
+  return (value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/['`]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function createSortedSearchEntries(entries) {
+  return entries
+    .filter((entry) => entry.key)
+    .sort((a, b) => b.key.length - a.key.length);
+}
+
+const LOCATION_SEARCH_ENTRIES = createSortedSearchEntries(
+  LOCATIONS.flatMap((location) => {
+    const aliases = LOCATION_ALIASES[location.name] || [];
+    return [location.name, ...aliases].map((alias) => ({
+      key: normalizeGeoText(alias),
+      location
+    }));
+  })
+);
+
+const COUNTRY_SEARCH_ENTRIES = createSortedSearchEntries([
+  ...Object.keys(COUNTRY_CENTROIDS).map((country) => ({
+    key: normalizeGeoText(country),
+    country
+  })),
+  ...Object.entries(COUNTRY_ALIASES).flatMap(([country, aliases]) => (
+    aliases.map((alias) => ({
+      key: normalizeGeoText(alias),
+      country
+    }))
+  ))
+]);
+
+const COUNTRY_LOOKUP = new Map(
+  COUNTRY_SEARCH_ENTRIES.map((entry) => [entry.key, entry.country])
+);
+
+export function getCountryGeoHints(countryName, {
+  maxAliases = 4,
+  maxLocalities = 4
+} = {}) {
+  const normalizedCountry = normalizeGeoText(countryName);
+  const canonicalCountry = COUNTRY_LOOKUP.get(normalizedCountry) || countryName;
+  const aliases = [...new Set((COUNTRY_ALIASES[canonicalCountry] || []).filter(Boolean))].slice(0, maxAliases);
+  const localities = [...new Set(
+    LOCATIONS
+      .filter((location) => location.country === canonicalCountry)
+      .map((location) => location.name)
+      .filter(Boolean)
+  )].slice(0, maxLocalities);
+
+  return {
+    country: canonicalCountry || null,
+    aliases,
+    localities
+  };
+}
 
 // Demonyms / adjective forms → country name
 // Allows matching "Indonesian economy" → Indonesia, "Iranian missile" → Iran, etc.
@@ -407,16 +502,16 @@ const DEMONYMS = {
   'american': 'United States', 'uruguayan': 'Uruguay', 'uzbek': 'Uzbekistan',
   'venezuelan': 'Venezuela', 'vietnamese': 'Vietnam', 'yemeni': 'Yemen',
   'zambian': 'Zambia', 'zimbabwean': 'Zimbabwe',
+  'fijian': 'Fiji', 'trinidadian': 'Trinidad and Tobago',
+  'tobagonian': 'Trinidad and Tobago',
 };
 
-// Pre-sorted country names (longest first) to avoid substring issues
-// e.g. "Nigeria" must match before "Niger", "South Korea" before "Korea"
-const SORTED_COUNTRIES = Object.keys(COUNTRY_CENTROIDS)
-  .sort((a, b) => b.length - a.length);
-
-// Pre-sorted demonyms (longest first)
-const SORTED_DEMONYMS = Object.keys(DEMONYMS)
-  .sort((a, b) => b.length - a.length);
+const SORTED_DEMONYMS = createSortedSearchEntries(
+  Object.entries(DEMONYMS).map(([demonym, country]) => ({
+    key: normalizeGeoText(demonym),
+    country
+  }))
+);
 
 /**
  * Check if a name match is a whole-word boundary match.
@@ -434,20 +529,17 @@ function isWordBoundary(text, idx, matchLen) {
  * Returns country name or null.
  */
 function findCountryInText(text) {
-  // Check country names first (longest first)
-  for (const country of SORTED_COUNTRIES) {
-    const lower = country.toLowerCase();
-    const idx = text.indexOf(lower);
-    if (idx !== -1 && isWordBoundary(text, idx, lower.length)) {
-      return country;
+  for (const entry of COUNTRY_SEARCH_ENTRIES) {
+    const idx = text.indexOf(entry.key);
+    if (idx !== -1 && isWordBoundary(text, idx, entry.key.length)) {
+      return entry.country;
     }
   }
 
-  // Check demonyms (e.g. "Indonesian", "Iranian")
-  for (const demonym of SORTED_DEMONYMS) {
-    const idx = text.indexOf(demonym);
-    if (idx !== -1 && isWordBoundary(text, idx, demonym.length)) {
-      return DEMONYMS[demonym];
+  for (const entry of SORTED_DEMONYMS) {
+    const idx = text.indexOf(entry.key);
+    if (idx !== -1 && isWordBoundary(text, idx, entry.key.length)) {
+      return entry.country;
     }
   }
 
@@ -462,17 +554,49 @@ function findCityInText(text) {
   let bestMatch = null;
   let bestLen = 0;
 
-  for (const [name, loc] of locationIndex) {
-    const idx = text.indexOf(name);
-    if (idx !== -1 && isWordBoundary(text, idx, name.length)) {
-      if (name.length > bestLen) {
-        bestMatch = loc;
-        bestLen = name.length;
+  for (const entry of LOCATION_SEARCH_ENTRIES) {
+    const idx = text.indexOf(entry.key);
+    if (idx !== -1 && isWordBoundary(text, idx, entry.key.length)) {
+      if (entry.key.length > bestLen) {
+        bestMatch = entry.location;
+        bestLen = entry.key.length;
       }
     }
   }
 
   return bestMatch;
+}
+
+function buildLocalityResult(location, matchedOn) {
+  return {
+    lat: location.lat,
+    lng: location.lng,
+    locality: location.name,
+    region: location.country,
+    precision: 'locality',
+    matchedOn
+  };
+}
+
+function buildCountryResult(country, matchedOn) {
+  const centroid = COUNTRY_CENTROIDS[country];
+  if (!centroid) {
+    return null;
+  }
+
+  return {
+    lat: centroid[0],
+    lng: centroid[1],
+    locality: country,
+    region: country,
+    precision: 'country',
+    matchedOn
+  };
+}
+
+function resolveCountryName(value) {
+  const normalized = normalizeGeoText(value);
+  return COUNTRY_LOOKUP.get(normalized) || SOURCE_COUNTRY_MAP[value] || value;
 }
 
 /**
@@ -481,44 +605,165 @@ function findCityInText(text) {
  * Returns { lat, lng, locality, region } or null.
  */
 export function geocodeArticle(title, sourcecountry, summary) {
-  const titleLower = (title || '').toLowerCase();
-  const summaryLower = (summary || '').toLowerCase().slice(0, 300);
+  const titleLower = normalizeGeoText(title);
+  const summaryLower = normalizeGeoText(summary).slice(0, 300);
 
-  // 1. City/region match in title (highest precision)
   const titleCity = findCityInText(titleLower);
-  if (titleCity) {
-    return { lat: titleCity.lat, lng: titleCity.lng, locality: titleCity.name, region: titleCity.country };
-  }
-
-  // 2. Country name or demonym in title
   const titleCountry = findCountryInText(titleLower);
-  if (titleCountry) {
-    const centroid = COUNTRY_CENTROIDS[titleCountry];
-    return { lat: centroid[0], lng: centroid[1], locality: titleCountry, region: titleCountry };
-  }
-
-  // 3. City/region match in summary
   const summaryCity = findCityInText(summaryLower);
-  if (summaryCity) {
-    return { lat: summaryCity.lat, lng: summaryCity.lng, locality: summaryCity.name, region: summaryCity.country };
-  }
-
-  // 4. Country name or demonym in summary
   const summaryCountry = findCountryInText(summaryLower);
-  if (summaryCountry) {
-    const centroid = COUNTRY_CENTROIDS[summaryCountry];
-    return { lat: centroid[0], lng: centroid[1], locality: summaryCountry, region: summaryCountry };
+
+  if (titleCity && (!titleCountry || titleCountry === titleCity.country)) {
+    if (!titleCountry) {
+      if (summaryCity && summaryCity.country !== titleCity.country) {
+        return buildLocalityResult(summaryCity, 'summary-country-conflict');
+      }
+
+      if (summaryCountry && summaryCountry !== titleCity.country) {
+        const summaryCountryConflictResult = buildCountryResult(summaryCountry, 'summary-country-conflict');
+        if (summaryCountryConflictResult) {
+          return summaryCountryConflictResult;
+        }
+      }
+    }
+
+    return buildLocalityResult(titleCity, 'title-city');
   }
 
-  // 5. Fall back to source country (the outlet's country)
-  //    Only used when neither title nor summary mention a recognizable location.
-  const countryName = SOURCE_COUNTRY_MAP[sourcecountry] || sourcecountry;
+  if (titleCountry) {
+    if (summaryCity && summaryCity.country === titleCountry) {
+      return buildLocalityResult(summaryCity, 'summary-city-confirmed');
+    }
+
+    const titleCountryResult = buildCountryResult(
+      titleCountry,
+      titleCity && titleCity.country !== titleCountry ? 'title-country-conflict' : 'title-country'
+    );
+    if (titleCountryResult) {
+      return titleCountryResult;
+    }
+  }
+
+  if (titleCity) {
+    return buildLocalityResult(titleCity, 'title-city');
+  }
+
+  if (summaryCity && (!summaryCountry || summaryCountry === summaryCity.country)) {
+    return buildLocalityResult(summaryCity, 'summary-city');
+  }
+
+  if (summaryCountry) {
+    const summaryCountryResult = buildCountryResult(
+      summaryCountry,
+      summaryCity && summaryCity.country !== summaryCountry ? 'summary-country-conflict' : 'summary-country'
+    );
+    if (summaryCountryResult) {
+      return summaryCountryResult;
+    }
+  }
+
+  if (summaryCity) {
+    return buildLocalityResult(summaryCity, 'summary-city');
+  }
+
+  const countryName = resolveCountryName(sourcecountry);
   const coords = COUNTRY_CENTROIDS[countryName];
   if (coords) {
-    return { lat: coords[0], lng: coords[1], locality: countryName, region: countryName };
+    return {
+      lat: coords[0],
+      lng: coords[1],
+      locality: countryName,
+      region: countryName,
+      precision: 'source-country',
+      matchedOn: 'source-country'
+    };
   }
 
   return null;
+}
+
+/**
+ * Find ALL countries mentioned in text (not just the first).
+ */
+function findAllCountriesInText(text) {
+  const found = [];
+  const seen = new Set();
+  for (const entry of COUNTRY_SEARCH_ENTRIES) {
+    const idx = text.indexOf(entry.key);
+    if (idx !== -1 && isWordBoundary(text, idx, entry.key.length) && !seen.has(entry.country)) {
+      seen.add(entry.country);
+      found.push(entry.country);
+    }
+  }
+  for (const entry of SORTED_DEMONYMS) {
+    const idx = text.indexOf(entry.key);
+    if (idx !== -1 && isWordBoundary(text, idx, entry.key.length) && !seen.has(entry.country)) {
+      seen.add(entry.country);
+      found.push(entry.country);
+    }
+  }
+  return found;
+}
+
+/**
+ * Find ALL cities mentioned in text, one per country (not just the best match).
+ */
+function findAllCitiesInText(text) {
+  const found = [];
+  const seen = new Set();
+  for (const entry of LOCATION_SEARCH_ENTRIES) {
+    const idx = text.indexOf(entry.key);
+    if (idx !== -1 && isWordBoundary(text, idx, entry.key.length) && !seen.has(entry.location.country)) {
+      seen.add(entry.location.country);
+      found.push(entry.location);
+    }
+  }
+  return found;
+}
+
+/**
+ * Geocode an article to ALL mentioned countries/cities.
+ * Returns an array of geo results (one per country).
+ * Excludes the source country so articles appear where they're ABOUT, not where they're FROM.
+ */
+export function geocodeArticleAll(title, sourcecountry, summary) {
+  const titleLower = normalizeGeoText(title);
+  const summaryLower = normalizeGeoText(summary).slice(0, 300);
+  const combinedText = `${titleLower} ${summaryLower}`;
+
+  const cities = findAllCitiesInText(combinedText);
+  const countries = findAllCountriesInText(combinedText);
+
+  const results = [];
+  const seenCountries = new Set();
+
+  // Prefer city-level precision where available
+  for (const city of cities) {
+    if (!seenCountries.has(city.country)) {
+      seenCountries.add(city.country);
+      results.push(buildLocalityResult(city, 'title-city'));
+    }
+  }
+
+  for (const country of countries) {
+    if (!seenCountries.has(country)) {
+      seenCountries.add(country);
+      const r = buildCountryResult(country, 'title-country');
+      if (r) results.push(r);
+    }
+  }
+
+  // Exclude source country — article should appear where it's ABOUT, not where it's FROM
+  const sourceResolved = resolveCountryName(sourcecountry);
+  const filtered = results.filter((r) => r.region !== sourceResolved);
+
+  // If filtering removed everything, keep original results (article IS about its source country)
+  if (filtered.length > 0) return filtered;
+  if (results.length > 0) return results;
+
+  // Final fallback to single geocodeArticle
+  const single = geocodeArticle(title, sourcecountry, summary);
+  return single ? [single] : [];
 }
 
 /**
@@ -556,11 +801,30 @@ const COUNTRY_TO_ISO = {
   'Spain': 'ES', 'Sri Lanka': 'LK', 'Sudan': 'SD', 'Sweden': 'SE',
   'Switzerland': 'CH', 'Syria': 'SY', 'Taiwan': 'TW', 'Tanzania': 'TZ',
   'Thailand': 'TH', 'Tunisia': 'TN', 'Turkey': 'TR', 'Uganda': 'UG',
+  'Bahrain': 'BH', 'Benin': 'BJ', 'Botswana': 'BW', 'Burkina Faso': 'BF',
+  'Burundi': 'BI', 'Central African Republic': 'CF', 'Congo': 'CG',
+  'Fiji': 'FJ', 'Ivory Coast': 'CI', 'Kyrgyzstan': 'KG',
+  'Madagascar': 'MG', 'Malawi': 'MW', 'Mauritania': 'MR', 'Namibia': 'NA',
+  'Papua New Guinea': 'PG', 'Sierra Leone': 'SL', 'Tajikistan': 'TJ',
+  'Trinidad and Tobago': 'TT', 'Turkmenistan': 'TM',
   'Ukraine': 'UA', 'United Arab Emirates': 'AE', 'United Kingdom': 'GB',
   'United States': 'US', 'Uruguay': 'UY', 'Venezuela': 'VE',
   'Vietnam': 'VN', 'Yemen': 'YE', 'Zambia': 'ZM', 'Zimbabwe': 'ZW'
 };
 
+const ISO_TO_COUNTRY = Object.entries(COUNTRY_TO_ISO).reduce((accumulator, [countryName, iso]) => {
+  if (!accumulator[iso]) {
+    accumulator[iso] = countryName;
+  }
+  return accumulator;
+}, {});
+
 export function countryToIso(countryName) {
   return COUNTRY_TO_ISO[countryName] || null;
 }
+
+export function isoToCountry(iso) {
+  return ISO_TO_COUNTRY[(iso || '').toUpperCase()] || null;
+}
+
+export const KNOWN_COUNTRY_NAMES = Object.keys(COUNTRY_TO_ISO).sort();

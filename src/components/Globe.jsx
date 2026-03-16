@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GlobeGL from 'react-globe.gl';
+import { useTranslation } from 'react-i18next';
 import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 import earthTexture from '../assets/earth-night.jpg';
 import skyTexture from '../assets/night-sky.png';
 import { getSeverityMeta } from '../utils/mockData';
+import { getCoverageMeta } from '../utils/coverageMeta';
 
 const DEFAULT_VIEW = { lat: 20, lng: 10, altitude: 2.2 };
 
@@ -16,11 +18,14 @@ const getIso = (f) => {
 const Globe = ({
   newsList,
   regionSeverities,
+  mapOverlay,
+  coverageStatusByIso = {},
   selectedRegion,
   selectedStory,
   onRegionSelect,
   onStorySelect
 }) => {
+  const { t } = useTranslation();
   const containerRef = useRef(null);
   const globeRef = useRef(null);
   const initRef = useRef(false);
@@ -30,6 +35,13 @@ const Globe = ({
   const [hoveredCountry, setHoveredCountry] = useState(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [userDragged, setUserDragged] = useState(false);
+
+  // Disable hover on touch devices
+  const isTouchDevice = useMemo(() => (
+    typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+      && typeof screen !== 'undefined' && screen.width < 768
+  ), []);
+  const handlePolygonHover = isTouchDevice ? undefined : setHoveredCountry;
 
   // Fetch country GeoJSON
   useEffect(() => {
@@ -158,6 +170,13 @@ const Globe = ({
     return iso ? regionSeverities[iso]?.averageSeverity || 0 : 0;
   };
 
+  const getCoverageEntry = (featureOrIso) => {
+    const iso = typeof featureOrIso === 'string' ? featureOrIso : getIso(featureOrIso);
+    return iso ? coverageStatusByIso[iso] || null : null;
+  };
+
+  const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
+
   return (
     <div ref={containerRef} className="globe-wrapper">
       {size.width > 0 && size.height > 0 && (
@@ -179,8 +198,17 @@ const Globe = ({
           polygonAltitude={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
+            const status = getCoverageStatus(f);
+            const coverageMeta = getCoverageMeta(status);
+            const isPassiveCoverage = status === 'uncovered' || status === 'source-sparse';
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
+
+            if (mapOverlay === 'coverage') {
+              if (isSel) return isPassiveCoverage ? 0.016 : 0.02;
+              if (isHov) return isPassiveCoverage ? 0.01 : 0.013;
+              return 0;
+            }
 
             if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
             if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
@@ -190,8 +218,15 @@ const Globe = ({
           polygonCapColor={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
+
+            if (mapOverlay === 'coverage') {
+              if (isSel) return coverageMeta.selectedFill;
+              if (isHov) return coverageMeta.hoverFill;
+              return coverageMeta.fill;
+            }
 
             if (isSel && sev) return getSeverityMeta(sev).mapFill;
             if (isSel) return 'rgba(123, 138, 255, 0.18)';
@@ -203,8 +238,14 @@ const Globe = ({
           polygonSideColor={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
+
+            if (mapOverlay === 'coverage') {
+              if (isSel || isHov) return coverageMeta.side;
+              return 'rgba(0, 0, 0, 0)';
+            }
 
             if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
             if (isSel || isHov) return 'rgba(255, 255, 255, 0.04)';
@@ -213,8 +254,12 @@ const Globe = ({
 
           polygonStrokeColor={(f) => {
             const iso = getIso(f);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             if (iso === selectedRegion) return 'rgba(255, 255, 255, 0.45)';
-            if (hoveredCountry && getIso(hoveredCountry) === iso) return 'rgba(255, 255, 255, 0.2)';
+            if (hoveredCountry && getIso(hoveredCountry) === iso) {
+              return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(255, 255, 255, 0.2)';
+            }
+            if (mapOverlay === 'coverage') return coverageMeta.stroke;
             return 'rgba(255, 255, 255, 0.03)';
           }}
 
@@ -223,23 +268,54 @@ const Globe = ({
             const iso = getIso(f);
             const meta = getSeverityMeta(sev);
             const count = regionSeverities[iso]?.count || 0;
+            const coverageEntry = getCoverageEntry(iso);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
+            const coverageCount = coverageEntry?.eventCount || 0;
+            const confidence = coverageEntry?.maxConfidence || 0;
+            const feedStatus = coverageEntry?.feedCount
+              ? `${coverageEntry.healthyFeeds + coverageEntry.emptyFeeds}/${coverageEntry.feedCount}`
+              : t('map.noLocalFeeds');
+
+            if (mapOverlay === 'coverage') {
+              return `
+                <div class="globe-tooltip">
+                  <div class="globe-tooltip-name">${f.properties.ADMIN}</div>
+                  <div class="globe-tooltip-row">
+                    <span>${t('map.status')}</span>
+                    <strong style="color:${coverageMeta.accent}">${t(`coverageStatus.${coverageMeta.labelKey}`)}</strong>
+                  </div>
+                  <div class="globe-tooltip-row">
+                    <span>${t('map.confidence')}</span>
+                    <strong>${confidence ? `${confidence}%` : '—'}</strong>
+                  </div>
+                  <div class="globe-tooltip-row">
+                    <span>${t('map.reports')}</span>
+                    <strong>${coverageCount}</strong>
+                  </div>
+                  <div class="globe-tooltip-row">
+                    <span>${t('map.sourceFeeds')}</span>
+                    <strong>${feedStatus}</strong>
+                  </div>
+                </div>
+              `;
+            }
 
             return `
               <div class="globe-tooltip">
                 <div class="globe-tooltip-name">${f.properties.ADMIN}</div>
                 <div class="globe-tooltip-row">
-                  <span>Severity</span>
+                  <span>${t('map.severity')}</span>
                   <strong style="color:${sev ? meta.accent : 'inherit'}">${sev || 'Quiet'}</strong>
                 </div>
                 <div class="globe-tooltip-row">
-                  <span>Reports</span>
+                  <span>${t('map.reports')}</span>
                   <strong>${count}</strong>
                 </div>
               </div>
             `;
           }}
 
-          onPolygonHover={setHoveredCountry}
+          onPolygonHover={handlePolygonHover}
           onPolygonClick={(p) => {
             const iso = getIso(p);
             if (iso) onRegionSelect(iso);

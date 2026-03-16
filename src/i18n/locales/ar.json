@@ -9,6 +9,7 @@
     "refreshLabel": "تحديث البيانات",
     "regions": "مناطق",
     "stories": "أخبار",
+    "verified": "موثقة",
     "critical": "حرجة"
   },
   "filters": {
@@ -16,26 +17,136 @@
     "timeRange": "الفترة",
     "sortBy": "ترتيب حسب",
     "minSeverity": "الحد الأدنى للخطورة",
+    "minConfidence": "الحد الأدنى للثقة",
     "24h": "٢٤ س",
     "3days": "٣ أيام",
     "7days": "٧ أيام",
     "30days": "٣٠ يوم",
     "all": "الكل",
     "severity": "الخطورة",
-    "recent": "الأحدث"
+    "recent": "الأحدث",
+    "mapOverlay": "طبقة الخريطة",
+    "verification": "التحقق",
+    "accuracyMode": "وضع الدقة",
+    "aiMode": "حمولة الذكاء الاصطناعي",
+    "standard": "قياسي",
+    "strictAccuracy": "دقة صارمة",
+    "sourceFootprint": "بصمة المصادر",
+    "countriesWithLocalFeeds": "الدول ذات المصادر المحلية",
+    "countriesWithRegionalFeeds": "الدول ذات الإسناد الإقليمي",
+    "countriesWithoutLocalFeeds": "الدول بلا مصادر محلية",
+    "thinCoverageCountries": "تغطية محلية ضعيفة",
+    "expansionTargets": "أهداف التوسعة",
+    "noExpansionTargets": "لا توجد فجوات أولوية حالياً",
+    "noMissingLocalFeeds": "كل دولة لديها مصدر محلي واحد على الأقل",
+    "noThinCoverage": "لا توجد دول عالقة عند مصدر محلي واحد",
+    "sourceType": "نوع المصدر",
+    "language": "اللغة",
+    "locationPrecision": "دقة الموقع",
+    "coverage": "التغطية",
+    "coveredCountries": "الدول المغطاة",
+    "verifiedCountries": "الدول الموثقة",
+    "uncoveredCountries": "الدول غير المغطاة",
+    "lowConfidenceRegions": "المناطق منخفضة الثقة",
+    "ingestionRiskCountries": "الدول المعرضة لخطر الجمع",
+    "sourceSparseCountries": "الدول ذات المصادر القليلة",
+    "sourceMix": "مزيج المصادر",
+    "precisionMix": "مزيج الدقة",
+    "languages": "اللغات",
+    "coverageClear": "لا توجد مناطق منخفضة الثقة",
+    "noIngestionRisk": "لا توجد دول ذات خطر جمع نشط",
+    "noSourceSparse": "لا توجد دول قليلة المصادر بنيويًا",
+    "trendWatch": "مراقبة الاتجاهات",
+    "risingRegions": "مناطق صاعدة",
+    "newlyVerifiedRegions": "مناطق موثقة حديثًا",
+    "atRiskRegions": "مناطق دخلت الخطر",
+    "noTrendData": "لا توجد تغييرات اتجاه حديثة",
+    "coverageTimeline": "سجل التغطية",
+    "recentSnapshots": "اللقطات الأخيرة",
+    "recentTransitions": "الانتقالات الأخيرة",
+    "noCoverageTimeline": "لا يوجد سجل تغطية محفوظ بعد",
+    "sourceHealth": "حالة المصادر",
+    "backendStatus": "حالة الخلفية",
+    "gdeltHealthy": "استعلامات GDELT السليمة",
+    "gdeltFailed": "استعلامات GDELT الفاشلة",
+    "rssHealthy": "خلاصات RSS السليمة",
+    "rssFailed": "خلاصات RSS الفاشلة",
+    "ingestedRecords": "السجلات المستوردة",
+    "lastSuccess": "آخر نجاح",
+    "sourceIssues": "مشكلات المصادر",
+    "refreshHistory": "سجل التحديث",
+    "noRefreshHistory": "لا يوجد سجل تحديث بعد",
+    "noSourceIssues": "لا توجد مشكلات مصادر نشطة",
+    "opsAlerts": "تنبيهات التشغيل",
+    "noOpsAlerts": "لا توجد تنبيهات تشغيل نشطة",
+    "regionLag": "تأخر المناطق",
+    "staleRegionLag": "مناطق متأخرة",
+    "watchRegionLag": "مناطق قيد المراقبة",
+    "noRegionLag": "لا توجد مناطق متأخرة",
+    "noHealthData": "ستظهر حالة المصادر بعد الجلب التالي",
+    "results": "نتائج",
+    "aiModeOption": {
+      "auto": "تلقائي",
+      "reduced": "مخفف",
+      "full": "كامل",
+      "off": "متوقف"
+    },
+    "aiModeProfile": {
+      "autoReduced": "اختار الوضع التلقائي ذكاءً اصطناعياً مخففاً لأن المتصفح أبلغ عن ذاكرة محدودة. تم تعطيل NER وتقليل حجم العينة.",
+      "autoBalanced": "اختار الوضع التلقائي ميزانية متوازنة للذكاء الاصطناعي لهذا الجهاز. يبقى التصنيف وNER فعالين لكن بحدود أقل.",
+      "autoFull": "اختار الوضع التلقائي ميزانية الذكاء الاصطناعي الكاملة لهذا الجهاز.",
+      "reduced": "الوضع المخفف يبقي تحليل المشاعر، ويعطل NER، ويخفض الحدود لتقليل الذاكرة.",
+      "full": "الوضع الكامل يشغل مسار الإثراء الكامل ويستخدم أكبر ميزانية للمقالات.",
+      "off": "تم تعطيل الإثراء بالذكاء الاصطناعي. سيعتمد Mapr فقط على الشدة والترميز الجغرافي القائمين على القواعد."
+    }
   },
   "panel": {
     "closePanel": "إغلاق اللوحة",
     "report": "تقرير",
     "reports": "تقارير",
-    "avg": "متوسط"
+    "avg": "متوسط",
+    "noRegionNews": "لا توجد أحداث مرسومة لهذه المنطقة",
+    "noRegionNewsHint": "وسّع المدة الزمنية أو خفّض شدة التصفية أو انتقل إلى طبقة التغطية لفحص حالة المصادر.",
+    "searchingRegionNews": "جارٍ فحص مصادر أوسع لهذه المنطقة",
+    "searchingRegionNewsHint": "يقوم Mapr بتشغيل جلب موجّه للبلد المحدد.",
+    "recentTransitions": "الانتقالات الأخيرة",
+    "noRecentTransitions": "لا توجد تغييرات حالة حديثة",
+    "recentCheckpoints": "النقاط الأخيرة",
+    "noRecentCheckpoints": "لا توجد نقاط تغطية حديثة",
+    "sourcePlan": "خطة المصادر",
+    "localFeeds": "المصادر المحلية",
+    "regionalFeeds": "المصادر الإقليمية",
+    "plannedFeeds": "المصادر المخطط لها",
+    "checkedFeeds": "المصادر التي تم فحصها",
+    "failedChecks": "الفحوصات الفاشلة",
+    "noLocalFeedCatalog": "لا توجد مصادر محلية مهيأة لهذا البلد بعد",
+    "noLocalFeedCatalogHint": "يعتمد Mapr على المصادر الإقليمية والرسمية والعالمية إلى أن تتم إضافة مصادر محلية.",
+    "noFeedChecks": "لا توجد فحوصات موجهة بعد",
+    "feedCheckFailed": "فشل فحص المصدر"
   },
   "legend": {
     "severity": "الخطورة",
+    "coverage": "التغطية",
     "critical": "حرجة",
     "elevated": "مرتفعة",
     "watch": "مراقبة",
     "low": "منخفضة"
+  },
+  "coverageStatus": {
+    "verified": "موثقة",
+    "developing": "قيد التحقق",
+    "lowConfidence": "ثقة منخفضة",
+    "ingestionRisk": "خطر في الجمع",
+    "sourceSparse": "مصادر قليلة",
+    "uncovered": "غير مغطاة"
+  },
+  "map": {
+    "severity": "الخطورة",
+    "reports": "التقارير",
+    "status": "الحالة",
+    "confidence": "الثقة",
+    "sourceFeeds": "المصادر",
+    "noLocalFeeds": "لا توجد مصادر محلية"
   },
   "errors": {
     "fallbackData": "استخدام بيانات احتياطية"
@@ -43,8 +154,108 @@
   "article": {
     "readFull": "قراءة المقال كاملاً",
     "source": "المصدر",
+    "sources": "المصادر",
+    "independentSources": "المصادر المستقلة",
     "published": "تاريخ النشر",
+    "firstSeen": "أول ظهور",
+    "lastSeen": "آخر ظهور",
     "category": "الفئة",
-    "severity": "الخطورة"
+    "severity": "الخطورة",
+    "verification": "التحقق",
+    "confidence": "الثقة",
+    "confidenceSignals": "إشارات الثقة",
+    "locationPrecision": "دقة الموقع",
+    "locationSignal": "أساس الموقع",
+    "sourceTypes": "أنواع المصادر",
+    "languages": "اللغات",
+    "evidence": "الأدلة",
+    "noEvidence": "لا توجد أدلة إضافية",
+    "readMore": "اقرأ المزيد",
+    "showLess": "عرض أقل",
+    "confidenceReason": {
+      "officialSource": "يتضمن تغطية من مصدر رسمي",
+      "corroboratedSources": "مدعوم من {{count}} مصادر",
+      "diverseSourceTypes": "مؤكد عبر {{count}} أنواع من المصادر",
+      "crossBorderSources": "ورد من مصادر عبر {{count}} دول",
+      "localityPrecision": "محدد إلى موقع محلي بعينه",
+      "countryPrecision": "محدد على مستوى الدولة",
+      "trustedSources": "مدعوم بمصادر عالية الثقة",
+      "sourceCountryFallback": "لا يزال تحديد الموقع يعتمد على دولة المصدر كحل احتياطي",
+      "conflictingLocationSignals": "إشارات الموقع متعارضة",
+      "summaryDerivedLocation": "تم اشتقاق الموقع من الملخصات"
+    },
+    "locationSignalType": {
+      "titleCity": "ذُكر الموقع المحلي في العنوان",
+      "titleCountry": "ذُكرت الدولة في العنوان",
+      "titleCountryConflict": "تم اختيار الدولة بعد تعارض موقع في العنوان",
+      "summaryCity": "تم العثور على موقع محلي في الملخص",
+      "summaryCityConfirmed": "موقع الملخص يؤكد دولة العنوان",
+      "summaryCountry": "تم العثور على الدولة في الملخص",
+      "summaryCountryConflict": "تم اختيار الدولة بعد تعارض موقع في الملخص",
+      "sourceCountry": "اعتماد احتياطي على دولة المصدر"
+    },
+    "verificationStatus": {
+      "official": "رسمي",
+      "verified": "موثق",
+      "developing": "قيد التحقق",
+      "single-source": "مصدر واحد"
+    }
+  },
+  "precision": {
+    "locality": "محلي",
+    "country": "دولة",
+    "source-country": "دولة المصدر",
+    "unknown": "غير معروف"
+  },
+  "healthStatus": {
+    "healthy": "سليم",
+    "degraded": "متدهور",
+    "stale": "قديم",
+    "cold": "بارد",
+    "empty": "فارغ",
+    "failed": "فاشل"
+  },
+  "opsSeverity": {
+    "critical": "حرج",
+    "warning": "تحذير",
+    "info": "معلومة"
+  },
+  "opsAlert": {
+    "backendStale": {
+      "title": "لقطة الخلفية قديمة",
+      "detail": "آخر جلب ناجح مر عليه {{hours}} ساعة."
+    },
+    "backendFailures": {
+      "title": "تحديثات الخلفية تفشل",
+      "detail": "فشل {{count}} محاولات تحديث متتالية."
+    },
+    "rssFailures": {
+      "title": "فحوصات RSS تفشل",
+      "detail": "فشل {{failed}} من أصل {{total}} خلاصات RSS في آخر مرور."
+    },
+    "gdeltFailures": {
+      "title": "ملفات GDELT تفشل",
+      "detail": "فشل {{failed}} من أصل {{total}} ملفات GDELT في آخر مرور."
+    },
+    "ingestionRisk": {
+      "title": "هناك دول في خطر جمع",
+      "detail": "هناك {{count}} دول لديها تغطية فاشلة بدون بديل سليم."
+    },
+    "sourceSparse": {
+      "title": "ما زالت بعض الدول تفتقر إلى عمق المصادر",
+      "detail": "لا تزال {{count}} دول مصنفة على أنها قليلة المصادر."
+    },
+    "staleRegionLag": {
+      "title": "مناطق مغطاة أصبحت هادئة",
+      "detail": "هناك {{count}} مناطق مغطاة بلا تحديثات مرسومة حديثة."
+    }
+  },
+  "sourceType": {
+    "official": "رسمية",
+    "wire": "وكالات",
+    "global": "عالمية",
+    "regional": "إقليمية",
+    "local": "محلية",
+    "unknown": "غير معروفة"
   }
 }

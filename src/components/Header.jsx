@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X } from 'lucide-react';
+import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink } from 'lucide-react';
 import { getSeverityMeta } from '../utils/mockData';
+import { getSourceHost } from '../utils/urlUtils';
 
 const LANGUAGES = [
   { code: 'en', label: 'EN' },
@@ -11,12 +12,10 @@ const LANGUAGES = [
   { code: 'zh', label: 'ZH' }
 ];
 
-const AI_STATUS_CONFIG = {
-  idle: null,
-  loading: { label: 'AI loading', icon: '⚡' },
-  analyzing: { label: 'AI analyzing', icon: '⚡' },
-  done: { label: 'AI', icon: '✓' },
-  error: null
+const BACKEND_STATUS_CONFIG = {
+  healthy: { tone: 'is-healthy', labelKey: 'healthy' },
+  degraded: { tone: 'is-degraded', labelKey: 'degraded' },
+  stale: { tone: 'is-stale', labelKey: 'stale' }
 };
 
 const Header = ({
@@ -27,13 +26,13 @@ const Header = ({
   regionSeverities = {},
   storyCount,
   regionCount,
+  verifiedCount = 0,
   criticalCount,
   mapMode,
   onMapModeChange,
   dataSource,
   onRefresh,
-  aiStatus = 'idle',
-  aiProgress = { done: 0, total: 0 }
+  backendStatus = null
 }) => {
   const { t, i18n } = useTranslation();
   const [showResults, setShowResults] = useState(false);
@@ -159,17 +158,11 @@ const Header = ({
           <span className="brand-live-dot" />
           {dataSource === 'live' ? t('header.live') : dataSource === 'loading' ? t('header.loading') : t('header.offline')}
         </span>
-        {AI_STATUS_CONFIG[aiStatus] && (() => {
-          const cfg = AI_STATUS_CONFIG[aiStatus];
+        {backendStatus && BACKEND_STATUS_CONFIG[backendStatus] && (() => {
+          const cfg = BACKEND_STATUS_CONFIG[backendStatus];
           return (
-            <span className={`brand-ai ${aiStatus === 'done' ? 'is-done' : 'is-busy'}`}>
-              <span className="brand-ai-icon">{cfg.icon}</span>
-              {cfg.label}
-              {aiStatus === 'analyzing' && aiProgress.total > 0 && (
-                <span className="brand-ai-progress">
-                  {Math.round((aiProgress.done / aiProgress.total) * 100)}%
-                </span>
-              )}
+            <span className={`brand-backend ${cfg.tone}`}>
+              {t(`healthStatus.${cfg.labelKey}`)}
             </span>
           );
         })()}
@@ -215,7 +208,7 @@ const Header = ({
                       <span className="search-result-title">{result.name}</span>
                       <span className="search-result-meta">
                         <span className="search-result-dot" style={{ background: meta.accent }} />
-                        {result.count} stories
+                        {result.count} {t('header.stories')}
                       </span>
                     </div>
                   </button>
@@ -223,22 +216,40 @@ const Header = ({
               } else {
                 const { story } = result;
                 const meta = getSeverityMeta(story.severity);
+                const sourceLabel = getSourceHost(story.url, story.source || t('article.readFull'));
                 return (
-                  <button
+                  <div
                     key={`s-${story.id}`}
-                    className={`search-result ${idx === activeIndex ? 'is-active' : ''}`}
-                    onClick={() => handleSelect(result)}
+                    className={`search-result-row ${idx === activeIndex ? 'is-active' : ''}`}
                     onMouseEnter={() => setActiveIndex(idx)}
                   >
-                    <Newspaper size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-                    <div className="search-result-text">
-                      <span className="search-result-title">{story.title}</span>
-                      <span className="search-result-meta">
-                        <span className="search-result-dot" style={{ background: meta.accent }} />
-                        {story.locality || story.region}
-                      </span>
-                    </div>
-                  </button>
+                    <button
+                      className={`search-result ${idx === activeIndex ? 'is-active' : ''}`}
+                      onClick={() => handleSelect(result)}
+                    >
+                      <Newspaper size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
+                      <div className="search-result-text">
+                        <span className="search-result-title">{story.title}</span>
+                        <span className="search-result-meta">
+                          <span className="search-result-dot" style={{ background: meta.accent }} />
+                          {story.locality || story.region}
+                        </span>
+                      </div>
+                    </button>
+                    {story.url && (
+                      <a
+                        className="search-result-link"
+                        href={story.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={t('article.readFull')}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink size={12} />
+                        {sourceLabel}
+                      </a>
+                    )}
+                  </div>
                 );
               }
             })}
@@ -300,6 +311,11 @@ const Header = ({
         <div className="stat-chip">
           <strong>{storyCount}</strong>&nbsp;{t('header.stories')}
         </div>
+        {verifiedCount > 0 && (
+          <div className="stat-chip is-verified">
+            <strong>{verifiedCount}</strong>&nbsp;{t('header.verified')}
+          </div>
+        )}
         {criticalCount > 0 && (
           <div className="stat-chip is-critical">
             <strong>{criticalCount}</strong>&nbsp;{t('header.critical')}

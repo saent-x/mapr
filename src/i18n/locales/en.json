@@ -9,6 +9,7 @@
     "refreshLabel": "Refresh live data",
     "regions": "regions",
     "stories": "stories",
+    "verified": "verified",
     "critical": "critical"
   },
   "filters": {
@@ -16,26 +17,138 @@
     "timeRange": "Time range",
     "sortBy": "Sort by",
     "minSeverity": "Min severity",
+    "minConfidence": "Min confidence",
     "24h": "24h",
     "3days": "3 days",
     "7days": "7 days",
     "30days": "30 days",
     "all": "All",
     "severity": "Severity",
-    "recent": "Recent"
+    "recent": "Recent",
+    "mapOverlay": "Map overlay",
+    "verification": "Verification",
+    "accuracyMode": "Accuracy mode",
+    "aiMode": "AI workload",
+    "standard": "Standard",
+    "strictAccuracy": "Strict accuracy",
+    "sourceFootprint": "Source footprint",
+    "countriesWithLocalFeeds": "Countries with local feeds",
+    "countriesWithRegionalFeeds": "Countries with regional fallback",
+    "countriesWithoutLocalFeeds": "Countries without local feeds",
+    "thinCoverageCountries": "Thin local-feed coverage",
+    "expansionTargets": "Expansion targets",
+    "noExpansionTargets": "No priority source gaps right now",
+    "noMissingLocalFeeds": "Every country has at least one local feed",
+    "noThinCoverage": "No countries are stuck at one local feed",
+    "sourceType": "Source type",
+    "language": "Language",
+    "locationPrecision": "Location precision",
+    "coverage": "Coverage",
+    "coveredCountries": "Covered countries",
+    "verifiedCountries": "Verified countries",
+    "uncoveredCountries": "Uncovered countries",
+    "lowConfidenceRegions": "Low-confidence regions",
+    "ingestionRiskCountries": "Ingestion-risk countries",
+    "sourceSparseCountries": "Source-sparse countries",
+    "sourceMix": "Source mix",
+    "precisionMix": "Precision mix",
+    "languages": "Languages",
+    "coverageClear": "No low-confidence regions",
+    "noIngestionRisk": "No countries with active ingest risk",
+    "noSourceSparse": "No structurally sparse countries",
+    "trendWatch": "Trend watch",
+    "risingRegions": "Rising regions",
+    "newlyVerifiedRegions": "Newly verified",
+    "atRiskRegions": "Newly at risk",
+    "noTrendData": "No recent trend changes",
+    "coverageTimeline": "Coverage timeline",
+    "recentSnapshots": "Recent snapshots",
+    "recentTransitions": "Recent transitions",
+    "noCoverageTimeline": "No saved coverage history yet",
+    "sourceHealth": "Source health",
+    "backendStatus": "Backend status",
+    "gdeltHealthy": "GDELT healthy",
+    "gdeltFailed": "GDELT failed",
+    "rssHealthy": "RSS healthy",
+    "rssFailed": "RSS failed",
+    "ingestedRecords": "Ingested records",
+    "lastSuccess": "Last success",
+    "sourceIssues": "Source issues",
+    "refreshHistory": "Refresh history",
+    "noRefreshHistory": "No refresh history yet",
+    "noSourceIssues": "No active source issues",
+    "opsAlerts": "Ops alerts",
+    "noOpsAlerts": "No active ops alerts",
+    "regionLag": "Region lag",
+    "staleRegionLag": "Stale regions",
+    "watchRegionLag": "Watch regions",
+    "noRegionLag": "No lagging regions",
+    "noHealthData": "Source health will appear after the next fetch",
+    "results": "results",
+    "aiModeOption": {
+      "auto": "Auto",
+      "reduced": "Reduced",
+      "full": "Full",
+      "off": "Off"
+    },
+    "aiModeProfile": {
+      "autoReduced": "Auto selected reduced AI because the browser reports limited memory. NER is disabled and article sampling is smaller.",
+      "autoBalanced": "Auto selected a balanced AI budget for this device. Classification and NER stay on with smaller caps.",
+      "autoFull": "Auto selected the full AI budget for this device.",
+      "reduced": "Reduced AI keeps sentiment on, disables NER, and lowers article caps to save memory.",
+      "full": "Full AI runs the complete enrichment path and uses the largest article budget.",
+      "off": "AI enrichment is disabled. Mapr will rely only on heuristic severity and geocoding."
+    }
   },
   "panel": {
     "closePanel": "Close panel",
     "report": "report",
     "reports": "reports",
-    "avg": "Avg"
+    "avg": "Avg",
+    "noRegionNews": "No mapped events for this region",
+    "noRegionNewsHint": "Try widening the time window, lowering severity, or switching to the coverage overlay to inspect source health.",
+    "searchingRegionNews": "Scanning broader sources for this region",
+    "searchingRegionNewsHint": "Mapr is running a targeted backfill for the selected country.",
+    "recentTransitions": "Recent transitions",
+    "noRecentTransitions": "No recent status changes",
+    "recentCheckpoints": "Recent checkpoints",
+    "noRecentCheckpoints": "No recent coverage checkpoints",
+    "showAll": "Show all ({{count}})",
+    "showLess": "Show less",
+    "sourcePlan": "Source plan",
+    "localFeeds": "Local feeds",
+    "regionalFeeds": "Regional feeds",
+    "plannedFeeds": "Planned feeds",
+    "checkedFeeds": "Checked feeds",
+    "failedChecks": "Failed checks",
+    "noLocalFeedCatalog": "No local feeds are configured for this country yet",
+    "noLocalFeedCatalogHint": "Mapr is falling back to regional, official, and global sources until local feeds are added.",
+    "noFeedChecks": "No targeted feed checks yet",
+    "feedCheckFailed": "Feed check failed"
   },
   "legend": {
     "severity": "Severity",
+    "coverage": "Coverage",
     "critical": "Critical",
     "elevated": "Elevated",
     "watch": "Watch",
     "low": "Low"
+  },
+  "coverageStatus": {
+    "verified": "Verified",
+    "developing": "Developing",
+    "lowConfidence": "Low confidence",
+    "ingestionRisk": "Ingestion risk",
+    "sourceSparse": "Source sparse",
+    "uncovered": "Uncovered"
+  },
+  "map": {
+    "severity": "Severity",
+    "reports": "Reports",
+    "status": "Status",
+    "confidence": "Confidence",
+    "sourceFeeds": "Source feeds",
+    "noLocalFeeds": "No local feeds"
   },
   "errors": {
     "fallbackData": "Using fallback data"
@@ -43,8 +156,108 @@
   "article": {
     "readFull": "Read full article",
     "source": "Source",
+    "sources": "Sources",
+    "independentSources": "Independent sources",
     "published": "Published",
+    "firstSeen": "First seen",
+    "lastSeen": "Last seen",
     "category": "Category",
-    "severity": "Severity"
+    "severity": "Severity",
+    "verification": "Verification",
+    "confidence": "Confidence",
+    "confidenceSignals": "Confidence signals",
+    "locationPrecision": "Location precision",
+    "locationSignal": "Location basis",
+    "sourceTypes": "Source types",
+    "languages": "Languages",
+    "evidence": "Evidence",
+    "noEvidence": "No supporting evidence available",
+    "readMore": "Read more",
+    "showLess": "Show less",
+    "confidenceReason": {
+      "officialSource": "Includes official reporting",
+      "corroboratedSources": "Corroborated by {{count}} sources",
+      "diverseSourceTypes": "Confirmed across {{count}} source types",
+      "crossBorderSources": "Reported by sources across {{count}} countries",
+      "localityPrecision": "Pinned to a specific locality",
+      "countryPrecision": "Resolved to country level",
+      "trustedSources": "Backed by high-trust sources",
+      "sourceCountryFallback": "Location still relies on source-country fallback",
+      "conflictingLocationSignals": "Location mentions conflict across sources",
+      "summaryDerivedLocation": "Location was derived from summaries"
+    },
+    "locationSignalType": {
+      "titleCity": "Locality named in title",
+      "titleCountry": "Country named in title",
+      "titleCountryConflict": "Country chosen after title location conflict",
+      "summaryCity": "Locality found in summary",
+      "summaryCityConfirmed": "Summary locality confirms title country",
+      "summaryCountry": "Country found in summary",
+      "summaryCountryConflict": "Country chosen after summary location conflict",
+      "sourceCountry": "Fallback to source country"
+    },
+    "verificationStatus": {
+      "official": "Official",
+      "verified": "Verified",
+      "developing": "Developing",
+      "single-source": "Single source"
+    }
+  },
+  "precision": {
+    "locality": "Locality",
+    "country": "Country",
+    "source-country": "Source country",
+    "unknown": "Unknown"
+  },
+  "healthStatus": {
+    "healthy": "healthy",
+    "degraded": "degraded",
+    "stale": "stale",
+    "cold": "cold",
+    "empty": "empty",
+    "failed": "failed"
+  },
+  "opsSeverity": {
+    "critical": "critical",
+    "warning": "warning",
+    "info": "info"
+  },
+  "opsAlert": {
+    "backendStale": {
+      "title": "Backend snapshot is stale",
+      "detail": "Latest successful ingest is {{hours}}h old."
+    },
+    "backendFailures": {
+      "title": "Backend refreshes are failing",
+      "detail": "{{count}} consecutive refresh attempts have failed."
+    },
+    "rssFailures": {
+      "title": "RSS feed checks are failing",
+      "detail": "{{failed}} of {{total}} RSS feeds failed on the latest pass."
+    },
+    "gdeltFailures": {
+      "title": "GDELT profiles are failing",
+      "detail": "{{failed}} of {{total}} GDELT query profiles failed on the latest pass."
+    },
+    "ingestionRisk": {
+      "title": "Countries are in ingestion risk",
+      "detail": "{{count}} countries currently have failed feed coverage without a healthy fallback."
+    },
+    "sourceSparse": {
+      "title": "Countries still lack direct source depth",
+      "detail": "{{count}} countries are still flagged as source sparse."
+    },
+    "staleRegionLag": {
+      "title": "Covered regions have gone quiet",
+      "detail": "{{count}} covered regions have no recent mapped updates."
+    }
+  },
+  "sourceType": {
+    "official": "official",
+    "wire": "wire",
+    "global": "global",
+    "regional": "regional",
+    "local": "local",
+    "unknown": "unknown"
   }
 }

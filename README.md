@@ -5,9 +5,10 @@ Real-time global news visualized on a 3D interactive globe. Mapr aggregates stor
 ## Features
 
 - **3D Globe + Flat Map** — Switch between a WebGL globe (react-globe.gl) and a Leaflet flat map with marker clustering
-- **50+ News Sources** — GDELT API + RSS feeds from regional outlets across Africa, Asia, Middle East, Europe, Americas, and Oceania
+- **130+ News Sources** — GDELT API + RSS feeds from regional outlets across Africa, Asia, Middle East, Europe, Americas, and Oceania
 - **Severity Scoring** — Keyword-based severity classification (Critical, Elevated, Watch, Low) with color-coded dots
 - **Category Detection** — Automatic categorization: Conflict, Weather, Seismic, Health, Humanitarian, Civil, and more
+- **AFINN Sentiment Analysis** — Lightweight AFINN-165 lexicon (3,382 words) enhances severity scoring beyond keywords
 - **Client-Side Geocoding** — 280+ city database maps articles to exact coordinates without external APIs
 - **Multi-Language UI** — Full i18n support for English, Spanish, French, Arabic (RTL), and Chinese
 - **Expandable Articles** — Click any story to see its image, source, publish date, and a link to the full article
@@ -54,10 +55,11 @@ src/
 │   └── FilterDrawer.jsx   # Time range, sort, severity filters
 ├── services/
 │   ├── gdeltService.js    # GDELT DOC API integration
-│   └── rssService.js      # 50+ RSS feeds with batched CORS proxy fetching
+│   └── rssService.js      # 130+ RSS feeds with batched CORS proxy fetching
 ├── utils/
 │   ├── geocoder.js        # Client-side geocoding (280+ cities, 100+ countries)
 │   ├── articleUtils.js    # Severity scoring, category detection, deduplication
+│   ├── afinn.js           # AFINN-165 sentiment lexicon scoring
 │   └── mockData.js        # Fallback data and severity metadata
 ├── i18n/
 │   ├── index.js           # i18next configuration
@@ -68,7 +70,8 @@ src/
 ## Data Sources
 
 - **GDELT Project** — Global Database of Events, Language, and Tone (DOC API v2)
-- **RSS Feeds** — Regional outlets including Punch Nigeria, NDTV India, Japan Times, Guardian UK, Dawn Pakistan, ABC Australia, and 45+ more
+- **RSS Feeds** — 130+ regional outlets across every continent: AllAfrica per-country feeds, The Local (Europe), MercoPress (South America), NDTV, Japan Times, Guardian, Dawn Pakistan, ABC Australia, and many more
+- **AFINN-165** — Sentiment lexicon for headline severity scoring (ODbL license)
 
 ## License
 

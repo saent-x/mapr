@@ -9,6 +9,7 @@
     "refreshLabel": "Actualiser les données",
     "regions": "régions",
     "stories": "articles",
+    "verified": "vérifiées",
     "critical": "critiques"
   },
   "filters": {
@@ -16,26 +17,136 @@
     "timeRange": "Période",
     "sortBy": "Trier par",
     "minSeverity": "Sévérité min.",
+    "minConfidence": "Confiance min.",
     "24h": "24h",
     "3days": "3 jours",
     "7days": "7 jours",
     "30days": "30 jours",
     "all": "Tout",
     "severity": "Sévérité",
-    "recent": "Récent"
+    "recent": "Récent",
+    "mapOverlay": "Couche carte",
+    "verification": "Vérification",
+    "accuracyMode": "Mode de précision",
+    "aiMode": "Charge IA",
+    "standard": "Standard",
+    "strictAccuracy": "Précision stricte",
+    "sourceFootprint": "Empreinte des sources",
+    "countriesWithLocalFeeds": "Pays avec flux locaux",
+    "countriesWithRegionalFeeds": "Pays avec relais regionaux",
+    "countriesWithoutLocalFeeds": "Pays sans flux locaux",
+    "thinCoverageCountries": "Couverture locale mince",
+    "expansionTargets": "Cibles d'extension",
+    "noExpansionTargets": "Aucune lacune prioritaire pour l'instant",
+    "noMissingLocalFeeds": "Chaque pays a au moins un flux local",
+    "noThinCoverage": "Aucun pays bloqué à un seul flux local",
+    "sourceType": "Type de source",
+    "language": "Langue",
+    "locationPrecision": "Précision du lieu",
+    "coverage": "Couverture",
+    "coveredCountries": "Pays couverts",
+    "verifiedCountries": "Pays vérifiés",
+    "uncoveredCountries": "Pays non couverts",
+    "lowConfidenceRegions": "Régions à faible confiance",
+    "ingestionRiskCountries": "Pays à risque d'ingestion",
+    "sourceSparseCountries": "Pays à sources limitées",
+    "sourceMix": "Répartition des sources",
+    "precisionMix": "Répartition de précision",
+    "languages": "Langues",
+    "coverageClear": "Aucune région à faible confiance",
+    "noIngestionRisk": "Aucun pays avec un risque d'ingestion actif",
+    "noSourceSparse": "Aucun pays structurellement limité",
+    "trendWatch": "Veille des tendances",
+    "risingRegions": "Régions en hausse",
+    "newlyVerifiedRegions": "Nouvelles vérifiées",
+    "atRiskRegions": "Nouvelles à risque",
+    "noTrendData": "Aucun changement récent de tendance",
+    "coverageTimeline": "Historique de couverture",
+    "recentSnapshots": "Instantanés récents",
+    "recentTransitions": "Transitions récentes",
+    "noCoverageTimeline": "Aucun historique de couverture enregistré pour le moment",
+    "sourceHealth": "Santé des sources",
+    "backendStatus": "État du backend",
+    "gdeltHealthy": "GDELT saines",
+    "gdeltFailed": "GDELT en échec",
+    "rssHealthy": "RSS saines",
+    "rssFailed": "RSS en échec",
+    "ingestedRecords": "Enregistrements ingérés",
+    "lastSuccess": "Dernier succès",
+    "sourceIssues": "Incidents des sources",
+    "refreshHistory": "Historique des actualisations",
+    "noRefreshHistory": "Aucun historique d'actualisation pour le moment",
+    "noSourceIssues": "Aucun incident source actif",
+    "opsAlerts": "Alertes d'exploitation",
+    "noOpsAlerts": "Aucune alerte d'exploitation active",
+    "regionLag": "Retard regional",
+    "staleRegionLag": "Regions en retard",
+    "watchRegionLag": "Regions a surveiller",
+    "noRegionLag": "Aucune region en retard",
+    "noHealthData": "La santé des sources apparaîtra après la prochaine collecte",
+    "results": "résultats",
+    "aiModeOption": {
+      "auto": "Auto",
+      "reduced": "Réduite",
+      "full": "Complète",
+      "off": "Désactivée"
+    },
+    "aiModeProfile": {
+      "autoReduced": "Le mode auto a choisi une IA réduite car le navigateur signale peu de mémoire. Le NER est désactivé et l'échantillon est plus petit.",
+      "autoBalanced": "Le mode auto a choisi un budget IA équilibré pour cet appareil. La classification et le NER restent actifs avec des limites plus faibles.",
+      "autoFull": "Le mode auto a choisi le budget IA complet pour cet appareil.",
+      "reduced": "L'IA réduite conserve l'analyse de sentiment, désactive le NER et baisse les limites pour économiser la mémoire.",
+      "full": "L'IA complète exécute tout l'enrichissement et utilise le budget d'articles maximal.",
+      "off": "L'enrichissement IA est désactivé. Mapr s'appuie uniquement sur la sévérité et le géocodage heuristiques."
+    }
   },
   "panel": {
     "closePanel": "Fermer le panneau",
     "report": "rapport",
     "reports": "rapports",
-    "avg": "Moy"
+    "avg": "Moy",
+    "noRegionNews": "Aucun événement cartographié pour cette région",
+    "noRegionNewsHint": "Élargissez la période, baissez la gravité ou passez à la couche de couverture pour inspecter la santé des sources.",
+    "searchingRegionNews": "Recherche de sources élargies pour cette région",
+    "searchingRegionNewsHint": "Mapr lance une collecte ciblée pour le pays sélectionné.",
+    "recentTransitions": "Transitions récentes",
+    "noRecentTransitions": "Aucun changement récent de statut",
+    "recentCheckpoints": "Points récents",
+    "noRecentCheckpoints": "Aucun point récent de couverture",
+    "sourcePlan": "Plan des sources",
+    "localFeeds": "Flux locaux",
+    "regionalFeeds": "Flux regionaux",
+    "plannedFeeds": "Flux prévus",
+    "checkedFeeds": "Flux vérifiés",
+    "failedChecks": "Vérifications en échec",
+    "noLocalFeedCatalog": "Aucun flux local n'est encore configuré pour ce pays",
+    "noLocalFeedCatalogHint": "Mapr bascule sur des sources regionales, officielles et globales jusqu'à l'ajout de flux locaux.",
+    "noFeedChecks": "Aucune vérification ciblée pour le moment",
+    "feedCheckFailed": "La vérification du flux a échoué"
   },
   "legend": {
     "severity": "Sévérité",
+    "coverage": "Couverture",
     "critical": "Critique",
     "elevated": "Élevée",
     "watch": "Vigilance",
     "low": "Faible"
+  },
+  "coverageStatus": {
+    "verified": "Vérifiée",
+    "developing": "En cours",
+    "lowConfidence": "Faible confiance",
+    "ingestionRisk": "Risque d'ingestion",
+    "sourceSparse": "Sources limitées",
+    "uncovered": "Non couverte"
+  },
+  "map": {
+    "severity": "Sévérité",
+    "reports": "Rapports",
+    "status": "Statut",
+    "confidence": "Confiance",
+    "sourceFeeds": "Sources",
+    "noLocalFeeds": "Aucune source locale"
   },
   "errors": {
     "fallbackData": "Données de secours utilisées"
@@ -43,8 +154,108 @@
   "article": {
     "readFull": "Lire l'article complet",
     "source": "Source",
+    "sources": "Sources",
+    "independentSources": "Sources indépendantes",
     "published": "Publié",
+    "firstSeen": "Première détection",
+    "lastSeen": "Dernière détection",
     "category": "Catégorie",
-    "severity": "Sévérité"
+    "severity": "Sévérité",
+    "verification": "Vérification",
+    "confidence": "Confiance",
+    "confidenceSignals": "Signaux de confiance",
+    "locationPrecision": "Précision du lieu",
+    "locationSignal": "Base de localisation",
+    "sourceTypes": "Types de source",
+    "languages": "Langues",
+    "evidence": "Preuves",
+    "noEvidence": "Aucune preuve supplémentaire",
+    "readMore": "Lire plus",
+    "showLess": "Réduire",
+    "confidenceReason": {
+      "officialSource": "Inclut une source officielle",
+      "corroboratedSources": "Recoupé par {{count}} sources",
+      "diverseSourceTypes": "Confirmé via {{count}} types de source",
+      "crossBorderSources": "Signalé par des sources de {{count}} pays",
+      "localityPrecision": "Localisé à une localité précise",
+      "countryPrecision": "Résolu au niveau pays",
+      "trustedSources": "Appuyé par des sources de confiance élevée",
+      "sourceCountryFallback": "La localisation dépend encore du pays de la source",
+      "conflictingLocationSignals": "Les signaux de localisation sont contradictoires",
+      "summaryDerivedLocation": "La localisation provient des résumés"
+    },
+    "locationSignalType": {
+      "titleCity": "Localité citée dans le titre",
+      "titleCountry": "Pays cité dans le titre",
+      "titleCountryConflict": "Pays retenu après conflit de lieu dans le titre",
+      "summaryCity": "Localité trouvée dans le résumé",
+      "summaryCityConfirmed": "La localité du résumé confirme le pays du titre",
+      "summaryCountry": "Pays trouvé dans le résumé",
+      "summaryCountryConflict": "Pays retenu après conflit de lieu dans le résumé",
+      "sourceCountry": "Repli sur le pays de la source"
+    },
+    "verificationStatus": {
+      "official": "Officiel",
+      "verified": "Vérifiée",
+      "developing": "En cours",
+      "single-source": "Source unique"
+    }
+  },
+  "precision": {
+    "locality": "Localité",
+    "country": "Pays",
+    "source-country": "Pays source",
+    "unknown": "Inconnue"
+  },
+  "healthStatus": {
+    "healthy": "sain",
+    "degraded": "dégradé",
+    "stale": "obsolète",
+    "cold": "vide",
+    "empty": "vide",
+    "failed": "échec"
+  },
+  "opsSeverity": {
+    "critical": "critique",
+    "warning": "alerte",
+    "info": "info"
+  },
+  "opsAlert": {
+    "backendStale": {
+      "title": "L'instantane du backend est obsolete",
+      "detail": "La derniere ingestion reussie date de {{hours}}h."
+    },
+    "backendFailures": {
+      "title": "Les rafraichissements du backend echouent",
+      "detail": "{{count}} tentatives consecutives de rafraichissement ont echoue."
+    },
+    "rssFailures": {
+      "title": "Les verifications RSS echouent",
+      "detail": "{{failed}} flux RSS sur {{total}} ont echoue lors du dernier passage."
+    },
+    "gdeltFailures": {
+      "title": "Les profils GDELT echouent",
+      "detail": "{{failed}} profils GDELT sur {{total}} ont echoue lors du dernier passage."
+    },
+    "ingestionRisk": {
+      "title": "Des pays sont en risque d'ingestion",
+      "detail": "{{count}} pays ont une couverture en echec sans repli sain."
+    },
+    "sourceSparse": {
+      "title": "La profondeur directe des sources manque encore",
+      "detail": "{{count}} pays restent marques comme pauvres en sources."
+    },
+    "staleRegionLag": {
+      "title": "Des regions couvertes sont devenues silencieuses",
+      "detail": "{{count}} regions couvertes n'ont plus de mises a jour cartographiees recentes."
+    }
+  },
+  "sourceType": {
+    "official": "officielles",
+    "wire": "agences",
+    "global": "mondiales",
+    "regional": "régionales",
+    "local": "locales",
+    "unknown": "inconnues"
   }
 }

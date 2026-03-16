@@ -4,7 +4,10 @@
   "description": "This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.js",
+    "dev:frontend": "vite",
+    "server": "node server/index.js",
+    "test": "node --test",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -13,7 +16,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@huggingface/transformers": "^3.8.1",
+    "afinn-165": "^2.0.2",
     "axios": "^1.13.6",
     "date-fns": "^4.1.0",
     "i18next": "^25.8.18",

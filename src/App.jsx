@@ -4,10 +4,22 @@ import { SlidersHorizontal } from 'lucide-react';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
-import { fetchLiveNews, clearCache } from './services/gdeltService';
-import { fetchRssNews, clearRssCache } from './services/rssService';
-import { deduplicateArticles } from './utils/articleUtils';
-import { classifyArticles, mergeAiSeverity, inferLocations, mergeAiLocations } from './services/aiService';
+import {
+  fetchBackendBriefing,
+  fetchBackendCoverageHistory,
+  fetchBackendCoverageRegion,
+  fetchBackendRegionBriefing,
+  fetchBackendHealth,
+  refreshBackendBriefing
+} from './services/backendService';
+import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
+import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
+import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
+import { mergeStoryLists } from './utils/aiState';
+import { getSourceHost } from './utils/urlUtils';
+import { buildRegionSourcePlan, buildSourceCoverageAudit } from './utils/sourceCoverage';
+import { sortStories, storyMatchesFilters } from './utils/storyFilters';
+import { isoToCountry } from './utils/geocoder';
 import {
   MOCK_NEWS,
   calculateRegionSeverity,
@@ -19,6 +31,24 @@ const Globe = lazy(() => import('./components/Globe'));
 const FlatMap = lazy(() => import('./components/FlatMap'));
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const REGION_BACKFILL_CACHE_LIMIT = 6;
+
+function upsertRegionBackfill(cache, entry) {
+  const nextCache = {
+    ...cache,
+    [entry.iso]: {
+      ...(cache[entry.iso] || {}),
+      ...entry,
+      touchedAt: Date.now()
+    }
+  };
+
+  const orderedEntries = Object.values(nextCache)
+    .sort((left, right) => (right.touchedAt || 0) - (left.touchedAt || 0))
+    .slice(0, REGION_BACKFILL_CACHE_LIMIT);
+
+  return Object.fromEntries(orderedEntries.map((item) => [item.iso, item]));
+}
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -31,10 +61,16 @@ function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [dateWindow, setDateWindow] = useState('168h');
-  const [startDate, setStartDate] = useState('');
   const [minSeverity, setMinSeverity] = useState(0);
+  const [minConfidence, setMinConfidence] = useState(0);
   const [sortMode, setSortMode] = useState('severity');
   const [mapMode, setMapMode] = useState('globe');
+  const [mapOverlay, setMapOverlay] = useState('severity');
+  const [verificationFilter, setVerificationFilter] = useState('all');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
+  const [languageFilter, setLanguageFilter] = useState('all');
+  const [accuracyMode, setAccuracyMode] = useState('standard');
+  const [precisionFilter, setPrecisionFilter] = useState('all');
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedStoryId, setSelectedStoryId] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -43,45 +79,41 @@ function App() {
   const [liveNews, setLiveNews] = useState(null);
   const [dataSource, setDataSource] = useState('loading'); // 'loading' | 'live' | 'mock'
   const [dataError, setDataError] = useState(null);
+  const [sourceHealth, setSourceHealth] = useState({ gdelt: null, rss: null, backend: null });
+  const [coverageTrends, setCoverageTrends] = useState(null);
+  const [coverageHistory, setCoverageHistory] = useState(null);
+  const [regionCoverageHistory, setRegionCoverageHistory] = useState(null);
+  const [regionBackfills, setRegionBackfills] = useState({});
+  const [opsHealth, setOpsHealth] = useState(null);
   const refreshTimerRef = useRef(null);
 
-  // AI classification state
-  const [aiScores, setAiScores] = useState(null);
-  const [aiLocations, setAiLocations] = useState(null);
-  const [aiStatus, setAiStatus] = useState('idle'); // 'idle' | 'loading' | 'analyzing' | 'done' | 'error'
-  const [aiProgress, setAiProgress] = useState({ done: 0, total: 0 });
-  const classifiedIdsRef = useRef(new Set());
-  const nerDoneRef = useRef(false);
-
-  // Fetch live data from GDELT + RSS (progressive: show GDELT immediately, merge RSS when ready)
-  const loadLiveData = useCallback(async () => {
+  // Fetch live data from backend API
+  const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
     try {
-      // Start both fetches
-      const gdeltPromise = fetchLiveNews({ timespan: '24h', maxRecords: 250 }).catch(() => []);
-      const rssPromise = fetchRssNews().catch(() => []);
+      const [briefing, historyPayload] = await Promise.all([
+        forceRefresh
+          ? refreshBackendBriefing()
+          : fetchBackendBriefing(),
+        fetchBackendCoverageHistory().catch(() => null)
+      ]);
 
-      // Show GDELT data as soon as it arrives
-      const gdelt = await gdeltPromise;
-      if (gdelt.length > 0) {
-        setLiveNews(gdelt);
+      if (Array.isArray(briefing?.articles) && briefing.articles.length > 0) {
+        setLiveNews(briefing.articles);
+        setRegionBackfills({});
+        setSourceHealth(briefing.sourceHealth || { gdelt: null, rss: null, backend: null });
+        setCoverageTrends(historyPayload?.trends || briefing.coverageTrends || null);
+        setCoverageHistory(historyPayload || null);
+        fetchBackendHealth().then(setOpsHealth).catch(() => setOpsHealth(null));
         setDataSource('live');
         setDataError(null);
+        return;
       }
 
-      // Merge RSS when it finishes (may take 15-20s with batching)
-      const rss = await rssPromise;
-      const allArticles = deduplicateArticles([...gdelt, ...rss]);
-
-      if (allArticles.length > 0) {
-        setLiveNews(allArticles);
-        setDataSource('live');
-        setDataError(null);
-      } else if (!gdelt.length) {
-        setLiveNews(null);
-        setDataSource('mock');
-      }
+      // Backend returned empty results
+      setLiveNews(null);
+      setDataSource('mock');
     } catch (err) {
-      console.warn('News fetch failed, using mock data:', err.message);
+      console.warn('Backend briefing failed:', err.message);
       setLiveNews(null);
       setDataSource('mock');
       setDataError(err.message);
@@ -96,119 +128,262 @@ function App() {
     return () => clearInterval(refreshTimerRef.current);
   }, [loadLiveData]);
 
-  // AI classification: runs in background after articles load
-  useEffect(() => {
-    if (!liveNews || liveNews.length === 0) return;
-
-    // Find articles not yet classified
-    const unclassified = liveNews.filter((a) => !classifiedIdsRef.current.has(a.id));
-    if (unclassified.length === 0) return;
-
-    let cancelled = false;
-
-    setAiStatus((prev) => (prev === 'done' ? 'analyzing' : 'loading'));
-
-    classifyArticles(unclassified, (done, total) => {
-      if (!cancelled) {
-        setAiStatus('analyzing');
-        setAiProgress({ done, total });
-      }
-    })
-      .then((newScores) => {
-        if (cancelled) return;
-        unclassified.forEach((a) => classifiedIdsRef.current.add(a.id));
-        setAiScores((prev) => {
-          const merged = new Map(prev || []);
-          for (const [id, score] of newScores) {
-            merged.set(id, score);
-          }
-          return merged;
-        });
-        setAiStatus('done');
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          console.warn('AI classification failed:', err.message);
-          setAiStatus('error');
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, [liveNews]);
-
-  // AI NER pass: runs after sentiment classification completes
-  // Corrects articles that were assigned to the wrong country
-  useEffect(() => {
-    if (aiStatus !== 'done' || !liveNews || nerDoneRef.current) return;
-
-    let cancelled = false;
-    nerDoneRef.current = true;
-
-    inferLocations(liveNews, () => {})
-      .then((locMap) => {
-        if (cancelled || locMap.size === 0) return;
-        setAiLocations(locMap);
-      })
-      .catch((err) => {
-        console.warn('NER location inference failed:', err.message);
-      });
-
-    return () => { cancelled = true; };
-  }, [aiStatus, liveNews]);
-
-  // Base news: live data or fallback to mock — enhanced with AI severity + locations
-  const baseNews = useMemo(() => {
-    let news = liveNews || MOCK_NEWS;
-    if (aiLocations && aiLocations.size > 0) {
-      news = mergeAiLocations(news, aiLocations);
+  // Base articles: live data or fallback to mock
+  const baseArticles = useMemo(() => {
+    if (dataSource !== 'live') {
+      return liveNews || MOCK_NEWS;
     }
-    if (aiScores && aiScores.size > 0) {
-      news = mergeAiSeverity(news, aiScores);
-    }
-    return news;
-  }, [liveNews, aiScores, aiLocations]);
+    return liveNews || [];
+  }, [dataSource, liveNews]);
+
+  const canonicalNews = useMemo(
+    () => canonicalizeArticles(baseArticles),
+    [baseArticles]
+  );
 
   const dateFloor = useMemo(
-    () => resolveDateFloor(dateWindow, startDate),
-    [dateWindow, startDate]
+    () => resolveDateFloor(dateWindow),
+    [dateWindow]
   );
 
   const activeNews = useMemo(() => {
-    const filtered = baseNews.filter((story) => {
-      if (story.severity < minSeverity) return false;
-      if (dateFloor && new Date(story.publishedAt) < dateFloor) return false;
-      return true;
-    });
+    const filtered = canonicalNews.filter((story) => (
+      storyMatchesFilters(story, {
+        minSeverity,
+        minConfidence,
+        dateFloor,
+        accuracyMode,
+        verificationFilter,
+        sourceTypeFilter,
+        languageFilter,
+        precisionFilter
+      })
+    ));
 
-    filtered.sort((a, b) => {
-      if (sortMode === 'latest') return new Date(b.publishedAt) - new Date(a.publishedAt);
-      return b.severity - a.severity || new Date(b.publishedAt) - new Date(a.publishedAt);
-    });
-
-    return filtered;
-  }, [baseNews, dateFloor, minSeverity, sortMode]);
+    return sortStories(filtered, sortMode);
+  }, [accuracyMode, canonicalNews, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, sortMode, sourceTypeFilter, verificationFilter]);
 
   const regionSeverities = useMemo(
     () => calculateRegionSeverity(activeNews),
     [activeNews]
   );
 
-  useEffect(() => {
-    if (selectedRegion && !activeNews.some((s) => s.isoA2 === selectedRegion)) {
-      setSelectedRegion(null);
+  const coverageMetrics = useMemo(
+    () => calculateCoverageMetrics(activeNews),
+    [activeNews]
+  );
+
+  const coverageDiagnostics = useMemo(
+    () => buildCoverageDiagnostics(coverageMetrics, sourceHealth),
+    [coverageMetrics, sourceHealth]
+  );
+  const sourceCoverageAudit = useMemo(
+    () => buildSourceCoverageAudit(coverageDiagnostics),
+    [coverageDiagnostics]
+  );
+
+  const coverageStatusByIso = coverageDiagnostics.byIso;
+
+  const selectedRegionBackfillStories = useMemo(() => {
+    if (!selectedRegion) {
+      return [];
     }
-    if (selectedStoryId && !activeNews.some((s) => s.id === selectedStoryId)) {
+
+    const backfillStories = regionBackfills[selectedRegion]?.events || [];
+    return sortStories(backfillStories.filter((story) => (
+      storyMatchesFilters(story, {
+        minSeverity,
+        minConfidence,
+        dateFloor,
+        accuracyMode,
+        verificationFilter,
+        sourceTypeFilter,
+        languageFilter,
+        precisionFilter
+      })
+    )), sortMode);
+  }, [accuracyMode, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, regionBackfills, selectedRegion, sortMode, sourceTypeFilter, verificationFilter]);
+
+  useEffect(() => {
+    const availableStories = selectedRegion
+      ? mergeStoryLists(activeNews.filter((story) => story.isoA2 === selectedRegion), selectedRegionBackfillStories)
+      : activeNews;
+
+    if (selectedStoryId && !availableStories.some((story) => story.id === selectedStoryId)) {
       setSelectedStoryId(null);
     }
-  }, [activeNews, selectedRegion, selectedStoryId]);
+  }, [activeNews, selectedRegion, selectedRegionBackfillStories, selectedStoryId]);
 
-  const selectedStory = activeNews.find((s) => s.id === selectedStoryId) ?? null;
+  const selectedStory = activeNews.find((story) => story.id === selectedStoryId)
+    ?? selectedRegionBackfillStories.find((story) => story.id === selectedStoryId)
+    ?? null;
   const panelRegion = selectedRegion || selectedStory?.isoA2 || null;
   const panelOpen = Boolean(panelRegion);
-  const panelNews = panelRegion ? activeNews.filter((s) => s.isoA2 === panelRegion) : [];
-  const panelRegionData = panelRegion ? regionSeverities[panelRegion] : null;
+  const panelBackfillEntry = panelRegion ? regionBackfills[panelRegion] || null : null;
+  const panelBackfillStories = useMemo(() => {
+    if (!panelRegion) {
+      return [];
+    }
 
-  const activeRegions = Object.keys(regionSeverities).length;
+    const backfillStories = panelBackfillEntry?.events || [];
+    return sortStories(backfillStories.filter((story) => (
+      storyMatchesFilters(story, {
+        minSeverity,
+        minConfidence,
+        dateFloor,
+        accuracyMode,
+        verificationFilter,
+        sourceTypeFilter,
+        languageFilter,
+        precisionFilter
+      })
+    )), sortMode);
+  }, [accuracyMode, dateFloor, languageFilter, minConfidence, minSeverity, panelBackfillEntry, panelRegion, precisionFilter, sortMode, sourceTypeFilter, verificationFilter]);
+  const panelLiveNews = panelRegion ? activeNews.filter((story) => story.isoA2 === panelRegion) : [];
+  const panelNews = panelLiveNews.length > 0 ? panelLiveNews : panelBackfillStories;
+  const panelRegionData = useMemo(() => {
+    if (!panelRegion) {
+      return null;
+    }
+
+    if (regionSeverities[panelRegion]) {
+      return regionSeverities[panelRegion];
+    }
+
+    return calculateRegionSeverity(panelNews)[panelRegion] || null;
+  }, [panelNews, panelRegion, regionSeverities]);
+  const panelRegionName = panelRegion
+    ? coverageStatusByIso[panelRegion]?.region
+      || panelRegionData?.region
+      || selectedStory?.region
+      || panelBackfillEntry?.region
+      || isoToCountry(panelRegion)
+      || panelRegion
+    : null;
+  const panelRegionStatus = panelRegion ? coverageStatusByIso[panelRegion]?.status || null : null;
+  const panelCoverageEntry = panelRegion ? coverageStatusByIso[panelRegion] || null : null;
+  const panelBackfillStatus = panelBackfillEntry?.status || 'idle';
+  const panelCoverageTransitions = useMemo(() => (
+    panelRegion
+      ? (coverageHistory?.transitions || []).filter((entry) => entry.iso === panelRegion).slice(0, 4)
+      : []
+  ), [coverageHistory, panelRegion]);
+  const mapNewsList = useMemo(() => {
+    if (!panelRegion || panelNews.length === 0) {
+      return activeNews;
+    }
+
+    return mergeStoryLists(activeNews, panelNews);
+  }, [activeNews, panelNews, panelRegion]);
+  const mapRegionSeverities = useMemo(() => {
+    if (!panelRegion || !panelRegionData || regionSeverities[panelRegion]) {
+      return regionSeverities;
+    }
+
+    return {
+      ...regionSeverities,
+      [panelRegion]: panelRegionData
+    };
+  }, [panelRegion, panelRegionData, regionSeverities]);
+
+  useEffect(() => {
+    if (!panelRegion) {
+      setRegionCoverageHistory(null);
+      return;
+    }
+
+    setRegionCoverageHistory(null);
+    let cancelled = false;
+
+    fetchBackendCoverageRegion({ iso: panelRegion })
+      .then((payload) => {
+        if (!cancelled) {
+          setRegionCoverageHistory(payload);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRegionCoverageHistory(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [panelRegion]);
+
+  useEffect(() => {
+    if (!panelRegion || dataSource !== 'live') {
+      return undefined;
+    }
+
+    if (panelLiveNews.length > 0) {
+      return undefined;
+    }
+
+    if (panelBackfillStatus === 'loading' || panelBackfillStatus === 'done' || panelBackfillStatus === 'empty') {
+      return undefined;
+    }
+
+    const regionName = panelRegionName || isoToCountry(panelRegion) || panelRegion;
+    let cancelled = false;
+
+    setRegionBackfills((prev) => upsertRegionBackfill(prev, {
+      iso: panelRegion,
+      region: regionName,
+      status: 'loading',
+      events: [],
+      sourcePlan: buildRegionSourcePlan(regionName, { coverageDiagnostics }),
+      feedChecks: []
+    }));
+
+    const backfillRequest = fetchBackendRegionBriefing({ iso: panelRegion });
+
+    backfillRequest
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        const events = sortStories(
+          (payload?.events || canonicalizeArticles((payload?.articles || []).filter((article) => article.isoA2 === panelRegion)))
+            .filter((story) => story.isoA2 === panelRegion),
+          sortMode
+        );
+        setRegionBackfills((prev) => upsertRegionBackfill(prev, {
+          iso: panelRegion,
+          region: payload?.region || regionName,
+          status: events.length > 0 ? 'done' : 'empty',
+          fetchedAt: payload?.fetchedAt || new Date().toISOString(),
+          sourcePlan: payload?.sourcePlan || buildRegionSourcePlan(regionName, { coverageDiagnostics }),
+          feedChecks: payload?.feedChecks || [],
+          events
+        }));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.warn('Region backfill failed:', error.message);
+        setRegionBackfills((prev) => upsertRegionBackfill(prev, {
+          iso: panelRegion,
+          region: regionName,
+          status: 'error',
+          fetchedAt: new Date().toISOString(),
+          sourcePlan: buildRegionSourcePlan(regionName, { coverageDiagnostics }),
+          feedChecks: [],
+          events: []
+        }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coverageDiagnostics, dataSource, panelBackfillStatus, panelLiveNews.length, panelRegion, panelRegionName, sortMode]);
+
+  const activeRegions = coverageMetrics.coveredCountries;
+  const verifiedRegions = coverageMetrics.verifiedCountries;
   const criticalCount = activeNews.filter((s) => s.severity >= 85).length;
 
   const handleRegionSelect = (iso) => {
@@ -237,15 +412,14 @@ function App() {
   }, []);
 
   const handleRefresh = () => {
-    clearCache();
-    clearRssCache();
     setDataSource('loading');
-    setAiScores(null);
-    setAiLocations(null);
-    setAiStatus('idle');
-    classifiedIdsRef.current.clear();
-    nerDoneRef.current = false;
-    loadLiveData();
+    setSourceHealth({ gdelt: null, rss: null, backend: null });
+    setCoverageTrends(null);
+    setCoverageHistory(null);
+    setRegionCoverageHistory(null);
+    setRegionBackfills({});
+    setOpsHealth(null);
+    loadLiveData({ forceRefresh: true });
   };
 
   return (
@@ -253,8 +427,10 @@ function App() {
       <Suspense fallback={null}>
         {mapMode === 'globe' ? (
           <Globe
-            newsList={activeNews}
-            regionSeverities={regionSeverities}
+            newsList={mapNewsList}
+            regionSeverities={mapRegionSeverities}
+            mapOverlay={mapOverlay}
+            coverageStatusByIso={coverageStatusByIso}
             selectedRegion={selectedRegion}
             selectedStory={selectedStory}
             onRegionSelect={handleRegionSelect}
@@ -262,8 +438,10 @@ function App() {
           />
         ) : (
           <FlatMap
-            newsList={activeNews}
-            regionSeverities={regionSeverities}
+            newsList={mapNewsList}
+            regionSeverities={mapRegionSeverities}
+            mapOverlay={mapOverlay}
+            coverageStatusByIso={coverageStatusByIso}
             selectedRegion={selectedRegion}
             selectedStory={selectedStory}
             onRegionSelect={handleRegionSelect}
@@ -276,17 +454,17 @@ function App() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onSearchSelect={handleSearchSelect}
-        newsList={baseNews}
+        newsList={activeNews}
         regionSeverities={regionSeverities}
         storyCount={activeNews.length}
         regionCount={activeRegions}
+        verifiedCount={verifiedRegions}
         criticalCount={criticalCount}
         mapMode={mapMode}
         onMapModeChange={setMapMode}
         dataSource={dataSource}
         onRefresh={handleRefresh}
-        aiStatus={aiStatus}
-        aiProgress={aiProgress}
+        backendStatus={opsHealth?.status || sourceHealth?.backend?.status || null}
       />
 
       <button
@@ -301,51 +479,112 @@ function App() {
         isOpen={filtersOpen}
         dateWindow={dateWindow}
         setDateWindow={setDateWindow}
+        mapOverlay={mapOverlay}
+        setMapOverlay={setMapOverlay}
+        verificationFilter={verificationFilter}
+        setVerificationFilter={setVerificationFilter}
+        sourceTypeFilter={sourceTypeFilter}
+        setSourceTypeFilter={setSourceTypeFilter}
+        languageFilter={languageFilter}
+        setLanguageFilter={setLanguageFilter}
+        accuracyMode={accuracyMode}
+        setAccuracyMode={setAccuracyMode}
+        sourceCoverageAudit={sourceCoverageAudit}
+        precisionFilter={precisionFilter}
+        setPrecisionFilter={setPrecisionFilter}
         minSeverity={minSeverity}
         setMinSeverity={setMinSeverity}
+        minConfidence={minConfidence}
+        setMinConfidence={setMinConfidence}
         sortMode={sortMode}
         setSortMode={setSortMode}
+        coverageMetrics={coverageMetrics}
+        coverageDiagnostics={coverageDiagnostics}
+        coverageTrends={coverageTrends}
+        coverageHistory={coverageHistory}
+        opsHealth={opsHealth}
+        allNews={canonicalNews}
+        filteredNews={activeNews}
+        sourceHealth={sourceHealth}
+        onRegionSelect={handleRegionSelect}
       />
 
       <div className="legend">
-        <span className="legend-label">{t('legend.severity')}</span>
+        <span className="legend-label">{t(`legend.${mapOverlay}`)}</span>
         <div className="legend-items">
-          {[
-            { key: 'critical', color: 'var(--critical)' },
-            { key: 'elevated', color: 'var(--elevated)' },
-            { key: 'watch', color: 'var(--watch)' },
-            { key: 'low', color: 'var(--low)' }
-          ].map((item) => (
-            <div key={item.key} className="legend-item">
-              <span className="legend-dot" style={{ background: item.color }} />
-              {t(`legend.${item.key}`)}
-            </div>
-          ))}
+          {mapOverlay === 'severity'
+            ? [
+              { key: 'critical', color: 'var(--critical)' },
+              { key: 'elevated', color: 'var(--elevated)' },
+              { key: 'watch', color: 'var(--watch)' },
+              { key: 'low', color: 'var(--low)' }
+            ].map((item) => (
+              <div key={item.key} className="legend-item">
+                <span className="legend-dot" style={{ background: item.color }} />
+                {t(`legend.${item.key}`)}
+              </div>
+            ))
+            : COVERAGE_STATUS_ORDER.map((status) => {
+              const meta = getCoverageMeta(status);
+              return (
+                <div key={status} className="legend-item">
+                  <span className="legend-dot" style={{ background: meta.accent }} />
+                  {t(`coverageStatus.${meta.labelKey}`)}
+                </div>
+              );
+            })}
         </div>
+        <span className="legend-credit">crafted by <strong>tor</strong></span>
       </div>
 
       <div className={`story-bar ${panelOpen ? 'is-shifted' : ''}`}>
         {activeNews.slice(0, 8).map((story) => {
           const meta = getSeverityMeta(story.severity);
+          const sourceLabel = getSourceHost(story.url, story.source || t('article.readFull'));
           return (
-            <button
+            <div
               key={story.id}
-              className={`story-chip ${selectedStoryId === story.id ? 'is-active' : ''}`}
-              onClick={() => handleStorySelect(story)}
+              className={`story-chip-shell ${selectedStoryId === story.id ? 'is-active' : ''}`}
             >
-              <span className="story-chip-dot" style={{ background: meta.accent }} />
-              <div className="story-chip-text">
-                <div className="story-chip-title">{story.title}</div>
-                <div className="story-chip-location">{story.locality}</div>
-              </div>
-            </button>
+              <button
+                type="button"
+                className="story-chip"
+                onClick={() => handleStorySelect(story)}
+              >
+                <span className="story-chip-dot" style={{ background: meta.accent }} />
+                <div className="story-chip-text">
+                  <div className="story-chip-title">{story.title}</div>
+                  <div className="story-chip-location">{story.locality}</div>
+                </div>
+              </button>
+              {story.url && (
+                <a
+                  className="story-chip-link"
+                  href={story.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t('article.readFull')}
+                >
+                  {sourceLabel}
+                </a>
+              )}
+            </div>
           );
         })}
       </div>
 
       <NewsPanel
+        key={panelRegion || 'closed'}
         isOpen={panelOpen}
+        regionName={panelRegionName}
+        regionStatus={panelRegionStatus}
         regionData={panelRegionData}
+        coverageEntry={panelCoverageEntry}
+        coverageTransitions={panelCoverageTransitions}
+        regionHistory={regionCoverageHistory}
+        regionBackfillStatus={panelBackfillStatus}
+        regionSourcePlan={panelBackfillEntry?.sourcePlan || null}
+        regionFeedChecks={panelBackfillEntry?.feedChecks || []}
         news={panelNews}
         selectedStoryId={selectedStoryId}
         onStorySelect={handleStorySelect}

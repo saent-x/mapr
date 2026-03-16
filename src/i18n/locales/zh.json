@@ -9,6 +9,7 @@
     "refreshLabel": "刷新数据",
     "regions": "个地区",
     "stories": "条新闻",
+    "verified": "个已验证",
     "critical": "条紧急"
   },
   "filters": {
@@ -16,26 +17,136 @@
     "timeRange": "时间范围",
     "sortBy": "排序方式",
     "minSeverity": "最低严重性",
+    "minConfidence": "最低置信度",
     "24h": "24小时",
     "3days": "3天",
     "7days": "7天",
     "30days": "30天",
     "all": "全部",
     "severity": "严重性",
-    "recent": "最新"
+    "recent": "最新",
+    "mapOverlay": "地图图层",
+    "verification": "验证",
+    "accuracyMode": "精度模式",
+    "aiMode": "AI 负载",
+    "standard": "标准",
+    "strictAccuracy": "严格精度",
+    "sourceFootprint": "来源覆盖面",
+    "countriesWithLocalFeeds": "有本地源的国家",
+    "countriesWithRegionalFeeds": "有区域补位源的国家",
+    "countriesWithoutLocalFeeds": "没有本地源的国家",
+    "thinCoverageCountries": "本地源过少的国家",
+    "expansionTargets": "扩展目标",
+    "noExpansionTargets": "当前没有优先级较高的来源缺口",
+    "noMissingLocalFeeds": "每个国家至少有一个本地源",
+    "noThinCoverage": "没有国家只剩一个本地源",
+    "sourceType": "来源类型",
+    "language": "语言",
+    "locationPrecision": "定位精度",
+    "coverage": "覆盖情况",
+    "coveredCountries": "已覆盖国家",
+    "verifiedCountries": "已验证国家",
+    "uncoveredCountries": "未覆盖国家",
+    "lowConfidenceRegions": "低置信地区",
+    "ingestionRiskCountries": "采集风险国家",
+    "sourceSparseCountries": "来源稀疏国家",
+    "sourceMix": "来源构成",
+    "precisionMix": "精度构成",
+    "languages": "语言数",
+    "coverageClear": "没有低置信地区",
+    "noIngestionRisk": "没有处于采集风险中的国家",
+    "noSourceSparse": "没有结构性来源稀疏国家",
+    "trendWatch": "趋势观察",
+    "risingRegions": "上升地区",
+    "newlyVerifiedRegions": "新近验证",
+    "atRiskRegions": "新近风险地区",
+    "noTrendData": "没有近期趋势变化",
+    "coverageTimeline": "覆盖时间线",
+    "recentSnapshots": "最近快照",
+    "recentTransitions": "最近状态变化",
+    "noCoverageTimeline": "暂无已保存的覆盖历史",
+    "sourceHealth": "来源健康度",
+    "backendStatus": "后端状态",
+    "gdeltHealthy": "GDELT 正常",
+    "gdeltFailed": "GDELT 失败",
+    "rssHealthy": "RSS 正常",
+    "rssFailed": "RSS 失败",
+    "ingestedRecords": "已摄取记录",
+    "lastSuccess": "上次成功",
+    "sourceIssues": "来源问题",
+    "refreshHistory": "刷新历史",
+    "noRefreshHistory": "暂无刷新历史",
+    "noSourceIssues": "当前没有来源问题",
+    "opsAlerts": "运维告警",
+    "noOpsAlerts": "当前没有运维告警",
+    "regionLag": "区域延迟",
+    "staleRegionLag": "滞后区域",
+    "watchRegionLag": "观察区域",
+    "noRegionLag": "没有延迟区域",
+    "noHealthData": "下一次抓取后将显示来源健康度",
+    "results": "结果",
+    "aiModeOption": {
+      "auto": "自动",
+      "reduced": "精简",
+      "full": "完整",
+      "off": "关闭"
+    },
+    "aiModeProfile": {
+      "autoReduced": "自动模式因浏览器可用内存较低而选择精简 AI。NER 已关闭，文章采样更小。",
+      "autoBalanced": "自动模式为当前设备选择了平衡的 AI 预算。分类和 NER 仍然开启，但上限更低。",
+      "autoFull": "自动模式为当前设备选择了完整 AI 预算。",
+      "reduced": "精简 AI 保留情绪分类、关闭 NER，并降低文章上限以节省内存。",
+      "full": "完整 AI 运行全部增强流程，并使用最大的文章预算。",
+      "off": "AI 增强已关闭。Mapr 将仅依赖启发式严重度和地理定位。"
+    }
   },
   "panel": {
     "closePanel": "关闭面板",
     "report": "条报道",
     "reports": "条报道",
-    "avg": "均值"
+    "avg": "均值",
+    "noRegionNews": "该区域当前没有已映射事件",
+    "noRegionNewsHint": "可以扩大时间范围、降低严重度阈值，或切换到覆盖层检查来源健康度。",
+    "searchingRegionNews": "正在为该区域扫描更广的来源",
+    "searchingRegionNewsHint": "Mapr 正在为所选国家执行定向补抓。",
+    "recentTransitions": "最近状态变化",
+    "noRecentTransitions": "暂无最近状态变化",
+    "recentCheckpoints": "最近检查点",
+    "noRecentCheckpoints": "暂无最近覆盖检查点",
+    "sourcePlan": "来源计划",
+    "localFeeds": "本地来源",
+    "regionalFeeds": "区域来源",
+    "plannedFeeds": "计划检查的来源",
+    "checkedFeeds": "已检查来源",
+    "failedChecks": "失败检查",
+    "noLocalFeedCatalog": "该国家目前还没有配置本地来源",
+    "noLocalFeedCatalogHint": "在补充本地来源之前，Mapr 会退回到区域、官方和全球来源。",
+    "noFeedChecks": "暂无定向来源检查",
+    "feedCheckFailed": "来源检查失败"
   },
   "legend": {
     "severity": "严重性",
+    "coverage": "覆盖情况",
     "critical": "紧急",
     "elevated": "高",
     "watch": "关注",
     "low": "低"
+  },
+  "coverageStatus": {
+    "verified": "已验证",
+    "developing": "发展中",
+    "lowConfidence": "低置信",
+    "ingestionRisk": "采集风险",
+    "sourceSparse": "来源稀疏",
+    "uncovered": "未覆盖"
+  },
+  "map": {
+    "severity": "严重性",
+    "reports": "事件数",
+    "status": "状态",
+    "confidence": "置信度",
+    "sourceFeeds": "来源",
+    "noLocalFeeds": "无本地来源"
   },
   "errors": {
     "fallbackData": "正在使用备用数据"
@@ -43,8 +154,108 @@
   "article": {
     "readFull": "阅读全文",
     "source": "来源",
+    "sources": "来源数",
+    "independentSources": "独立来源",
     "published": "发布时间",
+    "firstSeen": "首次出现",
+    "lastSeen": "最近出现",
     "category": "类别",
-    "severity": "严重性"
+    "severity": "严重性",
+    "verification": "验证状态",
+    "confidence": "置信度",
+    "confidenceSignals": "置信依据",
+    "locationPrecision": "定位精度",
+    "locationSignal": "定位依据",
+    "sourceTypes": "来源类型",
+    "languages": "语言",
+    "evidence": "佐证来源",
+    "noEvidence": "暂无更多佐证",
+    "readMore": "展开更多",
+    "showLess": "收起",
+    "confidenceReason": {
+      "officialSource": "包含官方来源报道",
+      "corroboratedSources": "由 {{count}} 个来源交叉印证",
+      "diverseSourceTypes": "覆盖 {{count}} 种来源类型",
+      "crossBorderSources": "来自 {{count}} 个国家的来源",
+      "localityPrecision": "已定位到具体地点",
+      "countryPrecision": "已解析到国家级别",
+      "trustedSources": "由高可信来源支撑",
+      "sourceCountryFallback": "定位仍依赖来源国家回退",
+      "conflictingLocationSignals": "位置线索存在冲突",
+      "summaryDerivedLocation": "定位来自摘要内容"
+    },
+    "locationSignalType": {
+      "titleCity": "标题中直接提到地点",
+      "titleCountry": "标题中直接提到国家",
+      "titleCountryConflict": "标题位置冲突后按国家处理",
+      "summaryCity": "从摘要中识别到地点",
+      "summaryCityConfirmed": "摘要地点确认了标题国家",
+      "summaryCountry": "从摘要中识别到国家",
+      "summaryCountryConflict": "摘要位置冲突后按国家处理",
+      "sourceCountry": "回退到来源国家"
+    },
+    "verificationStatus": {
+      "official": "官方",
+      "verified": "已验证",
+      "developing": "发展中",
+      "single-source": "单一来源"
+    }
+  },
+  "precision": {
+    "locality": "具体地点",
+    "country": "国家",
+    "source-country": "来源国家",
+    "unknown": "未知"
+  },
+  "healthStatus": {
+    "healthy": "正常",
+    "degraded": "降级",
+    "stale": "陈旧",
+    "cold": "冷启动",
+    "empty": "为空",
+    "failed": "失败"
+  },
+  "opsSeverity": {
+    "critical": "严重",
+    "warning": "警告",
+    "info": "信息"
+  },
+  "opsAlert": {
+    "backendStale": {
+      "title": "后端快照已陈旧",
+      "detail": "上次成功摄取距今已有 {{hours}} 小时。"
+    },
+    "backendFailures": {
+      "title": "后端刷新正在失败",
+      "detail": "连续 {{count}} 次刷新尝试失败。"
+    },
+    "rssFailures": {
+      "title": "RSS 检查正在失败",
+      "detail": "最新一轮中 {{failed}} / {{total}} 个 RSS 源失败。"
+    },
+    "gdeltFailures": {
+      "title": "GDELT 查询配置正在失败",
+      "detail": "最新一轮中 {{failed}} / {{total}} 个 GDELT 查询配置失败。"
+    },
+    "ingestionRisk": {
+      "title": "存在采集风险国家",
+      "detail": "{{count}} 个国家当前只有失败覆盖且没有健康回退。"
+    },
+    "sourceSparse": {
+      "title": "部分国家仍缺少直接来源深度",
+      "detail": "仍有 {{count}} 个国家被标记为来源稀疏。"
+    },
+    "staleRegionLag": {
+      "title": "已覆盖区域近期变安静",
+      "detail": "{{count}} 个已覆盖区域缺少近期地图更新。"
+    }
+  },
+  "sourceType": {
+    "official": "官方",
+    "wire": "通讯社",
+    "global": "全球",
+    "regional": "区域",
+    "local": "本地",
+    "unknown": "未知"
   }
 }
