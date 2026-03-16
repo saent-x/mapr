@@ -36,11 +36,21 @@ const getIso = (f) => {
   return f?.properties?.WB_A2 || f?.properties?.ADM0_A3_US || null;
 };
 
-// Sync map view with selected story/region
+// Default "overview" view
+const DEFAULT_CENTER = [20, 10];
+const DEFAULT_ZOOM = 3;
+
+// On small screens, don't zoom in as far
+const isMobile = typeof screen !== 'undefined' && screen.width < 768;
+const STORY_ZOOM = isMobile ? 5 : 8;
+const REGION_ZOOM = isMobile ? 3.5 : 5;
+
+// Sync map view with selected story/region and handle resize on panel open/close
 const MapController = ({ selectedStory, selectedRegion, regionSeverities, newsList }) => {
   const map = useMap();
   const prevStoryRef = useRef(null);
   const prevRegionRef = useRef(null);
+  const hadSelectionRef = useRef(false);
 
   // Invalidate map size when container resizes (e.g. sidebar open/close)
   useEffect(() => {
@@ -53,25 +63,32 @@ const MapController = ({ selectedStory, selectedRegion, regionSeverities, newsLi
   }, [map]);
 
   useEffect(() => {
+    // Fly to selected story
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
-      map.flyTo([selectedStory.coordinates[0], selectedStory.coordinates[1]], 8, { duration: 1.2 });
+      map.flyTo([selectedStory.coordinates[0], selectedStory.coordinates[1]], STORY_ZOOM, { duration: 1.2 });
       prevStoryRef.current = selectedStory.id;
+      hadSelectionRef.current = true;
       return;
     }
 
+    // Fly to selected region
     if (selectedRegion && selectedRegion !== prevRegionRef.current) {
       const focal = regionSeverities[selectedRegion]?.peakStory
         || newsList.find((s) => s.isoA2 === selectedRegion);
       if (focal) {
-        map.flyTo([focal.coordinates[0], focal.coordinates[1]], 5, { duration: 1.2 });
+        map.flyTo([focal.coordinates[0], focal.coordinates[1]], REGION_ZOOM, { duration: 1.2 });
       }
       prevRegionRef.current = selectedRegion;
+      hadSelectionRef.current = true;
       return;
     }
 
-    if (!selectedStory && !selectedRegion) {
+    // Fly back to overview when panel is closed (deselected)
+    if (!selectedStory && !selectedRegion && hadSelectionRef.current) {
       prevStoryRef.current = null;
       prevRegionRef.current = null;
+      hadSelectionRef.current = false;
+      map.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, { duration: 1.2 });
     }
   }, [map, selectedStory, selectedRegion, regionSeverities, newsList]);
 

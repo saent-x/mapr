@@ -9,6 +9,11 @@ import { getCoverageMeta } from '../utils/coverageMeta';
 
 const DEFAULT_VIEW = { lat: 20, lng: 10, altitude: 2.2 };
 
+// On small screens, don't zoom in as far — the globe fills the viewport quickly
+const isMobile = typeof screen !== 'undefined' && screen.width < 768;
+const STORY_ALTITUDE = isMobile ? 1.4 : 0.7;
+const REGION_ALTITUDE = isMobile ? 1.6 : 0.9;
+
 const getIso = (f) => {
   const iso = f?.properties?.ISO_A2;
   if (iso && iso !== '-99') return iso;
@@ -131,7 +136,7 @@ const Globe = ({
 
     if (selectedStory) {
       globeRef.current.pointOfView(
-        { lat: selectedStory.coordinates[0], lng: selectedStory.coordinates[1], altitude: 0.7 },
+        { lat: selectedStory.coordinates[0], lng: selectedStory.coordinates[1], altitude: STORY_ALTITUDE },
         1200
       );
       return;
@@ -142,7 +147,7 @@ const Globe = ({
         || newsList.find((s) => s.isoA2 === selectedRegion);
       if (focal) {
         globeRef.current.pointOfView(
-          { lat: focal.coordinates[0], lng: focal.coordinates[1], altitude: 0.9 },
+          { lat: focal.coordinates[0], lng: focal.coordinates[1], altitude: REGION_ALTITUDE },
           1200
         );
         return;

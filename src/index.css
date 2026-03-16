@@ -2492,7 +2492,7 @@ button {
     left: 0;
     top: auto;
     bottom: 0;
-    height: 35vh;
+    height: 42vh;
     border-radius: 1rem 1rem 0 0;
     border-bottom: none;
     transform: translateY(100%);
@@ -2504,13 +2504,13 @@ button {
   }
 
   .news-panel.is-mobile-expanded {
-    height: 85vh;
+    height: 88vh;
   }
 
   .news-panel-drag-handle {
     display: flex;
     justify-content: center;
-    padding: 0.5rem 0 0.25rem;
+    padding: 0.4rem 0 0.15rem;
     cursor: grab;
     touch-action: none;
   }
@@ -2526,8 +2526,40 @@ button {
     display: flex;
   }
 
+  .news-panel-header {
+    padding: 0.5rem 0.75rem 0.5rem;
+  }
+
   .news-panel-header h2 {
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+  }
+
+  .news-panel-meta {
+    gap: 0.3rem;
+  }
+
+  /* Compact diagnostics — 4 columns so all fit in the peek */
+  .news-panel-diagnostics {
+    padding: 0.5rem;
+    gap: 0.35rem;
+  }
+
+  .news-panel-diagnostics-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.3rem;
+  }
+
+  .news-panel-diagnostic-card {
+    padding: 0.3rem 0.35rem;
+    gap: 0.08rem;
+  }
+
+  .news-panel-diagnostic-card span {
+    font-size: 0.55rem;
+  }
+
+  .news-panel-diagnostic-card strong {
+    font-size: 0.65rem;
   }
 
   .news-card {

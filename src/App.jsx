@@ -13,6 +13,7 @@ import {
   fetchBackendHealth,
   refreshBackendBriefing
 } from './services/backendService';
+import { fetchLiveNews, getGdeltFetchHealth } from './services/gdeltService';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
@@ -95,8 +96,9 @@ function App() {
   const [opsHealth, setOpsHealth] = useState(null);
   const refreshTimerRef = useRef(null);
 
-  // Fetch live data from backend API
+  // Fetch live data — tries backend first, falls back to client-side GDELT
   const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
+    // 1. Try backend API (Vercel serverless functions)
     try {
       const [briefing, historyPayload] = await Promise.all([
         forceRefresh
@@ -116,16 +118,34 @@ function App() {
         setDataError(null);
         return;
       }
-
-      // Backend returned empty results
-      setLiveNews(null);
-      setDataSource('mock');
-    } catch (err) {
-      console.warn('Backend briefing failed:', err.message);
-      setLiveNews(null);
-      setDataSource('mock');
-      setDataError(err.message);
+    } catch (backendErr) {
+      console.warn('Backend briefing failed, trying client-side GDELT fallback:', backendErr.message);
     }
+
+    // 2. Fallback: fetch directly from GDELT client-side (no serverless function needed)
+    try {
+      const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 250 });
+      if (Array.isArray(clientArticles) && clientArticles.length > 0) {
+        setLiveNews(clientArticles);
+        setRegionBackfills({});
+        const gdeltHealth = getGdeltFetchHealth();
+        setSourceHealth({ gdelt: gdeltHealth, rss: null, backend: null });
+        setCoverageTrends(null);
+        setCoverageHistory(null);
+        setOpsHealth(null);
+        setDataSource('live');
+        setDataError(null);
+        console.info(`Client-side GDELT fallback loaded ${clientArticles.length} articles`);
+        return;
+      }
+    } catch (clientErr) {
+      console.warn('Client-side GDELT fallback also failed:', clientErr.message);
+    }
+
+    // 3. Last resort: static mock data
+    setLiveNews(null);
+    setDataSource('mock');
+    setDataError('Both backend and client-side fetching failed');
   }, []);
 
   // Initial load + auto-refresh
@@ -345,13 +365,12 @@ function App() {
       feedChecks: []
     }));
 
-    const backfillRequest = fetchBackendRegionBriefing({ iso: panelRegion });
-
-    backfillRequest
-      .then((payload) => {
-        if (cancelled) {
-          return;
-        }
+    // Try backend first, fall back to client-side GDELT
+    const doBackfill = async () => {
+      // 1. Try backend
+      try {
+        const payload = await fetchBackendRegionBriefing({ iso: panelRegion });
+        if (cancelled) return;
 
         const events = sortStories(
           (payload?.events || canonicalizeArticles((payload?.articles || []).filter((article) => article.isoA2 === panelRegion)))
@@ -367,13 +386,40 @@ function App() {
           feedChecks: payload?.feedChecks || [],
           events
         }));
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
+        return;
+      } catch (backendErr) {
+        console.warn('Region backfill backend failed, trying client-side:', backendErr.message);
+      }
 
-        console.warn('Region backfill failed:', error.message);
+      // 2. Fallback: client-side GDELT query for this region
+      try {
+        const clientArticles = await fetchLiveNews({
+          query: `"${regionName}"`,
+          timespan: '24h',
+          maxRecords: 50
+        });
+        if (cancelled) return;
+
+        const events = sortStories(
+          (clientArticles || []).filter((story) => story.isoA2 === panelRegion),
+          sortMode
+        );
+        setRegionBackfills((prev) => upsertRegionBackfill(prev, {
+          iso: panelRegion,
+          region: regionName,
+          status: events.length > 0 ? 'done' : 'empty',
+          fetchedAt: new Date().toISOString(),
+          sourcePlan: buildRegionSourcePlan(regionName, { coverageDiagnostics }),
+          feedChecks: [],
+          events
+        }));
+        return;
+      } catch (clientErr) {
+        console.warn('Region backfill client-side also failed:', clientErr.message);
+      }
+
+      // 3. Both failed
+      if (!cancelled) {
         setRegionBackfills((prev) => upsertRegionBackfill(prev, {
           iso: panelRegion,
           region: regionName,
@@ -383,7 +429,10 @@ function App() {
           feedChecks: [],
           events: []
         }));
-      });
+      }
+    };
+
+    doBackfill();
 
     return () => {
       cancelled = true;
