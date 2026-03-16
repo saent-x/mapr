@@ -91,15 +91,16 @@ const FlatMap = ({
   const { t } = useTranslation();
   const [countries, setCountries] = useState(null);
   const [hoveredIso, setHoveredIso] = useState(null);
-  const [tileUrl, setTileUrl] = useState(() => (
-    document.documentElement.getAttribute('data-theme') === 'light' ? TILE_LIGHT : TILE_DARK
+  const [theme, setTheme] = useState(() => (
+    document.documentElement.getAttribute('data-theme') || 'dark'
   ));
+  const tileUrl = theme === 'light' ? TILE_LIGHT : TILE_DARK;
+  const isLight = theme === 'light';
 
   // Watch for theme changes
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      const theme = document.documentElement.getAttribute('data-theme');
-      setTileUrl(theme === 'light' ? TILE_LIGHT : TILE_DARK);
+      setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
@@ -120,6 +121,14 @@ const FlatMap = ({
       .catch(() => {});
   }, []);
 
+  // Theme-aware neutral colors for polygon borders
+  const neutralBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+  const neutralBorderHover = isLight ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.2)';
+  const neutralBorderSelected = isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)';
+  const neutralFillHover = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.15)';
+  const neutralBorderFaint = isLight ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.05)';
+  const selectedStroke = isLight ? '#333333' : '#ffffff';
+
   // Style each country polygon based on severity
   const countryStyle = useCallback((feature) => {
     const iso = getIso(feature);
@@ -133,7 +142,7 @@ const FlatMap = ({
       return {
         fillColor: coverageMeta.accent,
         fillOpacity: isSelected ? 0.42 : isHovered ? 0.3 : coverageEntry ? 0.2 : 0.08,
-        color: isSelected ? '#ffffff' : isHovered ? coverageMeta.accent : coverageMeta.stroke,
+        color: isSelected ? selectedStroke : isHovered ? coverageMeta.accent : coverageMeta.stroke,
         weight: isSelected ? 2 : isHovered ? 1.5 : 0.8,
         opacity: 1,
       };
@@ -144,7 +153,7 @@ const FlatMap = ({
       return {
         fillColor: meta.accent,
         fillOpacity: isSelected ? 0.45 : isHovered ? 0.35 : 0.2,
-        color: isSelected ? meta.accent : isHovered ? meta.accent : 'rgba(255,255,255,0.08)',
+        color: isSelected ? meta.accent : isHovered ? meta.accent : neutralBorder,
         weight: isSelected ? 2 : isHovered ? 1.5 : 0.5,
         opacity: 1,
       };
@@ -152,13 +161,13 @@ const FlatMap = ({
 
     // No news for this country
     return {
-      fillColor: isHovered ? 'rgba(255,255,255,0.15)' : coverageMeta.accent,
+      fillColor: isHovered ? neutralFillHover : coverageMeta.accent,
       fillOpacity: isSelected ? 0.2 : isHovered ? 0.12 : 0.04,
-      color: isSelected ? 'rgba(255,255,255,0.4)' : isHovered ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
+      color: isSelected ? neutralBorderSelected : isHovered ? neutralBorderHover : neutralBorderFaint,
       weight: isSelected ? 1.5 : isHovered ? 1 : 0.5,
       opacity: 1,
     };
-  }, [coverageStatusByIso, hoveredIso, mapOverlay, regionSeverities, selectedRegion]);
+  }, [coverageStatusByIso, hoveredIso, isLight, mapOverlay, neutralBorder, neutralBorderFaint, neutralBorderHover, neutralBorderSelected, neutralFillHover, selectedStroke, regionSeverities, selectedRegion]);
 
   // Handlers for each country feature
   const onEachCountry = useCallback((feature, layer) => {
@@ -214,8 +223,8 @@ const FlatMap = ({
       .sort(([leftIso], [rightIso]) => leftIso.localeCompare(rightIso))
       .map(([iso, entry]) => `${iso}:${entry.status}:${entry.maxConfidence}`)
       .join('|');
-    return `${mapOverlay}-${sevKeys}-${coverageKeys}-${selectedRegion}-${hoveredIso}`;
-  }, [coverageStatusByIso, hoveredIso, mapOverlay, regionSeverities, selectedRegion]);
+    return `${mapOverlay}-${theme}-${sevKeys}-${coverageKeys}-${selectedRegion}-${hoveredIso}`;
+  }, [coverageStatusByIso, hoveredIso, mapOverlay, regionSeverities, selectedRegion, theme]);
 
   // Article dot markers
   const markers = useMemo(() => {

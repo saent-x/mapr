@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, ChevronUp } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { enUS, es, fr, ar, zhCN } from 'date-fns/locale';
 import { getSeverityMeta } from '../utils/mockData';
@@ -56,7 +56,36 @@ const NewsPanel = ({
   const { t, i18n } = useTranslation();
   const [expandedId, setExpandedId] = useState(null);
   const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const expandedRef = useRef(null);
+  const sheetRef = useRef(null);
+  const dragStartY = useRef(null);
+
+  // Reset mobile sheet state when panel closes or region changes
+  useEffect(() => {
+    setMobileExpanded(false);
+  }, [regionName, isOpen]);
+
+  // Touch drag handlers for the mobile bottom sheet handle
+  const handleDragStart = useCallback((e) => {
+    dragStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleDragEnd = useCallback((e) => {
+    if (dragStartY.current === null) return;
+    const delta = dragStartY.current - e.changedTouches[0].clientY;
+    dragStartY.current = null;
+    // Swipe up → expand, swipe down → collapse or close
+    if (delta > 40) {
+      setMobileExpanded(true);
+    } else if (delta < -40) {
+      if (mobileExpanded) {
+        setMobileExpanded(false);
+      } else {
+        onClose();
+      }
+    }
+  }, [mobileExpanded, onClose]);
 
   const resolvedRegionName = regionName || regionData?.region || t('panel.closePanel');
   const sevMeta = getSeverityMeta(regionData?.averageSeverity || 0);
@@ -134,13 +163,35 @@ const NewsPanel = ({
   );
 
   return (
-    <div className={`news-panel ${isOpen ? 'is-open' : ''}`}>
+    <div
+      ref={sheetRef}
+      className={`news-panel ${isOpen ? 'is-open' : ''} ${mobileExpanded ? 'is-mobile-expanded' : ''}`}
+    >
+      {/* Mobile drag handle */}
+      <div
+        className="news-panel-drag-handle"
+        onTouchStart={handleDragStart}
+        onTouchEnd={handleDragEnd}
+        onClick={() => setMobileExpanded((prev) => !prev)}
+      >
+        <div className="news-panel-drag-bar" />
+      </div>
+
       <div className="news-panel-header">
         <div className="news-panel-title">
           <h2>{resolvedRegionName}</h2>
-          <button className="news-panel-close" onClick={onClose} aria-label={t('panel.closePanel')}>
-            <X size={16} />
-          </button>
+          <div className="news-panel-title-actions">
+            <button
+              className="news-panel-expand-mobile"
+              onClick={() => setMobileExpanded((prev) => !prev)}
+              aria-label={mobileExpanded ? 'Collapse' : 'Expand'}
+            >
+              <ChevronUp size={16} className={mobileExpanded ? 'is-flipped' : ''} />
+            </button>
+            <button className="news-panel-close" onClick={onClose} aria-label={t('panel.closePanel')}>
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {regionData ? (

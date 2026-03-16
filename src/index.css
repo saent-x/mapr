@@ -944,6 +944,41 @@ button {
   color: var(--text);
 }
 
+/* Mobile bottom sheet elements - hidden on desktop */
+.news-panel-drag-handle {
+  display: none;
+}
+
+.news-panel-expand-mobile {
+  display: none;
+  width: 1.85rem;
+  height: 1.85rem;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  transition: background 0.15s, color 0.15s, transform 0.2s;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.news-panel-expand-mobile:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.news-panel-expand-mobile .is-flipped {
+  transform: rotate(180deg);
+}
+
+.news-panel-title-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
 .news-panel-meta {
   display: flex;
   gap: 0.4rem;
@@ -2450,16 +2485,49 @@ button {
     max-width: none;
   }
 
+  /* Mobile bottom sheet pattern */
   .news-panel {
     width: 100%;
     right: 0;
-    top: 0;
+    left: 0;
+    top: auto;
     bottom: 0;
-    border-radius: 0;
+    height: 35vh;
+    border-radius: 1rem 1rem 0 0;
+    border-bottom: none;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), height 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .news-panel.is-open {
+    transform: translateY(0);
+  }
+
+  .news-panel.is-mobile-expanded {
+    height: 85vh;
+  }
+
+  .news-panel-drag-handle {
+    display: flex;
+    justify-content: center;
+    padding: 0.5rem 0 0.25rem;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .news-panel-drag-bar {
+    width: 2rem;
+    height: 0.2rem;
+    border-radius: 2px;
+    background: var(--text-tertiary);
+  }
+
+  .news-panel-expand-mobile {
+    display: flex;
   }
 
   .news-panel-header h2 {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
   }
 
   .news-card {
@@ -2599,6 +2667,69 @@ button {
 
 [data-theme="light"] .flatmap-container {
   background: var(--bg);
+}
+
+[data-theme="light"] .flatmap-tooltip {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1a1a2e;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .flatmap-tooltip::before {
+  border-top-color: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="light"] .flatmap-popup .leaflet-popup-content-wrapper {
+  background: rgba(255, 255, 255, 0.96);
+  color: #1a1a2e;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .flatmap-popup .leaflet-popup-tip {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+[data-theme="light"] .flatmap-popup .leaflet-popup-close-button {
+  color: rgba(26, 26, 46, 0.5);
+}
+
+[data-theme="light"] .flatmap-popup .leaflet-popup-close-button:hover {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .flatmap-popup-content h3 {
+  color: #1a1a2e;
+}
+
+[data-theme="light"] .flatmap-popup-meta span {
+  color: rgba(26, 26, 46, 0.6);
+}
+
+[data-theme="light"] .flatmap-popup-detail-row {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .flatmap-popup-detail-row span:first-child {
+  color: rgba(26, 26, 46, 0.5);
+}
+
+[data-theme="light"] .flatmap-popup-chip {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(26, 26, 46, 0.7);
+}
+
+[data-theme="light"] .flatmap-popup-evidence-item {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(26, 26, 46, 0.7);
+}
+
+[data-theme="light"] .flatmap-popup-link {
+  color: #5b6adf;
+}
+
+[data-theme="light"] .news-panel-expand-mobile:hover,
+[data-theme="light"] .news-panel-close:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 /* ── Improved Mobile (< 600px) ── */
