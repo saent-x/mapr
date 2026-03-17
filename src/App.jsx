@@ -74,7 +74,9 @@ function App() {
   const [minSeverity, setMinSeverity] = useState(0);
   const [minConfidence, setMinConfidence] = useState(0);
   const [sortMode, setSortMode] = useState('severity');
-  const [mapMode, setMapMode] = useState('globe');
+  const [mapMode, setMapMode] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'flat' : 'globe'
+  );
   const [mapOverlay, setMapOverlay] = useState('severity');
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
