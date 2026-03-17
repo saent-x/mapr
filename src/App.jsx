@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
@@ -716,6 +717,7 @@ function App() {
           {t('errors.fallbackData')}
         </div>
       )}
+      <Analytics />
     </div>
     </ErrorBoundary>
   );
