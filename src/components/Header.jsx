@@ -33,7 +33,8 @@ const Header = ({
   onMapModeChange,
   dataSource,
   onRefresh,
-  backendStatus = null
+  backendStatus = null,
+  children,
 }) => {
   const { t, i18n } = useTranslation();
   const [showResults, setShowResults] = useState(false);
@@ -184,7 +185,7 @@ const Header = ({
 
       <div className="search-wrapper" ref={searchRef}>
         <label className="search-bar">
-          <Search size={15} />
+          <Search size={13} />
           <input
             type="text"
             className="search-input"
@@ -281,7 +282,7 @@ const Header = ({
             className={`map-toggle-btn ${mapMode === 'globe' ? 'is-active' : ''}`}
             onClick={() => onMapModeChange('globe')}
           >
-            <Globe2 size={13} />
+            <Globe2 size={12} />
             {t('header.globe')}
           </button>
           <button
@@ -291,13 +292,13 @@ const Header = ({
             className={`map-toggle-btn ${mapMode === 'flat' ? 'is-active' : ''}`}
             onClick={() => onMapModeChange('flat')}
           >
-            <MapIcon size={13} />
+            <MapIcon size={12} />
             {t('header.flat')}
           </button>
         </div>
 
         <div className="lang-switcher">
-          <Languages size={13} className="lang-switcher-icon" />
+          <Languages size={12} className="lang-switcher-icon" />
           <select
             value={i18n.language}
             onChange={(e) => changeLanguage(e.target.value)}
@@ -315,7 +316,7 @@ const Header = ({
           aria-label="Toggle theme"
           title="Toggle theme"
         >
-          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+          {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
         </button>
 
         <button
@@ -324,7 +325,7 @@ const Header = ({
           aria-label={t('header.refreshLabel')}
           title={t('header.refreshLabel')}
         >
-          <RefreshCw size={14} className={dataSource === 'loading' ? 'spin' : ''} />
+          <RefreshCw size={13} className={dataSource === 'loading' ? 'spin' : ''} />
         </button>
       </div>
 
@@ -346,6 +347,8 @@ const Header = ({
           </div>
         )}
       </div>
+
+      {children}
     </header>
   );
 };

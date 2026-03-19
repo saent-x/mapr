@@ -94,12 +94,17 @@ async function fetchAllRss() {
   );
 
   const articles = [];
+  let healthyFeeds = 0;
+  let failedFeeds = 0;
   for (const result of results) {
-    if (result.status === 'fulfilled') {
+    if (result.status === 'fulfilled' && result.value.length > 0) {
       articles.push(...result.value);
+      healthyFeeds++;
+    } else {
+      failedFeeds++;
     }
   }
-  return articles;
+  return { articles, healthyFeeds, failedFeeds, totalFeeds: ALL_RSS_FEEDS.length };
 }
 
 // ── GDELT ────────────────────────────────────────────────────
@@ -175,11 +180,12 @@ async function fetchGdelt(maxRecords = 250) {
 // ── Build Briefing ───────────────────────────────────────────
 
 export async function buildBriefing() {
-  const [rssArticles, gdeltArticles] = await Promise.all([
+  const [rssResult, gdeltArticles] = await Promise.all([
     fetchAllRss(),
     fetchGdelt()
   ]);
 
+  const rssArticles = rssResult.articles;
   const allArticles = deduplicateArticles([...gdeltArticles, ...rssArticles]);
   allArticles.sort((a, b) => b.severity - a.severity);
 
@@ -202,8 +208,23 @@ export async function buildBriefing() {
     coverageMetrics,
     coverageDiagnostics,
     sourceHealth: {
-      gdelt: { status: gdeltArticles.length > 0 ? 'ok' : 'empty', articleCount: gdeltArticles.length },
-      rss: { status: rssArticles.length > 0 ? 'ok' : 'empty', articleCount: rssArticles.length },
+      gdelt: {
+        status: gdeltArticles.length > 0 ? 'ok' : 'empty',
+        articleCount: gdeltArticles.length,
+        normalizedArticles: gdeltArticles.length,
+        // Server uses 1 combined query, not 6 profiles
+        totalProfiles: 1,
+        healthyProfiles: gdeltArticles.length > 0 ? 1 : 0,
+        failedProfiles: gdeltArticles.length > 0 ? 0 : 1,
+      },
+      rss: {
+        status: rssArticles.length > 0 ? 'ok' : 'empty',
+        articleCount: rssArticles.length,
+        articlesFound: rssArticles.length,
+        totalFeeds: rssResult.totalFeeds,
+        healthyFeeds: rssResult.healthyFeeds,
+        failedFeeds: rssResult.failedFeeds,
+      },
       backend: { status: 'ok', source: 'serverless' }
     }
   };

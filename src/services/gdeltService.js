@@ -149,19 +149,30 @@ async function fetchGdeltQuery(searchQuery, timespan, maxRecords) {
     await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS - timeSinceLastFetch));
   }
 
-  const params = new URLSearchParams({
-    query: searchQuery,
-    mode: 'artlist',
-    format: 'json',
-    timespan: timespan,
-    maxrecords: String(maxRecords),
-    sort: 'DateDesc'
-  });
-
-  const url = `${GDELT_DOC_URL}?${params}`;
   lastFetchTime = Date.now();
 
-  const response = await fetch(url);
+  // Use server proxy to avoid CORS issues in the browser
+  const useProxy = typeof window !== 'undefined';
+
+  let response;
+  if (useProxy) {
+    const params = new URLSearchParams({
+      query: searchQuery,
+      timespan: timespan,
+      maxrecords: String(maxRecords),
+    });
+    response = await fetch(`/api/gdelt-proxy?${params}`);
+  } else {
+    const params = new URLSearchParams({
+      query: searchQuery,
+      mode: 'artlist',
+      format: 'json',
+      timespan: timespan,
+      maxrecords: String(maxRecords),
+      sort: 'DateDesc'
+    });
+    response = await fetch(`${GDELT_DOC_URL}?${params}`);
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');

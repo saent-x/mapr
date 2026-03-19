@@ -6,6 +6,7 @@ import earthTexture from '../assets/earth-night.jpg';
 import skyTexture from '../assets/night-sky.png';
 import { getSeverityMeta } from '../utils/mockData';
 import { getCoverageMeta } from '../utils/coverageMeta';
+import { isoToCountry } from '../utils/geocoder';
 
 const DEFAULT_VIEW = { lat: 20, lng: 10, altitude: 2.2 };
 
@@ -28,7 +29,8 @@ const Globe = ({
   selectedRegion,
   selectedStory,
   onRegionSelect,
-  onStorySelect
+  onStorySelect,
+  onArcSelect
 }) => {
   const { t } = useTranslation();
   const containerRef = useRef(null);
@@ -38,6 +40,7 @@ const Globe = ({
 
   const [countries, setCountries] = useState({ features: [] });
   const [hoveredCountry, setHoveredCountry] = useState(null);
+  const [hoveredArc, setHoveredArc] = useState(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [userDragged, setUserDragged] = useState(false);
 
@@ -114,7 +117,7 @@ const Globe = ({
     const ctrl = globeRef.current.controls();
     ctrl.enableDamping = true;
     ctrl.dampingFactor = 0.08;
-    ctrl.autoRotateSpeed = 0.06;
+    ctrl.autoRotateSpeed = 0.08;
     ctrl.target.set(0, 0, 0);
     ctrl.update();
 
@@ -162,12 +165,98 @@ const Globe = ({
 
   const isActivePoint = (s) => s.isoA2 === activeRegion;
 
-  // Rings: only for selected region / story
+  // Rings: active pulses on high-severity stories across the globe
   const ringData = useMemo(() => {
     if (selectedStory) return [selectedStory];
-    if (!selectedRegion) return [];
-    return newsList.filter((s) => s.isoA2 === selectedRegion && s.severity >= 70).slice(0, 4);
+    // Show rings on all critical/elevated stories for ambient activity
+    const ambient = newsList
+      .filter((s) => s.severity >= 60)
+      .slice(0, 12);
+    if (selectedRegion) {
+      // Add selected region stories on top
+      const regionRings = newsList
+        .filter((s) => s.isoA2 === selectedRegion && s.severity >= 40)
+        .slice(0, 6);
+      const ids = new Set(regionRings.map((s) => s.id));
+      return [...regionRings, ...ambient.filter((s) => !ids.has(s.id))].slice(0, 14);
+    }
+    return ambient;
   }, [newsList, selectedRegion, selectedStory]);
+
+  // Arcs: connect countries that are mentioned in the same news
+  const arcData = useMemo(() => {
+    const arcs = [];
+    const seen = new Set();
+
+    const addArc = (a, b, title) => {
+      if (a.isoA2 === b.isoA2) return;
+      const pairKey = [a.isoA2, b.isoA2].sort().join('-');
+      if (seen.has(pairKey)) return;
+      seen.add(pairKey);
+      const avgSev = Math.round((a.severity + b.severity) / 2);
+      arcs.push({
+        id: pairKey,
+        startLat: a.coordinates[0],
+        startLng: a.coordinates[1],
+        endLat: b.coordinates[0],
+        endLng: b.coordinates[1],
+        startIso: a.isoA2,
+        endIso: b.isoA2,
+        startRegion: a.region || a.locality,
+        endRegion: b.region || b.locality,
+        severity: avgSev,
+        category: a.category || b.category || 'related',
+        title: title || a.title,
+      });
+    };
+
+    // 1. Same article placed in multiple countries (same URL)
+    const byUrl = {};
+    for (const story of newsList) {
+      if (!story.coordinates || !story.isoA2 || !story.url) continue;
+      if (!byUrl[story.url]) byUrl[story.url] = [];
+      if (!byUrl[story.url].some((s) => s.isoA2 === story.isoA2)) {
+        byUrl[story.url].push(story);
+      }
+    }
+    for (const group of Object.values(byUrl)) {
+      if (group.length < 2) continue;
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          addArc(group[i], group[j], group[i].title);
+        }
+      }
+    }
+
+    // 2. Article title mentions another country's name
+    // Build a lookup: country name → story with best coordinates for that country
+    const countryStoryMap = {};
+    for (const story of newsList) {
+      if (!story.coordinates || !story.isoA2) continue;
+      if (!countryStoryMap[story.isoA2] || story.severity > countryStoryMap[story.isoA2].severity) {
+        countryStoryMap[story.isoA2] = story;
+      }
+    }
+
+    for (const story of newsList) {
+      if (!story.coordinates || !story.isoA2) continue;
+      const titleLower = (story.title || '').toLowerCase();
+      if (!titleLower) continue;
+      // Check if this story's title mentions other countries that have stories
+      for (const [iso, representative] of Object.entries(countryStoryMap)) {
+        if (iso === story.isoA2) continue;
+        const countryName = isoToCountry(iso);
+        if (!countryName) continue;
+        if (titleLower.includes(countryName.toLowerCase())) {
+          addArc(story, representative, story.title);
+        }
+      }
+    }
+
+    return arcs
+      .sort((a, b) => b.severity - a.severity)
+      .slice(0, 30);
+  }, [newsList]);
 
   // Helpers
   const getRegionSev = (f) => {
@@ -194,8 +283,8 @@ const Globe = ({
           globeImageUrl={earthTexture}
           backgroundImageUrl={skyTexture}
           showAtmosphere
-          atmosphereColor="#4a6fa1"
-          atmosphereAltitude={0.18}
+          atmosphereColor="#00a8cc"
+          atmosphereAltitude={0.22}
 
           /* === POLYGONS === */
           polygonsData={countries.features}
@@ -217,6 +306,8 @@ const Globe = ({
 
             if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
             if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
+            // Slight elevation for countries with severity data
+            if (sev) return 0.002 + sev / 8000;
             return 0;
           }}
 
@@ -233,11 +324,22 @@ const Globe = ({
               return coverageMeta.fill;
             }
 
-            if (isSel && sev) return getSeverityMeta(sev).mapFill;
-            if (isSel) return 'rgba(123, 138, 255, 0.18)';
-            if (isHov && sev) return getSeverityMeta(sev).mapFill;
-            if (isHov) return 'rgba(255, 255, 255, 0.07)';
-            return 'rgba(255, 255, 255, 0.012)';
+            if (sev) {
+              const meta = getSeverityMeta(sev);
+              if (isSel) return meta.mapFill;
+              if (isHov) return meta.mapFill;
+              // Always shade countries with data by severity
+              const alpha = 0.08 + (sev / 100) * 0.14;
+              const hex = meta.accent;
+              const r = parseInt(hex.slice(1, 3), 16);
+              const g = parseInt(hex.slice(3, 5), 16);
+              const b = parseInt(hex.slice(5, 7), 16);
+              return `rgba(${r},${g},${b},${alpha})`;
+            }
+
+            if (isSel) return 'rgba(0, 200, 255, 0.15)';
+            if (isHov) return 'rgba(0, 200, 255, 0.08)';
+            return 'rgba(0, 180, 255, 0.02)';
           }}
 
           polygonSideColor={(f) => {
@@ -253,19 +355,19 @@ const Globe = ({
             }
 
             if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
-            if (isSel || isHov) return 'rgba(255, 255, 255, 0.04)';
+            if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
             return 'rgba(0, 0, 0, 0)';
           }}
 
           polygonStrokeColor={(f) => {
             const iso = getIso(f);
             const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-            if (iso === selectedRegion) return 'rgba(255, 255, 255, 0.45)';
+            if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
             if (hoveredCountry && getIso(hoveredCountry) === iso) {
-              return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(255, 255, 255, 0.2)';
+              return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(0, 220, 255, 0.35)';
             }
             if (mapOverlay === 'coverage') return coverageMeta.stroke;
-            return 'rgba(255, 255, 255, 0.03)';
+            return 'rgba(0, 200, 255, 0.07)';
           }}
 
           polygonLabel={(f) => {
@@ -338,13 +440,13 @@ const Globe = ({
           pointRadius={(s) => {
             if (selectedStory?.id === s.id) return 0.35;
             if (isActivePoint(s)) return 0.12 + s.severity / 450;
-            return 0.06 + s.severity / 900;
+            return 0.07 + s.severity / 800;
           }}
           pointColor={(s) => {
             if (selectedStory?.id === s.id) return '#ffffff';
             const meta = getSeverityMeta(s.severity);
             if (isActivePoint(s)) return meta.accent;
-            return meta.muted;
+            return meta.muted.replace(/[\d.]+\)$/, (m) => `${Math.min(parseFloat(m) * 1.6, 0.35)})`);
           }}
           pointLabel={(s) => {
             if (!isActivePoint(s)) return '';
@@ -361,17 +463,88 @@ const Globe = ({
           }}
           onPointClick={(s) => onStorySelect(s)}
 
-          /* === RINGS (pulses on active region) === */
+          /* === ARCS (connect countries with related crises) === */
+          arcsData={arcData}
+          arcStartLat={(d) => d.startLat}
+          arcStartLng={(d) => d.startLng}
+          arcEndLat={(d) => d.endLat}
+          arcEndLng={(d) => d.endLng}
+          arcColor={(d) => {
+            const meta = getSeverityMeta(d.severity);
+            const isHov = hoveredArc && hoveredArc.id === d.id;
+            if (isHov) return [meta.accent, meta.accent];
+            return [`${meta.accent}90`, `${meta.accent}40`];
+          }}
+          arcStroke={(d) => {
+            const isHov = hoveredArc && hoveredArc.id === d.id;
+            if (isHov) return 1.2;
+            if (d.severity >= 85) return 0.4;
+            if (d.severity >= 60) return 0.3;
+            if (d.severity >= 35) return 0.2;
+            return 0.15;
+          }}
+          arcDashLength={(d) => {
+            const isHov = hoveredArc && hoveredArc.id === d.id;
+            return isHov ? 1 : 0.8;
+          }}
+          arcDashGap={(d) => {
+            const isHov = hoveredArc && hoveredArc.id === d.id;
+            return isHov ? 0 : 0.3;
+          }}
+          arcDashAnimateTime={(d) => {
+            const isHov = hoveredArc && hoveredArc.id === d.id;
+            if (isHov) return 0; // stop animation on hover
+            if (d.severity >= 85) return 4000;
+            if (d.severity >= 60) return 6000;
+            return 8000;
+          }}
+          arcAltitudeAutoScale={0.35}
+          onArcHover={setHoveredArc}
+          arcLabel={(d) => {
+            const meta = getSeverityMeta(d.severity);
+            return `
+              <div class="globe-tooltip">
+                <div class="globe-tooltip-name" style="color:${meta.accent}">${d.category}</div>
+                <div class="globe-tooltip-row">
+                  <span>${d.startRegion}</span>
+                  <strong>↔</strong>
+                  <span>${d.endRegion}</span>
+                </div>
+                <div class="globe-tooltip-row">
+                  <span>${t('map.severity')}</span>
+                  <strong style="color:${meta.accent}">${meta.label} · ${d.severity}</strong>
+                </div>
+              </div>
+            `;
+          }}
+          onArcClick={(d) => {
+            if (onArcSelect) onArcSelect(d);
+          }}
+          arcsTransitionDuration={600}
+
+          /* === RINGS (ambient activity pulses) === */
           ringsData={ringData}
           ringLat={(s) => s.coordinates[0]}
           ringLng={(s) => s.coordinates[1]}
           ringColor={(s) => {
             const meta = getSeverityMeta(s.severity);
-            return [meta.ring, meta.muted, 'rgba(255,255,255,0)'];
+            return [meta.accent, meta.ring, meta.muted, 'rgba(255,255,255,0)'];
           }}
-          ringMaxRadius={(s) => 2 + s.severity / 24}
-          ringPropagationSpeed={1.4}
-          ringRepeatPeriod={1200}
+          ringMaxRadius={(s) => {
+            if (selectedStory?.id === s.id) return 4 + s.severity / 16;
+            if (s.isoA2 === selectedRegion) return 3 + s.severity / 20;
+            return 2 + s.severity / 30;
+          }}
+          ringPropagationSpeed={(s) => {
+            if (selectedStory?.id === s.id || s.isoA2 === selectedRegion) return 2;
+            return 1.2;
+          }}
+          ringRepeatPeriod={(s) => {
+            if (selectedStory?.id === s.id) return 800;
+            if (s.severity >= 85) return 1200;
+            if (s.severity >= 60) return 1800;
+            return 2400;
+          }}
 
           /* === TRANSITIONS === */
           polygonsTransitionDuration={350}

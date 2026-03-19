@@ -1,11 +1,12 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, Radio } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
+import ArcPanel from './components/ArcPanel';
 import {
   fetchBackendBriefing,
   fetchBackendCoverageHistory,
@@ -19,7 +20,6 @@ import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipe
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
 import { mergeStoryLists } from './utils/aiState';
-import { getSourceHost } from './utils/urlUtils';
 import { buildRegionSourcePlan, buildSourceCoverageAudit } from './utils/sourceCoverage';
 import { sortStories, storyMatchesFilters } from './utils/storyFilters';
 import { isoToCountry } from './utils/geocoder';
@@ -85,7 +85,9 @@ function App() {
   const [precisionFilter, setPrecisionFilter] = useState('all');
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedStoryId, setSelectedStoryId] = useState(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedArc, setSelectedArc] = useState(null);
+  const [drawerMode, setDrawerMode] = useState(null); // null | 'filters' | 'intel'
+  const filtersOpen = drawerMode !== null;
 
   // Live data state
   const [liveNews, setLiveNews] = useState(null);
@@ -97,7 +99,16 @@ function App() {
   const [regionCoverageHistory, setRegionCoverageHistory] = useState(null);
   const [regionBackfills, setRegionBackfills] = useState({});
   const [opsHealth, setOpsHealth] = useState(null);
+  const [toasts, setToasts] = useState([]);
   const refreshTimerRef = useRef(null);
+  const prevArticleCountRef = useRef(0);
+  const isFirstLoadRef = useRef(true);
+
+  const addToast = useCallback((message, type = 'info') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev.slice(-3), { id, message, type }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+  }, []);
 
   // Fetch live data — tries backend first, falls back to client-side GDELT
   const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
@@ -111,6 +122,8 @@ function App() {
       ]);
 
       if (Array.isArray(briefing?.articles) && briefing.articles.length > 0) {
+        const count = briefing.articles.length;
+        const prevCount = prevArticleCountRef.current;
         setLiveNews(briefing.articles);
         setRegionBackfills({});
         setSourceHealth(briefing.sourceHealth || { gdelt: null, rss: null, backend: null });
@@ -119,6 +132,17 @@ function App() {
         fetchBackendHealth().then(setOpsHealth).catch(() => setOpsHealth(null));
         setDataSource('live');
         setDataError(null);
+        // Notify on refresh (not first load)
+        if (!isFirstLoadRef.current) {
+          const diff = count - prevCount;
+          if (diff > 0) {
+            addToast(`${diff} new stories detected · ${count} total`, 'new-data');
+          } else {
+            addToast(`Intel refreshed · ${count} stories`, 'refresh');
+          }
+        }
+        prevArticleCountRef.current = count;
+        isFirstLoadRef.current = false;
         return;
       }
     } catch (backendErr) {
@@ -129,6 +153,7 @@ function App() {
     try {
       const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 250 });
       if (Array.isArray(clientArticles) && clientArticles.length > 0) {
+        const count = clientArticles.length;
         setLiveNews(clientArticles);
         setRegionBackfills({});
         const gdeltHealth = getGdeltFetchHealth();
@@ -138,7 +163,11 @@ function App() {
         setOpsHealth(null);
         setDataSource('live');
         setDataError(null);
-        console.info(`Client-side GDELT fallback loaded ${clientArticles.length} articles`);
+        if (!isFirstLoadRef.current) {
+          addToast(`Client-side refresh · ${count} stories`, 'refresh');
+        }
+        prevArticleCountRef.current = count;
+        isFirstLoadRef.current = false;
         return;
       }
     } catch (clientErr) {
@@ -449,16 +478,25 @@ function App() {
   const handleRegionSelect = (iso) => {
     setSelectedRegion((prev) => (prev === iso ? null : iso));
     setSelectedStoryId(null);
+    setSelectedArc(null);
   };
 
   const handleStorySelect = (story) => {
     setSelectedStoryId(story.id);
     setSelectedRegion(story.isoA2);
+    setSelectedArc(null);
   };
+
+  const handleArcSelect = useCallback((arc) => {
+    setSelectedArc(arc);
+    setSelectedRegion(null);
+    setSelectedStoryId(null);
+  }, []);
 
   const handleClosePanel = useCallback(() => {
     setSelectedRegion(null);
     setSelectedStoryId(null);
+    setSelectedArc(null);
   }, []);
 
   const handleSearchSelect = useCallback((result) => {
@@ -502,14 +540,14 @@ function App() {
           if (panelOpen) {
             handleClosePanel();
           } else if (filtersOpen) {
-            setFiltersOpen(false);
+            setDrawerMode(null);
           }
           break;
         case 'g':
           setMapMode((prev) => (prev === 'globe' ? 'flat' : 'globe'));
           break;
         case 'f':
-          setFiltersOpen((prev) => !prev);
+          setDrawerMode((prev) => prev === 'filters' ? null : 'filters');
           break;
         default:
           break;
@@ -557,6 +595,7 @@ function App() {
             selectedStory={selectedStory}
             onRegionSelect={handleRegionSelect}
             onStorySelect={handleStorySelect}
+            onArcSelect={handleArcSelect}
           />
         ) : (
           <FlatMap
@@ -568,6 +607,7 @@ function App() {
             selectedStory={selectedStory}
             onRegionSelect={handleRegionSelect}
             onStorySelect={handleStorySelect}
+            onArcSelect={handleArcSelect}
           />
         )}
       </Suspense>
@@ -588,18 +628,57 @@ function App() {
         dataSource={dataSource}
         onRefresh={handleRefresh}
         backendStatus={opsHealth?.status || sourceHealth?.backend?.status || null}
-      />
-
-      <button
-        className={`filter-toggle ${filtersOpen ? 'is-active' : ''}`}
-        onClick={() => setFiltersOpen((p) => !p)}
       >
-        <SlidersHorizontal size={14} />
-        {t('filters.label')}
-      </button>
+        <div className="legend">
+          <span className="legend-label">{t(`legend.${mapOverlay}`)}</span>
+          <div className="legend-items">
+            {mapOverlay === 'severity'
+              ? [
+                { key: 'critical', color: 'var(--critical)' },
+                { key: 'elevated', color: 'var(--elevated)' },
+                { key: 'watch', color: 'var(--watch)' },
+                { key: 'low', color: 'var(--low)' }
+              ].map((item) => (
+                <div key={item.key} className="legend-item">
+                  <span className="legend-dot" style={{ background: item.color }} />
+                  {t(`legend.${item.key}`)}
+                </div>
+              ))
+              : COVERAGE_STATUS_ORDER.map((status) => {
+                const meta = getCoverageMeta(status);
+                return (
+                  <div key={status} className="legend-item">
+                    <span className="legend-dot" style={{ background: meta.accent }} />
+                    {t(`coverageStatus.${meta.labelKey}`)}
+                  </div>
+                );
+              })}
+          </div>
+          <span className="legend-credit">crafted by <strong>tor</strong></span>
+        </div>
+      </Header>
+
+      <div className="drawer-toggles">
+        <button
+          className={`filter-toggle ${drawerMode === 'filters' ? 'is-active' : ''}`}
+          onClick={() => setDrawerMode((prev) => prev === 'filters' ? null : 'filters')}
+        >
+          <SlidersHorizontal size={12} />
+          {t('filters.label')}
+        </button>
+        <button
+          className={`filter-toggle ${drawerMode === 'intel' ? 'is-active' : ''}`}
+          onClick={() => setDrawerMode((prev) => prev === 'intel' ? null : 'intel')}
+        >
+          <Radio size={12} />
+          INTEL
+        </button>
+      </div>
 
       <FilterDrawer
         isOpen={filtersOpen}
+        defaultTab={drawerMode || 'filters'}
+        onClose={() => setDrawerMode(null)}
         dateWindow={dateWindow}
         setDateWindow={setDateWindow}
         mapOverlay={mapOverlay}
@@ -632,73 +711,43 @@ function App() {
         onRegionSelect={handleRegionSelect}
       />
 
-      <div className="legend">
-        <span className="legend-label">{t(`legend.${mapOverlay}`)}</span>
-        <div className="legend-items">
-          {mapOverlay === 'severity'
-            ? [
-              { key: 'critical', color: 'var(--critical)' },
-              { key: 'elevated', color: 'var(--elevated)' },
-              { key: 'watch', color: 'var(--watch)' },
-              { key: 'low', color: 'var(--low)' }
-            ].map((item) => (
-              <div key={item.key} className="legend-item">
-                <span className="legend-dot" style={{ background: item.color }} />
-                {t(`legend.${item.key}`)}
-              </div>
-            ))
-            : COVERAGE_STATUS_ORDER.map((status) => {
-              const meta = getCoverageMeta(status);
+      <div className={`intel-ticker ${panelOpen ? 'is-shifted' : ''}`}>
+        <span className="intel-ticker-label">INTEL</span>
+        <div className="intel-ticker-track">
+          <div className="intel-ticker-scroll">
+            {activeNews.slice(0, 12).map((story) => {
+              const meta = getSeverityMeta(story.severity);
               return (
-                <div key={status} className="legend-item">
-                  <span className="legend-dot" style={{ background: meta.accent }} />
-                  {t(`coverageStatus.${meta.labelKey}`)}
-                </div>
+                <button
+                  key={story.id}
+                  type="button"
+                  className={`intel-ticker-item ${selectedStoryId === story.id ? 'is-active' : ''}`}
+                  onClick={() => handleStorySelect(story)}
+                >
+                  <span className="intel-ticker-dot" style={{ background: meta.accent }} />
+                  <span className="intel-ticker-severity" style={{ color: meta.accent }}>{meta.label}</span>
+                  <span className="intel-ticker-title">{story.title}</span>
+                  <span className="intel-ticker-loc">{story.locality}</span>
+                </button>
               );
             })}
+          </div>
         </div>
-        <span className="legend-credit">crafted by <strong>tor</strong></span>
       </div>
 
-      <div className={`story-bar ${panelOpen ? 'is-shifted' : ''}`}>
-        {activeNews.slice(0, 8).map((story) => {
-          const meta = getSeverityMeta(story.severity);
-          const sourceLabel = getSourceHost(story.url, story.source || t('article.readFull'));
-          return (
-            <div
-              key={story.id}
-              className={`story-chip-shell ${selectedStoryId === story.id ? 'is-active' : ''}`}
-            >
-              <button
-                type="button"
-                className="story-chip"
-                onClick={() => handleStorySelect(story)}
-              >
-                <span className="story-chip-dot" style={{ background: meta.accent }} />
-                <div className="story-chip-text">
-                  <div className="story-chip-title">{story.title}</div>
-                  <div className="story-chip-location">{story.locality}</div>
-                </div>
-              </button>
-              {story.url && (
-                <a
-                  className="story-chip-link"
-                  href={story.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={t('article.readFull')}
-                >
-                  {sourceLabel}
-                </a>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {selectedArc && (
+        <ArcPanel
+          arc={selectedArc}
+          newsList={activeNews}
+          onStorySelect={handleStorySelect}
+          onRegionSelect={handleRegionSelect}
+          onClose={() => setSelectedArc(null)}
+        />
+      )}
 
       <NewsPanel
         key={panelRegion || 'closed'}
-        isOpen={panelOpen}
+        isOpen={panelOpen && !selectedArc}
         regionName={panelRegionName}
         regionStatus={panelRegionStatus}
         regionData={panelRegionData}
@@ -719,6 +768,18 @@ function App() {
           {t('errors.fallbackData')}
         </div>
       )}
+      {/* Toast notifications */}
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`toast toast-${toast.type}`}>
+              <span className="toast-dot" />
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       <Analytics />
     </div>
     </ErrorBoundary>
