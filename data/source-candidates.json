@@ -1,0 +1,967 @@
+[
+  {
+    "country": "Burundi",
+    "isoA2": "BI",
+    "source": "Iwacu",
+    "website": "https://www.iwacu-burundi.org/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Independent local outlet; useful for Burundi-specific political and civic coverage."
+  },
+  {
+    "country": "Burundi",
+    "isoA2": "BI",
+    "source": "Breaking Burundi",
+    "website": "https://breakingburundi.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English local coverage."
+  },
+  {
+    "country": "Burundi",
+    "isoA2": "BI",
+    "source": "Inside Burundi",
+    "website": "https://insideburundi.org/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Investigative and ground-reporting outlet."
+  },
+  {
+    "country": "Central African Republic",
+    "isoA2": "CF",
+    "source": "Radio Ndeke Luka",
+    "website": "https://www.radiondekeluka.org/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Widely used local broadcaster; strong national reach."
+  },
+  {
+    "country": "Central African Republic",
+    "isoA2": "CF",
+    "source": "Corbeau News Centrafrique",
+    "website": "https://corbeaunews-centrafrique.org/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "medium",
+    "notes": "Independent digital outlet; useful as a second CAR-native source."
+  },
+  {
+    "country": "El Salvador",
+    "isoA2": "SV",
+    "source": "El Faro",
+    "website": "https://elfaro.net/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Independent digital native outlet."
+  },
+  {
+    "country": "El Salvador",
+    "isoA2": "SV",
+    "source": "La Prensa Grafica",
+    "website": "https://www.laprensagrafica.com/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Major Salvadoran daily."
+  },
+  {
+    "country": "El Salvador",
+    "isoA2": "SV",
+    "source": "El Diario de Hoy / elsalvador.com",
+    "website": "https://www.elsalvador.com/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Large national news site."
+  },
+  {
+    "country": "Estonia",
+    "isoA2": "EE",
+    "source": "ERR News",
+    "website": "https://news.err.ee/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language public broadcaster coverage."
+  },
+  {
+    "country": "Guatemala",
+    "isoA2": "GT",
+    "source": "Prensa Libre",
+    "website": "https://www.prensalibre.com/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Major Guatemalan newspaper."
+  },
+  {
+    "country": "Guatemala",
+    "isoA2": "GT",
+    "source": "Plaza Publica",
+    "website": "https://www.plazapublica.com.gt/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Investigative and analysis-heavy local outlet."
+  },
+  {
+    "country": "Honduras",
+    "isoA2": "HN",
+    "source": "La Prensa Honduras",
+    "website": "https://www.laprensa.hn/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Major Honduran daily."
+  },
+  {
+    "country": "Honduras",
+    "isoA2": "HN",
+    "source": "Contracorriente",
+    "website": "https://contracorriente.red/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Independent in-depth digital journalism."
+  },
+  {
+    "country": "Kyrgyzstan",
+    "isoA2": "KG",
+    "source": "Radio Azattyk",
+    "website": "https://rus.azattyk.org/",
+    "mode": "html",
+    "language": "ru",
+    "priority": "high",
+    "notes": "Major independent source via RFE/RL's Kyrgyz service."
+  },
+  {
+    "country": "Kyrgyzstan",
+    "isoA2": "KG",
+    "source": "Kloop",
+    "website": "https://kloop.kg/",
+    "mode": "html",
+    "language": "ru",
+    "priority": "high",
+    "notes": "Independent investigative outlet."
+  },
+  {
+    "country": "Kyrgyzstan",
+    "isoA2": "KG",
+    "source": "AKIpress",
+    "website": "https://akipress.com/",
+    "mode": "html",
+    "language": "ru",
+    "priority": "high",
+    "notes": "Independent national news agency."
+  },
+  {
+    "country": "Lithuania",
+    "isoA2": "LT",
+    "source": "LRT English",
+    "website": "https://www.lrt.lt/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language national broadcaster coverage."
+  },
+  {
+    "country": "Luxembourg",
+    "isoA2": "LU",
+    "source": "RTL Today",
+    "website": "https://today.rtl.lu/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Fast local Luxembourg coverage in English."
+  },
+  {
+    "country": "Luxembourg",
+    "isoA2": "LU",
+    "source": "Chronicle.lu",
+    "website": "https://chronicle.lu/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English local-community and national coverage."
+  },
+  {
+    "country": "Luxembourg",
+    "isoA2": "LU",
+    "source": "Luxembourg Times",
+    "website": "https://www.luxtimes.lu/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Quality political and business reporting for Luxembourg."
+  },
+  {
+    "country": "Malawi",
+    "isoA2": "MW",
+    "source": "Malawi24",
+    "website": "https://malawi24.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Independent national digital outlet."
+  },
+  {
+    "country": "Malawi",
+    "isoA2": "MW",
+    "source": "Nthanda Times",
+    "website": "https://nthandatimes.com/home/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Independent digital news platform."
+  },
+  {
+    "country": "Malawi",
+    "isoA2": "MW",
+    "source": "Malawi Data News",
+    "website": "https://malawidatanews.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Additional Malawi national coverage."
+  },
+  {
+    "country": "Mauritania",
+    "isoA2": "MR",
+    "source": "Mauritanian News Agency (AMI)",
+    "website": "https://ami.mr/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Official national source; should be paired with independent outlets where possible."
+  },
+  {
+    "country": "Nicaragua",
+    "isoA2": "NI",
+    "source": "Confidencial",
+    "website": "https://confidencial.digital/english/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Independent Nicaraguan outlet operating from alternate domain."
+  },
+  {
+    "country": "Nicaragua",
+    "isoA2": "NI",
+    "source": "The Nicaragua Dispatch",
+    "website": "http://www.nicaraguadispatch.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "English-language Nicaragua-focused publication."
+  },
+  {
+    "country": "Albania",
+    "isoA2": "AL",
+    "source": "BalkanWeb",
+    "website": "https://www.balkanweb.com/",
+    "mode": "html",
+    "language": "sq",
+    "priority": "high",
+    "notes": "High-volume Albanian national news portal with strong domestic coverage."
+  },
+  {
+    "country": "Albania",
+    "isoA2": "AL",
+    "source": "Albanian Daily News",
+    "website": "https://www.albaniandailynews.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Albania-focused outlet useful for international readability."
+  },
+  {
+    "country": "Armenia",
+    "isoA2": "AM",
+    "source": "ARMENPRESS",
+    "website": "https://armenpress.am/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "State news agency with broad national coverage in English."
+  },
+  {
+    "country": "Armenia",
+    "isoA2": "AM",
+    "source": "NEWS.am",
+    "website": "https://news.am/eng/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Large independent Armenian news portal with frequent local updates."
+  },
+  {
+    "country": "Azerbaijan",
+    "isoA2": "AZ",
+    "source": "Trend News Agency",
+    "website": "https://en.trend.az/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Azerbaijan-focused outlet with broad regional and domestic coverage."
+  },
+  {
+    "country": "Azerbaijan",
+    "isoA2": "AZ",
+    "source": "Report.az English",
+    "website": "https://report.az/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "National Azerbaijan news agency with English homepage coverage."
+  },
+  {
+    "country": "Belgium",
+    "isoA2": "BE",
+    "source": "The Brussels Times",
+    "website": "https://www.brusselstimes.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Belgium-focused national and Brussels reporting in English."
+  },
+  {
+    "country": "Belgium",
+    "isoA2": "BE",
+    "source": "The Bulletin",
+    "website": "https://www.thebulletin.be/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Long-running Belgium and Brussels news outlet for English-speaking readers."
+  },
+  {
+    "country": "Bolivia",
+    "isoA2": "BO",
+    "source": "El Deber",
+    "website": "https://eldeber.com.bo/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Major Bolivian national outlet with wide domestic coverage."
+  },
+  {
+    "country": "Bolivia",
+    "isoA2": "BO",
+    "source": "Los Tiempos",
+    "website": "https://www.lostiempos.com/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Established Bolivian daily useful as a second local source."
+  },
+  {
+    "country": "Bosnia",
+    "isoA2": "BA",
+    "source": "Sarajevo Times",
+    "website": "https://sarajevotimes.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Bosnia and Herzegovina-focused English-language outlet."
+  },
+  {
+    "country": "Bulgaria",
+    "isoA2": "BG",
+    "source": "Novinite",
+    "website": "https://www.novinite.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Bulgarian national news in English from Sofia News Agency."
+  },
+  {
+    "country": "Bulgaria",
+    "isoA2": "BG",
+    "source": "BTA English",
+    "website": "https://www.bta.bg/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "sourceType": "official",
+    "notes": "Bulgarian News Agency's English service."
+  },
+  {
+    "country": "Georgia",
+    "isoA2": "GE",
+    "source": "Civil Georgia",
+    "website": "https://civil.ge/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Widely used Georgia-focused independent English-language outlet."
+  },
+  {
+    "country": "Georgia",
+    "isoA2": "GE",
+    "source": "Georgia Today",
+    "website": "https://georgiatoday.ge/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Georgia-focused local outlet with domestic politics and society coverage."
+  },
+  {
+    "country": "Oman",
+    "isoA2": "OM",
+    "source": "Times of Oman",
+    "website": "https://timesofoman.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Major Oman daily with broad national reporting in English."
+  },
+  {
+    "country": "Oman",
+    "isoA2": "OM",
+    "source": "Muscat Daily",
+    "website": "https://www.muscatdaily.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Oman-focused English-language local news outlet."
+  },
+  {
+    "country": "Palestine",
+    "isoA2": "PS",
+    "source": "WAFA English",
+    "website": "https://english.wafa.ps/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "Palestinian News and Information Agency English service."
+  },
+  {
+    "country": "Palestine",
+    "isoA2": "PS",
+    "source": "Ma'an News",
+    "website": "https://www.maannews.net/eng/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Palestinian local news agency with long-running English coverage."
+  },
+  {
+    "country": "Peru",
+    "isoA2": "PE",
+    "source": "La Republica",
+    "website": "https://larepublica.pe/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Large Peruvian daily with strong national news volume."
+  },
+  {
+    "country": "Peru",
+    "isoA2": "PE",
+    "source": "El Comercio Peru",
+    "website": "https://elcomercio.pe/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Major Peruvian national newspaper."
+  },
+  {
+    "country": "Sierra Leone",
+    "isoA2": "SL",
+    "source": "The Sierra Leone Telegraph",
+    "website": "https://www.thesierraleonetelegraph.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Sierra Leone-focused online newspaper with local political reporting."
+  },
+  {
+    "country": "South Sudan",
+    "isoA2": "SS",
+    "source": "Eye Radio",
+    "website": "https://www.eyeradio.org/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Leading South Sudan-focused local broadcaster and news publisher."
+  },
+  {
+    "country": "South Sudan",
+    "isoA2": "SS",
+    "source": "Radio Tamazuj",
+    "website": "https://radiotamazuj.org/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "South Sudan and Sudan-focused independent local reporting."
+  },
+  {
+    "country": "Bahrain",
+    "isoA2": "BH",
+    "source": "Gulf Daily News",
+    "website": "https://www.gdnonline.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Long-running Bahrain daily with local and national reporting."
+  },
+  {
+    "country": "Bahrain",
+    "isoA2": "BH",
+    "source": "Bahrain News Agency",
+    "website": "https://www.bna.bh/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "sourceType": "official",
+    "notes": "Official English-language Bahrain news agency."
+  },
+  {
+    "country": "Belarus",
+    "isoA2": "BY",
+    "source": "Nasha Niva",
+    "website": "https://nashaniva.com/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Historic Belarus-focused independent outlet publishing in exile."
+  },
+  {
+    "country": "Belarus",
+    "isoA2": "BY",
+    "source": "BelTA English",
+    "website": "https://eng.belta.by/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "sourceType": "official",
+    "notes": "Official Belarusian news agency English service."
+  },
+  {
+    "country": "Cyprus",
+    "isoA2": "CY",
+    "source": "Cyprus Mail",
+    "website": "https://cyprus-mail.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "The main English-language daily newspaper in Cyprus."
+  },
+  {
+    "country": "Cyprus",
+    "isoA2": "CY",
+    "source": "Cyprus News Agency",
+    "website": "https://www.cna.org.cy/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "sourceType": "official",
+    "notes": "Cyprus News Agency English service."
+  },
+  {
+    "country": "Croatia",
+    "isoA2": "HR",
+    "source": "Total Croatia News",
+    "website": "https://total-croatia-news.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Croatia-focused national outlet."
+  },
+  {
+    "country": "Croatia",
+    "isoA2": "HR",
+    "source": "Croatia Week",
+    "website": "https://www.croatiaweek.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Croatia-focused English-language news site."
+  },
+  {
+    "country": "Dem. Rep. Congo",
+    "isoA2": "CD",
+    "source": "Radio Okapi",
+    "website": "https://www.radiookapi.net/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "UN-backed national broadcaster with extensive local coverage across DRC."
+  },
+  {
+    "country": "Dem. Rep. Congo",
+    "isoA2": "CD",
+    "source": "Actualite.cd",
+    "website": "https://actualite.cd/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Independent digital outlet focused on DRC politics and society."
+  },
+  {
+    "country": "Ecuador",
+    "isoA2": "EC",
+    "source": "El Universo",
+    "website": "https://www.eluniverso.com/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Major Ecuadorian daily with strong domestic coverage."
+  },
+  {
+    "country": "Ecuador",
+    "isoA2": "EC",
+    "source": "Primicias",
+    "website": "https://www.primicias.ec/",
+    "mode": "html",
+    "language": "es",
+    "priority": "high",
+    "notes": "Digital-native Ecuador outlet with strong politics and economy reporting."
+  },
+  {
+    "country": "Ghana",
+    "isoA2": "GH",
+    "source": "MyJoyOnline",
+    "website": "https://www.myjoyonline.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Large Ghanaian national news platform with broad local reporting."
+  },
+  {
+    "country": "Ghana",
+    "isoA2": "GH",
+    "source": "Graphic Online",
+    "website": "https://www.graphic.com.gh/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Major Ghanaian national news site."
+  },
+  {
+    "country": "Indonesia",
+    "isoA2": "ID",
+    "source": "Jakarta Globe",
+    "website": "https://jakartaglobe.id/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Indonesian national outlet."
+  },
+  {
+    "country": "Indonesia",
+    "isoA2": "ID",
+    "source": "The Jakarta Post",
+    "website": "https://www.thejakartapost.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Flagship English-language Indonesian newspaper."
+  },
+  {
+    "country": "Iraq",
+    "isoA2": "IQ",
+    "source": "Shafaq News",
+    "website": "https://shafaq.com/en",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Iraq-focused national and Kurdistan reporting in English."
+  },
+  {
+    "country": "Iraq",
+    "isoA2": "IQ",
+    "source": "Rudaw English",
+    "website": "https://www.rudaw.net/english",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Major Kurdish and Iraq-focused English-language outlet."
+  },
+  {
+    "country": "Burkina Faso",
+    "isoA2": "BF",
+    "source": "leFaso.net",
+    "website": "https://lefaso.net/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Major Burkina Faso digital-native national outlet with strong regional pages."
+  },
+  {
+    "country": "Burkina Faso",
+    "isoA2": "BF",
+    "source": "Sidwaya",
+    "website": "https://www.sidwaya.info/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "State daily with broad national coverage across Burkina Faso."
+  },
+  {
+    "country": "Congo",
+    "isoA2": "CG",
+    "source": "Les Depeches de Brazzaville",
+    "website": "https://www.lesdepechesdebrazzaville.fr/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Leading Republic of the Congo newspaper with national reporting."
+  },
+  {
+    "country": "Congo",
+    "isoA2": "CG",
+    "source": "Journal de Brazza",
+    "website": "https://www.journaldebrazza.com/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Brazzaville-focused national news site with active local reporting."
+  },
+  {
+    "country": "Gabon",
+    "isoA2": "GA",
+    "source": "GabonReview",
+    "website": "https://www.gabonreview.com/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Independent Gabonese outlet with regular national political coverage."
+  },
+  {
+    "country": "Gabon",
+    "isoA2": "GA",
+    "source": "Gabon Media Time",
+    "website": "https://gabonmediatime.com/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "medium",
+    "notes": "Libreville-based national outlet with politics and society coverage."
+  },
+  {
+    "country": "Latvia",
+    "isoA2": "LV",
+    "source": "LSM English",
+    "website": "https://www.lsm.lv/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "Latvian public media with English-language coverage and strong domestic reporting."
+  },
+  {
+    "country": "Latvia",
+    "isoA2": "LV",
+    "source": "TVNET",
+    "website": "https://www.tvnet.lv/",
+    "mode": "html",
+    "language": "lv",
+    "priority": "high",
+    "notes": "Large Latvian digital news portal with broad domestic reporting."
+  },
+  {
+    "country": "Moldova",
+    "isoA2": "MD",
+    "source": "MOLDPRES",
+    "website": "https://www.moldpres.md/eng/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "Moldovan state news agency with English-language national coverage."
+  },
+  {
+    "country": "Moldova",
+    "isoA2": "MD",
+    "source": "Ziarul de Garda",
+    "website": "https://www.zdg.md/",
+    "mode": "html",
+    "language": "ro",
+    "priority": "high",
+    "notes": "Independent Moldovan investigative and national news outlet."
+  },
+  {
+    "country": "Mongolia",
+    "isoA2": "MN",
+    "source": "MONTSAME English",
+    "website": "https://montsame.mn/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "Mongolian national news agency with English-language service."
+  },
+  {
+    "country": "Mongolia",
+    "isoA2": "MN",
+    "source": "GoGo Mongolia",
+    "website": "https://gogo.mn/",
+    "mode": "html",
+    "language": "mn",
+    "priority": "medium",
+    "notes": "Major Mongolian digital outlet with large domestic audience."
+  },
+  {
+    "country": "Montenegro",
+    "isoA2": "ME",
+    "source": "Vijesti",
+    "website": "https://www.vijesti.me/",
+    "mode": "html",
+    "language": "sr",
+    "priority": "high",
+    "notes": "Leading Montenegrin daily and digital outlet."
+  },
+  {
+    "country": "Montenegro",
+    "isoA2": "ME",
+    "source": "RTCG English",
+    "website": "https://rtcg.me/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "sourceType": "official",
+    "notes": "Montenegro public broadcaster English service."
+  },
+  {
+    "country": "Poland",
+    "isoA2": "PL",
+    "source": "Notes from Poland",
+    "website": "https://notesfrompoland.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Independent nonprofit English-language outlet focused on Poland."
+  },
+  {
+    "country": "Poland",
+    "isoA2": "PL",
+    "source": "TVP World",
+    "website": "https://tvpworld.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "sourceType": "official",
+    "notes": "Polish public broadcaster international English service."
+  },
+  {
+    "country": "Serbia",
+    "isoA2": "RS",
+    "source": "N1 English",
+    "website": "https://n1info.rs/english/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Independent Serbia-focused English-language news outlet."
+  },
+  {
+    "country": "Serbia",
+    "isoA2": "RS",
+    "source": "Serbian Monitor",
+    "website": "https://www.serbianmonitor.com/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Serbia-focused news and analysis outlet."
+  },
+  {
+    "country": "France",
+    "isoA2": "FR",
+    "source": "The Connexion",
+    "website": "https://www.connexionfrance.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Long-running English-language France-focused outlet."
+  },
+  {
+    "country": "France",
+    "isoA2": "FR",
+    "source": "France Info",
+    "website": "https://www.francetvinfo.fr/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "French public service news site with broad domestic reporting."
+  },
+  {
+    "country": "Germany",
+    "isoA2": "DE",
+    "source": "The Local Germany",
+    "website": "https://www.thelocal.de/home-page/home-page-germany",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Germany-focused news outlet."
+  },
+  {
+    "country": "Germany",
+    "isoA2": "DE",
+    "source": "Tagesschau",
+    "website": "https://www.tagesschau.de/",
+    "mode": "html",
+    "language": "de",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "German public broadcaster's flagship national news site."
+  },
+  {
+    "country": "Iceland",
+    "isoA2": "IS",
+    "source": "Iceland Monitor",
+    "website": "https://icelandmonitor.mbl.is/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Iceland news site from the country's largest publisher."
+  },
+  {
+    "country": "Iceland",
+    "isoA2": "IS",
+    "source": "Iceland Review",
+    "website": "https://www.icelandreview.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Long-running English-language Icelandic news and current affairs outlet."
+  },
+  {
+    "country": "Italy",
+    "isoA2": "IT",
+    "source": "ANSA English",
+    "website": "https://www.ansa.it/english/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "sourceType": "official",
+    "notes": "Italian national news agency English service."
+  },
+  {
+    "country": "Italy",
+    "isoA2": "IT",
+    "source": "Wanted in Rome",
+    "website": "https://www.wantedinrome.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "English-language Italy news site with regular domestic coverage."
+  },
+  {
+    "country": "Trinidad and Tobago",
+    "isoA2": "TT",
+    "source": "Trinidad and Tobago Newsday",
+    "website": "https://newsday.co.tt/",
+    "mode": "html",
+    "language": "en",
+    "priority": "medium",
+    "notes": "Site still surfaced recently, but corporate/publication status needs re-check before onboarding."
+  }
+]

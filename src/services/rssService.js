@@ -68,6 +68,25 @@ const CAUCASUS_COVERAGE_COUNTRIES = ['Armenia', 'Azerbaijan', 'Georgia'];
 const BALKANS_COVERAGE_COUNTRIES = ['Albania', 'Bosnia', 'Bulgaria', 'Croatia', 'Montenegro', 'Romania', 'Serbia', 'Slovenia'];
 const PACIFIC_COVERAGE_COUNTRIES = ['Australia', 'Fiji', 'New Zealand', 'Papua New Guinea'];
 
+const DISABLED_FEED_IDS = new Set([
+  // Dead or obsolete endpoints that consistently return 404/403 and distort source health.
+  'who-don',
+  'reuters',
+  'apnews',
+  'aa-cd',
+  'aa-bf',
+  'aa-ss',
+  'ghanaweb',
+  'citizen-tz',
+  'gulfnews-ae',
+  'khaleejtimes-ae',
+  'jakartapost-id',
+  'ansa-it',
+  'merco-pe',
+  'merco-bo',
+  'merco-ec'
+]);
+
 // ── Regional and global publisher feeds ──────────────────────────
 
 export const RSS_FEEDS = [
@@ -156,7 +175,7 @@ export const RSS_FEEDS = [
   { name: 'Times of India', url: 'https://timesofindia.indiatimes.com/rssfeedstopstories.cms', id: 'toi', country: 'India' },
   { name: 'Hindustan Times', url: 'https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml', id: 'ht-in', country: 'India' },
   { name: 'Japan Times', url: 'https://www.japantimes.co.jp/feed/', id: 'japantimes', country: 'Japan' },
-  { name: 'Korea Herald', url: 'http://www.koreaherald.com/common/rss_xml.php?ct=102', id: 'koreaherald', country: 'South Korea' },
+  { name: 'Korea Herald', url: 'https://www.koreaherald.com/common/rss_xml.php?ct=102', id: 'koreaherald', country: 'South Korea' },
   { name: 'Rappler Philippines', url: 'https://www.rappler.com/feed/', id: 'rappler-ph', country: 'Philippines' },
   { name: 'Dawn Pakistan', url: 'https://www.dawn.com/feed', id: 'dawn-pk', country: 'Pakistan' },
   { name: 'Daily Star Bangladesh', url: 'https://www.thedailystar.net/frontpage/rss.xml', id: 'dailystar-bd', country: 'Bangladesh' },
@@ -240,7 +259,8 @@ let cachedArticles = null;
 let cacheTimestamp = 0;
 let fetchInProgress = null;
 const CACHE_TTL = 5 * 60 * 1000;
-export const ALL_RSS_FEEDS = [...OFFICIAL_FEEDS, ...RSS_FEEDS];
+export const ALL_RSS_FEEDS = [...OFFICIAL_FEEDS, ...RSS_FEEDS]
+  .filter((feed) => !DISABLED_FEED_IDS.has(feed.id));
 
 function createEmptyRssHealth() {
   return {

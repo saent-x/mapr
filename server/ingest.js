@@ -1,4 +1,3 @@
-import { ALL_RSS_FEEDS } from '../src/services/rssService.js';
 import {
   buildRegionFocusQueries,
   clearCache as clearGdeltCache,
@@ -17,10 +16,20 @@ import {
   summarizeCoverageTrends
 } from '../src/utils/coverageHistory.js';
 import { countryToIso, geocodeArticleAll, isoToCountry } from '../src/utils/geocoder.js';
+import { deriveBriefingCoverage } from '../src/utils/healthSummary.js';
 import { detectLanguage } from '../src/utils/languageUtils.js';
 import { calculateCoverageMetrics, canonicalizeArticles } from '../src/utils/newsPipeline.js';
 import { buildOpsAlerts, buildRegionLagDiagnostics } from '../src/utils/opsDiagnostics.js';
 import { classifySourceType } from '../src/utils/sourceMetadata.js';
+import {
+  getDefaultSourceCatalog,
+  mergeSourceState,
+  readSourceCatalog,
+  readSourceState,
+  selectSourcesForRun,
+  summarizeSourceCatalog,
+  writeSourceState
+} from './sourceCatalog.js';
 import {
   appendHistory,
   DATABASE_PATH,
@@ -30,8 +39,6 @@ import {
   writeCoverageHistory,
   writeSnapshot
 } from './storage.js';
-import { parseFeedItems } from './rssParser.js';
-
 const DEFAULT_TIMESPAN = '24h';
 const DEFAULT_MAX_RECORDS = 250;
 const REGION_BACKFILL_TIMESPAN = '168h';
@@ -40,9 +47,9 @@ const REGION_BACKFILL_FEED_LIMIT = 12;
 const REGION_BACKFILL_TARGET_ARTICLES = 18;
 const RSS_BATCH_SIZE = 6;
 const RSS_BATCH_DELAY_MS = 400;
-const REQUEST_TIMEOUT_MS = 6500;
 const REFRESH_INTERVAL_MS = Number(process.env.MAPR_REFRESH_MS || 10 * 60 * 1000);
 const STALE_AFTER_MS = Number(process.env.MAPR_STALE_AFTER_MS || 30 * 60 * 1000);
+import { fetchCatalogSource } from './sourceFetcher.js';
 
 let currentSnapshot = null;
 let refreshPromise = null;
@@ -63,18 +70,110 @@ let ingestHealth = {
   consecutiveFailures: 0,
   lastError: null
 };
+let sourceCatalog = [];
+let sourceState = {};
 
 function createEmptyRssHealth() {
   return {
     lastUpdated: null,
     fromCache: false,
     totalFeeds: 0,
+    dueFeeds: 0,
     healthyFeeds: 0,
     emptyFeeds: 0,
     failedFeeds: 0,
     articlesFound: 0,
+    catalogSummary: null,
     feeds: []
   };
+}
+
+function getSourceCatalog() {
+  return sourceCatalog.length > 0 ? sourceCatalog : getDefaultSourceCatalog();
+}
+
+function getArticleFeedId(article, feeds = getSourceCatalog()) {
+  if (article?.feedId) {
+    return article.feedId;
+  }
+
+  const articleId = article?.id || '';
+  if (!articleId.startsWith('rss-server-')) {
+    return null;
+  }
+
+  const remainder = articleId.slice('rss-server-'.length);
+  const matchedFeed = feeds.find((feed) => remainder.startsWith(`${feed.id}-`));
+  return matchedFeed?.id || null;
+}
+
+function buildRssHealthFromCatalog(catalog, state, checkedFeedResults = [], {
+  checkedAt = new Date().toISOString(),
+  fromCache = false,
+  dueFeeds = null
+} = {}) {
+  const resultsById = new Map((checkedFeedResults || []).map((result) => [result.feedId, result]));
+  const hydratedFeeds = (catalog || []).map((feed) => {
+    const prior = state?.[feed.id] || {};
+    const result = resultsById.get(feed.id);
+    const lastStatus = result?.status || prior.lastStatus || 'never-checked';
+    const lastCheckedAt = result ? checkedAt : prior.lastCheckedAt || null;
+    const lastSuccessAt = result
+      ? (result.status === 'failed' ? prior.lastSuccessAt || null : checkedAt)
+      : prior.lastSuccessAt || null;
+
+    return {
+      feedId: feed.id,
+      name: feed.name,
+      sourceType: feed.sourceType || null,
+      sourceClass: feed.sourceClass || null,
+      fetchMode: feed.fetchMode || 'rss',
+      country: feed.country || null,
+      isoA2: feed.isoA2 || null,
+      coverageCountries: feed.coverageCountries || [],
+      coverageIsoA2s: feed.coverageIsoA2s || [],
+      cadenceMinutes: feed.cadenceMinutes || null,
+      status: lastStatus,
+      articleCount: result ? result.articleCount : (prior.lastArticleCount || 0),
+      proxy: result?.proxy || prior.proxy || null,
+      error: result ? result.error || null : prior.lastError || null,
+      lastCheckedAt,
+      lastSuccessAt,
+      nextCheckAt: prior.nextCheckAt || null,
+      checkedThisRun: Boolean(result)
+    };
+  });
+
+  return {
+    lastUpdated: checkedAt,
+    fromCache,
+    totalFeeds: hydratedFeeds.length,
+    dueFeeds: dueFeeds ?? hydratedFeeds.filter((feed) => feed.checkedThisRun).length,
+    healthyFeeds: hydratedFeeds.filter((feed) => feed.status === 'ok').length,
+    emptyFeeds: hydratedFeeds.filter((feed) => feed.status === 'empty').length,
+    failedFeeds: hydratedFeeds.filter((feed) => feed.status === 'failed').length,
+    articlesFound: hydratedFeeds.reduce((total, feed) => total + (feed.articleCount || 0), 0),
+    catalogSummary: summarizeSourceCatalog(catalog, state),
+    feeds: hydratedFeeds
+  };
+}
+
+function mergeRssArticles(previousArticles, refreshedFeedIds, nextRssArticles, feeds = getSourceCatalog()) {
+  const refreshedIds = refreshedFeedIds instanceof Set ? refreshedFeedIds : new Set(refreshedFeedIds || []);
+  const retainedPreviousArticles = (previousArticles || []).filter((article) => {
+    const feedId = getArticleFeedId(article, feeds);
+    if (!feedId) {
+      return false;
+    }
+
+    return !refreshedIds.has(feedId);
+  });
+
+  return [...retainedPreviousArticles, ...(nextRssArticles || [])];
+}
+
+function retainPreviousGdeltArticles(previousArticles) {
+  return (previousArticles || []).filter((article) => String(article?.id || '').startsWith('gdelt-'));
 }
 
 function getSnapshotAgeMs() {
@@ -112,12 +211,22 @@ function buildBackendHealth() {
     snapshotAgeMs,
     snapshotPath: DATABASE_PATH,
     storagePath: DATABASE_PATH,
-    storageBackend: 'sqlite'
+    storageBackend: 'sqlite',
+    sourceCatalog: summarizeSourceCatalog(getSourceCatalog(), sourceState)
   };
 }
 
 function createResponsePayload() {
   const backend = buildBackendHealth();
+  const sourceHealth = {
+    gdelt: currentSnapshot?.sourceHealth?.gdelt || null,
+    rss: currentSnapshot?.sourceHealth?.rss || null,
+    backend
+  };
+  const { coverageMetrics, coverageDiagnostics } = deriveBriefingCoverage({
+    events: currentSnapshot?.events || [],
+    sourceHealth
+  });
 
   return {
     meta: {
@@ -130,12 +239,10 @@ function createResponsePayload() {
     },
     articles: currentSnapshot?.articles || [],
     events: currentSnapshot?.events || [],
+    coverageMetrics,
+    coverageDiagnostics,
     coverageTrends,
-    sourceHealth: {
-      gdelt: currentSnapshot?.sourceHealth?.gdelt || null,
-      rss: currentSnapshot?.sourceHealth?.rss || null,
-      backend
-    },
+    sourceHealth,
     ingestHealth
   };
 }
@@ -152,115 +259,32 @@ function buildHistoryEntry({ status, reason, startedAt, articles, events, error 
   };
 }
 
-async function fetchText(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.1',
-        'user-agent': 'Mapr/1.0 (+local ingest)'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    return await response.text();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function normalizeServerRssArticle(item, feed, index) {
-  if (!item?.title) {
-    return [];
-  }
-
-  const geos = geocodeArticleAll(item.title, feed.country, item.summary);
-  if (geos.length === 0) {
-    return [];
-  }
-
-  const publishedDate = new Date(item.publishedAt || Date.now());
-  const publishedAt = Number.isNaN(publishedDate.getTime())
-    ? new Date().toISOString()
-    : publishedDate.toISOString();
-  const baseId = `rss-server-${feed.id}-${index}`;
-
-  return geos.map((geo, geoIdx) => ({
-    id: geos.length > 1 ? `${baseId}-${geoIdx}` : baseId,
-    title: item.title,
-    summary: item.summary || item.title,
-    url: item.link || '',
-    severity: deriveSeverity(item.title),
-    publishedAt,
-    region: geo.region,
-    isoA2: countryToIso(geo.region) || 'XX',
-    locality: geo.locality,
-    category: deriveCategory(item.title),
-    coordinates: [geo.lat, geo.lng],
-    source: feed.name,
-    sourceCountry: feed.country || null,
-    sourceType: classifySourceType({
-      source: feed.name,
-      sourceCountry: feed.country,
-      sourceType: feed.sourceType
-    }),
-    language: detectLanguage(`${item.title} ${item.summary || ''}`, feed.language || null),
-    geocodePrecision: geo.precision,
-    geocodeMatchedOn: geo.matchedOn,
-    socialimage: item.mediaUrl || null,
-    isLive: true
-  }));
-}
-
 async function fetchRssFeed(feed) {
-  try {
-    const xmlText = await fetchText(feed.url);
-    const parsedItems = parseFeedItems(xmlText);
-    const articles = parsedItems
-      .flatMap((item, index) => normalizeServerRssArticle(item, feed, index));
-
-    return {
-      feedId: feed.id,
-      name: feed.name,
-      sourceType: feed.sourceType || null,
-      country: feed.country || null,
-      isoA2: feed.country ? countryToIso(feed.country) || null : null,
-      coverageCountries: getFeedCoverageCountries(feed),
-      coverageIsoA2s: getFeedCoverageIsos(feed),
-      status: articles.length > 0 ? 'ok' : 'empty',
-      articleCount: articles.length,
-      error: null,
-      articles
-    };
-  } catch (error) {
-    return {
-      feedId: feed.id,
-      name: feed.name,
-      sourceType: feed.sourceType || null,
-      country: feed.country || null,
-      isoA2: feed.country ? countryToIso(feed.country) || null : null,
-      coverageCountries: getFeedCoverageCountries(feed),
-      coverageIsoA2s: getFeedCoverageIsos(feed),
-      status: 'failed',
-      articleCount: 0,
-      error: error.message,
-      articles: []
-    };
-  }
+  return fetchCatalogSource(feed, { idPrefix: 'server' });
 }
 
-async function fetchRssNewsDirect() {
+async function fetchRssNewsDirect({ force = false } = {}) {
+  const catalog = getSourceCatalog();
+  const selectedFeeds = selectSourcesForRun(catalog, sourceState, { force });
+  const checkedAt = new Date().toISOString();
+
+  if (selectedFeeds.length === 0) {
+    return {
+      articles: [],
+      checkedFeedIds: [],
+      health: buildRssHealthFromCatalog(catalog, sourceState, [], {
+        checkedAt,
+        fromCache: true,
+        dueFeeds: 0
+      })
+    };
+  }
+
   const articles = [];
   const feeds = [];
 
-  for (let index = 0; index < ALL_RSS_FEEDS.length; index += RSS_BATCH_SIZE) {
-    const batch = ALL_RSS_FEEDS.slice(index, index + RSS_BATCH_SIZE);
+  for (let index = 0; index < selectedFeeds.length; index += RSS_BATCH_SIZE) {
+    const batch = selectedFeeds.slice(index, index + RSS_BATCH_SIZE);
     const results = await Promise.all(batch.map((feed) => fetchRssFeed(feed)));
 
     results.forEach((result) => {
@@ -269,6 +293,9 @@ async function fetchRssNewsDirect() {
         feedId: result.feedId,
         name: result.name,
         sourceType: result.sourceType,
+        sourceClass: result.sourceClass,
+        fetchMode: result.fetchMode || 'rss',
+        cadenceMinutes: result.cadenceMinutes || null,
         country: result.country,
         isoA2: result.isoA2,
         coverageCountries: result.coverageCountries,
@@ -280,31 +307,33 @@ async function fetchRssNewsDirect() {
       });
     });
 
-    if (index + RSS_BATCH_SIZE < ALL_RSS_FEEDS.length) {
+    if (index + RSS_BATCH_SIZE < selectedFeeds.length) {
       await new Promise((resolve) => setTimeout(resolve, RSS_BATCH_DELAY_MS));
     }
   }
 
   articles.sort((left, right) => right.severity - left.severity);
+  sourceState = mergeSourceState(catalog, sourceState, feeds, checkedAt);
+  await writeSourceState(sourceState);
 
   return {
     articles,
-    health: {
-      lastUpdated: new Date().toISOString(),
+    checkedFeedIds: selectedFeeds.map((feed) => feed.id),
+    health: buildRssHealthFromCatalog(catalog, sourceState, feeds, {
+      checkedAt,
       fromCache: false,
-      totalFeeds: ALL_RSS_FEEDS.length,
-      healthyFeeds: feeds.filter((feed) => feed.status === 'ok').length,
-      emptyFeeds: feeds.filter((feed) => feed.status === 'empty').length,
-      failedFeeds: feeds.filter((feed) => feed.status === 'failed').length,
-      articlesFound: articles.length,
-      feeds
-    }
+      dueFeeds: selectedFeeds.length
+    })
   };
 }
 
 export function getRegionBackfillFeedPlan(regionName) {
-  return buildRegionSourcePlan(regionName, { limit: REGION_BACKFILL_FEED_LIMIT }).plannedFeeds
-    .map((plannedFeed) => ALL_RSS_FEEDS.find((feed) => feed.id === plannedFeed.id))
+  const catalog = getSourceCatalog();
+  return buildRegionSourcePlan(regionName, {
+    limit: REGION_BACKFILL_FEED_LIMIT,
+    feeds: catalog
+  }).plannedFeeds
+    .map((plannedFeed) => catalog.find((feed) => feed.id === plannedFeed.id))
     .filter(Boolean);
 }
 
@@ -325,11 +354,14 @@ async function fetchRegionRssBackfill(regionName, iso) {
     const results = await Promise.all(batch.map((feed) => fetchRssFeed(feed)));
 
     results.forEach((result) => {
-      feedHealth.push({
-        feedId: result.feedId,
-        name: result.name,
-        sourceType: result.sourceType,
-        country: result.country,
+        feedHealth.push({
+          feedId: result.feedId,
+          name: result.name,
+          sourceType: result.sourceType,
+          sourceClass: result.sourceClass,
+          fetchMode: result.fetchMode || 'rss',
+          cadenceMinutes: result.cadenceMinutes || null,
+          country: result.country,
         isoA2: result.isoA2,
         coverageCountries: result.coverageCountries,
         coverageIsoA2s: result.coverageIsoA2s,
@@ -367,7 +399,23 @@ function persistIngestHealth(snapshot) {
 }
 
 export async function initializeIngestion() {
+  sourceCatalog = await readSourceCatalog();
+  sourceState = await readSourceState();
   currentSnapshot = await readSnapshot();
+
+  if (
+    currentSnapshot?.sourceHealth?.rss?.feeds?.length > 0 &&
+    (!sourceState || Object.keys(sourceState).length === 0)
+  ) {
+    sourceState = mergeSourceState(
+      getSourceCatalog(),
+      {},
+      currentSnapshot.sourceHealth.rss.feeds,
+      currentSnapshot.fetchedAt || new Date().toISOString()
+    );
+    await writeSourceState(sourceState).catch(() => {});
+  }
+
   coverageHistory = await readCoverageHistory();
   coverageTrends = summarizeCoverageTrends(coverageHistory);
   loadedFromDisk = Boolean(currentSnapshot);
@@ -436,8 +484,10 @@ export async function getHealth() {
     gdelt: null,
     rss: createEmptyRssHealth()
   };
-  const coverageMetrics = calculateCoverageMetrics(currentSnapshot?.events || []);
-  const coverageDiagnostics = buildCoverageDiagnostics(coverageMetrics, sourceHealth);
+  const { coverageMetrics, coverageDiagnostics } = deriveBriefingCoverage({
+    events: currentSnapshot?.events || [],
+    sourceHealth
+  });
   const regionLag = buildRegionLagDiagnostics(currentSnapshot?.events || []);
   const opsAlerts = buildOpsAlerts({
     backendHealth: backend,
@@ -450,10 +500,35 @@ export async function getHealth() {
     ...backend,
     history: history.slice(0, 12),
     coverageTrends,
+    coverageMetrics,
+    coverageDiagnostics,
     sourceHealth,
+    sourceCatalog: summarizeSourceCatalog(getSourceCatalog(), sourceState),
     alerts: opsAlerts.alerts,
     alertSummary: opsAlerts.summary,
     regionLag
+  };
+}
+
+export function getSourceCatalogStatus() {
+  const catalog = getSourceCatalog();
+  const summary = summarizeSourceCatalog(catalog, sourceState);
+
+  return {
+    summary,
+    feeds: catalog.map((feed) => {
+      const state = sourceState?.[feed.id] || {};
+
+      return {
+        ...feed,
+        lastCheckedAt: state.lastCheckedAt || null,
+        lastSuccessAt: state.lastSuccessAt || null,
+        lastStatus: state.lastStatus || 'never-checked',
+        lastError: state.lastError || null,
+        lastArticleCount: state.lastArticleCount || 0,
+        nextCheckAt: state.nextCheckAt || null
+      };
+    })
   };
 }
 
@@ -484,7 +559,8 @@ export async function getRegionBriefing(iso) {
   const coverageDiagnostics = buildCoverageDiagnostics(coverageMetrics, currentSnapshot?.sourceHealth || {});
   const sourcePlan = buildRegionSourcePlan(regionName, {
     limit: REGION_BACKFILL_FEED_LIMIT,
-    coverageDiagnostics
+    coverageDiagnostics,
+    feeds: getSourceCatalog()
   });
 
   const existingArticles = (currentSnapshot?.articles || []).filter((article) => article.isoA2 === normalizedIso);
@@ -565,13 +641,22 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
           console.warn('GDELT ingest failed:', error.message);
           return [];
         }),
-        fetchRssNewsDirect().catch((error) => {
+        fetchRssNewsDirect({ force }).catch((error) => {
           console.warn('RSS ingest failed:', error.message);
-          return { articles: [], health: createEmptyRssHealth() };
+          return { articles: [], checkedFeedIds: [], health: createEmptyRssHealth() };
         })
       ]);
 
-      const mergedArticles = deduplicateArticles([...gdeltArticles, ...rssResult.articles]);
+      const effectiveGdeltArticles = gdeltArticles.length > 0
+        ? gdeltArticles
+        : retainPreviousGdeltArticles(currentSnapshot?.articles || []);
+      const mergedRssArticles = mergeRssArticles(
+        currentSnapshot?.articles || [],
+        rssResult.checkedFeedIds || [],
+        rssResult.articles,
+        getSourceCatalog()
+      );
+      const mergedArticles = deduplicateArticles([...effectiveGdeltArticles, ...mergedRssArticles]);
       if (mergedArticles.length === 0) {
         throw new Error('No articles available from GDELT or RSS sources');
       }

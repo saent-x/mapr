@@ -3,14 +3,14 @@ import { countryToIso, KNOWN_COUNTRY_NAMES } from './geocoder.js';
 
 export const REGION_PRIORITY_GLOBAL_FEED_IDS = [
   'un-news',
-  'who-don',
   'usgs-significant',
   'bbc',
-  'reuters',
   'aljazeera',
   'guardian-uk',
   'dw',
-  'france24'
+  'france24',
+  'euronews',
+  'npr'
 ];
 
 const STATUS_PRIORITY = {
@@ -43,6 +43,12 @@ function uniqueFeeds(feeds) {
   });
 }
 
+export function isRunnableFeed(feed) {
+  return Boolean(feed)
+    && feed.enabled !== false
+    && ['rss', 'html'].includes(feed.fetchMode || feed.mode || 'rss');
+}
+
 export function getFeedCoverageCountries(feed) {
   const coverageCountries = Array.isArray(feed?.coverageCountries)
     ? feed.coverageCountries.filter(Boolean)
@@ -68,20 +74,37 @@ export function feedTargetsRegion(feed, regionName) {
 
 export function buildRegionSourcePlan(regionName, {
   limit = 12,
-  coverageDiagnostics = null
+  coverageDiagnostics = null,
+  feeds = ALL_RSS_FEEDS
 } = {}) {
   const iso = countryToIso(regionName);
-  const localFeeds = ALL_RSS_FEEDS.filter((feed) => feed.country === regionName);
-  const regionalFeeds = ALL_RSS_FEEDS.filter((feed) => (
+  const activeFeeds = feeds.filter((feed) => isRunnableFeed(feed));
+  const candidateFeeds = feeds.filter((feed) => !isRunnableFeed(feed));
+  const localFeeds = activeFeeds.filter((feed) => feed.country === regionName);
+  const regionalFeeds = activeFeeds.filter((feed) => (
     feed.country !== regionName
     && Array.isArray(feed.coverageCountries)
     && feed.coverageCountries.includes(regionName)
   ));
-  const officialFeeds = ALL_RSS_FEEDS.filter((feed) => feed.sourceType === 'official');
+  const candidateLocalFeeds = candidateFeeds.filter((feed) => feed.country === regionName);
+  const candidateRegionalFeeds = candidateFeeds.filter((feed) => (
+    feed.country !== regionName
+    && Array.isArray(feed.coverageCountries)
+    && feed.coverageCountries.includes(regionName)
+  ));
+  const officialFeeds = activeFeeds.filter((feed) => (
+    feed.sourceType === 'official'
+    && (
+      !feed.country
+      || feed.country === regionName
+      || (Array.isArray(feed.coverageCountries) && feed.coverageCountries.includes(regionName))
+    )
+  ));
   const globalFeeds = REGION_PRIORITY_GLOBAL_FEED_IDS
-    .map((feedId) => ALL_RSS_FEEDS.find((feed) => feed.id === feedId))
+    .map((feedId) => activeFeeds.find((feed) => feed.id === feedId))
     .filter(Boolean);
   const plannedFeeds = uniqueFeeds([...localFeeds, ...regionalFeeds, ...officialFeeds, ...globalFeeds]).slice(0, limit);
+  const candidatePlan = uniqueFeeds([...candidateLocalFeeds, ...candidateRegionalFeeds]).slice(0, limit);
   const status = iso ? coverageDiagnostics?.byIso?.[iso]?.status || 'uncovered' : 'uncovered';
 
   return {
@@ -90,6 +113,8 @@ export function buildRegionSourcePlan(regionName, {
     status,
     localFeedCount: localFeeds.length,
     regionalFeedCount: regionalFeeds.length,
+    candidateLocalFeedCount: candidateLocalFeeds.length,
+    candidateRegionalFeedCount: candidateRegionalFeeds.length,
     targetedFeedCount: localFeeds.length + regionalFeeds.length,
     officialFeedCount: officialFeeds.length,
     globalFeedCount: globalFeeds.length,
@@ -97,23 +122,41 @@ export function buildRegionSourcePlan(regionName, {
     localFeeds: localFeeds.map((feed) => ({
       id: feed.id,
       name: feed.name,
-      sourceType: feed.sourceType || null
+      sourceType: feed.sourceType || null,
+      fetchMode: feed.fetchMode || 'rss',
+      cadenceMinutes: feed.cadenceMinutes || null,
+      enabled: feed.enabled !== false
     })),
     regionalFeeds: regionalFeeds.map((feed) => ({
       id: feed.id,
       name: feed.name,
-      sourceType: feed.sourceType || null
+      sourceType: feed.sourceType || null,
+      fetchMode: feed.fetchMode || 'rss',
+      cadenceMinutes: feed.cadenceMinutes || null,
+      enabled: feed.enabled !== false
+    })),
+    candidateFeeds: candidatePlan.map((feed) => ({
+      id: feed.id,
+      name: feed.name,
+      sourceType: feed.sourceType || null,
+      fetchMode: feed.fetchMode || 'rss',
+      country: feed.country || null,
+      enabled: feed.enabled !== false,
+      notes: feed.notes || null
     })),
     plannedFeeds: plannedFeeds.map((feed) => ({
       id: feed.id,
       name: feed.name,
       sourceType: feed.sourceType || null,
-      country: feed.country || null
+      fetchMode: feed.fetchMode || 'rss',
+      country: feed.country || null,
+      cadenceMinutes: feed.cadenceMinutes || null,
+      enabled: feed.enabled !== false
     }))
   };
 }
 
-export function buildSourceCoverageAudit(coverageDiagnostics) {
+export function buildSourceCoverageAudit(coverageDiagnostics, feeds = ALL_RSS_FEEDS) {
   const byIso = {};
 
   KNOWN_COUNTRY_NAMES.forEach((country) => {
@@ -129,20 +172,28 @@ export function buildSourceCoverageAudit(coverageDiagnostics) {
       eventCount: coverageDiagnostics?.byIso?.[iso]?.eventCount || 0,
       localFeedCount: 0,
       regionalFeedCount: 0,
+      candidateLocalFeedCount: 0,
+      candidateRegionalFeedCount: 0,
       targetedFeedCount: 0,
       officialFeedCount: 0,
       globalFeedCount: 0
     };
   });
 
-  ALL_RSS_FEEDS.forEach((feed) => {
+  feeds.forEach((feed) => {
+    const activeFeed = isRunnableFeed(feed);
+
     if (feed.country) {
       const iso = countryToIso(feed.country);
       if (!iso || !byIso[iso]) {
         return;
       }
 
-      byIso[iso].localFeedCount += 1;
+      if (activeFeed) {
+        byIso[iso].localFeedCount += 1;
+      } else {
+        byIso[iso].candidateLocalFeedCount = (byIso[iso].candidateLocalFeedCount || 0) + 1;
+      }
     }
 
     const coverageCountries = Array.isArray(feed.coverageCountries)
@@ -156,16 +207,22 @@ export function buildSourceCoverageAudit(coverageDiagnostics) {
           return;
         }
 
-        byIso[iso].regionalFeedCount += 1;
+        if (activeFeed) {
+          byIso[iso].regionalFeedCount += 1;
+        } else {
+          byIso[iso].candidateRegionalFeedCount = (byIso[iso].candidateRegionalFeedCount || 0) + 1;
+        }
       });
       return;
     }
 
     if (!feed.country) {
       const bucket = feed.sourceType === 'official' ? 'officialFeedCount' : 'globalFeedCount';
-      Object.values(byIso).forEach((entry) => {
-        entry[bucket] += 1;
-      });
+      if (activeFeed) {
+        Object.values(byIso).forEach((entry) => {
+          entry[bucket] += 1;
+        });
+      }
     }
   });
 

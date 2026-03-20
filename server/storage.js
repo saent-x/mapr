@@ -68,6 +68,14 @@ function parseJson(value, fallback) {
   }
 }
 
+function upsertMetadata(db, key, value) {
+  prepareStatement(db, `
+    INSERT INTO metadata (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, value);
+}
+
 function readLegacyJson(filePath, fallback) {
   if (!existsSync(filePath)) {
     return fallback;
@@ -157,11 +165,19 @@ export async function readSnapshot() {
 
 export async function writeSnapshot(snapshot) {
   const db = ensureDatabase();
-  prepareStatement(db, `
-    INSERT INTO metadata (key, value)
-    VALUES (?, ?)
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value
-  `).run('snapshot', JSON.stringify(snapshot));
+  upsertMetadata(db, 'snapshot', JSON.stringify(snapshot));
+  return DATABASE_PATH;
+}
+
+export async function readMetadataJson(key, fallback = null) {
+  const db = ensureDatabase();
+  const row = prepareStatement(db, 'SELECT value FROM metadata WHERE key = ?').get(key);
+  return parseJson(row?.value, fallback);
+}
+
+export async function writeMetadataJson(key, payload) {
+  const db = ensureDatabase();
+  upsertMetadata(db, key, JSON.stringify(payload));
   return DATABASE_PATH;
 }
 

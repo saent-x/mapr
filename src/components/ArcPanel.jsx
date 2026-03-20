@@ -265,7 +265,7 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
                   <div className="arc-panel-story-text">
                     <span className="arc-panel-story-title">{article.title}</span>
                     <span className="arc-panel-story-meta">
-                      {article.start.locality} · {article.end.locality}
+                      {article.start.locality} · {article.end.locality} · {safeTimeAgo(article.start.publishedAt, { locale, addSuffix: true })}
                     </span>
                   </div>
                   <ChevronDown size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} />

@@ -20,44 +20,20 @@ function parseGdeltDate(seendate) {
   return new Date(`${year}-${month}-${day}T${hour}:${min}:${sec}Z`).toISOString();
 }
 
-const COVERAGE_THEME = [
-  'crisis', 'disaster', 'conflict', 'earthquake', 'flood', 'storm', 'wildfire',
-  'drought', 'famine', 'protest', 'attack', 'explosion', 'outbreak', 'aid',
-  'displacement', 'blackout', 'landslide', 'evacuation', 'ceasefire'
-].join(' OR ');
-
-const GOVERNANCE_THEME = [
-  'government', 'president', 'minister', 'parliament', 'election', 'policy',
-  'law', 'summit', 'sanctions', 'trade', 'infrastructure', 'energy'
-].join(' OR ');
-
-const REGION_BUCKETS = {
-  africa: ['Sudan', 'Nigeria', 'Kenya', 'Ethiopia', 'South Africa', 'Democratic Republic of the Congo', 'Ghana', 'Egypt', 'Mozambique', 'Somalia', 'Algeria', 'Tunisia', 'Libya', 'Mali', 'Cameroon', 'Ivory Coast', 'Senegal', 'Chad', 'Guinea', 'Burkina Faso', 'Niger', 'Uganda', 'Tanzania', 'Angola', 'Zambia', 'Zimbabwe', 'Rwanda', 'Madagascar', 'Botswana', 'Namibia'],
-  middleEast: ['Israel', 'Palestine', 'Lebanon', 'Syria', 'Iraq', 'Iran', 'Yemen', 'Jordan', 'Saudi Arabia', 'Turkey'],
-  asia: ['India', 'Pakistan', 'Bangladesh', 'China', 'Japan', 'Indonesia', 'Philippines', 'Thailand', 'Myanmar', 'Afghanistan'],
-  europe: ['Ukraine', 'Russia', 'Germany', 'France', 'United Kingdom', 'Poland', 'Italy', 'Spain', 'Romania', 'Turkey'],
-  americas: ['United States', 'Canada', 'Mexico', 'Brazil', 'Argentina', 'Colombia', 'Peru', 'Chile', 'Ecuador', 'Haiti'],
-  oceania: ['Australia', 'New Zealand', 'Papua New Guinea', 'Fiji', 'Solomon Islands']
-};
-
-const buildRegionQuery = (regionNames, theme) => (
-  `(${theme}) AND (${regionNames.map((name) => `"${name}"`).join(' OR ')})`
-);
-
+// Keep queries simple — GDELT silently returns 0 for overly complex queries
 export const GDELT_QUERY_PROFILES = [
-  { id: 'global-crisis', query: `(${COVERAGE_THEME})` },
-  { id: 'global-governance', query: `(${GOVERNANCE_THEME})` },
-  { id: 'africa-middle-east', query: `${buildRegionQuery([...REGION_BUCKETS.africa, ...REGION_BUCKETS.middleEast], COVERAGE_THEME)}` },
-  { id: 'asia', query: `${buildRegionQuery(REGION_BUCKETS.asia, COVERAGE_THEME)}` },
-  { id: 'europe', query: `${buildRegionQuery(REGION_BUCKETS.europe, GOVERNANCE_THEME)}` },
-  { id: 'americas-oceania', query: `${buildRegionQuery([...REGION_BUCKETS.americas, ...REGION_BUCKETS.oceania], COVERAGE_THEME)}` }
+  { id: 'crisis', query: '(crisis OR conflict OR disaster OR attack OR protest OR earthquake)' },
+  { id: 'humanitarian', query: '(flood OR famine OR outbreak OR displacement OR evacuation OR drought)' },
+  { id: 'governance', query: '(government OR president OR election OR sanctions OR summit OR parliament)' },
 ];
 
 // Cache and throttle state
 const gdeltCache = new Map();
-let lastFetchTime = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const THROTTLE_MS = 5500; // 5.5 seconds between requests (GDELT asks for 5s)
+const THROTTLE_MS = 6500; // Keep a safer gap than GDELT's stated 5 seconds.
+const RETRY_BACKOFF_MS = 8500;
+let lastFetchCompletedAt = 0;
+let gdeltRequestQueue = Promise.resolve();
 
 function createEmptyGdeltHealth() {
   return {
@@ -75,6 +51,30 @@ function createEmptyGdeltHealth() {
 
 let lastFetchHealth = createEmptyGdeltHealth();
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function enqueueGdeltRequest(task) {
+  const run = gdeltRequestQueue
+    .catch(() => {})
+    .then(async () => {
+      const elapsedSinceLastCompletion = Date.now() - lastFetchCompletedAt;
+      if (elapsedSinceLastCompletion < THROTTLE_MS) {
+        await wait(THROTTLE_MS - elapsedSinceLastCompletion);
+      }
+
+      try {
+        return await task();
+      } finally {
+        lastFetchCompletedAt = Date.now();
+      }
+    });
+
+  gdeltRequestQueue = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 function buildCacheKey({ query = '', queries = [], timespan = '24h', maxRecords = 200 } = {}) {
   return JSON.stringify({
     query: query.trim(),
@@ -86,13 +86,15 @@ function buildCacheKey({ query = '', queries = [], timespan = '24h', maxRecords 
   });
 }
 
+const REGION_FOCUS_THEME = 'crisis OR conflict OR disaster OR attack OR protest OR earthquake OR government OR election OR sanctions';
+
 export function buildRegionFocusQuery(regionName) {
   const normalizedRegion = normalizeArticleText(regionName);
   if (!normalizedRegion) {
     throw new Error('Missing region name for GDELT focus query');
   }
 
-  return `("${normalizedRegion}") AND ((${COVERAGE_THEME}) OR (${GOVERNANCE_THEME}))`;
+  return `("${normalizedRegion}") AND (${REGION_FOCUS_THEME})`;
 }
 
 export function buildRegionFocusQueries(regionName) {
@@ -119,7 +121,7 @@ export function buildRegionFocusQueries(regionName) {
       .map(quoteTerm);
     queries.push({
       id: 'region-aliases',
-      query: `(${aliasTerms.join(' OR ')}) AND ((${COVERAGE_THEME}) OR (${GOVERNANCE_THEME}))`
+      query: `(${aliasTerms.join(' OR ')}) AND (${REGION_FOCUS_THEME})`
     });
   }
 
@@ -129,7 +131,7 @@ export function buildRegionFocusQueries(regionName) {
       .map(quoteTerm);
     queries.push({
       id: 'region-localities',
-      query: `(${localityTerms.join(' OR ')}) AND ((${COVERAGE_THEME}) OR (${GOVERNANCE_THEME}))`
+      query: `(${localityTerms.join(' OR ')}) AND (${REGION_FOCUS_THEME})`
     });
   }
 
@@ -142,51 +144,57 @@ export function buildRegionFocusQueries(regionName) {
  * Fetch a single GDELT query with throttling.
  */
 async function fetchGdeltQuery(searchQuery, timespan, maxRecords) {
-  // Throttle requests
-  const now = Date.now();
-  const timeSinceLastFetch = now - lastFetchTime;
-  if (timeSinceLastFetch < THROTTLE_MS) {
-    await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS - timeSinceLastFetch));
-  }
+  return enqueueGdeltRequest(async () => {
+    const executeFetch = async () => {
+      const useProxy = typeof window !== 'undefined';
 
-  lastFetchTime = Date.now();
+      let response;
+      if (useProxy) {
+        const params = new URLSearchParams({
+          query: searchQuery,
+          timespan,
+          maxrecords: String(maxRecords),
+        });
+        response = await fetch(`/api/gdelt-proxy?${params}`);
+      } else {
+        const params = new URLSearchParams({
+          query: searchQuery,
+          mode: 'artlist',
+          format: 'json',
+          timespan,
+          maxrecords: String(maxRecords),
+          sort: 'DateDesc'
+        });
+        response = await fetch(`${GDELT_DOC_URL}?${params}`);
+      }
 
-  // Use server proxy to avoid CORS issues in the browser
-  const useProxy = typeof window !== 'undefined';
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`GDELT API returned ${response.status}: ${text.slice(0, 100)}`);
+      }
 
-  let response;
-  if (useProxy) {
-    const params = new URLSearchParams({
-      query: searchQuery,
-      timespan: timespan,
-      maxrecords: String(maxRecords),
-    });
-    response = await fetch(`/api/gdelt-proxy?${params}`);
-  } else {
-    const params = new URLSearchParams({
-      query: searchQuery,
-      mode: 'artlist',
-      format: 'json',
-      timespan: timespan,
-      maxrecords: String(maxRecords),
-      sort: 'DateDesc'
-    });
-    response = await fetch(`${GDELT_DOC_URL}?${params}`);
-  }
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`GDELT returned non-JSON: ${text.slice(0, 80)}`);
+      }
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`GDELT API returned ${response.status}: ${text.slice(0, 100)}`);
-  }
+      return data?.articles || [];
+    };
 
-  const text = await response.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(`GDELT returned non-JSON: ${text.slice(0, 80)}`);
-  }
-  return data?.articles || [];
+    try {
+      return await executeFetch();
+    } catch (error) {
+      if (!String(error?.message || '').includes('429')) {
+        throw error;
+      }
+
+      await wait(RETRY_BACKOFF_MS);
+      return executeFetch();
+    }
+  });
 }
 
 /**
@@ -324,5 +332,6 @@ export function getGdeltFetchHealth() {
  */
 export function clearCache() {
   gdeltCache.clear();
+  lastFetchCompletedAt = 0;
   lastFetchHealth = createEmptyGdeltHealth();
 }

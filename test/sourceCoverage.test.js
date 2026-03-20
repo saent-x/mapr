@@ -47,3 +47,17 @@ test('buildSourceCoverageAudit tracks regional fallback coverage separately from
   assert(audit.byIso.GE.targetedFeedCount >= 1);
   assert(audit.stats.countriesWithRegionalFeeds > 0);
 });
+
+test('buildRegionSourcePlan keeps candidate-only sources out of the active feed counts', () => {
+  const plan = buildRegionSourcePlan('Burundi', {
+    limit: 8,
+    feeds: [
+      { id: 'candidate-bi', name: 'Iwacu', country: 'Burundi', fetchMode: 'html', enabled: false, notes: 'candidate source' },
+      { id: 'global-a', name: 'Global A', sourceType: 'global', fetchMode: 'rss', enabled: true }
+    ]
+  });
+
+  assert.equal(plan.localFeedCount, 0);
+  assert.equal(plan.candidateLocalFeedCount, 1);
+  assert(plan.candidateFeeds.some((feed) => feed.id === 'candidate-bi'));
+});

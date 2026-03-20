@@ -5,11 +5,12 @@ import { getRegionBackfillFeedPlan } from '../server/ingest.js';
 test('getRegionBackfillFeedPlan includes local, official, and global feeds', () => {
   const plan = getRegionBackfillFeedPlan('Nigeria');
   const ids = plan.map((feed) => feed.id);
+  const hasGlobalFeed = ids.some((id) => ['bbc', 'aljazeera', 'guardian-uk', 'dw', 'france24', 'euronews', 'npr'].includes(id));
 
   assert(ids.includes('punch-ng'));
   assert(ids.includes('premiumtimes-ng'));
   assert(ids.includes('un-news'));
-  assert(ids.includes('reuters'));
+  assert.equal(hasGlobalFeed, true);
   assert.equal(new Set(ids).size, ids.length);
 });
 
@@ -19,6 +20,6 @@ test('getRegionBackfillFeedPlan includes targeted regional feeds when a country 
 
   assert(ids.includes('ocmedia'));
   assert(ids.includes('un-news'));
-  assert(ids.includes('reuters'));
+  assert(ids.includes('guardian-uk'));
   assert.equal(new Set(ids).size, ids.length);
 });
