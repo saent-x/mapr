@@ -351,12 +351,27 @@ const CesiumGlobe = ({
 
     viewerRef.current = viewer;
 
-    // Force resize after a tick to ensure Cesium picks up container dimensions
+    // Force resize and verify rendering
     requestAnimationFrame(() => {
       if (viewer && !viewer.isDestroyed()) {
         viewer.resize();
         viewer.scene.requestRender();
-        console.log('[CesiumGlobe] Forced resize, canvas:', viewer.canvas.width, 'x', viewer.canvas.height);
+        const canvas = viewer.canvas;
+        console.log('[CesiumGlobe] Canvas:', canvas.width, 'x', canvas.height);
+        console.log('[CesiumGlobe] Canvas parent:', canvas.parentElement?.className);
+        console.log('[CesiumGlobe] Canvas style display:', getComputedStyle(canvas).display);
+        console.log('[CesiumGlobe] Canvas style visibility:', getComputedStyle(canvas).visibility);
+        console.log('[CesiumGlobe] Canvas style opacity:', getComputedStyle(canvas).opacity);
+        console.log('[CesiumGlobe] Canvas getBoundingClientRect:', JSON.stringify(canvas.getBoundingClientRect()));
+        // Check if WebGL is actually rendering pixels
+        const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+        if (gl) {
+          const pixel = new Uint8Array(4);
+          gl.readPixels(canvas.width / 2, canvas.height / 2, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          console.log('[CesiumGlobe] Center pixel RGBA:', pixel[0], pixel[1], pixel[2], pixel[3]);
+        } else {
+          console.warn('[CesiumGlobe] Could not get WebGL context for pixel check');
+        }
       }
     });
     console.log('[CesiumGlobe] Viewer created');
@@ -783,8 +798,8 @@ const CesiumGlobe = ({
   return (
     <div
       ref={containerRef}
-      className="globe-wrapper"
-      style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, overflow: 'hidden' }}
+      className="globe-wrapper cesium-globe-active"
+      style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, overflow: 'hidden', zIndex: 0 }}
     />
   );
 };
