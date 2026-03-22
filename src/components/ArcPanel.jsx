@@ -173,6 +173,16 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
   const startName = isoToCountry(arc.startIso) || arc.startRegion || arc.startIso;
   const endName = isoToCountry(arc.endIso) || arc.endRegion || arc.endIso;
 
+  const ARC_TYPE_COLORS = {
+    'same-event': '#ffffff',
+    'shared-actor': '#00d4ff',
+    'causal-flow': '#ffaa00',
+  };
+  const arcTypeColor = ARC_TYPE_COLORS[arc.type] || '#ffffff';
+  const arcTypeLabel = arc.type === 'shared-actor' ? 'shared actor'
+    : arc.type === 'causal-flow' ? 'causal flow'
+    : 'same event';
+
   // Find events that connect both arc countries
   const { sharedEvents, startStories, endStories } = useMemo(() => {
     const startIso = arc.startIso;
@@ -202,9 +212,12 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
       {/* Header */}
       <div className="arc-panel-header">
         <div className="arc-panel-header-top">
-          <Link2 size={12} style={{ color: meta.accent, flexShrink: 0 }} />
-          <span className="arc-panel-category" style={{ color: meta.accent }}>
-            {arc.category}
+          <Link2 size={12} style={{ color: arcTypeColor, flexShrink: 0 }} />
+          <span className="arc-panel-category" style={{ color: arcTypeColor }}>
+            {arcTypeLabel}
+            {arc.label && (
+              <span className="arc-panel-type-entity"> · {arc.label}</span>
+            )}
           </span>
           <span className="arc-panel-severity" style={{ background: meta.muted, color: meta.accent }}>
             {meta.label}

@@ -6,7 +6,32 @@ import { ChevronRight, Globe2, Crosshair } from 'lucide-react';
 import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 import { getSeverityMeta } from '../utils/mockData';
 import { getCoverageMeta } from '../utils/coverageMeta';
-import { isoToCountry } from '../utils/geocoder';
+import { isoToCountry, areCountriesAdjacent } from '../utils/geocoder';
+
+const ARC_COLORS = {
+  'same-event': '#ffffff',
+  'shared-actor': '#00d4ff',
+  'causal-flow': '#ffaa00',
+};
+
+const CAUSAL_PAIRS = [
+  { source: 'disaster', target: 'humanitarian', label: 'displacement' },
+  { source: 'conflict', target: 'humanitarian', label: 'refugee flow' },
+  { source: 'conflict', target: 'political', label: 'diplomatic response' },
+  { source: 'economic', target: 'political', label: 'economic pressure' },
+  { source: 'political', target: 'conflict', label: 'escalation' },
+];
+
+const normalizeCausalCategory = (cat) => {
+  if (!cat) return null;
+  const c = cat.toLowerCase();
+  if (c.includes('seismic') || c.includes('weather') || c.includes('natural')) return 'disaster';
+  if (c.includes('civil') || c.includes('politic')) return 'political';
+  if (c.includes('conflict') || c.includes('war') || c.includes('military')) return 'conflict';
+  if (c.includes('humanit') || c.includes('refugee') || c.includes('aid')) return 'humanitarian';
+  if (c.includes('econom') || c.includes('trade') || c.includes('finance')) return 'economic';
+  return c;
+};
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
@@ -352,7 +377,7 @@ const FlatMap = ({
       }
     }
 
-    const addArc = (isoA, isoB, severity, category, title) => {
+    const addArc = (isoA, isoB, severity, category, title, type = 'same-event', label = null) => {
       if (isoA === isoB) return;
       const pairKey = [isoA, isoB].sort().join('-');
       if (seen.has(pairKey)) return;
@@ -365,7 +390,9 @@ const FlatMap = ({
         type: 'Feature',
         properties: {
           severity: sev,
-          color: severityToColor(sev),
+          color: ARC_COLORS[type] || ARC_COLORS['same-event'],
+          arcType: type,
+          arcLabel: label || '',
           category: category || a.category || b.category || 'related',
           startIso: isoA,
           endIso: isoB,
@@ -383,13 +410,53 @@ const FlatMap = ({
       });
     };
 
-    // Derive arcs from events' countries arrays (multi-country events)
+    // 1. Same-event arcs: multi-country events
     for (const story of newsList) {
       const eventCountries = story.countries;
       if (!Array.isArray(eventCountries) || eventCountries.length < 2) continue;
       for (let i = 0; i < eventCountries.length; i++) {
         for (let j = i + 1; j < eventCountries.length; j++) {
-          addArc(eventCountries[i], eventCountries[j], story.severity, story.category, story.title);
+          addArc(eventCountries[i], eventCountries[j], story.severity, story.category, story.title, 'same-event');
+        }
+      }
+    }
+
+    // 2. Shared-actor arcs: entity name appears in events in 2+ different countries
+    const entityCountryMap = {};
+    for (const story of newsList) {
+      if (!story.isoA2) continue;
+      for (const org of (story.entities?.organizations || [])) {
+        if (!org.name) continue;
+        if (!entityCountryMap[org.name]) entityCountryMap[org.name] = [];
+        entityCountryMap[org.name].push({ iso: story.isoA2, severity: story.severity, title: story.title });
+      }
+    }
+    for (const [entityName, occurrences] of Object.entries(entityCountryMap)) {
+      const uniqueCountries = [...new Set(occurrences.map((o) => o.iso))];
+      if (uniqueCountries.length >= 2) {
+        const maxSev = Math.max(...occurrences.map((o) => o.severity || 0));
+        addArc(uniqueCountries[0], uniqueCountries[1], maxSev, 'shared-actor', entityName, 'shared-actor', entityName);
+      }
+    }
+
+    // 3. Causal-flow arcs: category pairs between adjacent countries
+    const categoryCountryMap = {};
+    for (const story of newsList) {
+      if (!story.isoA2) continue;
+      const normalizedCat = normalizeCausalCategory(story.category);
+      if (!normalizedCat) continue;
+      if (!categoryCountryMap[normalizedCat]) categoryCountryMap[normalizedCat] = [];
+      categoryCountryMap[normalizedCat].push({ iso: story.isoA2, severity: story.severity, title: story.title });
+    }
+    for (const { source, target, label } of CAUSAL_PAIRS) {
+      const sourceEntries = categoryCountryMap[source] || [];
+      const targetEntries = categoryCountryMap[target] || [];
+      for (const src of sourceEntries) {
+        for (const tgt of targetEntries) {
+          if (src.iso === tgt.iso) continue;
+          if (!areCountriesAdjacent(src.iso, tgt.iso)) continue;
+          const avgSev = Math.round(((src.severity || 0) + (tgt.severity || 0)) / 2);
+          addArc(src.iso, tgt.iso, avgSev, label, `${src.title} → ${tgt.title}`, 'causal-flow', label);
         }
       }
     }
@@ -539,6 +606,8 @@ const FlatMap = ({
         endRegion: props.endRegion,
         category: props.category,
         severity: props.severity,
+        type: props.arcType || 'same-event',
+        label: props.arcLabel || null,
       });
       setPopupInfo(null);
       return;
