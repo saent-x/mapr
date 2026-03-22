@@ -19,7 +19,7 @@ import adminAuthHandler from '../api/admin-auth.js';
 import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 
-const PORT = Number(process.env.MAPR_API_PORT || 3030);
+const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',

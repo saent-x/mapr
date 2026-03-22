@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:frontend": "vite",
+    "start": "node server/index.js",
     "server": "node server/index.js",
     "test": "node --test",
     "build": "vite build",
