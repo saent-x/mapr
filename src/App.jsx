@@ -20,6 +20,7 @@ import { mergeStoryLists } from './utils/aiState';
 import { buildRegionSourcePlan, buildSourceCoverageAudit } from './utils/sourceCoverage';
 import { sortStories, storyMatchesFilters } from './utils/storyFilters';
 import { isoToCountry } from './utils/geocoder';
+import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import {
   MOCK_NEWS,
   calculateRegionSeverity,
@@ -168,6 +169,17 @@ function App() {
 
     return sortStories(filtered, sortMode);
   }, [accuracyMode, canonicalNews, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, sortMode, sourceTypeFilter, verificationFilter]);
+
+  // Lifecycle transition messages for the intel ticker
+  const prevEventsRef = useRef([]);
+  const [lifecycleMessages, setLifecycleMessages] = useState([]);
+  useEffect(() => {
+    const msgs = generateLifecycleMessages(activeNews, prevEventsRef.current);
+    if (msgs.length > 0) {
+      setLifecycleMessages(msgs);
+    }
+    prevEventsRef.current = activeNews;
+  }, [activeNews]);
 
   const regionSeverities = useMemo(
     () => calculateRegionSeverity(activeNews),
@@ -656,6 +668,19 @@ function App() {
         <span className="intel-ticker-label">INTEL</span>
         <div className="intel-ticker-track">
           <div className="intel-ticker-scroll">
+            {lifecycleMessages.map((msg, idx) => {
+              const meta = getSeverityMeta(msg.severity);
+              return (
+                <span
+                  key={`lifecycle-${idx}`}
+                  className="intel-ticker-item intel-ticker-lifecycle"
+                >
+                  <span className="intel-ticker-dot" style={{ background: meta.accent }} />
+                  <span className="intel-ticker-severity" style={{ color: meta.accent }}>{msg.lifecycle}</span>
+                  <span className="intel-ticker-title">{msg.text}</span>
+                </span>
+              );
+            })}
             {activeNews.slice(0, 12).map((story) => {
               const meta = getSeverityMeta(story.severity);
               return (
