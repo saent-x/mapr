@@ -20,7 +20,7 @@ import { deriveBriefingCoverage } from '../src/utils/healthSummary.js';
 import { detectLanguage } from '../src/utils/languageUtils.js';
 import { calculateCoverageMetrics, canonicalizeArticles } from '../src/utils/newsPipeline.js';
 import { buildOpsAlerts, buildRegionLagDiagnostics } from '../src/utils/opsDiagnostics.js';
-import { classifySourceType } from '../src/utils/sourceMetadata.js';
+import { classifySourceType, getSourceNetworkKey } from '../src/utils/sourceMetadata.js';
 import {
   getDefaultSourceCatalog,
   mergeSourceState,
@@ -43,6 +43,7 @@ import {
   readSnapshot,
   upsertArticles,
   upsertEvent,
+  updateSourceCredibility,
   writeCoverageHistory,
   writeSnapshot
 } from './storage.js';
@@ -731,6 +732,13 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         const sourceProfile = computeSourceProfile(allEventArticles);
         event.sourceProfile = sourceProfile;
         event.entities = aggregateEntities(allEventArticles);
+
+        // Update source credibility based on corroboration
+        const isCorroborated = allEventArticles.length >= 2 && sourceProfile.diversityScore > 0.3;
+        for (const article of allEventArticles) {
+          const sourceKey = getSourceNetworkKey(article);
+          await updateSourceCredibility(sourceKey, isCorroborated);
+        }
 
         // Use composite severity instead of the old weighted max/avg blend
         event.severity = computeCompositeSeverity({

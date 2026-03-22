@@ -89,6 +89,13 @@ function ensureDatabase() {
       FOREIGN KEY (articleId) REFERENCES articles(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS source_credibility (
+      sourceKey TEXT PRIMARY KEY,
+      totalEvents INTEGER DEFAULT 0,
+      corroboratedEvents INTEGER DEFAULT 0,
+      lastUpdatedAt TEXT
+    );
+
     CREATE INDEX IF NOT EXISTS idx_events_lifecycle ON events(lifecycle);
     CREATE INDEX IF NOT EXISTS idx_events_lastUpdated ON events(lastUpdatedAt);
     CREATE INDEX IF NOT EXISTS idx_articles_isoA2 ON articles(isoA2);
@@ -417,6 +424,23 @@ export async function pruneOrphanedArticles(maxAgeDays = 30) {
     WHERE id NOT IN (SELECT articleId FROM event_articles)
       AND createdAt < datetime('now', '-' || ? || ' days')
   `).run(maxAgeDays);
+}
+
+export async function updateSourceCredibility(sourceKey, wasCorroborated) {
+  const db = ensureDatabase();
+  prepareStatement(db,
+    `INSERT INTO source_credibility (sourceKey, totalEvents, corroboratedEvents, lastUpdatedAt)
+     VALUES (?, 1, ?, datetime('now'))
+     ON CONFLICT(sourceKey) DO UPDATE SET
+       totalEvents = totalEvents + 1,
+       corroboratedEvents = corroboratedEvents + ?,
+       lastUpdatedAt = datetime('now')`
+  ).run(sourceKey, wasCorroborated ? 1 : 0, wasCorroborated ? 1 : 0);
+}
+
+export async function readSourceCredibility(sourceKey) {
+  const db = ensureDatabase();
+  return prepareStatement(db, 'SELECT * FROM source_credibility WHERE sourceKey = ?').get(sourceKey) || null;
 }
 
 export function closeStorage() {
