@@ -10,6 +10,26 @@ import { normalizeArticleText } from '../utils/articleText';
 import { isoToCountry, KNOWN_COUNTRY_NAMES } from '../utils/geocoder';
 import ExpandableText from './ExpandableText';
 
+const LIFECYCLE_COLORS = {
+  emerging: '#00d4ff',
+  developing: '#00e5a0',
+  escalating: '#ff5555',
+  stabilizing: '#ffaa00',
+  resolved: '#666'
+};
+
+function LifecycleBadge({ lifecycle }) {
+  if (!lifecycle) return null;
+  return (
+    <span
+      className="lifecycle-badge"
+      style={{ color: LIFECYCLE_COLORS[lifecycle] || '#666', borderColor: LIFECYCLE_COLORS[lifecycle] || '#666' }}
+    >
+      {lifecycle}
+    </span>
+  );
+}
+
 const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
 const LANGUAGE_LABELS = { en: 'EN', es: 'ES', fr: 'FR', ar: 'AR', zh: 'ZH' };
 const LOCATION_SIGNAL_KEYS = {
@@ -153,66 +173,28 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
   const startName = isoToCountry(arc.startIso) || arc.startRegion || arc.startIso;
   const endName = isoToCountry(arc.endIso) || arc.endRegion || arc.endIso;
 
-  // Find the shared articles between the two countries
-  const { sharedArticles, startStories, endStories } = useMemo(() => {
-    const startItems = newsList.filter((s) => s.isoA2 === arc.startIso && s.coordinates);
-    const endItems = newsList.filter((s) => s.isoA2 === arc.endIso && s.coordinates);
-    const shared = [];
-    const matchedStartIds = new Set();
-    const matchedEndIds = new Set();
+  // Find events that connect both arc countries
+  const { sharedEvents, startStories, endStories } = useMemo(() => {
+    const startIso = arc.startIso;
+    const endIso = arc.endIso;
 
-    // 1. Same URL = same source article placed in multiple countries
-    const endByUrl = {};
-    for (const s of endItems) {
-      if (s.url) endByUrl[s.url] = s;
-    }
-    for (const s of startItems) {
-      if (s.url && endByUrl[s.url]) {
-        shared.push({ title: s.title, url: s.url, severity: Math.max(s.severity, endByUrl[s.url].severity), start: s, end: endByUrl[s.url] });
-        matchedStartIds.add(s.id);
-        matchedEndIds.add(endByUrl[s.url].id);
-      }
-    }
+    // Events whose countries array includes BOTH arc endpoints
+    const shared = newsList
+      .filter((s) => Array.isArray(s.countries) && s.countries.includes(startIso) && s.countries.includes(endIso))
+      .sort((a, b) => (b.severity || 0) - (a.severity || 0));
 
-    // 2. Title cross-reference — article in one country mentions the other country
-    const otherCountryName = (isoToCountry(arc.endIso) || '').toLowerCase();
-    const thisCountryName = (isoToCountry(arc.startIso) || '').toLowerCase();
+    const sharedIds = new Set(shared.map((s) => s.id));
 
-    if (otherCountryName) {
-      for (const s of startItems) {
-        if (matchedStartIds.has(s.id)) continue;
-        if ((s.title || '').toLowerCase().includes(otherCountryName)) {
-          // Find best matching end story
-          const endMatch = endItems.find((e) => !matchedEndIds.has(e.id) && e.category === s.category)
-            || endItems.find((e) => !matchedEndIds.has(e.id));
-          if (endMatch) {
-            shared.push({ title: s.title, url: s.url, severity: Math.max(s.severity, endMatch.severity), start: s, end: endMatch });
-            matchedStartIds.add(s.id);
-            matchedEndIds.add(endMatch.id);
-          }
-        }
-      }
-    }
-    if (thisCountryName) {
-      for (const s of endItems) {
-        if (matchedEndIds.has(s.id)) continue;
-        if ((s.title || '').toLowerCase().includes(thisCountryName)) {
-          const startMatch = startItems.find((st) => !matchedStartIds.has(st.id) && st.category === s.category)
-            || startItems.find((st) => !matchedStartIds.has(st.id));
-          if (startMatch) {
-            shared.push({ title: s.title, url: s.url, severity: Math.max(s.severity, startMatch.severity), start: startMatch, end: s });
-            matchedStartIds.add(startMatch.id);
-            matchedEndIds.add(s.id);
-          }
-        }
-      }
-    }
+    // Remaining stories belonging to each individual country (not already in shared)
+    const startItems = newsList
+      .filter((s) => !sharedIds.has(s.id) && (s.isoA2 === startIso || (Array.isArray(s.countries) && s.countries.includes(startIso))))
+      .sort((a, b) => (b.severity || 0) - (a.severity || 0));
 
-    shared.sort((a, b) => b.severity - a.severity);
-    const remainingStart = startItems.filter((s) => !matchedStartIds.has(s.id)).sort((a, b) => b.severity - a.severity);
-    const remainingEnd = endItems.filter((s) => !matchedEndIds.has(s.id)).sort((a, b) => b.severity - a.severity);
+    const endItems = newsList
+      .filter((s) => !sharedIds.has(s.id) && (s.isoA2 === endIso || (Array.isArray(s.countries) && s.countries.includes(endIso))))
+      .sort((a, b) => (b.severity || 0) - (a.severity || 0));
 
-    return { sharedArticles: shared, startStories: remainingStart, endStories: remainingEnd };
+    return { sharedEvents: shared, startStories: startItems, endStories: endItems };
   }, [arc, newsList]);
 
   return (
@@ -245,27 +227,32 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
       </div>
 
       <div className="arc-panel-body">
-        {/* Shared articles — the actual connection */}
+        {/* Shared events — the actual connection between the two countries */}
         <div className="arc-panel-section">
           <div className="arc-panel-section-label">
             <Link2 size={9} />
             SHARED INTEL
-            <span className="arc-panel-count">{sharedArticles.length}</span>
+            <span className="arc-panel-count">{sharedEvents.length}</span>
           </div>
-          {sharedArticles.length > 0 ? sharedArticles.map((article, idx) => {
-            const sMeta = getSeverityMeta(article.severity);
-            const isExpanded = expandedId === `shared-${idx}`;
+          {sharedEvents.length > 0 ? sharedEvents.map((event) => {
+            const sMeta = getSeverityMeta(event.severity);
+            const isExpanded = expandedId === `shared-${event.id}`;
+            const articleCount = event.articleCount || (event.supportingArticles || []).length || (event.articleIds || []).length;
             return (
-              <div key={idx} className={`arc-panel-shared ${isExpanded ? 'is-expanded' : ''}`}>
+              <div key={event.id} className={`arc-panel-shared ${isExpanded ? 'is-expanded' : ''}`}>
                 <button
                   className="arc-panel-story"
-                  onClick={() => setExpandedId(isExpanded ? null : `shared-${idx}`)}
+                  onClick={() => setExpandedId(isExpanded ? null : `shared-${event.id}`)}
                 >
                   <span className="arc-panel-story-dot" style={{ background: sMeta.accent }} />
                   <div className="arc-panel-story-text">
-                    <span className="arc-panel-story-title">{article.title}</span>
+                    <span className="arc-panel-story-title">{event.title}</span>
                     <span className="arc-panel-story-meta">
-                      {article.start.locality} · {article.end.locality} · {safeTimeAgo(article.start.publishedAt, { locale, addSuffix: true })}
+                      {safeTimeAgo(event.publishedAt || event.lastUpdatedAt || event.firstSeenAt, { locale, addSuffix: true })}
+                      {articleCount > 1 && <span className="event-source-count"> · {articleCount} sources</span>}
+                    </span>
+                    <span className="arc-panel-story-badges">
+                      <LifecycleBadge lifecycle={event.lifecycle} />
                     </span>
                   </div>
                   <ChevronDown size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} />
@@ -276,13 +263,26 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
                       <span className="arc-panel-shared-tag">{startName}</span>
                       <span className="arc-panel-shared-tag">{endName}</span>
                     </div>
-                    {renderStoryDetail(article.start)}
+                    {renderStoryDetail(event)}
+                    {(event.supportingArticles || []).length > 1 && (
+                      <div className="event-evidence">
+                        <div className="event-evidence-header">{event.supportingArticles.length} sources reporting</div>
+                        {event.supportingArticles.map((article, i) => (
+                          <div key={article.id || i} className="event-evidence-item">
+                            <span className="event-evidence-source">{article.source}</span>
+                            <a href={article.url} target="_blank" rel="noopener noreferrer" className="event-evidence-title">
+                              {article.title}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             );
           }) : (
-            <div className="arc-panel-empty">No shared articles found</div>
+            <div className="arc-panel-empty">No shared events found</div>
           )}
         </div>
 
@@ -303,7 +303,10 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
                     <span className="arc-panel-story-dot" style={{ background: sMeta.accent }} />
                     <div className="arc-panel-story-text">
                       <span className="arc-panel-story-title">{story.title}</span>
-                      <span className="arc-panel-story-meta">{story.locality} · {sMeta.label}</span>
+                      <span className="arc-panel-story-meta">{story.locality || story.region} · {sMeta.label}</span>
+                      <span className="arc-panel-story-badges">
+                        <LifecycleBadge lifecycle={story.lifecycle} />
+                      </span>
                     </div>
                     <ChevronDown size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} />
                   </button>
@@ -335,7 +338,10 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
                     <span className="arc-panel-story-dot" style={{ background: sMeta.accent }} />
                     <div className="arc-panel-story-text">
                       <span className="arc-panel-story-title">{story.title}</span>
-                      <span className="arc-panel-story-meta">{story.locality} · {sMeta.label}</span>
+                      <span className="arc-panel-story-meta">{story.locality || story.region} · {sMeta.label}</span>
+                      <span className="arc-panel-story-badges">
+                        <LifecycleBadge lifecycle={story.lifecycle} />
+                      </span>
                     </div>
                     <ChevronDown size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} />
                   </button>
