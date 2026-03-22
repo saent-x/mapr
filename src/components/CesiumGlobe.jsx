@@ -83,9 +83,10 @@ const CesiumGlobe = ({
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#080e18');
     viewer.scene.globe.showGroundAtmosphere = true;
     viewer.scene.globe.enableLighting = false;
-    viewer.scene.sun.show = false;
-    viewer.scene.moon.show = false;
-    viewer.scene.fog.enabled = false;
+    if (viewer.scene.sun) viewer.scene.sun.show = false;
+    if (viewer.scene.moon) viewer.scene.moon.show = false;
+    if (viewer.scene.fog) viewer.scene.fog.enabled = false;
+    if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
 
     // Initial camera
     viewer.camera.flyTo({
