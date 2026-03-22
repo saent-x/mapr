@@ -95,6 +95,13 @@ function ensureDatabase() {
     CREATE INDEX IF NOT EXISTS idx_articles_publishedAt ON articles(publishedAt);
   `);
 
+  // Migration: add enrichment column to events table
+  try {
+    database.exec(`ALTER TABLE events ADD COLUMN enrichment TEXT DEFAULT '{}'`);
+  } catch {
+    // Column already exists — this is expected on existing DBs
+  }
+
   migrateLegacyJsonIfNeeded(database);
   return database;
 }
@@ -315,8 +322,8 @@ export async function readArticles({ since, isoA2 } = {}) {
 export async function upsertEvent(event) {
   const db = ensureDatabase();
   prepareStatement(db, `
-    INSERT INTO events (id, title, primaryCountry, countries, lifecycle, severity, category, firstSeenAt, lastUpdatedAt, topicFingerprint, coordinates)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO events (id, title, primaryCountry, countries, lifecycle, severity, category, firstSeenAt, lastUpdatedAt, topicFingerprint, coordinates, enrichment)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       primaryCountry = excluded.primaryCountry,
@@ -327,7 +334,8 @@ export async function upsertEvent(event) {
       firstSeenAt = excluded.firstSeenAt,
       lastUpdatedAt = excluded.lastUpdatedAt,
       topicFingerprint = excluded.topicFingerprint,
-      coordinates = excluded.coordinates
+      coordinates = excluded.coordinates,
+      enrichment = excluded.enrichment
   `).run(
     event.id,
     event.title,
@@ -339,7 +347,8 @@ export async function upsertEvent(event) {
     event.firstSeenAt,
     event.lastUpdatedAt,
     event.topicFingerprint ?? null,
-    event.coordinates != null ? JSON.stringify(event.coordinates) : null
+    event.coordinates != null ? JSON.stringify(event.coordinates) : null,
+    event.enrichment ?? '{}'
   );
 }
 
@@ -354,11 +363,16 @@ export async function readActiveEvents({ maxAgeHours } = {}) {
 
   const where = `WHERE ${conditions.join(' AND ')}`;
   const rows = prepareStatement(db, `SELECT * FROM events ${where} ORDER BY lastUpdatedAt DESC`).all(...params);
-  return rows.map((row) => ({
-    ...row,
-    countries: parseJson(row.countries, []),
-    coordinates: parseJson(row.coordinates, null),
-  }));
+  return rows.map((row) => {
+    const enrichment = JSON.parse(row.enrichment || '{}');
+    return {
+      ...row,
+      ...enrichment,
+      countries: parseJson(row.countries, []),
+      topicFingerprint: parseJson(row.topicFingerprint, []),
+      coordinates: parseJson(row.coordinates, null),
+    };
+  });
 }
 
 export async function updateEventLifecycle(eventId, lifecycle) {
