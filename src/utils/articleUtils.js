@@ -1,4 +1,5 @@
 import { scoreSentiment } from './afinn.js';
+import { computeCompositeSeverity } from './severityModel.js';
 
 // Severity keywords — matched against article titles
 const SEVERITY_KEYWORDS = {
@@ -43,7 +44,7 @@ function stableOffset(input, max) {
   return Math.abs(hash) % max;
 }
 
-export function deriveSeverity(title, summary) {
+export function deriveSeverity(title, summary, entityContext) {
   const lower = (title || '').toLowerCase();
   const highVariance = stableOffset(lower, 10);
   const mediumVariance = stableOffset(lower, 15);
@@ -76,16 +77,31 @@ export function deriveSeverity(title, summary) {
   // sentiment is [-1, 1]: -1 = very negative (high severity), +1 = very positive (low severity)
   const afinnBoost = Math.round(sentiment * -15); // range: [-15, +15]
 
+  let keywordSeverity;
   if (keywordBase != null) {
     // Keyword matched: use AFINN to nudge within the band (±15 points)
-    return Math.max(10, Math.min(95, keywordBase + afinnBoost));
+    keywordSeverity = Math.max(10, Math.min(95, keywordBase + afinnBoost));
+  } else {
+    // No keyword match: use AFINN to differentiate from the baseline
+    // Also check summary for sentiment if title is neutral
+    const summarySentiment = summary ? scoreSentiment(summary) : 0;
+    const combinedBoost = Math.round(((sentiment * 0.7) + (summarySentiment * 0.3)) * -15);
+    keywordSeverity = Math.max(10, Math.min(95, 20 + baseVariance + combinedBoost));
   }
 
-  // No keyword match: use AFINN to differentiate from the baseline
-  // Also check summary for sentiment if title is neutral
-  const summarySentiment = summary ? scoreSentiment(summary) : 0;
-  const combinedBoost = Math.round(((sentiment * 0.7) + (summarySentiment * 0.3)) * -15);
-  return Math.max(10, Math.min(95, 20 + baseVariance + combinedBoost));
+  // If entity context provided, use composite model
+  if (entityContext) {
+    return computeCompositeSeverity({
+      keywordSeverity,
+      articleCount: entityContext.articleCount || 1,
+      diversityScore: entityContext.diversityScore || 0,
+      entities: entityContext.entities || { organizations: [], people: [] },
+      category: entityContext.category || 'General'
+    });
+  }
+
+  // Otherwise return keyword-only result (backward compatible)
+  return keywordSeverity;
 }
 
 /**
