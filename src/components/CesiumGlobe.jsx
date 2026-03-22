@@ -222,7 +222,25 @@ const CesiumGlobe = ({
 
   /* ── Initialize Cesium Viewer ── */
   useEffect(() => {
-    if (!containerRef.current || viewerRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+    // Destroy previous viewer if it exists (React StrictMode double-mount)
+    if (viewerRef.current && !viewerRef.current.isDestroyed()) {
+      viewerRef.current.destroy();
+      viewerRef.current = null;
+    }
+
+    // Force explicit pixel dimensions — Cesium needs this
+    const rect = el.getBoundingClientRect();
+    console.log('[CesiumGlobe] Container size:', rect.width, 'x', rect.height);
+    if (rect.width === 0 || rect.height === 0) {
+      console.warn('[CesiumGlobe] Container has zero size, delaying init');
+      const timer = setTimeout(() => {
+        // Force re-run by clearing ref
+        viewerRef.current = null;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
 
     // Create tooltip element
     const tooltip = document.createElement('div');
@@ -329,6 +347,15 @@ const CesiumGlobe = ({
     viewer.canvas.addEventListener('wheel', onInteraction, { passive: true });
 
     viewerRef.current = viewer;
+
+    // Force resize after a tick to ensure Cesium picks up container dimensions
+    requestAnimationFrame(() => {
+      if (viewer && !viewer.isDestroyed()) {
+        viewer.resize();
+        viewer.scene.requestRender();
+        console.log('[CesiumGlobe] Forced resize, canvas:', viewer.canvas.width, 'x', viewer.canvas.height);
+      }
+    });
     console.log('[CesiumGlobe] Viewer created');
 
     return () => {
