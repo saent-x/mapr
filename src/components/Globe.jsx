@@ -204,29 +204,57 @@ const Globe = ({
     return map;
   }, [newsList]);
 
-  // Rings: active pulses on high-severity stories across the globe
-  // In coverage mode, also add pulsing rings for velocity spike regions
-  const ringData = useMemo(() => {
-    if (mapOverlay === 'coverage') {
-      // In coverage mode: show velocity spike rings instead of severity rings
-      const spikeRings = [];
-      for (const spike of velocitySpikes.slice(0, 10)) {
-        const story = isoToStoryRef[spike.iso];
-        if (story) {
-          spikeRings.push({ ...story, _velocitySpike: true, _spikeLevel: spike.level, _zScore: spike.zScore });
-        }
-      }
-      if (selectedStory) return [selectedStory, ...spikeRings.filter((s) => s.id !== selectedStory.id)];
-      return spikeRings;
-    }
+  // Coverage status rings — one ring per country showing coverage health
+  // Only shown in coverage mode. Each ring pulses at its country's best-known coordinates.
+  const COVERAGE_RING_COLORS = {
+    verified: '#00e5a0',
+    developing: '#00d4ff',
+    'ingestion-risk': '#ffaa00',
+    'source-sparse': '#ff8800',
+    uncovered: '#ff5555',
+  };
 
+  const coverageRings = useMemo(() => {
+    if (mapOverlay !== 'coverage') return [];
+    const rings = [];
+    for (const [iso, entry] of Object.entries(coverageStatusByIso)) {
+      const story = isoToStoryRef[iso];
+      if (!story?.coordinates) continue;
+      const status = entry.status || 'uncovered';
+      const color = COVERAGE_RING_COLORS[status] || '#ff5555';
+      rings.push({
+        id: `cov-${iso}`,
+        coordinates: story.coordinates,
+        _coverageStatus: status,
+        _coverageColor: color,
+        _coverageIso: iso,
+        _isCoverageRing: true,
+        severity: 0, // not used for coverage rings
+      });
+    }
+    // Also add velocity spike rings
+    for (const spike of velocitySpikes.slice(0, 10)) {
+      const story = isoToStoryRef[spike.iso];
+      if (story?.coordinates) {
+        rings.push({
+          ...story,
+          _velocitySpike: true,
+          _spikeLevel: spike.level,
+          _zScore: spike.zScore,
+        });
+      }
+    }
+    return rings;
+  }, [coverageStatusByIso, isoToStoryRef, mapOverlay, velocitySpikes]);
+
+  // Severity rings — pulsing activity indicators
+  const severityRings = useMemo(() => {
+    if (mapOverlay === 'coverage') return [];
     if (selectedStory) return [selectedStory];
-    // Show rings on all critical/elevated stories for ambient activity
     const ambient = newsList
       .filter((s) => s.severity >= 60)
       .slice(0, 12);
     if (selectedRegion) {
-      // Add selected region stories on top
       const regionRings = newsList
         .filter((s) => s.isoA2 === selectedRegion && s.severity >= 40)
         .slice(0, 6);
@@ -234,7 +262,11 @@ const Globe = ({
       return [...regionRings, ...ambient.filter((s) => !ids.has(s.id))].slice(0, 14);
     }
     return ambient;
-  }, [isoToStoryRef, mapOverlay, newsList, selectedRegion, selectedStory, velocitySpikes]);
+  }, [mapOverlay, newsList, selectedRegion, selectedStory]);
+
+  const ringData = useMemo(() => {
+    return mapOverlay === 'coverage' ? coverageRings : severityRings;
+  }, [mapOverlay, coverageRings, severityRings]);
 
   // Arcs: connect countries from events' multi-country countries arrays
   const arcData = useMemo(() => {
@@ -345,86 +377,9 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
-  const polygonAltitude = useCallback((f) => {
-    const iso = getIso(f);
-    const sev = getRegionSev(f);
-    const status = getCoverageStatus(f);
-    const coverageMeta = getCoverageMeta(status);
-    const isPassiveCoverage = status === 'uncovered' || status === 'source-sparse';
-    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
-    const isSel = iso === selectedRegion;
-
-    if (mapOverlay === 'coverage') {
-      if (isSel) return isPassiveCoverage ? 0.016 : 0.02;
-      if (isHov) return isPassiveCoverage ? 0.01 : 0.013;
-      return 0;
-    }
-
-    if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
-    if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
-    // Slight elevation for countries with severity data
-    if (sev) return 0.002 + sev / 8000;
-    return 0;
-  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
-
-  const polygonCapColor = useCallback((f) => {
-    const iso = getIso(f);
-    const sev = getRegionSev(f);
-    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
-    const isSel = iso === selectedRegion;
-
-    if (mapOverlay === 'coverage') {
-      if (isSel) return coverageMeta.selectedFill;
-      if (isHov) return coverageMeta.hoverFill;
-      return coverageMeta.fill;
-    }
-
-    if (sev) {
-      const meta = getSeverityMeta(sev);
-      if (isSel) return meta.mapFill;
-      if (isHov) return meta.mapFill;
-      // Always shade countries with data by severity
-      const alpha = 0.08 + (sev / 100) * 0.14;
-      const hex = meta.accent;
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r},${g},${b},${alpha})`;
-    }
-
-    if (isSel) return 'rgba(0, 200, 255, 0.15)';
-    if (isHov) return 'rgba(0, 200, 255, 0.08)';
-    return 'rgba(0, 180, 255, 0.02)';
-  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
-
-  const polygonSideColor = useCallback((f) => {
-    const iso = getIso(f);
-    const sev = getRegionSev(f);
-    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
-    const isSel = iso === selectedRegion;
-
-    if (mapOverlay === 'coverage') {
-      if (isSel || isHov) return coverageMeta.side;
-      return 'rgba(0, 0, 0, 0)';
-    }
-
-    if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
-    if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
-    return 'rgba(0, 0, 0, 0)';
-  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
-
-  const polygonStrokeColor = useCallback((f) => {
-    const iso = getIso(f);
-    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-    if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
-    if (hoveredCountry && getIso(hoveredCountry) === iso) {
-      return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(0, 220, 255, 0.35)';
-    }
-    if (mapOverlay === 'coverage') return coverageMeta.stroke;
-    return 'rgba(0, 200, 255, 0.07)';
-  }, [hoveredCountry, selectedRegion, mapOverlay, coverageStatusByIso]);
+  // Polygons ALWAYS use severity coloring — no mode switching on polygons.
+  // Coverage info is shown via rings + points + tooltips instead.
+  // This avoids the flicker caused by polygon color recalculation.
 
   return (
     <div ref={containerRef} className="globe-wrapper">
@@ -441,16 +396,56 @@ const Globe = ({
           atmosphereColor="#00a8cc"
           atmosphereAltitude={0.22}
 
-          /* === POLYGONS === */
+          /* === POLYGONS — always severity-based, coverage shown via rings/points === */
           polygonsData={countries.features}
 
-          polygonAltitude={polygonAltitude}
+          polygonAltitude={(f) => {
+            const iso = getIso(f);
+            const sev = getRegionSev(f);
+            const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
+            const isSel = iso === selectedRegion;
+            if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
+            if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
+            if (sev) return 0.002 + sev / 8000;
+            return 0;
+          }}
 
-          polygonCapColor={polygonCapColor}
+          polygonCapColor={(f) => {
+            const iso = getIso(f);
+            const sev = getRegionSev(f);
+            const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
+            const isSel = iso === selectedRegion;
+            if (sev) {
+              const meta = getSeverityMeta(sev);
+              if (isSel || isHov) return meta.mapFill;
+              const alpha = 0.08 + (sev / 100) * 0.14;
+              const hex = meta.accent;
+              const r = parseInt(hex.slice(1, 3), 16);
+              const g = parseInt(hex.slice(3, 5), 16);
+              const b = parseInt(hex.slice(5, 7), 16);
+              return `rgba(${r},${g},${b},${alpha})`;
+            }
+            if (isSel) return 'rgba(0, 200, 255, 0.15)';
+            if (isHov) return 'rgba(0, 200, 255, 0.08)';
+            return 'rgba(0, 180, 255, 0.02)';
+          }}
 
-          polygonSideColor={polygonSideColor}
+          polygonSideColor={(f) => {
+            const iso = getIso(f);
+            const sev = getRegionSev(f);
+            const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
+            const isSel = iso === selectedRegion;
+            if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
+            if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
+            return 'rgba(0, 0, 0, 0)';
+          }}
 
-          polygonStrokeColor={polygonStrokeColor}
+          polygonStrokeColor={(f) => {
+            const iso = getIso(f);
+            if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
+            if (hoveredCountry && getIso(hoveredCountry) === iso) return 'rgba(0, 220, 255, 0.35)';
+            return 'rgba(0, 200, 255, 0.07)';
+          }}
 
           polygonLabel={(f) => {
             const sev = Math.round(getRegionSev(f));
@@ -626,6 +621,10 @@ const Globe = ({
           ringLat={(s) => s.coordinates[0]}
           ringLng={(s) => s.coordinates[1]}
           ringColor={(s) => {
+            if (s._isCoverageRing) {
+              const c = s._coverageColor;
+              return [c, `${c}88`, `${c}33`, 'rgba(255,255,255,0)'];
+            }
             if (s._velocitySpike) {
               const color = s._spikeLevel === 'spike' ? '#ffaa00' : '#8aa7ff';
               return [color, `${color}88`, `${color}33`, 'rgba(255,255,255,0)'];
@@ -634,17 +633,34 @@ const Globe = ({
             return [meta.accent, meta.ring, meta.muted, 'rgba(255,255,255,0)'];
           }}
           ringMaxRadius={(s) => {
+            if (s._isCoverageRing) {
+              // Larger rings for worse coverage status
+              if (s._coverageStatus === 'uncovered') return 5;
+              if (s._coverageStatus === 'source-sparse' || s._coverageStatus === 'ingestion-risk') return 4;
+              return 3;
+            }
             if (s._velocitySpike) return s._spikeLevel === 'spike' ? 5 : 3.5;
             if (selectedStory?.id === s.id) return 4 + s.severity / 16;
             if (s.isoA2 === selectedRegion) return 3 + s.severity / 20;
             return 2 + s.severity / 30;
           }}
           ringPropagationSpeed={(s) => {
+            if (s._isCoverageRing) {
+              // Faster pulse = worse coverage (draws attention)
+              if (s._coverageStatus === 'uncovered') return 3;
+              if (s._coverageStatus === 'source-sparse' || s._coverageStatus === 'ingestion-risk') return 2;
+              return 1;
+            }
             if (s._velocitySpike) return s._spikeLevel === 'spike' ? 2.5 : 1.8;
             if (selectedStory?.id === s.id || s.isoA2 === selectedRegion) return 2;
             return 1.2;
           }}
           ringRepeatPeriod={(s) => {
+            if (s._isCoverageRing) {
+              if (s._coverageStatus === 'uncovered') return 800;
+              if (s._coverageStatus === 'source-sparse' || s._coverageStatus === 'ingestion-risk') return 1200;
+              return 2000;
+            }
             if (s._velocitySpike) return s._spikeLevel === 'spike' ? 900 : 1400;
             if (selectedStory?.id === s.id) return 800;
             if (s.severity >= 85) return 1200;
