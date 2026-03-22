@@ -203,11 +203,17 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-await initializeIngestion();
-startScheduler();
-
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Mapr backend listening on http://127.0.0.1:${PORT}`);
+// Start server FIRST so healthcheck passes, then initialize data in background
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, async () => {
+  console.log(`Mapr backend listening on http://${HOST}:${PORT}`);
+  try {
+    await initializeIngestion();
+    startScheduler();
+    console.log('Ingestion initialized and scheduler started.');
+  } catch (err) {
+    console.error('Ingestion initialization failed:', err.message);
+  }
 });
 
 function shutdown() {
