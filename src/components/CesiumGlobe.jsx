@@ -273,8 +273,8 @@ const CesiumGlobe = ({
     });
 
     // Dark theme — no imagery layers at all
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#111111');
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#335577'); // BRIGHT for debug — should be very visible
+    viewer.scene.backgroundColor = Cesium.Color.RED; // DEBUG: bright red background so we can see globe vs background
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#335577');
     viewer.scene.globe.showGroundAtmosphere = false;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.globe.depthTestAgainstTerrain = false;
@@ -284,11 +284,11 @@ const CesiumGlobe = ({
     if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
     if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
 
-    // Initial camera
-    viewer.camera.flyTo({
+    // Initial camera — use setView (synchronous) instead of flyTo to avoid race with StrictMode
+    viewer.camera.setView({
       destination: Cesium.Cartesian3.fromDegrees(INITIAL_CAMERA.lng, INITIAL_CAMERA.lat, INITIAL_CAMERA.height),
-      duration: 0,
     });
+    console.log('[CesiumGlobe] Camera set to', INITIAL_CAMERA.lng, INITIAL_CAMERA.lat, INITIAL_CAMERA.height);
 
     // Input handler for click and hover
     const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
