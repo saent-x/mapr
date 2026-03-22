@@ -93,6 +93,7 @@ function App() {
   const [languageFilter, setLanguageFilter] = useState('all');
   const [accuracyMode, setAccuracyMode] = useState('standard');
   const [precisionFilter, setPrecisionFilter] = useState('all');
+  const [hideAmplified, setHideAmplified] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [selectedStoryId, setSelectedStoryId] = useState(null);
   const [selectedArc, setSelectedArc] = useState(null);
@@ -147,8 +148,23 @@ function App() {
     coverageTrends,
     coverageHistory,
     opsHealth,
+    velocitySpikes: hookVelocitySpikes,
     refresh: refreshEventData
   } = useEventData({ onNewData });
+
+  // Velocity spike toast notifications (uses backend spikes when available)
+  const prevVelocitySpikesRef = useRef([]);
+  useEffect(() => {
+    if (!hookVelocitySpikes || hookVelocitySpikes.length === 0) return;
+    const prevIsos = new Set(prevVelocitySpikesRef.current.map((s) => s.iso));
+    const topSpike = hookVelocitySpikes.find((s) => s.level === 'spike') || hookVelocitySpikes[0];
+    if (topSpike && !prevIsos.has(topSpike.iso)) {
+      const countryName = isoToCountry(topSpike.iso) || topSpike.iso;
+      const zLabel = topSpike.zScore === Infinity ? '∞' : topSpike.zScore.toFixed(1);
+      addToast(`Velocity spike · ${countryName} · z=${zLabel}`, 'velocity-spike');
+    }
+    prevVelocitySpikesRef.current = hookVelocitySpikes;
+  }, [hookVelocitySpikes, addToast]);
 
   // Region-specific state (stays in App — it's tied to panel selection)
   const [regionCoverageHistory, setRegionCoverageHistory] = useState(null);
@@ -304,12 +320,13 @@ function App() {
         verificationFilter,
         sourceTypeFilter,
         languageFilter,
-        precisionFilter
+        precisionFilter,
+        hideAmplified
       })
     ));
 
     return sortStories(filtered, sortMode);
-  }, [accuracyMode, canonicalNews, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, scrubTime, sortMode, sourceTypeFilter, verificationFilter]);
+  }, [accuracyMode, canonicalNews, dateFloor, hideAmplified, languageFilter, minConfidence, minSeverity, precisionFilter, scrubTime, sortMode, sourceTypeFilter, verificationFilter]);
 
   // Lifecycle transition messages for the intel ticker
   const prevEventsRef = useRef([]);
@@ -326,6 +343,29 @@ function App() {
     () => calculateRegionSeverity(activeNews),
     [activeNews]
   );
+
+  // Velocity spikes: prefer backend z-score spikes; fall back to client-side count heuristic
+  const velocitySpikes = useMemo(() => {
+    // Use backend spikes when available (they have zScore + level)
+    if (hookVelocitySpikes && hookVelocitySpikes.length > 0) {
+      return hookVelocitySpikes;
+    }
+    // Client-side fallback: regions with event count >= 3x the median non-zero region count
+    const countByIso = {};
+    activeNews.forEach((story) => {
+      if (story.isoA2) {
+        countByIso[story.isoA2] = (countByIso[story.isoA2] || 0) + 1;
+      }
+    });
+    const counts = Object.values(countByIso).filter((c) => c > 0).sort((a, b) => a - b);
+    if (counts.length < 3) return [];
+    const medianIdx = Math.floor(counts.length / 2);
+    const median = counts[medianIdx] || 1;
+    const threshold = Math.max(3, median * 3);
+    return Object.entries(countByIso)
+      .filter(([, count]) => count >= threshold)
+      .map(([iso, count]) => ({ iso, count, zScore: count / (median || 1), level: 'spike' }));
+  }, [activeNews, hookVelocitySpikes]);
 
   const coverageMetrics = useMemo(
     () => calculateCoverageMetrics(activeNews),
@@ -358,10 +398,11 @@ function App() {
         verificationFilter,
         sourceTypeFilter,
         languageFilter,
-        precisionFilter
+        precisionFilter,
+        hideAmplified
       })
     )), sortMode);
-  }, [accuracyMode, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, regionBackfills, selectedRegion, sortMode, sourceTypeFilter, verificationFilter]);
+  }, [accuracyMode, dateFloor, hideAmplified, languageFilter, minConfidence, minSeverity, precisionFilter, regionBackfills, selectedRegion, sortMode, sourceTypeFilter, verificationFilter]);
 
   useEffect(() => {
     const availableStories = selectedRegion
@@ -394,10 +435,11 @@ function App() {
         verificationFilter,
         sourceTypeFilter,
         languageFilter,
-        precisionFilter
+        precisionFilter,
+        hideAmplified
       })
     )), sortMode);
-  }, [accuracyMode, dateFloor, languageFilter, minConfidence, minSeverity, panelBackfillEntry, panelRegion, precisionFilter, sortMode, sourceTypeFilter, verificationFilter]);
+  }, [accuracyMode, dateFloor, hideAmplified, languageFilter, minConfidence, minSeverity, panelBackfillEntry, panelRegion, precisionFilter, sortMode, sourceTypeFilter, verificationFilter]);
   const panelLiveNews = panelRegion ? activeNews.filter((story) => story.isoA2 === panelRegion) : [];
   const panelNews = panelLiveNews.length > 0 ? panelLiveNews : panelBackfillStories;
   const panelRegionData = useMemo(() => {
@@ -677,6 +719,7 @@ function App() {
             regionSeverities={mapRegionSeverities}
             mapOverlay={mapOverlay}
             coverageStatusByIso={coverageStatusByIso}
+            velocitySpikes={velocitySpikes}
             selectedRegion={selectedRegion}
             selectedStory={selectedStory}
             onRegionSelect={handleRegionSelect}
@@ -689,6 +732,7 @@ function App() {
             regionSeverities={mapRegionSeverities}
             mapOverlay={mapOverlay}
             coverageStatusByIso={coverageStatusByIso}
+            velocitySpikes={velocitySpikes}
             selectedRegion={selectedRegion}
             selectedStory={selectedStory}
             onRegionSelect={handleRegionSelect}
@@ -711,6 +755,8 @@ function App() {
         criticalCount={criticalCount}
         mapMode={mapMode}
         onMapModeChange={setMapMode}
+        mapOverlay={mapOverlay}
+        onMapOverlayChange={setMapOverlay}
         dataSource={dataSource}
         onRefresh={handleRefresh}
         backendStatus={opsHealth?.status || sourceHealth?.backend?.status || null}
@@ -802,6 +848,8 @@ function App() {
         filteredNews={activeNews}
         sourceHealth={sourceHealth}
         onRegionSelect={handleRegionSelect}
+        hideAmplified={hideAmplified}
+        setHideAmplified={setHideAmplified}
       />
 
       <EventTimeline
@@ -875,6 +923,7 @@ function App() {
         onStorySelect={handleStorySelect}
         onClose={handleClosePanel}
         sessionDiff={sessionDiff}
+        velocitySpikes={velocitySpikes}
       />
 
       {dataError && (

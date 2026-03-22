@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon, Download } from 'lucide-react';
+import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon, Download, Layers } from 'lucide-react';
 import { getSeverityMeta } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 import ViewSwitcher from './ViewSwitcher';
@@ -32,6 +32,8 @@ const Header = ({
   criticalCount,
   mapMode,
   onMapModeChange,
+  mapOverlay,
+  onMapOverlayChange,
   dataSource,
   onRefresh,
   backendStatus = null,
@@ -312,6 +314,33 @@ const Header = ({
             {t('header.flat')}
           </button>
         </div>
+
+        {onMapOverlayChange && (
+          <div className="map-toggle overlay-toggle" role="tablist" aria-label="Map overlay">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mapOverlay === 'severity'}
+              className={`map-toggle-btn ${mapOverlay === 'severity' ? 'is-active' : ''}`}
+              onClick={() => onMapOverlayChange('severity')}
+              title="Severity overlay"
+            >
+              <Layers size={12} />
+              SEV
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mapOverlay === 'coverage'}
+              className={`map-toggle-btn ${mapOverlay === 'coverage' ? 'is-active' : ''}`}
+              onClick={() => onMapOverlayChange('coverage')}
+              title="Coverage overlay"
+            >
+              <Layers size={12} />
+              COV
+            </button>
+          </div>
+        )}
 
         <div className="lang-switcher">
           <Languages size={12} className="lang-switcher-icon" />

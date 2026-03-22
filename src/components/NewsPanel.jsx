@@ -92,7 +92,8 @@ const NewsPanel = ({
   selectedStoryId,
   onStorySelect,
   onClose,
-  sessionDiff = null
+  sessionDiff = null,
+  velocitySpikes = []
 }) => {
   const { t, i18n } = useTranslation();
   const [expandedId, setExpandedId] = useState(null);
@@ -378,6 +379,9 @@ const NewsPanel = ({
                       <span className="amplification-badge" title={story.amplification.reason}>
                         ⚠ amplified
                       </span>
+                    )}
+                    {velocitySpikes?.some((s) => s.iso === story.isoA2) && (
+                      <span className="velocity-badge">SPIKE</span>
                     )}
                   </span>
                   {story.entities && (

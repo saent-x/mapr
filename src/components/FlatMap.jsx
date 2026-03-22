@@ -84,6 +84,7 @@ const FlatMap = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  velocitySpikes = [],
   selectedRegion,
   selectedStory,
   onRegionSelect,
@@ -346,6 +347,40 @@ const FlatMap = ({
         },
       })),
   }), [newsList]);
+
+  /* ── velocity spike markers GeoJSON (coverage overlay only) ── */
+  const velocitySpikesGeoJson = useMemo(() => {
+    if (mapOverlay !== 'coverage' || velocitySpikes.length === 0) {
+      return { type: 'FeatureCollection', features: [] };
+    }
+    // Build ISO → representative story lookup
+    const isoToStory = {};
+    for (const story of newsList) {
+      if (!story.isoA2 || !story.coordinates) continue;
+      if (!isoToStory[story.isoA2] || story.severity > isoToStory[story.isoA2].severity) {
+        isoToStory[story.isoA2] = story;
+      }
+    }
+    const features = [];
+    for (const spike of velocitySpikes.slice(0, 10)) {
+      const story = isoToStory[spike.iso];
+      if (!story) continue;
+      features.push({
+        type: 'Feature',
+        properties: {
+          iso: spike.iso,
+          level: spike.level,
+          zScore: spike.zScore === Infinity ? 99 : spike.zScore,
+          color: spike.level === 'spike' ? '#ffaa00' : '#8aa7ff',
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [story.coordinates[1], story.coordinates[0]],
+        },
+      });
+    }
+    return { type: 'FeatureCollection', features };
+  }, [mapOverlay, velocitySpikes, newsList]);
 
   /* ── selected story marker ── */
   const selectedStoryGeoJson = useMemo(() => {
@@ -921,6 +956,46 @@ const FlatMap = ({
             />
           </Source>
         )}
+
+        {/* ── Velocity spike rings (coverage overlay) ── */}
+        <Source id="velocity-spikes" type="geojson" data={velocitySpikesGeoJson}>
+          {/* Outer glow ring */}
+          <Layer
+            id="velocity-spike-glow"
+            type="circle"
+            paint={{
+              'circle-color': ['get', 'color'],
+              'circle-radius': ['interpolate', ['linear'], ['get', 'zScore'], 1.5, 14, 3, 20, 5, 28],
+              'circle-opacity': 0.08,
+              'circle-blur': 1.2,
+            }}
+          />
+          {/* Middle ring */}
+          <Layer
+            id="velocity-spike-ring"
+            type="circle"
+            paint={{
+              'circle-color': 'transparent',
+              'circle-radius': ['interpolate', ['linear'], ['get', 'zScore'], 1.5, 9, 3, 13, 5, 18],
+              'circle-opacity': 0,
+              'circle-stroke-width': 1.5,
+              'circle-stroke-color': ['get', 'color'],
+              'circle-stroke-opacity': 0.55,
+            }}
+          />
+          {/* Center dot */}
+          <Layer
+            id="velocity-spike-dot"
+            type="circle"
+            paint={{
+              'circle-color': ['get', 'color'],
+              'circle-radius': 3,
+              'circle-opacity': 0.9,
+              'circle-stroke-width': 1,
+              'circle-stroke-color': 'rgba(0,0,0,0.4)',
+            }}
+          />
+        </Source>
 
         {/* ── Region hover tooltip ── */}
         {hoverInfo && !popupInfo && (

@@ -30,7 +30,8 @@ export function storyMatchesFilters(story, filters) {
     verificationFilter = 'all',
     sourceTypeFilter = 'all',
     languageFilter = 'all',
-    precisionFilter = 'all'
+    precisionFilter = 'all',
+    hideAmplified = false
   } = filters;
 
   if ((story.severity || 0) < minSeverity) {
@@ -62,6 +63,10 @@ export function storyMatchesFilters(story, filters) {
   }
 
   if (precisionFilter !== 'all' && (story.geocodePrecision || 'unknown') !== precisionFilter) {
+    return false;
+  }
+
+  if (hideAmplified && story.amplification?.isAmplified) {
     return false;
   }
 

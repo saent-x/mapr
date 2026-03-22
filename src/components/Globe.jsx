@@ -52,6 +52,7 @@ const Globe = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  velocitySpikes = [],
   selectedRegion,
   selectedStory,
   onRegionSelect,
@@ -191,8 +192,34 @@ const Globe = ({
 
   const isActivePoint = (s) => s.isoA2 === activeRegion;
 
+  // Build a lookup: ISO → best representative story with coordinates
+  const isoToStoryRef = useMemo(() => {
+    const map = {};
+    for (const story of newsList) {
+      if (!story.isoA2 || !story.coordinates) continue;
+      if (!map[story.isoA2] || story.severity > map[story.isoA2].severity) {
+        map[story.isoA2] = story;
+      }
+    }
+    return map;
+  }, [newsList]);
+
   // Rings: active pulses on high-severity stories across the globe
+  // In coverage mode, also add pulsing rings for velocity spike regions
   const ringData = useMemo(() => {
+    if (mapOverlay === 'coverage') {
+      // In coverage mode: show velocity spike rings instead of severity rings
+      const spikeRings = [];
+      for (const spike of velocitySpikes.slice(0, 10)) {
+        const story = isoToStoryRef[spike.iso];
+        if (story) {
+          spikeRings.push({ ...story, _velocitySpike: true, _spikeLevel: spike.level, _zScore: spike.zScore });
+        }
+      }
+      if (selectedStory) return [selectedStory, ...spikeRings.filter((s) => s.id !== selectedStory.id)];
+      return spikeRings;
+    }
+
     if (selectedStory) return [selectedStory];
     // Show rings on all critical/elevated stories for ambient activity
     const ambient = newsList
@@ -207,7 +234,7 @@ const Globe = ({
       return [...regionRings, ...ambient.filter((s) => !ids.has(s.id))].slice(0, 14);
     }
     return ambient;
-  }, [newsList, selectedRegion, selectedStory]);
+  }, [isoToStoryRef, mapOverlay, newsList, selectedRegion, selectedStory, velocitySpikes]);
 
   // Arcs: connect countries from events' multi-country countries arrays
   const arcData = useMemo(() => {
@@ -591,19 +618,26 @@ const Globe = ({
           ringLat={(s) => s.coordinates[0]}
           ringLng={(s) => s.coordinates[1]}
           ringColor={(s) => {
+            if (s._velocitySpike) {
+              const color = s._spikeLevel === 'spike' ? '#ffaa00' : '#8aa7ff';
+              return [color, `${color}88`, `${color}33`, 'rgba(255,255,255,0)'];
+            }
             const meta = getSeverityMeta(s.severity);
             return [meta.accent, meta.ring, meta.muted, 'rgba(255,255,255,0)'];
           }}
           ringMaxRadius={(s) => {
+            if (s._velocitySpike) return s._spikeLevel === 'spike' ? 5 : 3.5;
             if (selectedStory?.id === s.id) return 4 + s.severity / 16;
             if (s.isoA2 === selectedRegion) return 3 + s.severity / 20;
             return 2 + s.severity / 30;
           }}
           ringPropagationSpeed={(s) => {
+            if (s._velocitySpike) return s._spikeLevel === 'spike' ? 2.5 : 1.8;
             if (selectedStory?.id === s.id || s.isoA2 === selectedRegion) return 2;
             return 1.2;
           }}
           ringRepeatPeriod={(s) => {
+            if (s._velocitySpike) return s._spikeLevel === 'spike' ? 900 : 1400;
             if (selectedStory?.id === s.id) return 800;
             if (s.severity >= 85) return 1200;
             if (s.severity >= 60) return 1800;

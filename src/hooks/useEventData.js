@@ -26,6 +26,7 @@ export default function useEventData({ onNewData } = {}) {
   const [coverageTrends, setCoverageTrends] = useState(null);
   const [coverageHistory, setCoverageHistory] = useState(null);
   const [opsHealth, setOpsHealth] = useState(null);
+  const [velocitySpikes, setVelocitySpikes] = useState([]);
 
   const refreshTimerRef = useRef(null);
   const prevArticleCountRef = useRef(0);
@@ -54,6 +55,7 @@ export default function useEventData({ onNewData } = {}) {
         setSourceHealth(briefing.sourceHealth || { gdelt: null, rss: null, backend: null });
         setCoverageTrends(historyPayload?.trends || briefing.coverageTrends || null);
         setCoverageHistory(historyPayload || null);
+        setVelocitySpikes(Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : []);
         fetchBackendHealth().then(setOpsHealth).catch(() => setOpsHealth(null));
         setDataSource('live');
         setDataError(null);
@@ -130,6 +132,7 @@ export default function useEventData({ onNewData } = {}) {
     coverageTrends,
     coverageHistory,
     opsHealth,
+    velocitySpikes,
     refresh
   };
 }

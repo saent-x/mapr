@@ -56,7 +56,9 @@ const FilterDrawer = ({
   allNews = [],
   filteredNews = [],
   sourceHealth,
-  onRegionSelect
+  onRegionSelect,
+  hideAmplified = false,
+  setHideAmplified
 }) => {
   const { t } = useTranslation();
   const [tab, setTab] = useState(defaultTab);
@@ -255,6 +257,20 @@ const FilterDrawer = ({
             </div>
             <input type="range" className="severity-slider-track" min="0" max="100" step="5" value={minConfidence} onChange={(e) => setMinConfidence(Number(e.target.value))} />
           </div>
+
+          {setHideAmplified && (
+            <div className="filter-section">
+              <div className="filter-label">Signal quality</div>
+              <label className="filter-toggle amplification-toggle">
+                <input
+                  type="checkbox"
+                  checked={hideAmplified}
+                  onChange={(e) => setHideAmplified(e.target.checked)}
+                />
+                <span>Hide amplified events</span>
+              </label>
+            </div>
+          )}
         </div>
       )}
 
@@ -264,11 +280,29 @@ const FilterDrawer = ({
         const gdeltTotal = sourceHealth?.gdelt?.totalProfiles || 0;
         const rssHealthy = sourceHealth?.rss?.healthyFeeds || 0;
         const rssTotal = sourceHealth?.rss?.totalFeeds || 0;
+        const rssFailed = sourceHealth?.rss?.failedFeeds || 0;
         const totalIngested = (sourceHealth?.gdelt?.normalizedArticles || 0) + (sourceHealth?.rss?.articlesFound || 0);
         const dataStatus = gdeltTotal === 0 && rssTotal === 0
           ? 'offline'
           : (gdeltHealthy === 0 && rssHealthy < rssTotal * 0.5) ? 'degraded' : 'operational';
         const statusColor = dataStatus === 'operational' ? 'var(--low)' : dataStatus === 'degraded' ? 'var(--elevated)' : 'var(--critical)';
+
+        // Feed health trend indicator
+        const feedHealthRatio = rssTotal > 0 ? rssHealthy / rssTotal : null;
+        const feedTrendIndicator = feedHealthRatio === null
+          ? null
+          : feedHealthRatio >= 0.8
+            ? { symbol: '↑', color: 'var(--low)', label: 'healthy' }
+            : feedHealthRatio >= 0.5
+              ? { symbol: '→', color: 'var(--watch)', label: 'partial' }
+              : { symbol: '↓', color: 'var(--critical)', label: 'degraded' };
+
+        // Sparse/silent regions from diagnostics
+        const sparseDiagnosticCount = (coverageDiagnostics?.diagnosticCounts?.sourceSparseCountries || 0)
+          + (coverageDiagnostics?.diagnosticCounts?.ingestionRiskCountries || 0);
+        const sparseRegions = (coverageDiagnostics?.lowConfidenceRegions || [])
+          .filter((r) => r.status === 'source-sparse' || r.status === 'ingestion-risk')
+          .slice(0, 3);
 
         return (
           <div className="filter-drawer-body">
@@ -293,6 +327,24 @@ const FilterDrawer = ({
                   <strong style={{ color: rssHealthy > rssTotal * 0.5 ? 'var(--low)' : 'var(--elevated)' }}>{rssHealthy}/{rssTotal}</strong>
                 </div>
               </div>
+
+              {/* Feed status strip */}
+              {rssTotal > 0 && (
+                <div className="feed-status-strip">
+                  <span className="feed-status-count">
+                    <strong style={{ color: feedTrendIndicator?.color }}>{rssHealthy}/{rssTotal}</strong>
+                    {' '}feeds healthy
+                  </span>
+                  {feedTrendIndicator && (
+                    <span className="feed-status-trend" style={{ color: feedTrendIndicator.color }}>
+                      {feedTrendIndicator.symbol} {feedTrendIndicator.label}
+                    </span>
+                  )}
+                  {rssFailed > 0 && (
+                    <span className="feed-status-failed">{rssFailed} failed</span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Coverage overview */}
@@ -309,6 +361,31 @@ const FilterDrawer = ({
                 <div className="coverage-stat"><span>{t('filters.lowConfidenceRegions')}</span><strong>{diagnosticCounts.lowConfidenceCountries}</strong></div>
               </div>
             </div>
+
+            {/* Sparse / silent regions note */}
+            {sparseDiagnosticCount > 0 && (
+              <div className="filter-section">
+                <div className="filter-label">COVERAGE GAPS</div>
+                <div className="intel-sparse-note">
+                  <span className="intel-sparse-icon">⚠</span>
+                  <span>
+                    {sparseDiagnosticCount} region{sparseDiagnosticCount !== 1 ? 's' : ''} with sparse or silent coverage
+                  </span>
+                </div>
+                {sparseRegions.length > 0 && (
+                  <div className="coverage-gap-list" style={{ marginTop: '0.4rem' }}>
+                    {sparseRegions.map((entry) => (
+                      <button key={entry.iso} type="button" className="coverage-gap-item" onClick={() => onRegionSelect?.(entry.iso)}>
+                        <span>{entry.region || entry.iso}</span>
+                        <strong style={{ color: 'var(--elevated)', fontSize: '0.55rem', fontFamily: 'var(--font-mono)' }}>
+                          {entry.status === 'ingestion-risk' ? 'INGEST RISK' : 'SPARSE'}
+                        </strong>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Source breakdown */}
             <div className="filter-section">
