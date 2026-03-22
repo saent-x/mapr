@@ -366,6 +366,11 @@ const NewsPanel = ({
                   </span>
                   <span className="arc-panel-story-badges">
                     <LifecycleBadge lifecycle={story.lifecycle} />
+                    {story.amplification?.isAmplified && (
+                      <span className="amplification-badge" title={story.amplification.reason}>
+                        ⚠ amplified
+                      </span>
+                    )}
                   </span>
                   {story.entities && (
                     <div className="entity-tags">
