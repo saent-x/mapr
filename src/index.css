@@ -98,7 +98,8 @@ button {
   width: 100% !important;
   height: 100% !important;
   position: absolute !important;
-  inset: 0;
+  inset: 0 !important;
+  z-index: 2 !important;
 }
 
 .globe-wrapper::after {

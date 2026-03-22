@@ -273,8 +273,8 @@ const CesiumGlobe = ({
     });
 
     // Dark theme — no imagery layers at all
-    viewer.scene.backgroundColor = Cesium.Color.BLACK;
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a2a3a'); // lighter for visibility test
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#111111');
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#335577'); // BRIGHT for debug — should be very visible
     viewer.scene.globe.showGroundAtmosphere = false;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.globe.depthTestAgainstTerrain = false;
