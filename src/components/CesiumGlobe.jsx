@@ -265,7 +265,11 @@ const CesiumGlobe = ({
       selectionIndicator: false,
       creditContainer: document.createElement('div'),
       terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-      imageryProvider: false, // disable default Ion imagery — no API key needed
+      imageryProvider: new Cesium.SingleTileImageryProvider({
+        // 1x1 pixel dark tile — gives globe a surface to render without network requests
+        url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==',
+        rectangle: Cesium.Rectangle.fromDegrees(-180, -90, 180, 90),
+      }),
       skyBox: false,
       skyAtmosphere: false,
       requestRenderMode: false,
