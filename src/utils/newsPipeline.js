@@ -26,13 +26,13 @@ function normalizeText(value) {
   return (value || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function tokenizeHeadline(title) {
+export function tokenizeHeadline(title) {
   return normalizeText(title)
     .split(' ')
     .filter((token) => token.length > 2 && !STOP_WORDS.has(token));
 }
 
-function jaccardSimilarity(leftTokens, rightTokens) {
+export function jaccardSimilarity(leftTokens, rightTokens) {
   if (!leftTokens.length || !rightTokens.length) {
     return 0;
   }

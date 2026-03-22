@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalizeArticles } from '../src/utils/newsPipeline.js';
+import { canonicalizeArticles, tokenizeHeadline, jaccardSimilarity } from '../src/utils/newsPipeline.js';
+
+test('tokenizeHeadline is exported and works', () => {
+  const tokens = tokenizeHeadline('Wagner Group fighters deployed to Mali');
+  assert.ok(Array.isArray(tokens));
+  assert.ok(tokens.includes('wagner'));
+  assert.ok(tokens.includes('mali'));
+  assert.ok(!tokens.includes('the'));
+});
+
+test('jaccardSimilarity is exported and works', () => {
+  const a = ['wagner', 'group', 'mali'];
+  const b = ['wagner', 'group', 'libya'];
+  const score = jaccardSimilarity(a, b);
+  assert.ok(score > 0.4);
+  assert.ok(score < 0.8);
+});
 
 function createArticle(overrides = {}) {
   return {
