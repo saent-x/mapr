@@ -7,15 +7,12 @@ import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
 import ArcPanel from './components/ArcPanel';
+import useEventData from './hooks/useEventData';
 import {
-  fetchBackendBriefing,
-  fetchBackendCoverageHistory,
   fetchBackendCoverageRegion,
   fetchBackendRegionBriefing,
-  fetchBackendHealth,
-  refreshBackendBriefing
 } from './services/backendService';
-import { fetchLiveNews, getGdeltFetchHealth } from './services/gdeltService';
+import { fetchLiveNews } from './services/gdeltService';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
@@ -33,7 +30,6 @@ import {
 const Globe = lazy(() => import('./components/Globe'));
 const FlatMap = lazy(() => import('./components/FlatMap'));
 
-const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const REGION_BACKFILL_CACHE_LIMIT = 6;
 
 function upsertRegionBackfill(cache, entry) {
@@ -89,104 +85,54 @@ function App() {
   const [drawerMode, setDrawerMode] = useState(null); // null | 'filters' | 'intel'
   const filtersOpen = drawerMode !== null;
 
-  // Live data state
-  const [liveNews, setLiveNews] = useState(null);
-  const [dataSource, setDataSource] = useState('loading'); // 'loading' | 'live' | 'mock'
-  const [dataError, setDataError] = useState(null);
-  const [sourceHealth, setSourceHealth] = useState({ gdelt: null, rss: null, backend: null });
-  const [coverageTrends, setCoverageTrends] = useState(null);
-  const [coverageHistory, setCoverageHistory] = useState(null);
-  const [regionCoverageHistory, setRegionCoverageHistory] = useState(null);
-  const [regionBackfills, setRegionBackfills] = useState({});
-  const [opsHealth, setOpsHealth] = useState(null);
+  // Toast notifications (UI concern — stays in App)
   const [toasts, setToasts] = useState([]);
-  const refreshTimerRef = useRef(null);
-  const prevArticleCountRef = useRef(0);
-  const isFirstLoadRef = useRef(true);
-
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now();
     setToasts((prev) => [...prev.slice(-3), { id, message, type }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
   }, []);
 
-  // Fetch live data — tries backend first, falls back to client-side GDELT
-  const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
-    // 1. Try backend API (Vercel serverless functions)
-    try {
-      const [briefing, historyPayload] = await Promise.all([
-        forceRefresh
-          ? refreshBackendBriefing()
-          : fetchBackendBriefing(),
-        fetchBackendCoverageHistory().catch(() => null)
-      ]);
-
-      if (Array.isArray(briefing?.articles) && briefing.articles.length > 0) {
-        const count = briefing.articles.length;
-        const prevCount = prevArticleCountRef.current;
-        setLiveNews(briefing.articles);
-        setRegionBackfills({});
-        setSourceHealth(briefing.sourceHealth || { gdelt: null, rss: null, backend: null });
-        setCoverageTrends(historyPayload?.trends || briefing.coverageTrends || null);
-        setCoverageHistory(historyPayload || null);
-        fetchBackendHealth().then(setOpsHealth).catch(() => setOpsHealth(null));
-        setDataSource('live');
-        setDataError(null);
-        // Notify on refresh (not first load)
-        if (!isFirstLoadRef.current) {
-          const diff = count - prevCount;
-          if (diff > 0) {
-            addToast(`${diff} new stories detected · ${count} total`, 'new-data');
-          } else {
-            addToast(`Intel refreshed · ${count} stories`, 'refresh');
-          }
-        }
-        prevArticleCountRef.current = count;
-        isFirstLoadRef.current = false;
-        return;
-      }
-    } catch (backendErr) {
-      console.warn('Backend briefing failed, trying client-side GDELT fallback:', backendErr.message);
+  // Data fetching hook with toast bridging
+  const onNewData = useCallback((signal) => {
+    switch (signal.type) {
+      case 'new-data':
+        addToast(`${signal.diff} new stories detected · ${signal.count} total`, 'new-data');
+        break;
+      case 'refresh':
+        addToast(`Intel refreshed · ${signal.count} stories`, 'refresh');
+        break;
+      case 'client-refresh':
+        addToast(`Client-side refresh · ${signal.count} stories`, 'refresh');
+        break;
+      default:
+        break;
     }
+  }, [addToast]);
 
-    // 2. Fallback: fetch directly from GDELT client-side (no serverless function needed)
-    try {
-      const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 250 });
-      if (Array.isArray(clientArticles) && clientArticles.length > 0) {
-        const count = clientArticles.length;
-        setLiveNews(clientArticles);
-        setRegionBackfills({});
-        const gdeltHealth = getGdeltFetchHealth();
-        setSourceHealth({ gdelt: gdeltHealth, rss: null, backend: null });
-        setCoverageTrends(null);
-        setCoverageHistory(null);
-        setOpsHealth(null);
-        setDataSource('live');
-        setDataError(null);
-        if (!isFirstLoadRef.current) {
-          addToast(`Client-side refresh · ${count} stories`, 'refresh');
-        }
-        prevArticleCountRef.current = count;
-        isFirstLoadRef.current = false;
-        return;
-      }
-    } catch (clientErr) {
-      console.warn('Client-side GDELT fallback also failed:', clientErr.message);
-    }
+  const {
+    liveNews,
+    dataSource,
+    dataError,
+    sourceHealth,
+    coverageTrends,
+    coverageHistory,
+    opsHealth,
+    refresh: refreshEventData
+  } = useEventData({ onNewData });
 
-    // 3. Last resort: static mock data
-    setLiveNews(null);
-    setDataSource('mock');
-    setDataError('Both backend and client-side fetching failed');
-  }, []);
+  // Region-specific state (stays in App — it's tied to panel selection)
+  const [regionCoverageHistory, setRegionCoverageHistory] = useState(null);
+  const [regionBackfills, setRegionBackfills] = useState({});
 
-  // Initial load + auto-refresh
+  // Clear region backfills whenever fresh global data arrives
+  const prevLiveNewsRef = useRef(liveNews);
   useEffect(() => {
-    loadLiveData();
-
-    refreshTimerRef.current = setInterval(loadLiveData, REFRESH_INTERVAL);
-    return () => clearInterval(refreshTimerRef.current);
-  }, [loadLiveData]);
+    if (liveNews && liveNews !== prevLiveNewsRef.current) {
+      setRegionBackfills({});
+    }
+    prevLiveNewsRef.current = liveNews;
+  }, [liveNews]);
 
   // Base articles: live data or fallback to mock
   const baseArticles = useMemo(() => {
@@ -510,15 +456,10 @@ function App() {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setDataSource('loading');
-    setSourceHealth({ gdelt: null, rss: null, backend: null });
-    setCoverageTrends(null);
-    setCoverageHistory(null);
     setRegionCoverageHistory(null);
     setRegionBackfills({});
-    setOpsHealth(null);
-    loadLiveData({ forceRefresh: true });
-  }, [loadLiveData]);
+    refreshEventData();
+  }, [refreshEventData]);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
