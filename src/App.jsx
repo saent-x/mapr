@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, Radio } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
@@ -7,12 +8,21 @@ import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
 import ArcPanel from './components/ArcPanel';
+import BriefingExport from './components/BriefingExport';
+import EventTimeline from './components/EventTimeline';
 import useEventData from './hooks/useEventData';
 import {
   fetchBackendCoverageRegion,
   fetchBackendRegionBriefing,
 } from './services/backendService';
 import { fetchLiveNews } from './services/gdeltService';
+import {
+  saveSnapshot,
+  loadLastSnapshot,
+  diffEventSnapshots,
+  pruneOldSnapshots,
+  loadSnapshotHistory,
+} from './services/eventCache';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
@@ -21,6 +31,8 @@ import { buildRegionSourcePlan, buildSourceCoverageAudit } from './utils/sourceC
 import { sortStories, storyMatchesFilters } from './utils/storyFilters';
 import { isoToCountry } from './utils/geocoder';
 import { generateLifecycleMessages } from './utils/lifecycleMessages';
+import { loadViews, saveViews, createView } from './utils/viewManager';
+import { decodeURLToFilters, encodeViewToURL } from './utils/viewManager';
 import {
   MOCK_NEWS,
   calculateRegionSeverity,
@@ -52,6 +64,7 @@ function upsertRegionBackfill(cache, entry) {
 
 function App() {
   const { t, i18n } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // RTL + lang attribute
   useEffect(() => {
@@ -85,6 +98,21 @@ function App() {
   const [selectedArc, setSelectedArc] = useState(null);
   const [drawerMode, setDrawerMode] = useState(null); // null | 'filters' | 'intel'
   const filtersOpen = drawerMode !== null;
+
+  // ── Session memory (event cache) ──
+  const [sessionDiff, setSessionDiff] = useState(null);
+  const sessionDiffInitRef = useRef(false);
+
+  // ── Saved views ──
+  const [savedViews, setSavedViews] = useState(() => loadViews());
+  const [activeViewId, setActiveViewId] = useState(null);
+
+  // ── Timeline ──
+  const [scrubTime, setScrubTime] = useState(null); // null = live, Date = historical
+  const [snapshotHistory, setSnapshotHistory] = useState([]);
+
+  // ── Export modal ──
+  const [showExport, setShowExport] = useState(false);
 
   // Toast notifications (UI concern — stays in App)
   const [toasts, setToasts] = useState([]);
@@ -135,6 +163,109 @@ function App() {
     prevLiveNewsRef.current = liveNews;
   }, [liveNews]);
 
+  // ── Session memory: diff against last snapshot on initial data load ──
+  useEffect(() => {
+    if (!liveNews || liveNews.length === 0 || sessionDiffInitRef.current) return;
+    sessionDiffInitRef.current = true;
+
+    (async () => {
+      try {
+        const lastSnap = await loadLastSnapshot();
+        const previousEvents = lastSnap?.events || [];
+        const diff = diffEventSnapshots(previousEvents, liveNews);
+        setSessionDiff(diff);
+        // Save current snapshot and prune old ones
+        await saveSnapshot(liveNews);
+        await pruneOldSnapshots();
+      } catch (err) {
+        console.warn('Session memory init failed:', err.message);
+      }
+    })();
+  }, [liveNews]);
+
+  // Save snapshot after each data refresh (beyond initial)
+  useEffect(() => {
+    if (!sessionDiffInitRef.current || !liveNews || liveNews.length === 0) return;
+    // The initial save is handled above; subsequent saves happen here
+    // We skip if prevLiveNewsRef still matches (no actual change)
+    if (liveNews === prevLiveNewsRef.current) return;
+
+    (async () => {
+      try {
+        await saveSnapshot(liveNews);
+        await pruneOldSnapshots();
+      } catch (err) {
+        console.warn('Snapshot save failed:', err.message);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveNews]);
+
+  // ── Load snapshot history for timeline ──
+  useEffect(() => {
+    (async () => {
+      try {
+        const history = await loadSnapshotHistory();
+        setSnapshotHistory(history);
+      } catch (err) {
+        console.warn('Failed to load snapshot history:', err.message);
+      }
+    })();
+  }, []);
+
+  // ── URL state: read params on mount ──
+  const urlInitRef = useRef(false);
+  useEffect(() => {
+    if (urlInitRef.current) return;
+    urlInitRef.current = true;
+
+    const { filters, mapState } = decodeURLToFilters(searchParams);
+    if (filters.searchQuery) setSearchQuery(filters.searchQuery);
+    if (filters.minSeverity) setMinSeverity(filters.minSeverity);
+    if (filters.minConfidence) setMinConfidence(filters.minConfidence);
+    if (filters.dateWindow) setDateWindow(filters.dateWindow);
+    if (filters.sortMode) setSortMode(filters.sortMode);
+    if (filters.selectedRegion) setSelectedRegion(filters.selectedRegion);
+    if (mapState.mapMode) setMapMode(mapState.mapMode);
+    if (mapState.mapOverlay) setMapOverlay(mapState.mapOverlay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Saved views handlers ──
+  const handleSaveView = useCallback(() => {
+    const name = window.prompt('Name this view:');
+    if (!name || !name.trim()) return;
+    const view = createView(
+      name.trim(),
+      { searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion },
+      { mapMode, mapOverlay }
+    );
+    const next = [...savedViews, view];
+    setSavedViews(next);
+    setActiveViewId(view.id);
+    saveViews(next);
+  }, [savedViews, searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay]);
+
+  const handleSelectView = useCallback((view) => {
+    setActiveViewId(view.id);
+    const { filters = {}, mapState = {} } = view;
+    if (filters.searchQuery !== undefined) setSearchQuery(filters.searchQuery);
+    if (filters.minSeverity !== undefined) setMinSeverity(filters.minSeverity);
+    if (filters.minConfidence !== undefined) setMinConfidence(filters.minConfidence);
+    if (filters.dateWindow !== undefined) setDateWindow(filters.dateWindow);
+    if (filters.sortMode !== undefined) setSortMode(filters.sortMode);
+    if (filters.selectedRegion !== undefined) setSelectedRegion(filters.selectedRegion);
+    if (mapState.mapMode !== undefined) setMapMode(mapState.mapMode);
+    if (mapState.mapOverlay !== undefined) setMapOverlay(mapState.mapOverlay);
+  }, []);
+
+  const handleDeleteView = useCallback((view) => {
+    const next = savedViews.filter((v) => v.id !== view.id);
+    setSavedViews(next);
+    if (activeViewId === view.id) setActiveViewId(null);
+    saveViews(next);
+  }, [savedViews, activeViewId]);
+
   // Base articles: live data or fallback to mock
   const baseArticles = useMemo(() => {
     if (dataSource !== 'live') {
@@ -154,7 +285,17 @@ function App() {
   );
 
   const activeNews = useMemo(() => {
-    const filtered = canonicalNews.filter((story) => (
+    let pool = canonicalNews;
+
+    // Timeline scrub: only include events first seen before scrubTime
+    if (scrubTime != null) {
+      pool = pool.filter((story) => {
+        const ts = story.firstSeenAt ? new Date(story.firstSeenAt).getTime() : 0;
+        return ts <= scrubTime;
+      });
+    }
+
+    const filtered = pool.filter((story) => (
       storyMatchesFilters(story, {
         minSeverity,
         minConfidence,
@@ -168,7 +309,7 @@ function App() {
     ));
 
     return sortStories(filtered, sortMode);
-  }, [accuracyMode, canonicalNews, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, sortMode, sourceTypeFilter, verificationFilter]);
+  }, [accuracyMode, canonicalNews, dateFloor, languageFilter, minConfidence, minSeverity, precisionFilter, scrubTime, sortMode, sourceTypeFilter, verificationFilter]);
 
   // Lifecycle transition messages for the intel ticker
   const prevEventsRef = useRef([]);
@@ -511,28 +652,20 @@ function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [panelOpen, filtersOpen, handleRefresh, handleClosePanel]);
 
-  // ── URL deep linking ──
+  // ── URL state sync: write current filters to URL (replaceState to avoid clutter) ──
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const regionParam = params.get('region');
-    const storyParam = params.get('story');
-    if (regionParam) {
-      setSelectedRegion(regionParam.toUpperCase());
-    }
-    if (storyParam) {
-      setSelectedStoryId(storyParam);
-    }
-  }, []);
+    // Skip the initial render to avoid overwriting URL params we just read
+    if (!urlInitRef.current) return;
 
-  // Sync state → URL
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (selectedRegion) params.set('region', selectedRegion);
+    const qs = encodeViewToURL({
+      filters: { searchQuery: debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion },
+      mapState: { mapMode, mapOverlay }
+    });
+    // Also keep story param for deep links
+    const params = new URLSearchParams(qs);
     if (selectedStoryId) params.set('story', selectedStoryId);
-    const search = params.toString();
-    const url = search ? `${window.location.pathname}?${search}` : window.location.pathname;
-    window.history.replaceState(null, '', url);
-  }, [selectedRegion, selectedStoryId]);
+    setSearchParams(params, { replace: true });
+  }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, setSearchParams]);
 
   return (
     <ErrorBoundary>
@@ -581,6 +714,13 @@ function App() {
         dataSource={dataSource}
         onRefresh={handleRefresh}
         backendStatus={opsHealth?.status || sourceHealth?.backend?.status || null}
+        savedViews={savedViews}
+        activeViewId={activeViewId}
+        onSaveView={handleSaveView}
+        onSelectView={handleSelectView}
+        onDeleteView={handleDeleteView}
+        sessionDiff={sessionDiff}
+        onExport={() => setShowExport(true)}
       >
         <div className="legend">
           <span className="legend-label">{t(`legend.${mapOverlay}`)}</span>
@@ -664,6 +804,13 @@ function App() {
         onRegionSelect={handleRegionSelect}
       />
 
+      <EventTimeline
+        events={activeNews}
+        snapshotHistory={snapshotHistory}
+        scrubTime={scrubTime}
+        onScrub={setScrubTime}
+      />
+
       <div className={`intel-ticker ${panelOpen ? 'is-shifted' : ''}`}>
         <span className="intel-ticker-label">INTEL</span>
         <div className="intel-ticker-track">
@@ -727,6 +874,7 @@ function App() {
         selectedStoryId={selectedStoryId}
         onStorySelect={handleStorySelect}
         onClose={handleClosePanel}
+        sessionDiff={sessionDiff}
       />
 
       {dataError && (
@@ -744,6 +892,14 @@ function App() {
             </div>
           ))}
         </div>
+      )}
+
+      {showExport && (
+        <BriefingExport
+          events={activeNews}
+          filters={{ minSeverity, minConfidence, dateWindow, sortMode, mapOverlay }}
+          onClose={() => setShowExport(false)}
+        />
       )}
 
       <Analytics />

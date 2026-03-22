@@ -9,6 +9,7 @@ import { getSourceHost } from '../utils/urlUtils';
 import { getConfidenceReasonLabel } from '../utils/confidenceReasons';
 import { normalizeArticleText } from '../utils/articleText';
 import ExpandableText from './ExpandableText';
+import ChangesBanner from './ChangesBanner';
 
 const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
 
@@ -90,10 +91,12 @@ const NewsPanel = ({
   news,
   selectedStoryId,
   onStorySelect,
-  onClose
+  onClose,
+  sessionDiff = null
 }) => {
   const { t, i18n } = useTranslation();
   const [expandedId, setExpandedId] = useState(null);
+  const [changesDismissed, setChangesDismissed] = useState(false);
   const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const expandedRef = useRef(null);
@@ -325,6 +328,11 @@ const NewsPanel = ({
             {feedSummary}
           </span>
         </div>
+      )}
+
+      {/* Session changes banner */}
+      {!changesDismissed && sessionDiff && (
+        <ChangesBanner diff={sessionDiff} onDismiss={() => setChangesDismissed(true)} />
       )}
 
       {/* Story list — arc-panel style */}

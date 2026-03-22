@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon } from 'lucide-react';
+import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon, Download } from 'lucide-react';
 import { getSeverityMeta } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
+import ViewSwitcher from './ViewSwitcher';
 
 const LANGUAGES = [
   { code: 'en', label: 'EN' },
@@ -34,6 +35,13 @@ const Header = ({
   dataSource,
   onRefresh,
   backendStatus = null,
+  savedViews = [],
+  activeViewId = null,
+  onSaveView,
+  onSelectView,
+  onDeleteView,
+  sessionDiff = null,
+  onExport,
   children,
 }) => {
   const { t, i18n } = useTranslation();
@@ -274,6 +282,14 @@ const Header = ({
       </div>
 
       <div className="header-controls">
+        <ViewSwitcher
+          views={savedViews}
+          activeViewId={activeViewId}
+          onSelect={onSelectView}
+          onSave={onSaveView}
+          onDelete={onDeleteView}
+        />
+
         <div className="map-toggle" role="tablist" aria-label="Map mode">
           <button
             type="button"
@@ -327,6 +343,17 @@ const Header = ({
         >
           <RefreshCw size={13} className={dataSource === 'loading' ? 'spin' : ''} />
         </button>
+
+        {onExport && (
+          <button
+            className="refresh-btn"
+            onClick={onExport}
+            aria-label="Export briefing"
+            title="Export briefing"
+          >
+            <Download size={13} />
+          </button>
+        )}
       </div>
 
       <div className="header-stats">
@@ -344,6 +371,11 @@ const Header = ({
         {criticalCount > 0 && (
           <div className="stat-chip is-critical">
             <strong>{criticalCount}</strong>&nbsp;{t('header.critical')}
+          </div>
+        )}
+        {sessionDiff && !sessionDiff.isFirstVisit && sessionDiff.newEvents.length > 0 && (
+          <div className="stat-chip is-new">
+            <strong>{sessionDiff.newEvents.length}</strong>&nbsp;new
           </div>
         )}
       </div>
