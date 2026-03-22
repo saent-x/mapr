@@ -355,7 +355,7 @@ const CesiumGlobe = ({
       stroke: Cesium.Color.CYAN.withAlpha(0.2),
       strokeWidth: 1,
       fill: Cesium.Color.CYAN.withAlpha(0.06),
-      clampToGround: true,
+      clampToGround: false,
     }).then(ds => {
       if (cancelled || !viewerRef.current) return;
       countryDsRef.current = ds;
@@ -408,6 +408,8 @@ const CesiumGlobe = ({
       entity.polygon.material = fill;
       entity.polygon.outline = true;
       entity.polygon.outlineColor = outline;
+      entity.polygon.height = 0;
+      entity.polygon.classificationType = undefined; // don't classify against terrain
     }
     console.log('[CesiumGlobe] Colored', entities.length, 'polygons');
   }, [countriesLoaded, regionSeverities, coverageStatusByIso, mapOverlay, selectedRegion, hoveredIso]);
