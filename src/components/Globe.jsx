@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import GlobeGL from 'react-globe.gl';
 import { useTranslation } from 'react-i18next';
 import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
@@ -204,63 +204,29 @@ const Globe = ({
     return map;
   }, [newsList]);
 
-  // Coverage indicator data — large colored dots + status labels per country
-  const COVERAGE_COLORS = {
-    verified: '#00e5a0',
-    developing: '#00d4ff',
-    'ingestion-risk': '#ffaa00',
-    'source-sparse': '#ff8800',
-    uncovered: '#ff5555',
-  };
-  const COVERAGE_LABELS = {
-    verified: 'COVERED',
-    developing: 'DEVELOPING',
-    'ingestion-risk': 'AT RISK',
-    'source-sparse': 'SPARSE',
-    uncovered: 'NO DATA',
-  };
-
-  const coveragePoints = useMemo(() => {
-    if (mapOverlay !== 'coverage') return [];
-    const points = [];
-    for (const [iso, entry] of Object.entries(coverageStatusByIso)) {
-      const story = isoToStoryRef[iso];
-      if (!story?.coordinates) continue;
-      const status = entry.status || 'uncovered';
-      points.push({
-        id: `cov-${iso}`,
-        lat: story.coordinates[0],
-        lng: story.coordinates[1],
-        iso,
-        region: story.region || isoToCountry(iso) || iso,
-        status,
-        color: COVERAGE_COLORS[status] || '#ff5555',
-        label: COVERAGE_LABELS[status] || 'UNKNOWN',
-        eventCount: entry.eventCount || 0,
-        confidence: entry.maxConfidence || 0,
-      });
-    }
-    return points;
-  }, [coverageStatusByIso, isoToStoryRef, mapOverlay]);
-
-  // Rings
+  // Rings: active pulses on high-severity stories across the globe
+  // In coverage mode, also add pulsing rings for velocity spike regions
   const ringData = useMemo(() => {
     if (mapOverlay === 'coverage') {
-      // Velocity spike rings only in coverage mode
+      // In coverage mode: show velocity spike rings instead of severity rings
       const spikeRings = [];
       for (const spike of velocitySpikes.slice(0, 10)) {
         const story = isoToStoryRef[spike.iso];
-        if (story?.coordinates) {
+        if (story) {
           spikeRings.push({ ...story, _velocitySpike: true, _spikeLevel: spike.level, _zScore: spike.zScore });
         }
       }
+      if (selectedStory) return [selectedStory, ...spikeRings.filter((s) => s.id !== selectedStory.id)];
       return spikeRings;
     }
+
     if (selectedStory) return [selectedStory];
+    // Show rings on all critical/elevated stories for ambient activity
     const ambient = newsList
       .filter((s) => s.severity >= 60)
       .slice(0, 12);
     if (selectedRegion) {
+      // Add selected region stories on top
       const regionRings = newsList
         .filter((s) => s.isoA2 === selectedRegion && s.severity >= 40)
         .slice(0, 6);
@@ -379,10 +345,6 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
-  // Polygons ALWAYS use severity coloring — no mode switching on polygons.
-  // Coverage info is shown via rings + points + tooltips instead.
-  // This avoids the flicker caused by polygon color recalculation.
-
   return (
     <div ref={containerRef} className="globe-wrapper">
       {size.width > 0 && size.height > 0 && (
@@ -398,16 +360,27 @@ const Globe = ({
           atmosphereColor="#00a8cc"
           atmosphereAltitude={0.22}
 
-          /* === POLYGONS — always severity-based, coverage shown via rings/points === */
+          /* === POLYGONS === */
           polygonsData={countries.features}
 
           polygonAltitude={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
+            const status = getCoverageStatus(f);
+            const coverageMeta = getCoverageMeta(status);
+            const isPassiveCoverage = status === 'uncovered' || status === 'source-sparse';
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
+
+            if (mapOverlay === 'coverage') {
+              if (isSel) return isPassiveCoverage ? 0.016 : 0.02;
+              if (isHov) return isPassiveCoverage ? 0.01 : 0.013;
+              return 0;
+            }
+
             if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
             if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
+            // Slight elevation for countries with severity data
             if (sev) return 0.002 + sev / 8000;
             return 0;
           }}
@@ -415,11 +388,21 @@ const Globe = ({
           polygonCapColor={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
+
+            if (mapOverlay === 'coverage') {
+              if (isSel) return coverageMeta.selectedFill;
+              if (isHov) return coverageMeta.hoverFill;
+              return coverageMeta.fill;
+            }
+
             if (sev) {
               const meta = getSeverityMeta(sev);
-              if (isSel || isHov) return meta.mapFill;
+              if (isSel) return meta.mapFill;
+              if (isHov) return meta.mapFill;
+              // Always shade countries with data by severity
               const alpha = 0.08 + (sev / 100) * 0.14;
               const hex = meta.accent;
               const r = parseInt(hex.slice(1, 3), 16);
@@ -427,6 +410,7 @@ const Globe = ({
               const b = parseInt(hex.slice(5, 7), 16);
               return `rgba(${r},${g},${b},${alpha})`;
             }
+
             if (isSel) return 'rgba(0, 200, 255, 0.15)';
             if (isHov) return 'rgba(0, 200, 255, 0.08)';
             return 'rgba(0, 180, 255, 0.02)';
@@ -435,8 +419,15 @@ const Globe = ({
           polygonSideColor={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
+
+            if (mapOverlay === 'coverage') {
+              if (isSel || isHov) return coverageMeta.side;
+              return 'rgba(0, 0, 0, 0)';
+            }
+
             if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
             if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
             return 'rgba(0, 0, 0, 0)';
@@ -444,8 +435,12 @@ const Globe = ({
 
           polygonStrokeColor={(f) => {
             const iso = getIso(f);
+            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
-            if (hoveredCountry && getIso(hoveredCountry) === iso) return 'rgba(0, 220, 255, 0.35)';
+            if (hoveredCountry && getIso(hoveredCountry) === iso) {
+              return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(0, 220, 255, 0.35)';
+            }
+            if (mapOverlay === 'coverage') return coverageMeta.stroke;
             return 'rgba(0, 200, 255, 0.07)';
           }}
 
@@ -507,57 +502,28 @@ const Globe = ({
             if (iso) onRegionSelect(iso);
           }}
 
-          /* === POINTS — news events in severity mode, coverage indicators in coverage mode === */
-          pointsData={mapOverlay === 'coverage' ? coveragePoints : newsList}
-          pointLat={(s) => s.lat ?? s.coordinates?.[0]}
-          pointLng={(s) => s.lng ?? s.coordinates?.[1]}
+          /* === POINTS (all articles, highlighted for active region) === */
+          pointsData={newsList}
+          pointLat={(s) => s.coordinates[0]}
+          pointLng={(s) => s.coordinates[1]}
           pointAltitude={(s) => {
-            if (s.status) return 0.03; // coverage indicator — elevated above surface
             if (selectedStory?.id === s.id) return 0.015;
             if (isActivePoint(s)) return 0.0075 + s.severity / 2800;
             return 0.0025;
           }}
           pointRadius={(s) => {
-            if (s.status) {
-              // Coverage indicators — large, clearly visible
-              if (s.status === 'uncovered') return 1.2;
-              if (s.status === 'source-sparse' || s.status === 'ingestion-risk') return 0.9;
-              if (s.status === 'developing') return 0.7;
-              return 0.5; // verified
-            }
             if (selectedStory?.id === s.id) return 0.35;
             const markerSize = Math.min(0.6, 0.15 + (s.articleCount || 1) * 0.05);
             if (isActivePoint(s)) return markerSize;
             return markerSize * 0.55;
           }}
           pointColor={(s) => {
-            if (s.color) return s.color; // coverage indicator
             if (selectedStory?.id === s.id) return '#ffffff';
             const meta = getSeverityMeta(s.severity);
             if (isActivePoint(s)) return meta.accent;
             return meta.muted.replace(/[\d.]+\)$/, (m) => `${Math.min(parseFloat(m) * 1.6, 0.35)})`);
           }}
           pointLabel={(s) => {
-            // Coverage indicator tooltip
-            if (s.status) {
-              return `
-                <div class="globe-tooltip">
-                  <div class="globe-tooltip-name">${s.region}</div>
-                  <div class="globe-tooltip-row">
-                    <span>Status</span>
-                    <strong style="color:${s.color}">${s.label}</strong>
-                  </div>
-                  <div class="globe-tooltip-row">
-                    <span>Events</span>
-                    <strong>${s.eventCount}</strong>
-                  </div>
-                  <div class="globe-tooltip-row">
-                    <span>Confidence</span>
-                    <strong>${s.confidence ? `${s.confidence}%` : '—'}</strong>
-                  </div>
-                </div>
-              `;
-            }
             if (!isActivePoint(s)) return '';
             const meta = getSeverityMeta(s.severity);
             const articleCount = s.articleCount || 1;
@@ -678,29 +644,8 @@ const Globe = ({
             return 2400;
           }}
 
-          /* === LABELS — coverage status text on globe surface (coverage mode only) === */
-          labelsData={coveragePoints}
-          labelLat={(d) => d.lat}
-          labelLng={(d) => d.lng}
-          labelText={(d) => d.label}
-          labelSize={(d) => {
-            if (d.status === 'uncovered') return 1.0;
-            if (d.status === 'source-sparse' || d.status === 'ingestion-risk') return 0.8;
-            return 0.6;
-          }}
-          labelColor={(d) => d.color}
-          labelDotRadius={(d) => {
-            if (d.status === 'uncovered') return 0.6;
-            if (d.status === 'source-sparse' || d.status === 'ingestion-risk') return 0.4;
-            return 0.25;
-          }}
-          labelDotOrientation={() => 'bottom'}
-          labelAltitude={0.015}
-          labelResolution={3}
-          labelsTransitionDuration={500}
-
           /* === TRANSITIONS === */
-          polygonsTransitionDuration={350}
+          polygonsTransitionDuration={0}
           pointsTransitionDuration={300}
         />
       )}
