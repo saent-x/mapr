@@ -3327,3 +3327,103 @@ button {
   text-overflow: ellipsis;
 }
 .entity-tag-person { background: rgba(0, 229, 160, 0.1); color: #00e5a0; border: 1px solid rgba(0, 229, 160, 0.2); }
+
+/* =============================
+   EVENT TIMELINE SCRUBBER
+   ============================= */
+
+.event-timeline {
+  position: absolute;
+  bottom: 30px; /* sits directly above the intel ticker (30px tall) */
+  left: 0;
+  right: 0;
+  height: 30px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #0a0e16;
+  border-top: 1px solid rgba(0, 200, 255, 0.06);
+  user-select: none;
+  pointer-events: auto;
+}
+
+.event-timeline-label {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+  padding: 0 0.45rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.event-timeline-label--left {
+  text-align: right;
+}
+
+.event-timeline-label--right {
+  text-align: left;
+}
+
+.event-timeline-track {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  cursor: crosshair;
+  overflow: hidden;
+}
+
+.event-timeline-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 3px 0;
+}
+
+.event-timeline-bar {
+  flex: 1;
+  min-width: 0;
+  border-radius: 1px 1px 0 0;
+  transition: opacity 0.15s ease;
+}
+
+.event-timeline-empty {
+  position: absolute;
+  inset: 0;
+}
+
+.event-timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ffffff;
+  transform: translateX(-1px);
+  pointer-events: none;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+  z-index: 2;
+}
+
+.event-timeline.is-shifted {
+  right: 22rem;
+}
+
+@media (max-width: 600px) {
+  .event-timeline {
+    bottom: 26px;
+    height: 26px;
+  }
+
+  .event-timeline-label {
+    font-size: 0.5rem;
+    padding: 0 0.3rem;
+  }
+
+  .event-timeline.is-shifted {
+    display: none;
+  }
+}
