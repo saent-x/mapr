@@ -88,6 +88,19 @@ function App() {
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'flat' : 'globe'
   );
   const [mapOverlay, setMapOverlay] = useState('severity');
+  const prevMapModeRef = useRef(null);
+
+  // Coverage overlay auto-switches to flat map (GPU-rendered, no flicker).
+  // Switching back to severity restores the previous map mode.
+  useEffect(() => {
+    if (mapOverlay === 'coverage' && mapMode === 'globe') {
+      prevMapModeRef.current = 'globe';
+      setMapMode('flat');
+    } else if (mapOverlay === 'severity' && prevMapModeRef.current === 'globe') {
+      setMapMode('globe');
+      prevMapModeRef.current = null;
+    }
+  }, [mapOverlay]);
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [sourceTypeFilter, setSourceTypeFilter] = useState('all');
   const [languageFilter, setLanguageFilter] = useState('all');

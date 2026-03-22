@@ -366,21 +366,10 @@ const Globe = ({
           polygonAltitude={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
-            const status = getCoverageStatus(f);
-            const coverageMeta = getCoverageMeta(status);
-            const isPassiveCoverage = status === 'uncovered' || status === 'source-sparse';
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
-
-            if (mapOverlay === 'coverage') {
-              if (isSel) return isPassiveCoverage ? 0.016 : 0.02;
-              if (isHov) return isPassiveCoverage ? 0.01 : 0.013;
-              return 0;
-            }
-
             if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
             if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
-            // Slight elevation for countries with severity data
             if (sev) return 0.002 + sev / 8000;
             return 0;
           }}
@@ -388,21 +377,11 @@ const Globe = ({
           polygonCapColor={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
-            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
-
-            if (mapOverlay === 'coverage') {
-              if (isSel) return coverageMeta.selectedFill;
-              if (isHov) return coverageMeta.hoverFill;
-              return coverageMeta.fill;
-            }
-
             if (sev) {
               const meta = getSeverityMeta(sev);
-              if (isSel) return meta.mapFill;
-              if (isHov) return meta.mapFill;
-              // Always shade countries with data by severity
+              if (isSel || isHov) return meta.mapFill;
               const alpha = 0.08 + (sev / 100) * 0.14;
               const hex = meta.accent;
               const r = parseInt(hex.slice(1, 3), 16);
@@ -410,7 +389,6 @@ const Globe = ({
               const b = parseInt(hex.slice(5, 7), 16);
               return `rgba(${r},${g},${b},${alpha})`;
             }
-
             if (isSel) return 'rgba(0, 200, 255, 0.15)';
             if (isHov) return 'rgba(0, 200, 255, 0.08)';
             return 'rgba(0, 180, 255, 0.02)';
@@ -419,15 +397,8 @@ const Globe = ({
           polygonSideColor={(f) => {
             const iso = getIso(f);
             const sev = getRegionSev(f);
-            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
             const isSel = iso === selectedRegion;
-
-            if (mapOverlay === 'coverage') {
-              if (isSel || isHov) return coverageMeta.side;
-              return 'rgba(0, 0, 0, 0)';
-            }
-
             if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
             if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
             return 'rgba(0, 0, 0, 0)';
@@ -435,12 +406,8 @@ const Globe = ({
 
           polygonStrokeColor={(f) => {
             const iso = getIso(f);
-            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
             if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
-            if (hoveredCountry && getIso(hoveredCountry) === iso) {
-              return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(0, 220, 255, 0.35)';
-            }
-            if (mapOverlay === 'coverage') return coverageMeta.stroke;
+            if (hoveredCountry && getIso(hoveredCountry) === iso) return 'rgba(0, 220, 255, 0.35)';
             return 'rgba(0, 200, 255, 0.07)';
           }}
 
@@ -449,37 +416,6 @@ const Globe = ({
             const iso = getIso(f);
             const meta = getSeverityMeta(sev);
             const count = regionSeverities[iso]?.count || 0;
-            const coverageEntry = getCoverageEntry(iso);
-            const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-            const coverageCount = coverageEntry?.eventCount || 0;
-            const confidence = coverageEntry?.maxConfidence || 0;
-            const feedStatus = coverageEntry?.feedCount
-              ? `${coverageEntry.healthyFeeds + coverageEntry.emptyFeeds}/${coverageEntry.feedCount}`
-              : t('map.noLocalFeeds');
-
-            if (mapOverlay === 'coverage') {
-              return `
-                <div class="globe-tooltip">
-                  <div class="globe-tooltip-name">${f.properties.ADMIN}</div>
-                  <div class="globe-tooltip-row">
-                    <span>${t('map.status')}</span>
-                    <strong style="color:${coverageMeta.accent}">${t(`coverageStatus.${coverageMeta.labelKey}`)}</strong>
-                  </div>
-                  <div class="globe-tooltip-row">
-                    <span>${t('map.confidence')}</span>
-                    <strong>${confidence ? `${confidence}%` : '—'}</strong>
-                  </div>
-                  <div class="globe-tooltip-row">
-                    <span>${t('map.reports')}</span>
-                    <strong>${coverageCount}</strong>
-                  </div>
-                  <div class="globe-tooltip-row">
-                    <span>${t('map.sourceFeeds')}</span>
-                    <strong>${feedStatus}</strong>
-                  </div>
-                </div>
-              `;
-            }
 
             return `
               <div class="globe-tooltip">
