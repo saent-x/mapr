@@ -345,50 +345,86 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
-  // Bake colors directly onto polygon features so react-globe.gl reads static properties
-  // instead of calling functions on every animation frame. This eliminates flicker.
-  const hoveredIso = hoveredCountry ? getIso(hoveredCountry) : null;
-  const isCoverage = mapOverlay === 'coverage';
+  const polygonAltitude = useCallback((f) => {
+    const iso = getIso(f);
+    const sev = getRegionSev(f);
+    const status = getCoverageStatus(f);
+    const coverageMeta = getCoverageMeta(status);
+    const isPassiveCoverage = status === 'uncovered' || status === 'source-sparse';
+    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
+    const isSel = iso === selectedRegion;
 
-  const bakedPolygons = useMemo(() => {
-    return countries.features.map((f) => {
-      const iso = getIso(f);
-      const sev = iso ? regionSeverities[iso]?.averageSeverity || 0 : 0;
-      const status = iso ? coverageStatusByIso[iso]?.status || 'uncovered' : 'uncovered';
-      const cm = getCoverageMeta(status);
-      const isPassive = status === 'uncovered' || status === 'source-sparse';
-      const isSel = iso === selectedRegion;
-      const isHov = iso === hoveredIso;
+    if (mapOverlay === 'coverage') {
+      if (isSel) return isPassiveCoverage ? 0.016 : 0.02;
+      if (isHov) return isPassiveCoverage ? 0.01 : 0.013;
+      return 0;
+    }
 
-      let capColor, sideColor, strokeColor, altitude;
+    if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
+    if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
+    // Slight elevation for countries with severity data
+    if (sev) return 0.002 + sev / 8000;
+    return 0;
+  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
 
-      if (isCoverage) {
-        capColor = isSel ? cm.selectedFill : isHov ? cm.hoverFill : cm.fill;
-        sideColor = (isSel || isHov) ? cm.side : 'rgba(0, 0, 0, 0)';
-        strokeColor = isSel ? 'rgba(0, 240, 255, 0.6)' : isHov ? cm.stroke : cm.stroke;
-        altitude = isSel ? (isPassive ? 0.016 : 0.02) : isHov ? (isPassive ? 0.01 : 0.013) : 0;
-      } else {
-        if (sev) {
-          const meta = getSeverityMeta(sev);
-          const alpha = 0.08 + (sev / 100) * 0.14;
-          const r = parseInt(meta.accent.slice(1, 3), 16);
-          const g = parseInt(meta.accent.slice(3, 5), 16);
-          const b = parseInt(meta.accent.slice(5, 7), 16);
-          capColor = (isSel || isHov) ? meta.mapFill : `rgba(${r},${g},${b},${alpha})`;
-          sideColor = (isSel || isHov) ? meta.mapSide : 'rgba(0, 0, 0, 0)';
-        } else {
-          capColor = isSel ? 'rgba(0, 200, 255, 0.15)' : isHov ? 'rgba(0, 200, 255, 0.08)' : 'rgba(0, 180, 255, 0.02)';
-          sideColor = (isSel || isHov) ? 'rgba(0, 180, 255, 0.06)' : 'rgba(0, 0, 0, 0)';
-        }
-        strokeColor = isSel ? 'rgba(0, 240, 255, 0.6)' : isHov ? 'rgba(0, 220, 255, 0.35)' : 'rgba(0, 200, 255, 0.07)';
-        altitude = isSel ? (sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02)
-          : isHov ? (sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125)
-          : sev ? 0.002 + sev / 8000 : 0;
-      }
+  const polygonCapColor = useCallback((f) => {
+    const iso = getIso(f);
+    const sev = getRegionSev(f);
+    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
+    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
+    const isSel = iso === selectedRegion;
 
-      return { ...f, _capColor: capColor, _sideColor: sideColor, _strokeColor: strokeColor, _altitude: altitude };
-    });
-  }, [countries.features, regionSeverities, coverageStatusByIso, selectedRegion, hoveredIso, isCoverage]);
+    if (mapOverlay === 'coverage') {
+      if (isSel) return coverageMeta.selectedFill;
+      if (isHov) return coverageMeta.hoverFill;
+      return coverageMeta.fill;
+    }
+
+    if (sev) {
+      const meta = getSeverityMeta(sev);
+      if (isSel) return meta.mapFill;
+      if (isHov) return meta.mapFill;
+      // Always shade countries with data by severity
+      const alpha = 0.08 + (sev / 100) * 0.14;
+      const hex = meta.accent;
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+
+    if (isSel) return 'rgba(0, 200, 255, 0.15)';
+    if (isHov) return 'rgba(0, 200, 255, 0.08)';
+    return 'rgba(0, 180, 255, 0.02)';
+  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
+
+  const polygonSideColor = useCallback((f) => {
+    const iso = getIso(f);
+    const sev = getRegionSev(f);
+    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
+    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
+    const isSel = iso === selectedRegion;
+
+    if (mapOverlay === 'coverage') {
+      if (isSel || isHov) return coverageMeta.side;
+      return 'rgba(0, 0, 0, 0)';
+    }
+
+    if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
+    if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
+    return 'rgba(0, 0, 0, 0)';
+  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
+
+  const polygonStrokeColor = useCallback((f) => {
+    const iso = getIso(f);
+    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
+    if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
+    if (hoveredCountry && getIso(hoveredCountry) === iso) {
+      return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(0, 220, 255, 0.35)';
+    }
+    if (mapOverlay === 'coverage') return coverageMeta.stroke;
+    return 'rgba(0, 200, 255, 0.07)';
+  }, [hoveredCountry, selectedRegion, mapOverlay, coverageStatusByIso]);
 
   return (
     <div ref={containerRef} className="globe-wrapper">
@@ -405,16 +441,16 @@ const Globe = ({
           atmosphereColor="#00a8cc"
           atmosphereAltitude={0.22}
 
-          /* === POLYGONS — colors baked onto features to avoid per-frame callback flicker === */
-          polygonsData={bakedPolygons}
+          /* === POLYGONS === */
+          polygonsData={countries.features}
 
-          polygonAltitude="_altitude"
+          polygonAltitude={polygonAltitude}
 
-          polygonCapColor="_capColor"
+          polygonCapColor={polygonCapColor}
 
-          polygonSideColor="_sideColor"
+          polygonSideColor={polygonSideColor}
 
-          polygonStrokeColor="_strokeColor"
+          polygonStrokeColor={polygonStrokeColor}
 
           polygonLabel={(f) => {
             const sev = Math.round(getRegionSev(f));
@@ -617,7 +653,7 @@ const Globe = ({
           }}
 
           /* === TRANSITIONS === */
-          polygonsTransitionDuration={300}
+          polygonsTransitionDuration={350}
           pointsTransitionDuration={300}
         />
       )}
