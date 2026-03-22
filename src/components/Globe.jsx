@@ -183,53 +183,12 @@ const Globe = ({
     return ambient;
   }, [newsList, selectedRegion, selectedStory]);
 
-  // Arcs: connect countries that are mentioned in the same news
+  // Arcs: connect countries from events' multi-country countries arrays
   const arcData = useMemo(() => {
     const arcs = [];
     const seen = new Set();
 
-    const addArc = (a, b, title) => {
-      if (a.isoA2 === b.isoA2) return;
-      const pairKey = [a.isoA2, b.isoA2].sort().join('-');
-      if (seen.has(pairKey)) return;
-      seen.add(pairKey);
-      const avgSev = Math.round((a.severity + b.severity) / 2);
-      arcs.push({
-        id: pairKey,
-        startLat: a.coordinates[0],
-        startLng: a.coordinates[1],
-        endLat: b.coordinates[0],
-        endLng: b.coordinates[1],
-        startIso: a.isoA2,
-        endIso: b.isoA2,
-        startRegion: a.region || a.locality,
-        endRegion: b.region || b.locality,
-        severity: avgSev,
-        category: a.category || b.category || 'related',
-        title: title || a.title,
-      });
-    };
-
-    // 1. Same article placed in multiple countries (same URL)
-    const byUrl = {};
-    for (const story of newsList) {
-      if (!story.coordinates || !story.isoA2 || !story.url) continue;
-      if (!byUrl[story.url]) byUrl[story.url] = [];
-      if (!byUrl[story.url].some((s) => s.isoA2 === story.isoA2)) {
-        byUrl[story.url].push(story);
-      }
-    }
-    for (const group of Object.values(byUrl)) {
-      if (group.length < 2) continue;
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          addArc(group[i], group[j], group[i].title);
-        }
-      }
-    }
-
-    // 2. Article title mentions another country's name
-    // Build a lookup: country name → story with best coordinates for that country
+    // Build a lookup: ISO → best representative story (highest severity with coordinates)
     const countryStoryMap = {};
     for (const story of newsList) {
       if (!story.coordinates || !story.isoA2) continue;
@@ -238,17 +197,37 @@ const Globe = ({
       }
     }
 
+    const addArc = (isoA, isoB, severity, category, title) => {
+      if (isoA === isoB) return;
+      const pairKey = [isoA, isoB].sort().join('-');
+      if (seen.has(pairKey)) return;
+      const a = countryStoryMap[isoA];
+      const b = countryStoryMap[isoB];
+      if (!a || !b) return;
+      seen.add(pairKey);
+      arcs.push({
+        id: pairKey,
+        startLat: a.coordinates[0],
+        startLng: a.coordinates[1],
+        endLat: b.coordinates[0],
+        endLng: b.coordinates[1],
+        startIso: isoA,
+        endIso: isoB,
+        startRegion: a.region || a.locality,
+        endRegion: b.region || b.locality,
+        severity: severity ?? Math.round((a.severity + b.severity) / 2),
+        category: category || a.category || b.category || 'related',
+        title: title || a.title,
+      });
+    };
+
+    // Derive arcs from events' countries arrays (multi-country events)
     for (const story of newsList) {
-      if (!story.coordinates || !story.isoA2) continue;
-      const titleLower = (story.title || '').toLowerCase();
-      if (!titleLower) continue;
-      // Check if this story's title mentions other countries that have stories
-      for (const [iso, representative] of Object.entries(countryStoryMap)) {
-        if (iso === story.isoA2) continue;
-        const countryName = isoToCountry(iso);
-        if (!countryName) continue;
-        if (titleLower.includes(countryName.toLowerCase())) {
-          addArc(story, representative, story.title);
+      const eventCountries = story.countries;
+      if (!Array.isArray(eventCountries) || eventCountries.length < 2) continue;
+      for (let i = 0; i < eventCountries.length; i++) {
+        for (let j = i + 1; j < eventCountries.length; j++) {
+          addArc(eventCountries[i], eventCountries[j], story.severity, story.category, story.title);
         }
       }
     }
@@ -439,8 +418,9 @@ const Globe = ({
           }}
           pointRadius={(s) => {
             if (selectedStory?.id === s.id) return 0.35;
-            if (isActivePoint(s)) return 0.12 + s.severity / 450;
-            return 0.07 + s.severity / 800;
+            const markerSize = Math.min(0.6, 0.15 + (s.articleCount || 1) * 0.05);
+            if (isActivePoint(s)) return markerSize;
+            return markerSize * 0.55;
           }}
           pointColor={(s) => {
             if (selectedStory?.id === s.id) return '#ffffff';
@@ -451,6 +431,13 @@ const Globe = ({
           pointLabel={(s) => {
             if (!isActivePoint(s)) return '';
             const meta = getSeverityMeta(s.severity);
+            const articleCount = s.articleCount || 1;
+            const lifecycleRow = s.lifecycle
+              ? `<div class="globe-tooltip-row">
+                  <span>${t('map.lifecycle') || 'Lifecycle'}</span>
+                  <strong>${s.lifecycle}</strong>
+                </div>`
+              : '';
             return `
               <div class="globe-tooltip">
                 <div class="globe-tooltip-name">${s.title}</div>
@@ -458,6 +445,11 @@ const Globe = ({
                   <span>${s.locality}</span>
                   <strong style="color:${meta.accent}">${meta.label}</strong>
                 </div>
+                <div class="globe-tooltip-row">
+                  <span>${t('map.sources') || 'Sources'}</span>
+                  <strong>${articleCount}</strong>
+                </div>
+                ${lifecycleRow}
               </div>
             `;
           }}

@@ -309,6 +309,7 @@ const FlatMap = ({
           id: story.id,
           title: story.title,
           severity: story.severity,
+          articleCount: story.articleCount || 1,
           color: severityToColor(story.severity),
           locality: story.locality || '',
           category: story.category || '',
@@ -337,27 +338,39 @@ const FlatMap = ({
     };
   }, [selectedStory]);
 
-  /* ── arcs: lines between countries mentioned in the same news ── */
+  /* ── arcs: lines between countries from events' multi-country countries arrays ── */
   const arcsGeoJson = useMemo(() => {
     const features = [];
     const seen = new Set();
 
-    const addArc = (a, b, title) => {
-      if (a.isoA2 === b.isoA2) return;
-      const pairKey = [a.isoA2, b.isoA2].sort().join('-');
+    // Build a lookup: ISO → best representative story (highest severity with coordinates)
+    const countryStoryMap = {};
+    for (const story of newsList) {
+      if (!story.coordinates || !story.isoA2) continue;
+      if (!countryStoryMap[story.isoA2] || story.severity > countryStoryMap[story.isoA2].severity) {
+        countryStoryMap[story.isoA2] = story;
+      }
+    }
+
+    const addArc = (isoA, isoB, severity, category, title) => {
+      if (isoA === isoB) return;
+      const pairKey = [isoA, isoB].sort().join('-');
       if (seen.has(pairKey)) return;
+      const a = countryStoryMap[isoA];
+      const b = countryStoryMap[isoB];
+      if (!a || !b) return;
       seen.add(pairKey);
-      const avgSev = Math.round((a.severity + b.severity) / 2);
+      const sev = severity ?? Math.round((a.severity + b.severity) / 2);
       features.push({
         type: 'Feature',
         properties: {
-          severity: avgSev,
-          color: severityToColor(avgSev),
-          category: a.category || b.category || 'related',
-          startIso: a.isoA2,
-          endIso: b.isoA2,
-          startRegion: a.region || a.locality || a.isoA2,
-          endRegion: b.region || b.locality || b.isoA2,
+          severity: sev,
+          color: severityToColor(sev),
+          category: category || a.category || b.category || 'related',
+          startIso: isoA,
+          endIso: isoB,
+          startRegion: a.region || a.locality || isoA,
+          endRegion: b.region || b.locality || isoB,
           title: title || a.title,
         },
         geometry: {
@@ -370,42 +383,13 @@ const FlatMap = ({
       });
     };
 
-    // 1. Same URL = same article placed in multiple countries
-    const byUrl = {};
+    // Derive arcs from events' countries arrays (multi-country events)
     for (const story of newsList) {
-      if (!story.coordinates || !story.isoA2 || !story.url) continue;
-      if (!byUrl[story.url]) byUrl[story.url] = [];
-      if (!byUrl[story.url].some((s) => s.isoA2 === story.isoA2)) {
-        byUrl[story.url].push(story);
-      }
-    }
-    for (const group of Object.values(byUrl)) {
-      if (group.length < 2) continue;
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          addArc(group[i], group[j], group[i].title);
-        }
-      }
-    }
-
-    // 2. Title mentions another country that has stories
-    const countryStoryMap = {};
-    for (const story of newsList) {
-      if (!story.coordinates || !story.isoA2) continue;
-      if (!countryStoryMap[story.isoA2] || story.severity > countryStoryMap[story.isoA2].severity) {
-        countryStoryMap[story.isoA2] = story;
-      }
-    }
-    for (const story of newsList) {
-      if (!story.coordinates || !story.isoA2) continue;
-      const titleLower = (story.title || '').toLowerCase();
-      if (!titleLower) continue;
-      for (const [iso, representative] of Object.entries(countryStoryMap)) {
-        if (iso === story.isoA2) continue;
-        const countryName = isoToCountry(iso);
-        if (!countryName) continue;
-        if (titleLower.includes(countryName.toLowerCase())) {
-          addArc(story, representative, story.title);
+      const eventCountries = story.countries;
+      if (!Array.isArray(eventCountries) || eventCountries.length < 2) continue;
+      for (let i = 0; i < eventCountries.length; i++) {
+        for (let j = i + 1; j < eventCountries.length; j++) {
+          addArc(eventCountries[i], eventCountries[j], story.severity, story.category, story.title);
         }
       }
     }
@@ -826,7 +810,14 @@ const FlatMap = ({
             filter={['!', ['has', 'point_count']]}
             paint={{
               'circle-color': ['get', 'color'],
-              'circle-radius': 4,
+              'circle-radius': [
+                'interpolate', ['linear'],
+                ['get', 'articleCount'],
+                1, 4,
+                5, 7,
+                10, 10,
+                20, 14,
+              ],
               'circle-opacity': 0.85,
               'circle-stroke-width': 0.8,
               'circle-stroke-color': ['get', 'color'],
