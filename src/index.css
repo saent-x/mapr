@@ -2307,6 +2307,186 @@ button {
 }
 
 /* =============================
+   VIEW SWITCHER
+   ============================= */
+
+.view-switcher {
+  position: relative;
+  flex-shrink: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  border-right: 1px solid var(--glass-border);
+}
+
+.view-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0 0.45rem;
+  height: 22px;
+  border: 1px solid var(--glass-border);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.02);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), color 0.15s var(--ease), background 0.15s var(--ease);
+  white-space: nowrap;
+  max-width: 9rem;
+  overflow: hidden;
+}
+
+.view-switcher-btn:hover,
+.view-switcher-btn.is-open {
+  border-color: var(--glass-border-hover);
+  color: var(--text-secondary);
+}
+
+.view-switcher-btn.is-active {
+  color: var(--cyan);
+  border-color: rgba(0, 212, 255, 0.2);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.view-switcher-chevron {
+  font-size: 0.6rem;
+  line-height: 1;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  margin-left: 0.1rem;
+}
+
+.view-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0.5rem;
+  min-width: 11rem;
+  background: #0d1117;
+  border: 1px solid #1a2030;
+  border-radius: 4px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.view-switcher-list {
+  list-style: none;
+  padding: 0.2rem 0;
+  margin: 0;
+}
+
+.view-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.view-switcher-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: #aaa;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.view-switcher-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ddd;
+}
+
+.view-switcher-row.is-active {
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.view-switcher-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.view-switcher-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.view-switcher-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 100%;
+  min-height: 26px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s;
+}
+
+.view-switcher-delete:hover {
+  color: var(--critical);
+}
+
+.view-switcher-empty {
+  padding: 0.6rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: rgba(170, 170, 170, 0.45);
+  font-style: italic;
+}
+
+.view-switcher-footer {
+  padding: 0.25rem 0.35rem;
+  border-top: 1px solid #1a2030;
+}
+
+.view-switcher-save {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  background: transparent;
+  border: 1px solid #1a2030;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: rgba(170, 170, 170, 0.6);
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.view-switcher-save:hover {
+  border-color: rgba(0, 212, 255, 0.25);
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+/* =============================
    BRAND LIVE — LOADING STATE
    ============================= */
 
