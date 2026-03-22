@@ -96,6 +96,13 @@ function ensureDatabase() {
       lastUpdatedAt TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS velocity_history (
+      iso TEXT NOT NULL,
+      bucketAt TEXT NOT NULL,
+      articleCount INTEGER DEFAULT 0,
+      PRIMARY KEY (iso, bucketAt)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_events_lifecycle ON events(lifecycle);
     CREATE INDEX IF NOT EXISTS idx_events_lastUpdated ON events(lastUpdatedAt);
     CREATE INDEX IF NOT EXISTS idx_articles_isoA2 ON articles(isoA2);
@@ -441,6 +448,23 @@ export async function updateSourceCredibility(sourceKey, wasCorroborated) {
 export async function readSourceCredibility(sourceKey) {
   const db = ensureDatabase();
   return prepareStatement(db, 'SELECT * FROM source_credibility WHERE sourceKey = ?').get(sourceKey) || null;
+}
+
+export async function upsertVelocityBucket(iso, bucketAt, articleCount) {
+  const db = ensureDatabase();
+  prepareStatement(db,
+    `INSERT INTO velocity_history (iso, bucketAt, articleCount)
+     VALUES (?, ?, ?)
+     ON CONFLICT(iso, bucketAt) DO UPDATE SET articleCount = excluded.articleCount`
+  ).run(iso, bucketAt, articleCount);
+}
+
+export async function readVelocityHistory(iso, sinceDays = 7) {
+  const db = ensureDatabase();
+  const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+  return prepareStatement(db,
+    `SELECT bucketAt, articleCount FROM velocity_history WHERE iso = ? AND bucketAt >= ? ORDER BY bucketAt ASC`
+  ).all(iso, since);
 }
 
 export function closeStorage() {

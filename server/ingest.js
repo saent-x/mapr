@@ -43,6 +43,8 @@ import {
   readSnapshot,
   upsertArticles,
   upsertEvent,
+  upsertVelocityBucket,
+  readVelocityHistory,
   updateSourceCredibility,
   writeCoverageHistory,
   writeSnapshot
@@ -53,6 +55,7 @@ import { computeLifecycleTransition } from '../src/utils/eventModel.js';
 import { extractEntities } from './entityExtractor.js';
 import { computeCompositeSeverity } from '../src/utils/severityModel.js';
 import { detectAmplification } from '../src/utils/amplificationDetector.js';
+import { computeVelocitySpikes } from './velocityTracker.js';
 const DEFAULT_TIMESPAN = '24h';
 const DEFAULT_MAX_RECORDS = 250;
 const REGION_BACKFILL_TIMESPAN = '168h';
@@ -259,6 +262,7 @@ async function createResponsePayload() {
     },
     articles: currentSnapshot?.articles || [],
     events: enrichedEvents,
+    velocitySpikes: currentSnapshot?.velocitySpikes || [],
     coverageMetrics,
     coverageDiagnostics,
     coverageTrends,
@@ -698,6 +702,35 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       // 1. Persist individual articles
       await upsertArticles(mergedArticles);
 
+      // --- Velocity tracking ---
+      // Compute 2-hour bucket timestamp (e.g. "2026-03-22T14" rounded to even hours)
+      const nowDate = new Date();
+      const bucketHour = Math.floor(nowDate.getUTCHours() / 2) * 2;
+      const bucketAt = `${nowDate.toISOString().slice(0, 8)}${String(bucketHour).padStart(2, '0')}`;
+
+      // Count articles per ISO code in this batch
+      const isoCounts = {};
+      for (const article of mergedArticles) {
+        const iso = article.isoA2;
+        if (iso) {
+          isoCounts[iso] = (isoCounts[iso] || 0) + 1;
+        }
+      }
+
+      // Persist velocity buckets and build history map
+      const regionHistory = {};
+      for (const [iso, count] of Object.entries(isoCounts)) {
+        await upsertVelocityBucket(iso, bucketAt, count);
+        const historyRows = await readVelocityHistory(iso, 7);
+        const counts = historyRows
+          .filter(row => row.bucketAt !== bucketAt)
+          .map(row => row.articleCount);
+        regionHistory[iso] = { counts, currentCount: count };
+      }
+
+      // Compute velocity spikes
+      const velocitySpikes = computeVelocitySpikes(regionHistory);
+
       // 2. Load existing events from DB (only last 72h per spec)
       const existingEvents = await readActiveEvents({ maxAgeHours: 72 });
 
@@ -741,13 +774,18 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         }
 
         // Use composite severity instead of the old weighted max/avg blend
-        event.severity = computeCompositeSeverity({
+        const regionSpike = velocitySpikes.find(s => s.iso === event.primaryCountry);
+        const severityCtx = {
           keywordSeverity: Math.max(...allEventArticles.map(a => a.severity || 0)),
           articleCount: allEventArticles.length,
           diversityScore: sourceProfile.diversityScore,
           entities: event.entities,
           category: event.nerCategory || event.category
-        });
+        };
+        if (regionSpike) {
+          severityCtx.velocitySignal = Math.min(100, regionSpike.zScore * 30);
+        }
+        event.severity = computeCompositeSeverity(severityCtx);
 
         // Run amplification detection
         const amplification = detectAmplification(allEventArticles);
@@ -803,6 +841,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         fetchedAt,
         articles: mergedArticles,
         events: persistentEvents,
+        velocitySpikes,
         sourceHealth: nextSourceHealth,
         ingestHealth: {
           lastAttemptAt: attemptedAt,
