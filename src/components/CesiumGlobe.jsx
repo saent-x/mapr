@@ -97,6 +97,7 @@ const CesiumGlobe = ({
   const userInteractedRef = useRef(false);
   const [hoveredIso, setHoveredIso] = useState(null);
   const [hoveredEntity, setHoveredEntity] = useState(null);
+  const [countriesLoaded, setCountriesLoaded] = useState(false);
 
   // Keep latest callbacks in a ref so event handlers always see current values
   const cbRef = useRef({ onRegionSelect, onStorySelect, onArcSelect, newsList });
@@ -326,6 +327,7 @@ const CesiumGlobe = ({
     viewer.canvas.addEventListener('wheel', onInteraction, { passive: true });
 
     viewerRef.current = viewer;
+    console.log('[CesiumGlobe] Viewer created');
 
     return () => {
       viewer.canvas.removeEventListener('pointerdown', onInteraction);
@@ -356,6 +358,8 @@ const CesiumGlobe = ({
       if (cancelled || !viewerRef.current) return;
       countryDsRef.current = ds;
       viewer.dataSources.add(ds);
+      setCountriesLoaded(true);
+      console.log('[CesiumGlobe] GeoJSON loaded,', ds.entities.values.length, 'entities');
     });
 
     return () => { cancelled = true; };
@@ -403,7 +407,8 @@ const CesiumGlobe = ({
       entity.polygon.outline = true;
       entity.polygon.outlineColor = outline;
     }
-  }, [regionSeverities, coverageStatusByIso, mapOverlay, selectedRegion, hoveredIso]);
+    console.log('[CesiumGlobe] Colored', entities.length, 'polygons');
+  }, [countriesLoaded, regionSeverities, coverageStatusByIso, mapOverlay, selectedRegion, hoveredIso]);
 
   /* ── Event markers ── */
   useEffect(() => {
