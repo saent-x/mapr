@@ -2996,3 +2996,8 @@ button {
 .event-evidence-source { color: #00d4ff; white-space: nowrap; min-width: 60px; }
 .event-evidence-title { color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-evidence-title:hover { color: #fff; }
+
+.entity-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.entity-tag { font-size: 0.5rem; padding: 1px 5px; border-radius: 2px; font-family: 'JetBrains Mono', monospace; }
+.entity-tag-org { background: rgba(0, 212, 255, 0.1); color: #00d4ff; border: 1px solid rgba(0, 212, 255, 0.2); }
+.entity-tag-person { background: rgba(0, 229, 160, 0.1); color: #00e5a0; border: 1px solid rgba(0, 229, 160, 0.2); }

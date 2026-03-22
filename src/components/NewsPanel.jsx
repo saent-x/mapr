@@ -367,6 +367,16 @@ const NewsPanel = ({
                   <span className="arc-panel-story-badges">
                     <LifecycleBadge lifecycle={story.lifecycle} />
                   </span>
+                  {story.entities && (
+                    <div className="entity-tags">
+                      {(story.entities.organizations || []).slice(0, 3).map(org => (
+                        <span key={org.name} className="entity-tag entity-tag-org">{org.name}</span>
+                      ))}
+                      {(story.entities.people || []).slice(0, 2).map(p => (
+                        <span key={p.name} className="entity-tag entity-tag-person">{p.name}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <ChevronUp size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
               </button>
