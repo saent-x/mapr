@@ -229,6 +229,9 @@ const CesiumGlobe = ({
       viewerRef.current.destroy();
       viewerRef.current = null;
     }
+    // Clean up any leftover Cesium DOM from previous viewer
+    const staleNodes = el.querySelectorAll('.cesium-viewer');
+    staleNodes.forEach(n => n.remove());
 
     // Force explicit pixel dimensions — Cesium needs this
     const rect = el.getBoundingClientRect();
@@ -270,8 +273,8 @@ const CesiumGlobe = ({
     });
 
     // Dark theme — no imagery layers at all
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#060a12');
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#080e18');
+    viewer.scene.backgroundColor = Cesium.Color.BLACK;
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1a2a3a'); // lighter for visibility test
     viewer.scene.globe.showGroundAtmosphere = false;
     viewer.scene.globe.enableLighting = false;
     viewer.scene.globe.depthTestAgainstTerrain = false;
@@ -357,6 +360,15 @@ const CesiumGlobe = ({
       }
     });
     console.log('[CesiumGlobe] Viewer created');
+    console.log('[CesiumGlobe] Globe visible:', viewer.scene.globe.show);
+    console.log('[CesiumGlobe] Scene mode:', viewer.scene.mode);
+
+    // Test entity — bright red dot at 0,0 to verify rendering works
+    viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(0, 0),
+      point: { pixelSize: 20, color: Cesium.Color.RED },
+      label: { text: 'TEST', font: '16px monospace', fillColor: Cesium.Color.RED, style: Cesium.LabelStyle.FILL }
+    });
 
     return () => {
       viewer.canvas.removeEventListener('pointerdown', onInteraction);
@@ -379,9 +391,9 @@ const CesiumGlobe = ({
 
     let cancelled = false;
     Cesium.GeoJsonDataSource.load(countriesUrl, {
-      stroke: Cesium.Color.CYAN.withAlpha(0.2),
-      strokeWidth: 1,
-      fill: Cesium.Color.CYAN.withAlpha(0.06),
+      stroke: Cesium.Color.CYAN.withAlpha(0.5),
+      strokeWidth: 2,
+      fill: Cesium.Color.CYAN.withAlpha(0.15),
       clampToGround: false,
     }).then(ds => {
       if (cancelled || !viewerRef.current) return;
