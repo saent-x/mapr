@@ -827,4 +827,71 @@ export function isoToCountry(iso) {
   return ISO_TO_COUNTRY[(iso || '').toUpperCase()] || null;
 }
 
+export const COUNTRY_ADJACENCY = {
+  // Central/Eastern Europe
+  UA: ['RU', 'BY', 'PL', 'SK', 'HU', 'RO', 'MD'],
+  RU: ['UA', 'BY', 'GE', 'AZ', 'KZ', 'CN', 'MN', 'FI', 'EE', 'LV', 'LT', 'PL', 'NO'],
+  BY: ['RU', 'UA', 'PL', 'LT', 'LV'],
+  PL: ['DE', 'CZ', 'SK', 'UA', 'BY', 'LT', 'RU'],
+
+  // Middle East
+  SY: ['TR', 'IQ', 'JO', 'IL', 'LB'],
+  IQ: ['SY', 'TR', 'IR', 'KW', 'SA', 'JO'],
+  IR: ['IQ', 'TR', 'AF', 'PK', 'TM', 'AZ', 'AM'],
+  IL: ['PS', 'LB', 'SY', 'JO', 'EG'],
+  PS: ['IL', 'EG', 'JO'],
+  LB: ['SY', 'IL'],
+  YE: ['SA', 'OM'],
+  SA: ['YE', 'OM', 'AE', 'QA', 'BH', 'KW', 'IQ', 'JO'],
+  TR: ['SY', 'IQ', 'IR', 'GE', 'AM', 'AZ', 'BG', 'GR'],
+
+  // East Africa
+  SD: ['SS', 'TD', 'CF', 'ET', 'ER', 'EG', 'LY'],
+  SS: ['SD', 'ET', 'KE', 'UG', 'CD', 'CF'],
+  ET: ['ER', 'DJ', 'SO', 'KE', 'SS', 'SD'],
+  SO: ['ET', 'DJ', 'KE'],
+  KE: ['ET', 'SO', 'SS', 'UG', 'TZ'],
+  ER: ['SD', 'ET', 'DJ'],
+
+  // West Africa / Sahel
+  ML: ['SN', 'MR', 'DZ', 'NE', 'BF', 'CI', 'GN'],
+  NE: ['ML', 'BF', 'NG', 'TD', 'LY', 'DZ', 'BJ'],
+  BF: ['ML', 'NE', 'BJ', 'TG', 'GH', 'CI'],
+  NG: ['NE', 'TD', 'CM', 'BJ'],
+  TD: ['LY', 'SD', 'CF', 'CM', 'NG', 'NE'],
+
+  // Central Africa
+  CD: ['CG', 'CF', 'SS', 'UG', 'RW', 'BI', 'TZ', 'ZM', 'AO'],
+  CF: ['CM', 'TD', 'SD', 'SS', 'CD', 'CG'],
+
+  // North Africa
+  LY: ['TN', 'DZ', 'NE', 'TD', 'SD', 'EG'],
+  EG: ['LY', 'SD', 'IL', 'PS'],
+
+  // South/Central Asia
+  AF: ['PK', 'IR', 'TM', 'UZ', 'TJ', 'CN'],
+  PK: ['AF', 'IR', 'IN', 'CN'],
+  IN: ['PK', 'CN', 'NP', 'BD', 'MM', 'BT'],
+  CN: ['RU', 'MN', 'KZ', 'KG', 'TJ', 'AF', 'PK', 'IN', 'NP', 'BT', 'MM', 'LA', 'VN', 'KP'],
+
+  // Southeast Asia
+  MM: ['CN', 'IN', 'BD', 'LA', 'TH'],
+  TH: ['MM', 'LA', 'KH', 'MY'],
+
+  // East Asia
+  KP: ['CN', 'KR', 'RU'],
+  KR: ['KP'],
+  TW: ['CN'],  // political adjacency
+
+  // Americas
+  MX: ['US', 'GT', 'BZ'],
+  CO: ['VE', 'BR', 'PE', 'EC', 'PA'],
+  VE: ['CO', 'BR', 'GY'],
+};
+
+export function areCountriesAdjacent(iso1, iso2) {
+  return (COUNTRY_ADJACENCY[iso1] || []).includes(iso2) ||
+         (COUNTRY_ADJACENCY[iso2] || []).includes(iso1);
+}
+
 export const KNOWN_COUNTRY_NAMES = Object.keys(COUNTRY_TO_ISO).sort();
