@@ -12,6 +12,26 @@ import ExpandableText from './ExpandableText';
 
 const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
 
+const LIFECYCLE_COLORS = {
+  emerging: '#00d4ff',
+  developing: '#00e5a0',
+  escalating: '#ff5555',
+  stabilizing: '#ffaa00',
+  resolved: '#666'
+};
+
+function LifecycleBadge({ lifecycle }) {
+  if (!lifecycle) return null;
+  return (
+    <span
+      className="lifecycle-badge"
+      style={{ color: LIFECYCLE_COLORS[lifecycle] || '#666', borderColor: LIFECYCLE_COLORS[lifecycle] || '#666' }}
+    >
+      {lifecycle}
+    </span>
+  );
+}
+
 /** Parse a date string safely — returns a valid Date or null. */
 function safeDate(value) {
   if (!value) return null;
@@ -340,6 +360,12 @@ const NewsPanel = ({
                   <span className="arc-panel-story-title">{story.title}</span>
                   <span className="arc-panel-story-meta">
                     {story.locality || story.region} · {safeTimeAgo(story.publishedAt, { locale, addSuffix: true })}
+                    {story.articleCount > 1 && (
+                      <span className="event-source-count"> · {story.articleCount} sources</span>
+                    )}
+                  </span>
+                  <span className="arc-panel-story-badges">
+                    <LifecycleBadge lifecycle={story.lifecycle} />
                   </span>
                 </div>
                 <ChevronUp size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
@@ -347,6 +373,19 @@ const NewsPanel = ({
               {isExpanded && (
                 <div className="arc-panel-detail">
                   {renderStoryDetail(story)}
+                  {story.supportingArticles?.length > 1 && (
+                    <div className="event-evidence">
+                      <div className="event-evidence-header">{story.supportingArticles.length} sources reporting</div>
+                      {story.supportingArticles.map((article, i) => (
+                        <div key={article.id || i} className="event-evidence-item">
+                          <span className="event-evidence-source">{article.source}</span>
+                          <a href={article.url} target="_blank" rel="noopener noreferrer" className="event-evidence-title">
+                            {article.title}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -2963,3 +2963,36 @@ button {
     display: none;
   }
 }
+
+/* ── Lifecycle badge and event evidence ───────────────────────── */
+.lifecycle-badge {
+  font-size: 0.55rem;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border: 1px solid;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.event-source-count {
+  font-size: 0.55rem;
+  color: #666;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.arc-panel-story-badges {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.event-evidence { margin-top: 8px; border-top: 1px solid #1a2030; padding-top: 8px; }
+.event-evidence-header { font-size: 0.55rem; text-transform: uppercase; color: #666; letter-spacing: 0.5px; margin-bottom: 6px; }
+.event-evidence-item { display: flex; gap: 8px; align-items: baseline; font-size: 0.65rem; color: #888; padding: 2px 0; }
+.event-evidence-source { color: #00d4ff; white-space: nowrap; min-width: 60px; }
+.event-evidence-title { color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-evidence-title:hover { color: #fff; }
