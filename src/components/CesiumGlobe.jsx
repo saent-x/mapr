@@ -73,20 +73,21 @@ const CesiumGlobe = ({
       creditContainer: document.createElement('div'),
       terrainProvider: new Cesium.EllipsoidTerrainProvider(),
       skyBox: false,
-      skyAtmosphere: new Cesium.SkyAtmosphere(),
+      skyAtmosphere: false,
       contextOptions: { webgl: { alpha: false } }
     });
 
-    // Remove default imagery — we want a dark globe
+    // Dark theme — remove all imagery, set dark base
     viewer.scene.imageryLayers.removeAll();
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#060a12');
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#080e18');
-    viewer.scene.globe.showGroundAtmosphere = true;
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#050810');
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#070c14');
+    viewer.scene.globe.showGroundAtmosphere = false;
     viewer.scene.globe.enableLighting = false;
     if (viewer.scene.sun) viewer.scene.sun.show = false;
     if (viewer.scene.moon) viewer.scene.moon.show = false;
     if (viewer.scene.fog) viewer.scene.fog.enabled = false;
     if (viewer.scene.skyBox) viewer.scene.skyBox.show = false;
+    if (viewer.scene.skyAtmosphere) viewer.scene.skyAtmosphere.show = false;
 
     // Initial camera
     viewer.camera.flyTo({
@@ -143,9 +144,9 @@ const CesiumGlobe = ({
     if (!viewer) return;
 
     Cesium.GeoJsonDataSource.load(countriesUrl, {
-      stroke: Cesium.Color.CYAN.withAlpha(0.12),
-      strokeWidth: 1,
-      fill: Cesium.Color.CYAN.withAlpha(0.02),
+      stroke: Cesium.Color.CYAN.withAlpha(0.3),
+      strokeWidth: 1.5,
+      fill: Cesium.Color.CYAN.withAlpha(0.06),
       clampToGround: true
     }).then(ds => {
       countryDsRef.current = ds;
@@ -175,20 +176,20 @@ const CesiumGlobe = ({
         const status = coverageStatusByIso[iso]?.status || 'uncovered';
         const cm = getCoverageMeta(status);
         fill = isSel ? cssToColor(cm.selectedFill) : isHov ? cssToColor(cm.hoverFill) : cssToColor(cm.fill);
-        outline = isSel ? Cesium.Color.CYAN.withAlpha(0.6) : cssToColor(cm.stroke);
+        outline = isSel ? Cesium.Color.CYAN.withAlpha(0.8) : isHov ? cssToColor(cm.stroke) : cssToColor(cm.stroke);
       } else {
         if (sev) {
           const meta = getSeverityMeta(sev);
-          const alpha = 0.08 + (sev / 100) * 0.16;
+          const alpha = 0.12 + (sev / 100) * 0.25;
           fill = (isSel || isHov) ? cssToColor(meta.mapFill) : cssToColor(meta.accent, alpha);
         } else {
-          fill = isSel ? Cesium.Color.CYAN.withAlpha(0.15)
-            : isHov ? Cesium.Color.CYAN.withAlpha(0.08)
-            : Cesium.Color.CYAN.withAlpha(0.02);
+          fill = isSel ? Cesium.Color.CYAN.withAlpha(0.2)
+            : isHov ? Cesium.Color.CYAN.withAlpha(0.12)
+            : Cesium.Color.CYAN.withAlpha(0.06);
         }
-        outline = isSel ? Cesium.Color.CYAN.withAlpha(0.6)
-          : isHov ? Cesium.Color.CYAN.withAlpha(0.35)
-          : Cesium.Color.CYAN.withAlpha(0.07);
+        outline = isSel ? Cesium.Color.CYAN.withAlpha(0.8)
+          : isHov ? Cesium.Color.CYAN.withAlpha(0.5)
+          : Cesium.Color.CYAN.withAlpha(0.2);
       }
 
       entity.polygon.material = fill;
@@ -213,16 +214,16 @@ const CesiumGlobe = ({
     for (const story of newsList) {
       if (!story.coordinates) continue;
       const meta = getSeverityMeta(story.severity);
-      const size = Math.min(14, 5 + (story.articleCount || 1) * 1.2);
+      const size = Math.min(18, 7 + (story.articleCount || 1) * 1.5);
       const isSelected = selectedStory?.id === story.id;
 
       const entity = ds.entities.add({
         position: Cesium.Cartesian3.fromDegrees(story.coordinates[1], story.coordinates[0]),
         point: {
-          pixelSize: isSelected ? 12 : size,
-          color: isSelected ? Cesium.Color.WHITE : cssToColor(meta.accent, 0.85),
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.4),
-          outlineWidth: 1,
+          pixelSize: isSelected ? 16 : size,
+          color: isSelected ? Cesium.Color.WHITE : cssToColor(meta.accent, 1.0),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 1.5,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         }
       });
