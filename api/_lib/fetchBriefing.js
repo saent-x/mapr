@@ -68,7 +68,12 @@ export async function buildBriefing() {
   const allArticles = deduplicateArticles([...gdeltArticles, ...rssArticles]);
   allArticles.sort((a, b) => b.severity - a.severity);
 
-  const events = canonicalizeArticles(allArticles);
+  const events = canonicalizeArticles(allArticles).map(evt => ({
+    ...evt,
+    lifecycle: evt.lifecycle || 'developing',
+    firstSeenAt: evt.firstSeenAt || evt.publishedAt,
+    lastUpdatedAt: evt.lastUpdatedAt || evt.publishedAt
+  }));
   const sourceHealth = normalizeAdminSourceHealth({
     gdelt: getGdeltFetchHealth(),
     rss: {
