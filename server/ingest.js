@@ -33,12 +33,22 @@ import {
 import {
   appendHistory,
   DATABASE_PATH,
+  linkArticlesToEvent,
+  pruneOrphanedArticles,
+  pruneResolvedEvents,
+  readActiveEvents,
   readCoverageHistory,
+  readEventArticles,
   readHistory,
   readSnapshot,
+  upsertArticles,
+  upsertEvent,
   writeCoverageHistory,
   writeSnapshot
 } from './storage.js';
+import { fetchCatalogSource } from './sourceFetcher.js';
+import { mergeArticlesIntoEvents } from './eventStore.js';
+import { computeLifecycleTransition } from '../src/utils/eventModel.js';
 const DEFAULT_TIMESPAN = '24h';
 const DEFAULT_MAX_RECORDS = 250;
 const REGION_BACKFILL_TIMESPAN = '168h';
@@ -49,7 +59,6 @@ const RSS_BATCH_SIZE = 6;
 const RSS_BATCH_DELAY_MS = 400;
 const REFRESH_INTERVAL_MS = Number(process.env.MAPR_REFRESH_MS || 10 * 60 * 1000);
 const STALE_AFTER_MS = Number(process.env.MAPR_STALE_AFTER_MS || 30 * 60 * 1000);
-import { fetchCatalogSource } from './sourceFetcher.js';
 
 let currentSnapshot = null;
 let refreshPromise = null;
@@ -216,7 +225,7 @@ function buildBackendHealth() {
   };
 }
 
-function createResponsePayload() {
+async function createResponsePayload() {
   const backend = buildBackendHealth();
   const sourceHealth = {
     gdelt: currentSnapshot?.sourceHealth?.gdelt || null,
@@ -228,6 +237,13 @@ function createResponsePayload() {
     sourceHealth
   });
 
+  const enrichedEvents = await Promise.all(
+    (currentSnapshot?.events || []).map(async (evt) => {
+      const articles = await readEventArticles(evt.id);
+      return { ...evt, supportingArticles: articles, articleCount: articles.length };
+    })
+  );
+
   return {
     meta: {
       source: 'server',
@@ -238,7 +254,7 @@ function createResponsePayload() {
       loadedFromDisk
     },
     articles: currentSnapshot?.articles || [],
-    events: currentSnapshot?.events || [],
+    events: enrichedEvents,
     coverageMetrics,
     coverageDiagnostics,
     coverageTrends,
@@ -473,7 +489,7 @@ export function stopScheduler() {
   }
 }
 
-export function getBriefing() {
+export async function getBriefing() {
   return createResponsePayload();
 }
 
@@ -662,6 +678,65 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       }
 
       const events = canonicalizeArticles(mergedArticles);
+
+      // --- Persistent event store ---
+      // 1. Persist individual articles
+      await upsertArticles(mergedArticles);
+
+      // 2. Load existing events from DB (only last 72h per spec)
+      const existingEvents = await readActiveEvents({ maxAgeHours: 72 });
+
+      // 3. Merge new articles into events
+      const mergedEvents = mergeArticlesIntoEvents(mergedArticles, existingEvents);
+
+      // 4. Update lifecycle for all events
+      for (const event of mergedEvents) {
+        // Link articles first so readEventArticles works
+        await linkArticlesToEvent(event.id, event.articleIds);
+        // Get ALL articles for this event (from DB, not just current batch)
+        const allEventArticles = await readEventArticles(event.id);
+        const now = Date.now();
+        const twoHoursAgo = now - 2 * 60 * 60 * 1000;
+        const fourHoursAgo = now - 4 * 60 * 60 * 1000;
+        const currWindow = allEventArticles.filter(a => new Date(a.publishedAt).getTime() >= twoHoursAgo).length;
+        const prevWindow = allEventArticles.filter(a => {
+          const t = new Date(a.publishedAt).getTime();
+          return t >= fourHoursAgo && t < twoHoursAgo;
+        }).length;
+
+        event.lifecycle = computeLifecycleTransition({
+          lifecycle: event.lifecycle,
+          firstSeenAt: event.firstSeenAt,
+          articleCount: event.articleIds.length,
+          lastUpdatedAt: event.lastUpdatedAt,
+          prevWindowArticleCount: prevWindow,
+          currWindowArticleCount: currWindow
+        });
+
+        // Recompute severity
+        if (allEventArticles.length > 0) {
+          const severities = allEventArticles.map(a => a.severity || 0);
+          event.severity = Math.round(Math.max(...severities) * 0.58 + (severities.reduce((s, v) => s + v, 0) / severities.length) * 0.42);
+        }
+      }
+
+      // 5. Persist events
+      for (const event of mergedEvents) {
+        await upsertEvent({
+          ...event,
+          countries: JSON.stringify(event.countries),
+          topicFingerprint: JSON.stringify(event.topicFingerprint),
+          coordinates: JSON.stringify(event.coordinates)
+        });
+      }
+
+      // 6. Prune old data
+      await pruneResolvedEvents(30);
+      await pruneOrphanedArticles(7);
+
+      // Use persistent events for the snapshot
+      const persistentEvents = mergedEvents.filter(e => e.lifecycle !== 'resolved');
+
       const nextSourceHealth = {
         gdelt: getGdeltFetchHealth(),
         rss: rssResult.health
@@ -678,7 +753,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       currentSnapshot = {
         fetchedAt,
         articles: mergedArticles,
-        events,
+        events: persistentEvents,
         sourceHealth: nextSourceHealth,
         ingestHealth: {
           lastAttemptAt: attemptedAt,
@@ -700,7 +775,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         events
       }));
 
-      return createResponsePayload();
+      return await createResponsePayload();
     } catch (error) {
       ingestHealth = {
         lastAttemptAt: attemptedAt,
@@ -725,7 +800,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       })).catch(() => {});
 
       if (currentSnapshot) {
-        return createResponsePayload();
+        return await createResponsePayload();
       }
 
       throw error;

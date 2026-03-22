@@ -81,7 +81,7 @@ async function runVercelHandler(handler, request, response, url) {
 
 /** Build the admin-health response from the local server's cached briefing */
 async function buildAdminHealthResponse() {
-  const briefingPayload = buildAdminHealthPayload(getBriefing(), {
+  const briefingPayload = buildAdminHealthPayload(await getBriefing(), {
     timestamp: new Date().toISOString()
   });
   const healthPayload = await getHealth();
@@ -111,14 +111,14 @@ const server = http.createServer(async (request, response) => {
     // ── Stateful routes (use server's cache/SQLite) ──
 
     if (request.method === 'GET' && url.pathname === '/api/briefing') {
-      const briefing = getBriefing();
+      const briefing = await getBriefing();
       const hasSnapshot = briefing.meta.fetchedAt || briefing.articles.length > 0;
       sendJson(response, hasSnapshot ? 200 : 503, briefing);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/events') {
-      const briefing = getBriefing();
+      const briefing = await getBriefing();
       const hasSnapshot = briefing.meta.fetchedAt || briefing.events.length > 0;
       sendJson(response, hasSnapshot ? 200 : 503, {
         meta: briefing.meta,
