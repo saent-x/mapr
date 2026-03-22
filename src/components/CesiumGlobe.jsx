@@ -244,17 +244,19 @@ const CesiumGlobe = ({
       selectionIndicator: false,
       creditContainer: document.createElement('div'),
       terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+      imageryProvider: false, // disable default Ion imagery — no API key needed
       skyBox: false,
       skyAtmosphere: false,
+      requestRenderMode: false,
       contextOptions: { webgl: { alpha: false } },
     });
 
-    // Dark theme
-    viewer.scene.imageryLayers.removeAll();
+    // Dark theme — no imagery layers at all
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#060a12');
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#080e18');
     viewer.scene.globe.showGroundAtmosphere = false;
     viewer.scene.globe.enableLighting = false;
+    viewer.scene.globe.depthTestAgainstTerrain = false;
     if (viewer.scene.sun) viewer.scene.sun.show = false;
     if (viewer.scene.moon) viewer.scene.moon.show = false;
     if (viewer.scene.fog) viewer.scene.fog.enabled = false;
