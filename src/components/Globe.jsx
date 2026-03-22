@@ -66,7 +66,7 @@ const Globe = ({
   const dragRef = useRef({ down: false, moved: false, x: 0, y: 0 });
 
   const [countries, setCountries] = useState({ features: [] });
-  const [hoveredCountry, setHoveredCountry] = useState(null);
+  const hoveredCountryRef = useRef(null);
   const [hoveredArc, setHoveredArc] = useState(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [userDragged, setUserDragged] = useState(false);
@@ -76,7 +76,11 @@ const Globe = ({
     typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
       && typeof screen !== 'undefined' && screen.width < 768
   ), []);
-  const handlePolygonHover = isTouchDevice ? undefined : setHoveredCountry;
+  // Store hover in a ref — no re-renders, no flicker.
+  // react-globe.gl handles the visual tooltip via polygonLabel callback which receives the feature directly.
+  const handlePolygonHover = isTouchDevice ? undefined : (feature) => {
+    hoveredCountryRef.current = feature;
+  };
 
   // Fetch country GeoJSON
   useEffect(() => {
@@ -188,7 +192,8 @@ const Globe = ({
   }, [newsList, regionSeverities, selectedRegion, selectedStory]);
 
   // Points: show all articles globally, highlight active region
-  const activeRegion = selectedRegion || (hoveredCountry ? getIso(hoveredCountry) : null);
+  // activeRegion uses selectedRegion for stable state; hover is handled in callbacks via ref
+  const activeRegion = selectedRegion;
 
   const isActivePoint = (s) => s.isoA2 === activeRegion;
 
@@ -345,84 +350,94 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
-  // Pre-compute all polygon colors into a static lookup map.
-  // This avoids re-creating objects/strings inside callbacks that run every animation frame.
-  const hoveredIso = hoveredCountry ? getIso(hoveredCountry) : null;
-
+  // Pre-compute polygon colors into a static lookup map.
+  // IMPORTANT: Hover state is NOT included here — it's read from a ref inside callbacks.
+  // This ensures the color map only recomputes when actual data changes, not on every hover.
   const polygonColorMap = useMemo(() => {
     const map = {};
     for (const f of countries.features) {
       const iso = getIso(f);
       if (!iso) continue;
 
-      const sev = iso ? regionSeverities[iso]?.averageSeverity || 0 : 0;
+      const sev = regionSeverities[iso]?.averageSeverity || 0;
       const status = coverageStatusByIso[iso]?.status || 'uncovered';
       const cm = getCoverageMeta(status);
       const isPassive = status === 'uncovered' || status === 'source-sparse';
       const isSel = iso === selectedRegion;
-      const isHov = iso === hoveredIso;
 
-      // Pre-compute severity color string once
-      let sevCapColor = 'rgba(0, 180, 255, 0.02)';
-      let sevCapColorSel = 'rgba(0, 200, 255, 0.15)';
-      let sevCapColorHov = 'rgba(0, 200, 255, 0.08)';
+      // Pre-compute severity cap color string
+      let sevCap = 'rgba(0, 180, 255, 0.02)';
+      let sevCapSel = 'rgba(0, 200, 255, 0.15)';
+      let sevCapHov = 'rgba(0, 200, 255, 0.08)';
+      let sevSide = 'rgba(0, 180, 255, 0.06)';
       if (sev) {
         const meta = getSeverityMeta(sev);
         const alpha = 0.08 + (sev / 100) * 0.14;
-        const hex = meta.accent;
-        const r = parseInt(hex.slice(1, 3), 16);
-        const g = parseInt(hex.slice(3, 5), 16);
-        const b = parseInt(hex.slice(5, 7), 16);
-        sevCapColor = `rgba(${r},${g},${b},${alpha})`;
-        sevCapColorSel = meta.mapFill;
-        sevCapColorHov = meta.mapFill;
+        const r = parseInt(meta.accent.slice(1, 3), 16);
+        const g = parseInt(meta.accent.slice(3, 5), 16);
+        const b = parseInt(meta.accent.slice(5, 7), 16);
+        sevCap = `rgba(${r},${g},${b},${alpha})`;
+        sevCapSel = meta.mapFill;
+        sevCapHov = meta.mapFill;
+        sevSide = meta.mapSide;
       }
 
       map[iso] = {
-        // Altitude
-        altCoverage: isSel ? (isPassive ? 0.016 : 0.02) : isHov ? (isPassive ? 0.01 : 0.013) : 0,
-        altSeverity: isSel ? (sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02)
-          : isHov ? (sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125)
-          : sev ? 0.002 + sev / 8000 : 0,
-        // Cap color
-        capCoverage: isSel ? cm.selectedFill : isHov ? cm.hoverFill : cm.fill,
-        capSeverity: isSel ? sevCapColorSel : isHov ? sevCapColorHov : sevCapColor,
-        // Side color
-        sideCoverage: (isSel || isHov) ? cm.side : 'rgba(0, 0, 0, 0)',
-        sideSeverity: (isSel || isHov) ? (sev ? getSeverityMeta(sev).mapSide : 'rgba(0, 180, 255, 0.06)') : 'rgba(0, 0, 0, 0)',
-        // Stroke color
-        strokeCoverage: isSel ? 'rgba(0, 240, 255, 0.6)' : isHov ? cm.stroke : cm.stroke,
-        strokeSeverity: isSel ? 'rgba(0, 240, 255, 0.6)' : isHov ? 'rgba(0, 220, 255, 0.35)' : 'rgba(0, 200, 255, 0.07)',
+        isSel, isPassive, sev,
+        // Coverage colors (static — no hover dependency)
+        covCap: cm.fill, covCapSel: cm.selectedFill, covCapHov: cm.hoverFill,
+        covSide: cm.side, covStroke: cm.stroke,
+        // Severity colors (static — no hover dependency)
+        sevCap, sevCapSel, sevCapHov, sevSide,
+        // Altitude precomputes
+        altCovSel: isPassive ? 0.016 : 0.02,
+        altCovHov: isPassive ? 0.01 : 0.013,
+        altSevSel: sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02,
+        altSevHov: sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125,
+        altSevDefault: sev ? 0.002 + sev / 8000 : 0,
       };
     }
     return map;
-  }, [countries.features, regionSeverities, coverageStatusByIso, selectedRegion, hoveredIso]);
+  }, [countries.features, regionSeverities, coverageStatusByIso, selectedRegion]);
 
-  // Simple lookup callbacks — no object creation, no function calls, just string returns
+  // Callbacks read hover from ref — no React re-render on hover, no flicker.
   const isCoverage = mapOverlay === 'coverage';
 
   const polygonAltitude = useCallback((f) => {
-    const entry = polygonColorMap[getIso(f)];
-    if (!entry) return 0;
-    return isCoverage ? entry.altCoverage : entry.altSeverity;
+    const iso = getIso(f);
+    const e = polygonColorMap[iso];
+    if (!e) return 0;
+    const isHov = hoveredCountryRef.current && getIso(hoveredCountryRef.current) === iso;
+    if (isCoverage) return e.isSel ? e.altCovSel : isHov ? e.altCovHov : 0;
+    return e.isSel ? e.altSevSel : isHov ? e.altSevHov : e.altSevDefault;
   }, [polygonColorMap, isCoverage]);
 
   const polygonCapColor = useCallback((f) => {
-    const entry = polygonColorMap[getIso(f)];
-    if (!entry) return 'rgba(0, 180, 255, 0.02)';
-    return isCoverage ? entry.capCoverage : entry.capSeverity;
+    const iso = getIso(f);
+    const e = polygonColorMap[iso];
+    if (!e) return 'rgba(0, 180, 255, 0.02)';
+    const isHov = hoveredCountryRef.current && getIso(hoveredCountryRef.current) === iso;
+    if (isCoverage) return e.isSel ? e.covCapSel : isHov ? e.covCapHov : e.covCap;
+    return e.isSel ? e.sevCapSel : isHov ? e.sevCapHov : e.sevCap;
   }, [polygonColorMap, isCoverage]);
 
   const polygonSideColor = useCallback((f) => {
-    const entry = polygonColorMap[getIso(f)];
-    if (!entry) return 'rgba(0, 0, 0, 0)';
-    return isCoverage ? entry.sideCoverage : entry.sideSeverity;
+    const iso = getIso(f);
+    const e = polygonColorMap[iso];
+    if (!e) return 'rgba(0, 0, 0, 0)';
+    const isHov = hoveredCountryRef.current && getIso(hoveredCountryRef.current) === iso;
+    if (isCoverage) return (e.isSel || isHov) ? e.covSide : 'rgba(0, 0, 0, 0)';
+    return (e.isSel || isHov) ? (e.sev ? e.sevSide : 'rgba(0, 180, 255, 0.06)') : 'rgba(0, 0, 0, 0)';
   }, [polygonColorMap, isCoverage]);
 
   const polygonStrokeColor = useCallback((f) => {
-    const entry = polygonColorMap[getIso(f)];
-    if (!entry) return 'rgba(0, 200, 255, 0.07)';
-    return isCoverage ? entry.strokeCoverage : entry.strokeSeverity;
+    const iso = getIso(f);
+    const e = polygonColorMap[iso];
+    if (!e) return 'rgba(0, 200, 255, 0.07)';
+    const isHov = hoveredCountryRef.current && getIso(hoveredCountryRef.current) === iso;
+    if (e.isSel) return 'rgba(0, 240, 255, 0.6)';
+    if (isHov) return isCoverage ? e.covStroke : 'rgba(0, 220, 255, 0.35)';
+    return isCoverage ? e.covStroke : 'rgba(0, 200, 255, 0.07)';
   }, [polygonColorMap, isCoverage]);
 
   return (
@@ -652,7 +667,7 @@ const Globe = ({
           }}
 
           /* === TRANSITIONS === */
-          polygonsTransitionDuration={350}
+          polygonsTransitionDuration={0}
           pointsTransitionDuration={300}
         />
       )}
