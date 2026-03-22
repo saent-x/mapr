@@ -1,356 +1,260 @@
-import path from 'node:path';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import pg from 'pg';
 
-let openDatabase;
-let prepareStatement;
+const { Pool } = pg;
 
-if (typeof Bun !== 'undefined') {
-  const { Database } = await import('bun:sqlite');
-  openDatabase = (filePath) => new Database(filePath);
-  prepareStatement = (db, sql) => db.query(sql);
-} else {
-  const { DatabaseSync } = await import('node:sqlite');
-  openDatabase = (filePath) => new DatabaseSync(filePath);
-  prepareStatement = (db, sql) => db.prepare(sql);
-}
+let pool = null;
 
-const DATA_DIR = path.resolve(process.env.MAPR_DATA_DIR || path.join(process.cwd(), 'data'));
-export const DATABASE_PATH = path.join(DATA_DIR, 'mapr.db');
-export const SNAPSHOT_PATH = DATABASE_PATH;
-export const LEGACY_SNAPSHOT_PATH = path.join(DATA_DIR, 'mapr-snapshot.json');
-export const LEGACY_HISTORY_PATH = path.join(DATA_DIR, 'mapr-refresh-history.json');
-export const LEGACY_COVERAGE_HISTORY_PATH = path.join(DATA_DIR, 'mapr-coverage-history.json');
+function getPool() {
+  if (pool) return pool;
 
-let database = null;
-
-function ensureDatabase() {
-  if (database) {
-    return database;
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required');
   }
 
-  mkdirSync(DATA_DIR, { recursive: true });
-  database = openDatabase(DATABASE_PATH);
-  database.exec(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA synchronous = NORMAL;
+  pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes('neon.tech') ? { rejectUnauthorized: true } : { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 30000
+  });
 
+  return pool;
+}
+
+async function ensureSchema() {
+  const db = getPool();
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS refresh_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       at TEXT NOT NULL,
       payload TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS coverage_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       at TEXT NOT NULL,
       payload TEXT NOT NULL
     );
-
-    PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS articles (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       url TEXT UNIQUE,
       source TEXT,
-      publishedAt TEXT,
-      isoA2 TEXT,
+      "publishedAt" TEXT,
+      "isoA2" TEXT,
       severity REAL,
-      geocodePrecision TEXT,
+      "geocodePrecision" TEXT,
       payload TEXT NOT NULL,
-      createdAt TEXT DEFAULT (datetime('now'))
+      "createdAt" TEXT DEFAULT (now()::text)
     );
 
     CREATE TABLE IF NOT EXISTS events (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
-      primaryCountry TEXT NOT NULL,
+      "primaryCountry" TEXT NOT NULL,
       countries TEXT NOT NULL,
       lifecycle TEXT NOT NULL DEFAULT 'emerging',
       severity REAL NOT NULL DEFAULT 0,
       category TEXT,
-      firstSeenAt TEXT NOT NULL,
-      lastUpdatedAt TEXT NOT NULL,
-      topicFingerprint TEXT,
+      "firstSeenAt" TEXT NOT NULL,
+      "lastUpdatedAt" TEXT NOT NULL,
+      "topicFingerprint" TEXT,
       coordinates TEXT,
-      createdAt TEXT DEFAULT (datetime('now'))
+      enrichment TEXT DEFAULT '{}',
+      "createdAt" TEXT DEFAULT (now()::text)
     );
 
     CREATE TABLE IF NOT EXISTS event_articles (
-      eventId TEXT NOT NULL,
-      articleId TEXT NOT NULL,
-      PRIMARY KEY (eventId, articleId),
-      FOREIGN KEY (eventId) REFERENCES events(id) ON DELETE CASCADE,
-      FOREIGN KEY (articleId) REFERENCES articles(id) ON DELETE CASCADE
+      "eventId" TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      "articleId" TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      PRIMARY KEY ("eventId", "articleId")
     );
 
     CREATE TABLE IF NOT EXISTS source_credibility (
-      sourceKey TEXT PRIMARY KEY,
-      totalEvents INTEGER DEFAULT 0,
-      corroboratedEvents INTEGER DEFAULT 0,
-      lastUpdatedAt TEXT
+      "sourceKey" TEXT PRIMARY KEY,
+      "totalEvents" INTEGER DEFAULT 0,
+      "corroboratedEvents" INTEGER DEFAULT 0,
+      "lastUpdatedAt" TEXT
     );
 
     CREATE TABLE IF NOT EXISTS velocity_history (
       iso TEXT NOT NULL,
-      bucketAt TEXT NOT NULL,
-      articleCount INTEGER DEFAULT 0,
-      PRIMARY KEY (iso, bucketAt)
+      "bucketAt" TEXT NOT NULL,
+      "articleCount" INTEGER DEFAULT 0,
+      PRIMARY KEY (iso, "bucketAt")
     );
-
-    CREATE INDEX IF NOT EXISTS idx_events_lifecycle ON events(lifecycle);
-    CREATE INDEX IF NOT EXISTS idx_events_lastUpdated ON events(lastUpdatedAt);
-    CREATE INDEX IF NOT EXISTS idx_articles_isoA2 ON articles(isoA2);
-    CREATE INDEX IF NOT EXISTS idx_articles_publishedAt ON articles(publishedAt);
   `);
 
-  // Migration: add enrichment column to events table
-  try {
-    database.exec(`ALTER TABLE events ADD COLUMN enrichment TEXT DEFAULT '{}'`);
-  } catch {
-    // Column already exists — this is expected on existing DBs
-  }
+  // Create indexes (IF NOT EXISTS is supported in Postgres)
+  await db.query(`
+    CREATE INDEX IF NOT EXISTS idx_events_lifecycle ON events(lifecycle);
+    CREATE INDEX IF NOT EXISTS idx_events_lastUpdated ON events("lastUpdatedAt");
+    CREATE INDEX IF NOT EXISTS idx_articles_isoA2 ON articles("isoA2");
+    CREATE INDEX IF NOT EXISTS idx_articles_publishedAt ON articles("publishedAt");
+  `);
+}
 
-  migrateLegacyJsonIfNeeded(database);
-  return database;
+let schemaReady = null;
+
+async function ensureDatabase() {
+  if (!schemaReady) {
+    schemaReady = ensureSchema();
+  }
+  await schemaReady;
+  return getPool();
 }
 
 function parseJson(value, fallback) {
-  if (!value) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return fallback;
-  }
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
 }
 
-function upsertMetadata(db, key, value) {
-  prepareStatement(db, `
-    INSERT INTO metadata (key, value)
-    VALUES (?, ?)
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value
-  `).run(key, value);
-}
-
-function readLegacyJson(filePath, fallback) {
-  if (!existsSync(filePath)) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(readFileSync(filePath, 'utf8'));
-  } catch {
-    return fallback;
-  }
-}
-
-function runInTransaction(db, callback) {
-  db.exec('BEGIN');
-  try {
-    callback();
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-}
-
-function migrateLegacyJsonIfNeeded(db) {
-  const snapshotRow = prepareStatement(db, 'SELECT value FROM metadata WHERE key = ?').get('snapshot');
-  const historyCount = prepareStatement(db, 'SELECT COUNT(*) AS count FROM refresh_history').get().count || 0;
-  const coverageCount = prepareStatement(db, 'SELECT COUNT(*) AS count FROM coverage_history').get().count || 0;
-
-  if (snapshotRow || historyCount > 0 || coverageCount > 0) {
-    return;
-  }
-
-  const legacySnapshot = readLegacyJson(LEGACY_SNAPSHOT_PATH, null);
-  const legacyHistory = readLegacyJson(LEGACY_HISTORY_PATH, []);
-  const legacyCoverageHistory = readLegacyJson(LEGACY_COVERAGE_HISTORY_PATH, []);
-
-  if (legacySnapshot) {
-    prepareStatement(db, `
-      INSERT INTO metadata (key, value)
-      VALUES (?, ?)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value
-    `).run('snapshot', JSON.stringify(legacySnapshot));
-  }
-
-  if (Array.isArray(legacyHistory) && legacyHistory.length > 0) {
-    const insertHistory = prepareStatement(db, 'INSERT INTO refresh_history (at, payload) VALUES (?, ?)');
-    runInTransaction(db, () => {
-      legacyHistory
-        .slice()
-        .reverse()
-        .forEach((entry) => {
-          insertHistory.run(entry?.at || new Date().toISOString(), JSON.stringify(entry));
-        });
-    });
-  }
-
-  if (Array.isArray(legacyCoverageHistory) && legacyCoverageHistory.length > 0) {
-    const insertCoverage = prepareStatement(db, 'INSERT INTO coverage_history (at, payload) VALUES (?, ?)');
-    runInTransaction(db, () => {
-      legacyCoverageHistory
-        .slice()
-        .reverse()
-        .forEach((entry) => {
-          insertCoverage.run(entry?.at || new Date().toISOString(), JSON.stringify(entry));
-        });
-    });
-  }
-}
-
-function trimHistoryTable(db, tableName, limit) {
-  prepareStatement(db, `
-    DELETE FROM ${tableName}
-    WHERE id NOT IN (
-      SELECT id
-      FROM ${tableName}
-      ORDER BY id DESC
-      LIMIT ?
-    )
-  `).run(limit);
-}
+// ── Metadata / Snapshot ──────────────────────────────────────
 
 export async function readSnapshot() {
-  const db = ensureDatabase();
-  const row = prepareStatement(db, 'SELECT value FROM metadata WHERE key = ?').get('snapshot');
-  return parseJson(row?.value, null);
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT value FROM metadata WHERE key = $1', ['snapshot']);
+  return rows.length ? parseJson(rows[0].value, null) : null;
 }
 
 export async function writeSnapshot(snapshot) {
-  const db = ensureDatabase();
-  upsertMetadata(db, 'snapshot', JSON.stringify(snapshot));
-  return DATABASE_PATH;
+  const db = await ensureDatabase();
+  await db.query(`
+    INSERT INTO metadata (key, value) VALUES ($1, $2)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `, ['snapshot', JSON.stringify(snapshot)]);
 }
 
 export async function readMetadataJson(key, fallback = null) {
-  const db = ensureDatabase();
-  const row = prepareStatement(db, 'SELECT value FROM metadata WHERE key = ?').get(key);
-  return parseJson(row?.value, fallback);
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT value FROM metadata WHERE key = $1', [key]);
+  return rows.length ? parseJson(rows[0].value, fallback) : fallback;
 }
 
 export async function writeMetadataJson(key, payload) {
-  const db = ensureDatabase();
-  upsertMetadata(db, key, JSON.stringify(payload));
-  return DATABASE_PATH;
+  const db = await ensureDatabase();
+  await db.query(`
+    INSERT INTO metadata (key, value) VALUES ($1, $2)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `, [key, JSON.stringify(payload)]);
 }
 
+// ── Refresh History ──────────────────────────────────────────
+
 export async function readHistory() {
-  const db = ensureDatabase();
-  const rows = prepareStatement(db, 'SELECT payload FROM refresh_history ORDER BY id DESC').all();
-  return rows.map((row) => parseJson(row.payload, null)).filter(Boolean);
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT payload FROM refresh_history ORDER BY id DESC');
+  return rows.map(r => parseJson(r.payload, null)).filter(Boolean);
 }
 
 export async function appendHistory(entry, limit = 72) {
-  const db = ensureDatabase();
-  prepareStatement(db, 'INSERT INTO refresh_history (at, payload) VALUES (?, ?)').run(
-    entry?.at || new Date().toISOString(),
-    JSON.stringify(entry)
+  const db = await ensureDatabase();
+  await db.query(
+    'INSERT INTO refresh_history (at, payload) VALUES ($1, $2)',
+    [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
   );
-  trimHistoryTable(db, 'refresh_history', limit);
+  // Trim old entries
+  await db.query(`
+    DELETE FROM refresh_history WHERE id NOT IN (
+      SELECT id FROM refresh_history ORDER BY id DESC LIMIT $1
+    )
+  `, [limit]);
   return readHistory();
 }
 
+// ── Coverage History ─────────────────────────────────────────
+
 export async function readCoverageHistory() {
-  const db = ensureDatabase();
-  const rows = prepareStatement(db, 'SELECT payload FROM coverage_history ORDER BY id DESC').all();
-  return rows.map((row) => parseJson(row.payload, null)).filter(Boolean);
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT payload FROM coverage_history ORDER BY id DESC');
+  return rows.map(r => parseJson(r.payload, null)).filter(Boolean);
 }
 
 export async function writeCoverageHistory(history) {
-  const db = ensureDatabase();
-  runInTransaction(db, () => {
-    db.exec('DELETE FROM coverage_history');
-    const insertCoverage = prepareStatement(db, 'INSERT INTO coverage_history (at, payload) VALUES (?, ?)');
-    (Array.isArray(history) ? history : [])
-      .slice()
-      .reverse()
-      .forEach((entry) => {
-        insertCoverage.run(entry?.at || new Date().toISOString(), JSON.stringify(entry));
-      });
-  });
-  return DATABASE_PATH;
+  const db = await ensureDatabase();
+  await db.query('DELETE FROM coverage_history');
+  const entries = Array.isArray(history) ? history : [];
+  for (const entry of [...entries].reverse()) {
+    await db.query(
+      'INSERT INTO coverage_history (at, payload) VALUES ($1, $2)',
+      [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
+    );
+  }
 }
 
+// ── Articles ─────────────────────────────────────────────────
+
 export async function upsertArticles(articles) {
-  const db = ensureDatabase();
-  const stmt = prepareStatement(db, `
-    INSERT INTO articles (id, title, url, source, publishedAt, isoA2, severity, geocodePrecision, payload)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(url) DO UPDATE SET
-      id = excluded.id,
-      title = excluded.title,
-      source = excluded.source,
-      publishedAt = excluded.publishedAt,
-      isoA2 = excluded.isoA2,
-      severity = excluded.severity,
-      geocodePrecision = excluded.geocodePrecision,
-      payload = excluded.payload
-  `);
-  runInTransaction(db, () => {
-    for (const article of articles) {
-      stmt.run(
-        article.id,
-        article.title,
-        article.url ?? null,
-        article.source ?? null,
-        article.publishedAt ?? null,
-        article.isoA2 ?? null,
-        article.severity ?? null,
-        article.geocodePrecision ?? null,
-        JSON.stringify(article)
-      );
-    }
-  });
+  const db = await ensureDatabase();
+  for (const article of articles) {
+    await db.query(`
+      INSERT INTO articles (id, title, url, source, "publishedAt", "isoA2", severity, "geocodePrecision", payload)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ON CONFLICT (url) DO UPDATE SET
+        id = EXCLUDED.id,
+        title = EXCLUDED.title,
+        source = EXCLUDED.source,
+        "publishedAt" = EXCLUDED."publishedAt",
+        "isoA2" = EXCLUDED."isoA2",
+        severity = EXCLUDED.severity,
+        "geocodePrecision" = EXCLUDED."geocodePrecision",
+        payload = EXCLUDED.payload
+    `, [
+      article.id,
+      article.title,
+      article.url ?? null,
+      article.source ?? null,
+      article.publishedAt ?? null,
+      article.isoA2 ?? null,
+      article.severity ?? null,
+      article.geocodePrecision ?? null,
+      JSON.stringify(article)
+    ]);
+  }
 }
 
 export async function readArticles({ since, isoA2 } = {}) {
-  const db = ensureDatabase();
+  const db = await ensureDatabase();
   const conditions = [];
   const params = [];
+  let idx = 1;
 
-  if (since) {
-    conditions.push('publishedAt >= ?');
-    params.push(since);
-  }
-  if (isoA2) {
-    conditions.push('isoA2 = ?');
-    params.push(isoA2);
-  }
+  if (since) { conditions.push(`"publishedAt" >= $${idx++}`); params.push(since); }
+  if (isoA2) { conditions.push(`"isoA2" = $${idx++}`); params.push(isoA2); }
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const rows = prepareStatement(db, `SELECT payload FROM articles ${where} ORDER BY publishedAt DESC`).all(...params);
-  return rows.map((row) => parseJson(row.payload, null)).filter(Boolean);
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const { rows } = await db.query(`SELECT payload FROM articles ${where} ORDER BY "publishedAt" DESC`, params);
+  return rows.map(r => parseJson(r.payload, null)).filter(Boolean);
 }
 
+// ── Events ───────────────────────────────────────────────────
+
 export async function upsertEvent(event) {
-  const db = ensureDatabase();
-  prepareStatement(db, `
-    INSERT INTO events (id, title, primaryCountry, countries, lifecycle, severity, category, firstSeenAt, lastUpdatedAt, topicFingerprint, coordinates, enrichment)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET
-      title = excluded.title,
-      primaryCountry = excluded.primaryCountry,
-      countries = excluded.countries,
-      lifecycle = excluded.lifecycle,
-      severity = excluded.severity,
-      category = excluded.category,
-      firstSeenAt = excluded.firstSeenAt,
-      lastUpdatedAt = excluded.lastUpdatedAt,
-      topicFingerprint = excluded.topicFingerprint,
-      coordinates = excluded.coordinates,
-      enrichment = excluded.enrichment
-  `).run(
+  const db = await ensureDatabase();
+  await db.query(`
+    INSERT INTO events (id, title, "primaryCountry", countries, lifecycle, severity, category, "firstSeenAt", "lastUpdatedAt", "topicFingerprint", coordinates, enrichment)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (id) DO UPDATE SET
+      title = EXCLUDED.title,
+      "primaryCountry" = EXCLUDED."primaryCountry",
+      countries = EXCLUDED.countries,
+      lifecycle = EXCLUDED.lifecycle,
+      severity = EXCLUDED.severity,
+      category = EXCLUDED.category,
+      "firstSeenAt" = EXCLUDED."firstSeenAt",
+      "lastUpdatedAt" = EXCLUDED."lastUpdatedAt",
+      "topicFingerprint" = EXCLUDED."topicFingerprint",
+      coordinates = EXCLUDED.coordinates,
+      enrichment = EXCLUDED.enrichment
+  `, [
     event.id,
     event.title,
     event.primaryCountry,
@@ -363,113 +267,131 @@ export async function upsertEvent(event) {
     event.topicFingerprint ?? null,
     event.coordinates != null ? JSON.stringify(event.coordinates) : null,
     event.enrichment ?? '{}'
-  );
+  ]);
 }
 
 export async function readActiveEvents({ maxAgeHours } = {}) {
-  const db = ensureDatabase();
+  const db = await ensureDatabase();
   const conditions = ["lifecycle != 'resolved'"];
   const params = [];
+  let idx = 1;
 
   if (maxAgeHours != null) {
-    conditions.push(`lastUpdatedAt >= datetime('now', '-${Number(maxAgeHours)} hours')`);
+    conditions.push(`"lastUpdatedAt" >= $${idx++}`);
+    params.push(new Date(Date.now() - maxAgeHours * 60 * 60 * 1000).toISOString());
   }
 
   const where = `WHERE ${conditions.join(' AND ')}`;
-  const rows = prepareStatement(db, `SELECT * FROM events ${where} ORDER BY lastUpdatedAt DESC`).all(...params);
-  return rows.map((row) => {
-    const enrichment = JSON.parse(row.enrichment || '{}');
+  const { rows } = await db.query(`SELECT * FROM events ${where} ORDER BY "lastUpdatedAt" DESC`, params);
+  return rows.map(row => {
+    const enrichment = parseJson(row.enrichment, {});
     return {
       ...row,
       ...enrichment,
       countries: parseJson(row.countries, []),
       topicFingerprint: parseJson(row.topicFingerprint, []),
-      coordinates: parseJson(row.coordinates, null),
+      coordinates: parseJson(row.coordinates, null)
     };
   });
 }
 
 export async function updateEventLifecycle(eventId, lifecycle) {
-  const db = ensureDatabase();
-  prepareStatement(db, `UPDATE events SET lifecycle = ?, lastUpdatedAt = datetime('now') WHERE id = ?`).run(lifecycle, eventId);
+  const db = await ensureDatabase();
+  await db.query(
+    `UPDATE events SET lifecycle = $1, "lastUpdatedAt" = $2 WHERE id = $3`,
+    [lifecycle, new Date().toISOString(), eventId]
+  );
 }
 
 export async function linkArticlesToEvent(eventId, articleIds) {
-  const db = ensureDatabase();
-  const stmt = prepareStatement(db, `INSERT OR IGNORE INTO event_articles (eventId, articleId) VALUES (?, ?)`);
-  runInTransaction(db, () => {
-    for (const articleId of articleIds) {
-      stmt.run(eventId, articleId);
-    }
-  });
+  const db = await ensureDatabase();
+  for (const articleId of articleIds) {
+    await db.query(`
+      INSERT INTO event_articles ("eventId", "articleId") VALUES ($1, $2)
+      ON CONFLICT ("eventId", "articleId") DO NOTHING
+    `, [eventId, articleId]);
+  }
 }
 
 export async function readEventArticles(eventId) {
-  const db = ensureDatabase();
-  const rows = prepareStatement(db, `
+  const db = await ensureDatabase();
+  const { rows } = await db.query(`
     SELECT a.payload FROM articles a
-    INNER JOIN event_articles ea ON ea.articleId = a.id
-    WHERE ea.eventId = ?
-    ORDER BY a.publishedAt DESC
-  `).all(eventId);
-  return rows.map((row) => parseJson(row.payload, null)).filter(Boolean);
+    INNER JOIN event_articles ea ON ea."articleId" = a.id
+    WHERE ea."eventId" = $1
+    ORDER BY a."publishedAt" DESC
+  `, [eventId]);
+  return rows.map(r => parseJson(r.payload, null)).filter(Boolean);
 }
 
 export async function pruneResolvedEvents(maxAgeDays = 30) {
-  const db = ensureDatabase();
-  prepareStatement(db, `
-    DELETE FROM events
-    WHERE lifecycle = 'resolved'
-      AND lastUpdatedAt < datetime('now', '-' || ? || ' days')
-  `).run(maxAgeDays);
+  const db = await ensureDatabase();
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+  await db.query(`DELETE FROM events WHERE lifecycle = 'resolved' AND "lastUpdatedAt" < $1`, [cutoff]);
 }
 
 export async function pruneOrphanedArticles(maxAgeDays = 30) {
-  const db = ensureDatabase();
-  prepareStatement(db, `
+  const db = await ensureDatabase();
+  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+  await db.query(`
     DELETE FROM articles
-    WHERE id NOT IN (SELECT articleId FROM event_articles)
-      AND createdAt < datetime('now', '-' || ? || ' days')
-  `).run(maxAgeDays);
+    WHERE id NOT IN (SELECT "articleId" FROM event_articles)
+      AND "createdAt" < $1
+  `, [cutoff]);
 }
 
+// ── Source Credibility ───────────────────────────────────────
+
 export async function updateSourceCredibility(sourceKey, wasCorroborated) {
-  const db = ensureDatabase();
-  prepareStatement(db,
-    `INSERT INTO source_credibility (sourceKey, totalEvents, corroboratedEvents, lastUpdatedAt)
-     VALUES (?, 1, ?, datetime('now'))
-     ON CONFLICT(sourceKey) DO UPDATE SET
-       totalEvents = totalEvents + 1,
-       corroboratedEvents = corroboratedEvents + ?,
-       lastUpdatedAt = datetime('now')`
-  ).run(sourceKey, wasCorroborated ? 1 : 0, wasCorroborated ? 1 : 0);
+  const db = await ensureDatabase();
+  const inc = wasCorroborated ? 1 : 0;
+  await db.query(`
+    INSERT INTO source_credibility ("sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt")
+    VALUES ($1, 1, $2, now()::text)
+    ON CONFLICT ("sourceKey") DO UPDATE SET
+      "totalEvents" = source_credibility."totalEvents" + 1,
+      "corroboratedEvents" = source_credibility."corroboratedEvents" + $2,
+      "lastUpdatedAt" = now()::text
+  `, [sourceKey, inc]);
 }
 
 export async function readSourceCredibility(sourceKey) {
-  const db = ensureDatabase();
-  return prepareStatement(db, 'SELECT * FROM source_credibility WHERE sourceKey = ?').get(sourceKey) || null;
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT * FROM source_credibility WHERE "sourceKey" = $1', [sourceKey]);
+  return rows.length ? rows[0] : null;
 }
 
+// ── Velocity History ─────────────────────────────────────────
+
 export async function upsertVelocityBucket(iso, bucketAt, articleCount) {
-  const db = ensureDatabase();
-  prepareStatement(db,
-    `INSERT INTO velocity_history (iso, bucketAt, articleCount)
-     VALUES (?, ?, ?)
-     ON CONFLICT(iso, bucketAt) DO UPDATE SET articleCount = excluded.articleCount`
-  ).run(iso, bucketAt, articleCount);
+  const db = await ensureDatabase();
+  await db.query(`
+    INSERT INTO velocity_history (iso, "bucketAt", "articleCount")
+    VALUES ($1, $2, $3)
+    ON CONFLICT (iso, "bucketAt") DO UPDATE SET "articleCount" = EXCLUDED."articleCount"
+  `, [iso, bucketAt, articleCount]);
 }
 
 export async function readVelocityHistory(iso, sinceDays = 7) {
-  const db = ensureDatabase();
+  const db = await ensureDatabase();
   const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
-  return prepareStatement(db,
-    `SELECT bucketAt, articleCount FROM velocity_history WHERE iso = ? AND bucketAt >= ? ORDER BY bucketAt ASC`
-  ).all(iso, since);
+  const { rows } = await db.query(
+    `SELECT "bucketAt", "articleCount" FROM velocity_history WHERE iso = $1 AND "bucketAt" >= $2 ORDER BY "bucketAt" ASC`,
+    [iso, since]
+  );
+  return rows;
 }
 
-export function closeStorage() {
-  if (database) {
-    database.close();
-    database = null;
+// ── Cleanup ──────────────────────────────────────────────────
+
+export async function closeStorage() {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    schemaReady = null;
   }
 }
+
+// Legacy compatibility exports (no longer used but keep to avoid import errors)
+export const DATABASE_PATH = 'neon-postgres';
+export const SNAPSHOT_PATH = DATABASE_PATH;

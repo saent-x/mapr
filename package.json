@@ -26,6 +26,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.577.0",
     "maplibre-gl": "^5.20.2",
+    "pg": "^8.20.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-globe.gl": "^2.37.0",
