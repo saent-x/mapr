@@ -27,7 +27,8 @@ const SOURCE_NETWORK_HINTS = [
   { key: 'who', hints: ['who.', 'world health organization'] },
   { key: 'wmo', hints: ['wmo.', 'world meteorological organization'] },
   { key: 'usgs', hints: ['usgs'] },
-  { key: 'emsc', hints: ['emsc'] }
+  { key: 'emsc', hints: ['emsc'] },
+  { key: 'russian-state-media', hints: ['tass', 'sputnik', 'rt.com', 'ria novosti', 'ria-novosti', 'rossiya', 'interfax'] }
 ];
 
 function normalizeSourceName(source) {
