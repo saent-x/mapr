@@ -47,8 +47,11 @@ import {
   writeSnapshot
 } from './storage.js';
 import { fetchCatalogSource } from './sourceFetcher.js';
-import { mergeArticlesIntoEvents } from './eventStore.js';
+import { mergeArticlesIntoEvents, aggregateEntities, computeSourceProfile } from './eventStore.js';
 import { computeLifecycleTransition } from '../src/utils/eventModel.js';
+import { extractEntities } from './entityExtractor.js';
+import { computeCompositeSeverity } from '../src/utils/severityModel.js';
+import { detectAmplification } from '../src/utils/amplificationDetector.js';
 const DEFAULT_TIMESPAN = '24h';
 const DEFAULT_MAX_RECORDS = 250;
 const REGION_BACKFILL_TIMESPAN = '168h';
@@ -677,6 +680,17 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         throw new Error('No articles available from GDELT or RSS sources');
       }
 
+      // Run NER on articles before persisting
+      for (const article of mergedArticles) {
+        if (!article.entities) {
+          const extracted = await extractEntities(article.title);
+          article.entities = extracted;
+          if (extracted.category !== 'general') {
+            article.nerCategory = extracted.category;
+          }
+        }
+      }
+
       const events = canonicalizeArticles(mergedArticles);
 
       // --- Persistent event store ---
@@ -713,11 +727,32 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
           currWindowArticleCount: currWindow
         });
 
-        // Recompute severity
-        if (allEventArticles.length > 0) {
-          const severities = allEventArticles.map(a => a.severity || 0);
-          event.severity = Math.round(Math.max(...severities) * 0.58 + (severities.reduce((s, v) => s + v, 0) / severities.length) * 0.42);
-        }
+        // Entity aggregation and source profile
+        const sourceProfile = computeSourceProfile(allEventArticles);
+        event.sourceProfile = sourceProfile;
+        event.entities = aggregateEntities(allEventArticles);
+
+        // Use composite severity instead of the old weighted max/avg blend
+        event.severity = computeCompositeSeverity({
+          keywordSeverity: Math.max(...allEventArticles.map(a => a.severity || 0)),
+          articleCount: allEventArticles.length,
+          diversityScore: sourceProfile.diversityScore,
+          entities: event.entities,
+          category: event.nerCategory || event.category
+        });
+
+        // Run amplification detection
+        const amplification = detectAmplification(allEventArticles);
+        event.amplification = amplification;
+
+        // Compute confidence
+        const confidence = Math.min(1, Math.max(0,
+          (sourceProfile.diversityScore * 0.4) +
+          (Math.min(1, Math.log2(Math.max(1, allEventArticles.length)) / 4) * 0.35) +
+          (sourceProfile.wireCount > 0 ? 0.15 : 0) +
+          (amplification.isAmplified ? -0.2 : 0.1)
+        ));
+        event.confidence = Math.round(confidence * 100) / 100;
       }
 
       // 5. Persist events
@@ -726,7 +761,13 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
           ...event,
           countries: JSON.stringify(event.countries),
           topicFingerprint: JSON.stringify(event.topicFingerprint),
-          coordinates: JSON.stringify(event.coordinates)
+          coordinates: JSON.stringify(event.coordinates),
+          enrichment: JSON.stringify({
+            entities: event.entities,
+            sourceProfile: event.sourceProfile,
+            confidence: event.confidence,
+            amplification: event.amplification
+          })
         });
       }
 
