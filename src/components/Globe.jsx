@@ -345,86 +345,85 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
-  const polygonAltitude = useCallback((f) => {
-    const iso = getIso(f);
-    const sev = getRegionSev(f);
-    const status = getCoverageStatus(f);
-    const coverageMeta = getCoverageMeta(status);
-    const isPassiveCoverage = status === 'uncovered' || status === 'source-sparse';
-    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
-    const isSel = iso === selectedRegion;
+  // Pre-compute all polygon colors into a static lookup map.
+  // This avoids re-creating objects/strings inside callbacks that run every animation frame.
+  const hoveredIso = hoveredCountry ? getIso(hoveredCountry) : null;
 
-    if (mapOverlay === 'coverage') {
-      if (isSel) return isPassiveCoverage ? 0.016 : 0.02;
-      if (isHov) return isPassiveCoverage ? 0.01 : 0.013;
-      return 0;
+  const polygonColorMap = useMemo(() => {
+    const map = {};
+    for (const f of countries.features) {
+      const iso = getIso(f);
+      if (!iso) continue;
+
+      const sev = iso ? regionSeverities[iso]?.averageSeverity || 0 : 0;
+      const status = coverageStatusByIso[iso]?.status || 'uncovered';
+      const cm = getCoverageMeta(status);
+      const isPassive = status === 'uncovered' || status === 'source-sparse';
+      const isSel = iso === selectedRegion;
+      const isHov = iso === hoveredIso;
+
+      // Pre-compute severity color string once
+      let sevCapColor = 'rgba(0, 180, 255, 0.02)';
+      let sevCapColorSel = 'rgba(0, 200, 255, 0.15)';
+      let sevCapColorHov = 'rgba(0, 200, 255, 0.08)';
+      if (sev) {
+        const meta = getSeverityMeta(sev);
+        const alpha = 0.08 + (sev / 100) * 0.14;
+        const hex = meta.accent;
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        sevCapColor = `rgba(${r},${g},${b},${alpha})`;
+        sevCapColorSel = meta.mapFill;
+        sevCapColorHov = meta.mapFill;
+      }
+
+      map[iso] = {
+        // Altitude
+        altCoverage: isSel ? (isPassive ? 0.016 : 0.02) : isHov ? (isPassive ? 0.01 : 0.013) : 0,
+        altSeverity: isSel ? (sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02)
+          : isHov ? (sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125)
+          : sev ? 0.002 + sev / 8000 : 0,
+        // Cap color
+        capCoverage: isSel ? cm.selectedFill : isHov ? cm.hoverFill : cm.fill,
+        capSeverity: isSel ? sevCapColorSel : isHov ? sevCapColorHov : sevCapColor,
+        // Side color
+        sideCoverage: (isSel || isHov) ? cm.side : 'rgba(0, 0, 0, 0)',
+        sideSeverity: (isSel || isHov) ? (sev ? getSeverityMeta(sev).mapSide : 'rgba(0, 180, 255, 0.06)') : 'rgba(0, 0, 0, 0)',
+        // Stroke color
+        strokeCoverage: isSel ? 'rgba(0, 240, 255, 0.6)' : isHov ? cm.stroke : cm.stroke,
+        strokeSeverity: isSel ? 'rgba(0, 240, 255, 0.6)' : isHov ? 'rgba(0, 220, 255, 0.35)' : 'rgba(0, 200, 255, 0.07)',
+      };
     }
+    return map;
+  }, [countries.features, regionSeverities, coverageStatusByIso, selectedRegion, hoveredIso]);
 
-    if (isSel) return sev ? Math.max(0.03, 0.01 + sev / 1200) : 0.02;
-    if (isHov) return sev ? Math.max(0.02, 0.0075 + sev / 1600) : 0.0125;
-    // Slight elevation for countries with severity data
-    if (sev) return 0.002 + sev / 8000;
-    return 0;
-  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
+  // Simple lookup callbacks — no object creation, no function calls, just string returns
+  const isCoverage = mapOverlay === 'coverage';
+
+  const polygonAltitude = useCallback((f) => {
+    const entry = polygonColorMap[getIso(f)];
+    if (!entry) return 0;
+    return isCoverage ? entry.altCoverage : entry.altSeverity;
+  }, [polygonColorMap, isCoverage]);
 
   const polygonCapColor = useCallback((f) => {
-    const iso = getIso(f);
-    const sev = getRegionSev(f);
-    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
-    const isSel = iso === selectedRegion;
-
-    if (mapOverlay === 'coverage') {
-      if (isSel) return coverageMeta.selectedFill;
-      if (isHov) return coverageMeta.hoverFill;
-      return coverageMeta.fill;
-    }
-
-    if (sev) {
-      const meta = getSeverityMeta(sev);
-      if (isSel) return meta.mapFill;
-      if (isHov) return meta.mapFill;
-      // Always shade countries with data by severity
-      const alpha = 0.08 + (sev / 100) * 0.14;
-      const hex = meta.accent;
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
-      return `rgba(${r},${g},${b},${alpha})`;
-    }
-
-    if (isSel) return 'rgba(0, 200, 255, 0.15)';
-    if (isHov) return 'rgba(0, 200, 255, 0.08)';
-    return 'rgba(0, 180, 255, 0.02)';
-  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
+    const entry = polygonColorMap[getIso(f)];
+    if (!entry) return 'rgba(0, 180, 255, 0.02)';
+    return isCoverage ? entry.capCoverage : entry.capSeverity;
+  }, [polygonColorMap, isCoverage]);
 
   const polygonSideColor = useCallback((f) => {
-    const iso = getIso(f);
-    const sev = getRegionSev(f);
-    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-    const isHov = hoveredCountry && getIso(hoveredCountry) === iso;
-    const isSel = iso === selectedRegion;
-
-    if (mapOverlay === 'coverage') {
-      if (isSel || isHov) return coverageMeta.side;
-      return 'rgba(0, 0, 0, 0)';
-    }
-
-    if ((isSel || isHov) && sev) return getSeverityMeta(sev).mapSide;
-    if (isSel || isHov) return 'rgba(0, 180, 255, 0.06)';
-    return 'rgba(0, 0, 0, 0)';
-  }, [hoveredCountry, selectedRegion, mapOverlay, regionSeverities, coverageStatusByIso]);
+    const entry = polygonColorMap[getIso(f)];
+    if (!entry) return 'rgba(0, 0, 0, 0)';
+    return isCoverage ? entry.sideCoverage : entry.sideSeverity;
+  }, [polygonColorMap, isCoverage]);
 
   const polygonStrokeColor = useCallback((f) => {
-    const iso = getIso(f);
-    const coverageMeta = getCoverageMeta(getCoverageStatus(f));
-    if (iso === selectedRegion) return 'rgba(0, 240, 255, 0.6)';
-    if (hoveredCountry && getIso(hoveredCountry) === iso) {
-      return mapOverlay === 'coverage' ? coverageMeta.stroke : 'rgba(0, 220, 255, 0.35)';
-    }
-    if (mapOverlay === 'coverage') return coverageMeta.stroke;
-    return 'rgba(0, 200, 255, 0.07)';
-  }, [hoveredCountry, selectedRegion, mapOverlay, coverageStatusByIso]);
+    const entry = polygonColorMap[getIso(f)];
+    if (!entry) return 'rgba(0, 200, 255, 0.07)';
+    return isCoverage ? entry.strokeCoverage : entry.strokeSeverity;
+  }, [polygonColorMap, isCoverage]);
 
   return (
     <div ref={containerRef} className="globe-wrapper">
