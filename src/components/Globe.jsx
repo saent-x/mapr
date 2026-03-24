@@ -36,6 +36,15 @@ const normalizeCausalCategory = (cat) => {
 
 const DEFAULT_VIEW = { lat: 20, lng: 10, altitude: 2.2 };
 
+// Coverage ring styles — distinct from severity rings
+const COVERAGE_RING_STYLES = {
+  verified:        { color: '#00e5a0', maxRadius: 3,   speed: 0.8, repeat: 2500 },
+  developing:      { color: '#00d4ff', maxRadius: 3.5, speed: 1.0, repeat: 2000 },
+  'ingestion-risk':{ color: '#ffaa00', maxRadius: 4,   speed: 1.5, repeat: 1500 },
+  'source-sparse': { color: '#ff8800', maxRadius: 4.5, speed: 2.0, repeat: 1200 },
+  uncovered:       { color: '#ff4444', maxRadius: 5.5, speed: 2.5, repeat: 800  },
+};
+
 // On small screens, don't zoom in as far — the globe fills the viewport quickly
 const isMobile = typeof screen !== 'undefined' && screen.width < 768;
 const STORY_ALTITUDE = isMobile ? 1.4 : 0.7;
@@ -355,16 +364,6 @@ const Globe = ({
   };
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
-
-  // Coverage ring colors — distinct from severity rings
-  // Green = well covered, cyan = developing, amber = at risk, red = sparse/uncovered
-  const COVERAGE_RING_STYLES = {
-    verified:        { color: '#00e5a0', maxRadius: 3,   speed: 0.8, repeat: 2500 },
-    developing:      { color: '#00d4ff', maxRadius: 3.5, speed: 1.0, repeat: 2000 },
-    'ingestion-risk':{ color: '#ffaa00', maxRadius: 4,   speed: 1.5, repeat: 1500 },
-    'source-sparse': { color: '#ff8800', maxRadius: 4.5, speed: 2.0, repeat: 1200 },
-    uncovered:       { color: '#ff4444', maxRadius: 5.5, speed: 2.5, repeat: 800  },
-  };
 
   return (
     <div ref={containerRef} className="globe-wrapper">
