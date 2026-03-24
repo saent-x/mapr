@@ -12,9 +12,12 @@ function getPool() {
     throw new Error('DATABASE_URL environment variable is required');
   }
 
+  // Strip channel_binding parameter which some pg versions don't support
+  const cleanUrl = connectionString.replace(/[&?]channel_binding=[^&]*/g, '');
+
   pool = new Pool({
-    connectionString,
-    ssl: connectionString.includes('neon.tech') ? { rejectUnauthorized: true } : { rejectUnauthorized: false },
+    connectionString: cleanUrl,
+    ssl: { rejectUnauthorized: false },
     max: 5,
     idleTimeoutMillis: 30000
   });

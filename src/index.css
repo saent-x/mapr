@@ -91,16 +91,6 @@ button {
   outline: none;
 }
 
-.globe-wrapper .cesium-viewer,
-.globe-wrapper .cesium-viewer-cesiumWidgetContainer,
-.globe-wrapper .cesium-widget,
-.globe-wrapper .cesium-widget canvas {
-  width: 100% !important;
-  height: 100% !important;
-  position: absolute !important;
-  inset: 0 !important;
-  z-index: 2 !important;
-}
 
 .globe-wrapper::after {
   content: '';

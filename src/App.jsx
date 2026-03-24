@@ -41,7 +41,6 @@ import {
 } from './utils/mockData';
 
 const Globe = lazy(() => import('./components/Globe'));
-const CesiumGlobe = lazy(() => import('./components/CesiumGlobe'));
 const FlatMap = lazy(() => import('./components/FlatMap'));
 
 const REGION_BACKFILL_CACHE_LIMIT = 6;
@@ -89,15 +88,11 @@ function App() {
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'flat' : 'globe'
   );
   const [mapOverlay, setMapOverlay] = useState('severity');
-  // TEST: toggle between 'react-globe-gl' and 'cesium' globe engines
-  const [globeEngine, setGlobeEngine] = useState('react-globe-gl');
   const prevMapModeRef = useRef(null);
 
   // Coverage overlay auto-switches to flat map (GPU-rendered, no flicker).
   // Switching back to severity restores the previous map mode.
-  // Skip auto-switch if using Cesium (it handles coverage natively).
   useEffect(() => {
-    if (globeEngine === 'cesium') return;
     if (mapOverlay === 'coverage' && mapMode === 'globe') {
       prevMapModeRef.current = 'globe';
       setMapMode('flat');
@@ -730,51 +725,20 @@ function App() {
   return (
     <ErrorBoundary>
     <div className="app">
-      {/* TEST: Globe engine toggle — remove after testing */}
-      <div style={{
-        position: 'fixed', bottom: 70, left: 10, zIndex: 9999,
-        background: '#0d1117', border: '1px solid #1a2030', borderRadius: 4,
-        padding: '4px 8px', fontSize: 10, fontFamily: 'monospace', color: '#888'
-      }}>
-        <span style={{ marginRight: 6 }}>Engine:</span>
-        <button
-          onClick={() => setGlobeEngine('react-globe-gl')}
-          style={{ background: globeEngine === 'react-globe-gl' ? '#00d4ff' : '#222', color: globeEngine === 'react-globe-gl' ? '#000' : '#888', border: 'none', borderRadius: 2, padding: '2px 6px', marginRight: 4, cursor: 'pointer', fontSize: 10 }}
-        >GL</button>
-        <button
-          onClick={() => setGlobeEngine('cesium')}
-          style={{ background: globeEngine === 'cesium' ? '#00d4ff' : '#222', color: globeEngine === 'cesium' ? '#000' : '#888', border: 'none', borderRadius: 2, padding: '2px 6px', cursor: 'pointer', fontSize: 10 }}
-        >Cesium</button>
-      </div>
       <Suspense fallback={null}>
         {mapMode === 'globe' ? (
-          globeEngine === 'cesium' ? (
-            <CesiumGlobe
-              newsList={mapNewsList}
-              regionSeverities={mapRegionSeverities}
-              mapOverlay={mapOverlay}
-              coverageStatusByIso={coverageStatusByIso}
-              velocitySpikes={velocitySpikes}
-              selectedRegion={selectedRegion}
-              selectedStory={selectedStory}
-              onRegionSelect={handleRegionSelect}
-              onStorySelect={handleStorySelect}
-              onArcSelect={handleArcSelect}
-            />
-          ) : (
-            <Globe
-              newsList={mapNewsList}
-              regionSeverities={mapRegionSeverities}
-              mapOverlay={mapOverlay}
-              coverageStatusByIso={coverageStatusByIso}
-              velocitySpikes={velocitySpikes}
-              selectedRegion={selectedRegion}
-              selectedStory={selectedStory}
-              onRegionSelect={handleRegionSelect}
-              onStorySelect={handleStorySelect}
-              onArcSelect={handleArcSelect}
-            />
-          )
+          <Globe
+            newsList={mapNewsList}
+            regionSeverities={mapRegionSeverities}
+            mapOverlay={mapOverlay}
+            coverageStatusByIso={coverageStatusByIso}
+            velocitySpikes={velocitySpikes}
+            selectedRegion={selectedRegion}
+            selectedStory={selectedStory}
+            onRegionSelect={handleRegionSelect}
+            onStorySelect={handleStorySelect}
+            onArcSelect={handleArcSelect}
+          />
         ) : (
           <FlatMap
             newsList={mapNewsList}

@@ -205,6 +205,9 @@ const server = http.createServer(async (request, response) => {
 
 // Start server FIRST so healthcheck passes, then initialize data in background
 const HOST = process.env.HOST || '0.0.0.0';
+console.log(`Starting Mapr backend on ${HOST}:${PORT}...`);
+console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'set (' + process.env.DATABASE_URL.slice(0, 30) + '...)' : 'NOT SET'}`);
+
 server.listen(PORT, HOST, async () => {
   console.log(`Mapr backend listening on http://${HOST}:${PORT}`);
   try {
@@ -213,7 +216,13 @@ server.listen(PORT, HOST, async () => {
     console.log('Ingestion initialized and scheduler started.');
   } catch (err) {
     console.error('Ingestion initialization failed:', err.message);
+    console.error(err.stack);
   }
+});
+
+server.on('error', (err) => {
+  console.error('Server error:', err.message);
+  process.exit(1);
 });
 
 function shutdown() {
