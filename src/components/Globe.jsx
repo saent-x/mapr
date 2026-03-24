@@ -204,29 +204,40 @@ const Globe = ({
     return map;
   }, [newsList]);
 
-  // Rings: active pulses on high-severity stories across the globe
-  // In coverage mode, also add pulsing rings for velocity spike regions
+  // Rings: severity mode = activity pulses, coverage mode = coverage status per country
   const ringData = useMemo(() => {
     if (mapOverlay === 'coverage') {
-      // In coverage mode: show velocity spike rings instead of severity rings
-      const spikeRings = [];
+      // Coverage rings: one per country with known coordinates, colored by coverage status
+      const coverageRings = [];
+      for (const [iso, entry] of Object.entries(coverageStatusByIso)) {
+        const story = isoToStoryRef[iso];
+        if (!story?.coordinates) continue;
+        const status = entry.status || 'uncovered';
+        const style = COVERAGE_RING_STYLES[status] || COVERAGE_RING_STYLES.uncovered;
+        coverageRings.push({
+          ...story,
+          _isCoverageRing: true,
+          _coverageStatus: status,
+          _coverageStyle: style,
+          _coverageIso: iso,
+        });
+      }
+      // Add velocity spike rings on top
       for (const spike of velocitySpikes.slice(0, 10)) {
         const story = isoToStoryRef[spike.iso];
-        if (story) {
-          spikeRings.push({ ...story, _velocitySpike: true, _spikeLevel: spike.level, _zScore: spike.zScore });
+        if (story && !coverageRings.some(r => r._coverageIso === spike.iso)) {
+          coverageRings.push({ ...story, _velocitySpike: true, _spikeLevel: spike.level, _zScore: spike.zScore });
         }
       }
-      if (selectedStory) return [selectedStory, ...spikeRings.filter((s) => s.id !== selectedStory.id)];
-      return spikeRings;
+      return coverageRings;
     }
 
+    // Severity mode: ambient activity rings
     if (selectedStory) return [selectedStory];
-    // Show rings on all critical/elevated stories for ambient activity
     const ambient = newsList
       .filter((s) => s.severity >= 60)
       .slice(0, 12);
     if (selectedRegion) {
-      // Add selected region stories on top
       const regionRings = newsList
         .filter((s) => s.isoA2 === selectedRegion && s.severity >= 40)
         .slice(0, 6);
@@ -234,7 +245,7 @@ const Globe = ({
       return [...regionRings, ...ambient.filter((s) => !ids.has(s.id))].slice(0, 14);
     }
     return ambient;
-  }, [isoToStoryRef, mapOverlay, newsList, selectedRegion, selectedStory, velocitySpikes]);
+  }, [coverageStatusByIso, isoToStoryRef, mapOverlay, newsList, selectedRegion, selectedStory, velocitySpikes]);
 
   // Arcs: connect countries from events' multi-country countries arrays
   const arcData = useMemo(() => {
@@ -345,38 +356,15 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
-  // Coverage HTML overlay — floating badges pinned to country coordinates
-  // Uses htmlElementsData which renders DOM elements (not WebGL) — zero flicker
-  const COVERAGE_BADGE_COLORS = {
-    verified: { bg: '#00e5a0', text: '#000', label: 'OK' },
-    developing: { bg: '#00d4ff', text: '#000', label: 'DEV' },
-    'ingestion-risk': { bg: '#ffaa00', text: '#000', label: 'RISK' },
-    'source-sparse': { bg: '#ff8800', text: '#000', label: 'LOW' },
-    uncovered: { bg: '#ff4444', text: '#fff', label: 'NONE' },
+  // Coverage ring colors — distinct from severity rings
+  // Green = well covered, cyan = developing, amber = at risk, red = sparse/uncovered
+  const COVERAGE_RING_STYLES = {
+    verified:        { color: '#00e5a0', maxRadius: 3,   speed: 0.8, repeat: 2500 },
+    developing:      { color: '#00d4ff', maxRadius: 3.5, speed: 1.0, repeat: 2000 },
+    'ingestion-risk':{ color: '#ffaa00', maxRadius: 4,   speed: 1.5, repeat: 1500 },
+    'source-sparse': { color: '#ff8800', maxRadius: 4.5, speed: 2.0, repeat: 1200 },
+    uncovered:       { color: '#ff4444', maxRadius: 5.5, speed: 2.5, repeat: 800  },
   };
-
-  const coverageHtmlData = useMemo(() => {
-    if (mapOverlay !== 'coverage') return [];
-    const items = [];
-    for (const [iso, entry] of Object.entries(coverageStatusByIso)) {
-      const story = isoToStoryRef[iso];
-      if (!story?.coordinates) continue;
-      const status = entry.status || 'uncovered';
-      const badge = COVERAGE_BADGE_COLORS[status] || COVERAGE_BADGE_COLORS.uncovered;
-      const name = isoToCountry(iso) || iso;
-      items.push({
-        lat: story.coordinates[0],
-        lng: story.coordinates[1],
-        iso,
-        name,
-        status,
-        badge,
-        eventCount: entry.eventCount || 0,
-        confidence: entry.maxConfidence || 0,
-      });
-    }
-    return items;
-  }, [mapOverlay, coverageStatusByIso, isoToStoryRef]);
 
   return (
     <div ref={containerRef} className="globe-wrapper">
@@ -587,6 +575,10 @@ const Globe = ({
           ringLat={(s) => s.coordinates[0]}
           ringLng={(s) => s.coordinates[1]}
           ringColor={(s) => {
+            if (s._isCoverageRing) {
+              const c = s._coverageStyle.color;
+              return [c, `${c}88`, `${c}33`, 'rgba(255,255,255,0)'];
+            }
             if (s._velocitySpike) {
               const color = s._spikeLevel === 'spike' ? '#ffaa00' : '#8aa7ff';
               return [color, `${color}88`, `${color}33`, 'rgba(255,255,255,0)'];
@@ -595,57 +587,25 @@ const Globe = ({
             return [meta.accent, meta.ring, meta.muted, 'rgba(255,255,255,0)'];
           }}
           ringMaxRadius={(s) => {
+            if (s._isCoverageRing) return s._coverageStyle.maxRadius;
             if (s._velocitySpike) return s._spikeLevel === 'spike' ? 5 : 3.5;
             if (selectedStory?.id === s.id) return 4 + s.severity / 16;
             if (s.isoA2 === selectedRegion) return 3 + s.severity / 20;
             return 2 + s.severity / 30;
           }}
           ringPropagationSpeed={(s) => {
+            if (s._isCoverageRing) return s._coverageStyle.speed;
             if (s._velocitySpike) return s._spikeLevel === 'spike' ? 2.5 : 1.8;
             if (selectedStory?.id === s.id || s.isoA2 === selectedRegion) return 2;
             return 1.2;
           }}
           ringRepeatPeriod={(s) => {
+            if (s._isCoverageRing) return s._coverageStyle.repeat;
             if (s._velocitySpike) return s._spikeLevel === 'spike' ? 900 : 1400;
             if (selectedStory?.id === s.id) return 800;
             if (s.severity >= 85) return 1200;
             if (s.severity >= 60) return 1800;
             return 2400;
-          }}
-
-          /* === COVERAGE HTML OVERLAY — DOM-based, zero flicker === */
-          htmlElementsData={coverageHtmlData}
-          htmlLat={(d) => d.lat}
-          htmlLng={(d) => d.lng}
-          htmlAltitude={0.01}
-          htmlTransitionDuration={0}
-          htmlElement={(d) => {
-            const el = document.createElement('div');
-            el.className = 'coverage-badge';
-            el.style.cssText = `
-              background: ${d.badge.bg};
-              color: ${d.badge.text};
-              font-family: 'JetBrains Mono', monospace;
-              font-size: 8px;
-              font-weight: 700;
-              letter-spacing: 0.5px;
-              padding: 2px 5px;
-              border-radius: 3px;
-              white-space: nowrap;
-              pointer-events: auto;
-              cursor: pointer;
-              transform: translate(-50%, -50%);
-              opacity: 0.9;
-              box-shadow: 0 0 6px ${d.badge.bg}44;
-              border: 1px solid ${d.badge.bg}88;
-              text-transform: uppercase;
-            `;
-            el.textContent = d.badge.label;
-            el.title = `${d.name}: ${d.status} (${d.eventCount} events, ${d.confidence}% confidence)`;
-            el.addEventListener('click', () => {
-              onRegionSelect(d.iso);
-            });
-            return el;
           }}
 
           /* === TRANSITIONS === */

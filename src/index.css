@@ -92,14 +92,6 @@ button {
 }
 
 
-/* Coverage badges on globe — DOM overlay, not WebGL */
-.coverage-badge:hover {
-  opacity: 1 !important;
-  transform: translate(-50%, -50%) scale(1.3) !important;
-  z-index: 10 !important;
-  box-shadow: 0 0 12px currentColor !important;
-}
-
 .globe-wrapper::after {
   content: '';
   position: absolute;
