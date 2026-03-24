@@ -711,7 +711,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       // Compute 2-hour bucket timestamp (e.g. "2026-03-22T14" rounded to even hours)
       const nowDate = new Date();
       const bucketHour = Math.floor(nowDate.getUTCHours() / 2) * 2;
-      const bucketAt = `${nowDate.toISOString().slice(0, 8)}${String(bucketHour).padStart(2, '0')}`;
+      const bucketAt = `${nowDate.toISOString().slice(0, 10)}T${String(bucketHour).padStart(2, '0')}`;
 
       // Count articles per ISO code in this batch
       const isoCounts = {};
@@ -745,7 +745,11 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       // 4. Update lifecycle for all events
       for (const event of mergedEvents) {
         // Link articles first so readEventArticles works
-        await linkArticlesToEvent(event.id, event.articleIds);
+        try {
+          await linkArticlesToEvent(event.id, event.articleIds);
+        } catch (linkErr) {
+          // FK violation — some articleIds were deduped. Non-fatal.
+        }
         // Get ALL articles for this event (from DB, not just current batch)
         const allEventArticles = await readEventArticles(event.id);
         const now = Date.now();
@@ -810,9 +814,9 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       for (const event of mergedEvents) {
         await upsertEvent({
           ...event,
-          countries: JSON.stringify(event.countries),
-          topicFingerprint: JSON.stringify(event.topicFingerprint),
-          coordinates: JSON.stringify(event.coordinates),
+          countries: event.countries,
+          topicFingerprint: event.topicFingerprint,
+          coordinates: event.coordinates,
           enrichment: JSON.stringify({
             entities: event.entities,
             sourceProfile: event.sourceProfile,

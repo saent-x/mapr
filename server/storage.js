@@ -286,7 +286,7 @@ export async function readActiveEvents({ maxAgeHours } = {}) {
 
   const where = `WHERE ${conditions.join(' AND ')}`;
   const { rows } = await db.query(`SELECT * FROM events ${where} ORDER BY "lastUpdatedAt" DESC`, params);
-  return rows.map(row => {
+  const events = rows.map(row => {
     const enrichment = parseJson(row.enrichment, {});
     return {
       ...row,
@@ -296,6 +296,17 @@ export async function readActiveEvents({ maxAgeHours } = {}) {
       coordinates: parseJson(row.coordinates, null)
     };
   });
+
+  // Populate articleIds from junction table
+  for (const event of events) {
+    const { rows: linkRows } = await db.query(
+      'SELECT "articleId" FROM event_articles WHERE "eventId" = $1',
+      [event.id]
+    );
+    event.articleIds = linkRows.map(r => r.articleId);
+  }
+
+  return events;
 }
 
 export async function updateEventLifecycle(eventId, lifecycle) {
