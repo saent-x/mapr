@@ -469,13 +469,20 @@ function App() {
       ? (coverageHistory?.transitions || []).filter((entry) => entry.iso === panelRegion).slice(0, 4)
       : []
   ), [coverageHistory, panelRegion]);
-  const mapNewsList = useMemo(() => {
-    if (!panelRegion || panelNews.length === 0) {
-      return activeNews;
-    }
+  // For the globe/map: use raw articles (more dots, fuller globe) instead of clustered events
+  const mapArticles = useMemo(() => {
+    return baseArticles.filter(a => a.coordinates && a.isoA2);
+  }, [baseArticles]);
 
-    return mergeStoryLists(activeNews, panelNews);
-  }, [activeNews, panelNews, panelRegion]);
+  const mapNewsList = useMemo(() => {
+    // Use raw articles for map rendering (more geographic coverage)
+    // Fall back to events if no raw articles available
+    const base = mapArticles.length > 0 ? mapArticles : activeNews;
+    if (!panelRegion || panelNews.length === 0) {
+      return base;
+    }
+    return mergeStoryLists(base, panelNews);
+  }, [mapArticles, activeNews, panelNews, panelRegion]);
   const mapRegionSeverities = useMemo(() => {
     if (!panelRegion || !panelRegionData || regionSeverities[panelRegion]) {
       return regionSeverities;
