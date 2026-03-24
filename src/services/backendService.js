@@ -1,7 +1,15 @@
 const API_BASE = import.meta.env.VITE_MAPR_API_BASE || '/api';
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  // Timeout after 8 seconds — fail fast if Railway is cold/down
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   let payload = null;
   try {

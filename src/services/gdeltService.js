@@ -155,7 +155,9 @@ async function fetchGdeltQuery(searchQuery, timespan, maxRecords) {
           timespan,
           maxrecords: String(maxRecords),
         });
-        response = await fetch(`/api/gdelt-proxy?${params}`);
+        // Use origin-relative URL (Vercel serverless) for GDELT proxy
+        // Don't route through Railway — GDELT proxy doesn't need the database
+        response = await fetch(`${window.location.origin}/api/gdelt-proxy?${params}`);
       } else {
         const params = new URLSearchParams({
           query: searchQuery,
