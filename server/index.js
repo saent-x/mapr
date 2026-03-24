@@ -218,6 +218,15 @@ server.listen(PORT, HOST, async () => {
     console.error('Ingestion initialization failed:', err.message);
     console.error(err.stack);
   }
+
+  // Keep-alive: self-ping every 4 minutes to prevent Railway from scaling to zero
+  if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT) {
+    const keepAliveUrl = `http://127.0.0.1:${PORT}/api/health`;
+    setInterval(() => {
+      fetch(keepAliveUrl).catch(() => {});
+    }, 4 * 60 * 1000);
+    console.log('Keep-alive ping enabled (every 4 min).');
+  }
 });
 
 server.on('error', (err) => {
