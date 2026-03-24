@@ -345,6 +345,39 @@ const Globe = ({
 
   const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
 
+  // Coverage HTML overlay — floating badges pinned to country coordinates
+  // Uses htmlElementsData which renders DOM elements (not WebGL) — zero flicker
+  const COVERAGE_BADGE_COLORS = {
+    verified: { bg: '#00e5a0', text: '#000', label: 'OK' },
+    developing: { bg: '#00d4ff', text: '#000', label: 'DEV' },
+    'ingestion-risk': { bg: '#ffaa00', text: '#000', label: 'RISK' },
+    'source-sparse': { bg: '#ff8800', text: '#000', label: 'LOW' },
+    uncovered: { bg: '#ff4444', text: '#fff', label: 'NONE' },
+  };
+
+  const coverageHtmlData = useMemo(() => {
+    if (mapOverlay !== 'coverage') return [];
+    const items = [];
+    for (const [iso, entry] of Object.entries(coverageStatusByIso)) {
+      const story = isoToStoryRef[iso];
+      if (!story?.coordinates) continue;
+      const status = entry.status || 'uncovered';
+      const badge = COVERAGE_BADGE_COLORS[status] || COVERAGE_BADGE_COLORS.uncovered;
+      const name = isoToCountry(iso) || iso;
+      items.push({
+        lat: story.coordinates[0],
+        lng: story.coordinates[1],
+        iso,
+        name,
+        status,
+        badge,
+        eventCount: entry.eventCount || 0,
+        confidence: entry.maxConfidence || 0,
+      });
+    }
+    return items;
+  }, [mapOverlay, coverageStatusByIso, isoToStoryRef]);
+
   return (
     <div ref={containerRef} className="globe-wrapper">
       {size.width > 0 && size.height > 0 && (
@@ -578,6 +611,41 @@ const Globe = ({
             if (s.severity >= 85) return 1200;
             if (s.severity >= 60) return 1800;
             return 2400;
+          }}
+
+          /* === COVERAGE HTML OVERLAY — DOM-based, zero flicker === */
+          htmlElementsData={coverageHtmlData}
+          htmlLat={(d) => d.lat}
+          htmlLng={(d) => d.lng}
+          htmlAltitude={0.01}
+          htmlTransitionDuration={0}
+          htmlElement={(d) => {
+            const el = document.createElement('div');
+            el.className = 'coverage-badge';
+            el.style.cssText = `
+              background: ${d.badge.bg};
+              color: ${d.badge.text};
+              font-family: 'JetBrains Mono', monospace;
+              font-size: 8px;
+              font-weight: 700;
+              letter-spacing: 0.5px;
+              padding: 2px 5px;
+              border-radius: 3px;
+              white-space: nowrap;
+              pointer-events: auto;
+              cursor: pointer;
+              transform: translate(-50%, -50%);
+              opacity: 0.9;
+              box-shadow: 0 0 6px ${d.badge.bg}44;
+              border: 1px solid ${d.badge.bg}88;
+              text-transform: uppercase;
+            `;
+            el.textContent = d.badge.label;
+            el.title = `${d.name}: ${d.status} (${d.eventCount} events, ${d.confidence}% confidence)`;
+            el.addEventListener('click', () => {
+              onRegionSelect(d.iso);
+            });
+            return el;
           }}
 
           /* === TRANSITIONS === */
