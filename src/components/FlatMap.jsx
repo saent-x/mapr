@@ -321,7 +321,7 @@ const FlatMap = ({
   }, [selectedRegion]);
 
   const selectedGlowFilter = useMemo(() => {
-    return selectedRegion ? ['==', ['get', '_iso'], selectedRegion] : ['==', 1, 0];
+    return selectedRegion ? ['==', ['get', '_iso'], String(selectedRegion)] : ['==', 1, 0];
   }, [selectedRegion]);
 
   /* ── article markers GeoJSON ── */
