@@ -79,7 +79,7 @@ export default function useEventData({ onNewData } = {}) {
 
     // 2. Fallback: fetch directly from GDELT client-side
     try {
-      const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 250 });
+      const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 750 });
       if (Array.isArray(clientArticles) && clientArticles.length > 0) {
         const count = clientArticles.length;
         setLiveNews(clientArticles);

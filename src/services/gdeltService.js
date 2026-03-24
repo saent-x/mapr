@@ -75,7 +75,7 @@ function enqueueGdeltRequest(task) {
   return run;
 }
 
-function buildCacheKey({ query = '', queries = [], timespan = '24h', maxRecords = 200 } = {}) {
+function buildCacheKey({ query = '', queries = [], timespan = '24h', maxRecords = 750 } = {}) {
   return JSON.stringify({
     query: query.trim(),
     queries: Array.isArray(queries) ? queries.map((entry) => (
@@ -201,7 +201,7 @@ async function fetchGdeltQuery(searchQuery, timespan, maxRecords) {
  * Fetch live news articles from GDELT DOC API using multiple query themes.
  * Returns an array of normalized article objects matching the app's data format.
  */
-export async function fetchLiveNews({ query = '', queries = [], timespan = '24h', maxRecords = 200 } = {}) {
+export async function fetchLiveNews({ query = '', queries = [], timespan = '24h', maxRecords = 750 } = {}) {
   const now = Date.now();
   const cacheKey = buildCacheKey({ query, queries, timespan, maxRecords });
 
