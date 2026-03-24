@@ -462,7 +462,10 @@ export async function initializeIngestion() {
     return;
   }
 
-  if (!currentSnapshot) {
+  // Force refresh if no snapshot OR if snapshot has no articles (empty/failed previous ingest)
+  const hasRealData = currentSnapshot?.articles?.length > 0 || currentSnapshot?.fetchedAt;
+  if (!hasRealData) {
+    console.log('No valid snapshot found — forcing initial ingest...');
     try {
       await refreshSnapshot({ force: true, reason: 'startup' });
     } catch (error) {
@@ -671,6 +674,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         })
       ]);
 
+      console.log(`[ingest] GDELT returned ${gdeltArticles.length} articles, RSS returned ${rssResult.articles?.length || 0} articles from ${rssResult.checkedFeedIds?.length || 0} feeds`);
       const effectiveGdeltArticles = gdeltArticles.length > 0
         ? gdeltArticles
         : retainPreviousGdeltArticles(currentSnapshot?.articles || []);
@@ -874,6 +878,8 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
 
       return await createResponsePayload();
     } catch (error) {
+      console.error('[ingest] refreshSnapshot FAILED:', error.message);
+      console.error('[ingest] Stack:', error.stack?.split('\n').slice(0, 4).join('\n'));
       ingestHealth = {
         lastAttemptAt: attemptedAt,
         lastSuccessAt: ingestHealth.lastSuccessAt,

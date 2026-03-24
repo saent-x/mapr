@@ -198,29 +198,36 @@ export async function writeCoverageHistory(history) {
 export async function upsertArticles(articles) {
   const db = await ensureDatabase();
   for (const article of articles) {
-    await db.query(`
-      INSERT INTO articles (id, title, url, source, "publishedAt", "isoA2", severity, "geocodePrecision", payload)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (url) DO UPDATE SET
-        id = EXCLUDED.id,
-        title = EXCLUDED.title,
-        source = EXCLUDED.source,
-        "publishedAt" = EXCLUDED."publishedAt",
-        "isoA2" = EXCLUDED."isoA2",
-        severity = EXCLUDED.severity,
-        "geocodePrecision" = EXCLUDED."geocodePrecision",
-        payload = EXCLUDED.payload
-    `, [
-      article.id,
-      article.title,
-      article.url ?? null,
-      article.source ?? null,
-      article.publishedAt ?? null,
-      article.isoA2 ?? null,
-      article.severity ?? null,
-      article.geocodePrecision ?? null,
-      JSON.stringify(article)
-    ]);
+    try {
+      await db.query(`
+        INSERT INTO articles (id, title, url, source, "publishedAt", "isoA2", severity, "geocodePrecision", payload)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+          title = EXCLUDED.title,
+          url = EXCLUDED.url,
+          source = EXCLUDED.source,
+          "publishedAt" = EXCLUDED."publishedAt",
+          "isoA2" = EXCLUDED."isoA2",
+          severity = EXCLUDED.severity,
+          "geocodePrecision" = EXCLUDED."geocodePrecision",
+          payload = EXCLUDED.payload
+      `, [
+        article.id,
+        article.title,
+        article.url ?? null,
+        article.source ?? null,
+        article.publishedAt ?? null,
+        article.isoA2 ?? null,
+        article.severity ?? null,
+        article.geocodePrecision ?? null,
+        JSON.stringify(article)
+      ]);
+    } catch (err) {
+      // URL uniqueness conflict or other constraint — skip this article
+      if (!err.message.includes('unique constraint')) {
+        console.warn('[storage] upsertArticle failed for', article.id, ':', err.message);
+      }
+    }
   }
 }
 
