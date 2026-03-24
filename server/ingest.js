@@ -57,7 +57,7 @@ import { computeCompositeSeverity } from '../src/utils/severityModel.js';
 import { detectAmplification } from '../src/utils/amplificationDetector.js';
 import { computeVelocitySpikes } from './velocityTracker.js';
 const DEFAULT_TIMESPAN = '24h';
-const DEFAULT_MAX_RECORDS = 250;
+const DEFAULT_MAX_RECORDS = 750;
 const REGION_BACKFILL_TIMESPAN = '168h';
 const REGION_BACKFILL_MAX_RECORDS = 80;
 const REGION_BACKFILL_FEED_LIMIT = 12;
@@ -688,10 +688,15 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       // Run NER on articles before persisting
       for (const article of mergedArticles) {
         if (!article.entities) {
-          const extracted = await extractEntities(article.title);
-          article.entities = extracted;
-          if (extracted.category !== 'general') {
-            article.nerCategory = extracted.category;
+          try {
+            const extracted = await extractEntities(article.title);
+            article.entities = extracted;
+            if (extracted.category !== 'general') {
+              article.nerCategory = extracted.category;
+            }
+          } catch (nerErr) {
+            // Don't let one bad article crash the entire ingest
+            article.entities = { people: [], organizations: [], locations: [], category: 'general' };
           }
         }
       }
