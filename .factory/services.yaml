@@ -1,0 +1,22 @@
+commands:
+  install: npm install
+  build: npx vite build
+  test: node --test
+  lint: echo "no lint configured"
+  typecheck: echo "no typecheck configured (JSX project)"
+  dev: node scripts/dev.js
+
+services:
+  backend:
+    start: node server/index.js
+    stop: lsof -ti :3030 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:3030/api/health
+    port: 3030
+    depends_on: []
+
+  frontend:
+    start: npx vite --port 5173
+    stop: lsof -ti :5173 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:5173/
+    port: 5173
+    depends_on: [backend]
