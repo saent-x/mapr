@@ -49,7 +49,7 @@ async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS articles (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
-      url TEXT UNIQUE,
+      url TEXT,
       source TEXT,
       "publishedAt" TEXT,
       "isoA2" TEXT,
@@ -103,6 +103,35 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_articles_isoA2 ON articles("isoA2");
     CREATE INDEX IF NOT EXISTS idx_articles_publishedAt ON articles("publishedAt");
   `);
+
+  // Fix schema: drop url UNIQUE constraint that causes spurious conflicts during
+  // ON CONFLICT (id) upserts.  The id column is the canonical dedup key.
+  await db.query(`ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_url_key`).catch(() => {});
+
+  // Ensure id column is the primary key (older DB instances may have url as PK)
+  try {
+    const pkCheck = await db.query(`
+      SELECT a.attname FROM pg_constraint c
+      JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
+      WHERE c.conrelid = 'articles'::regclass AND c.contype = 'p'
+    `);
+    const pkCols = pkCheck.rows.map(r => r.attname);
+    if (pkCols.length > 0 && !pkCols.includes('id')) {
+      console.log('[storage] Fixing articles primary key: currently on', pkCols.join(','), '→ id');
+      await db.query('ALTER TABLE articles DROP CONSTRAINT articles_pkey CASCADE');
+      // Remove any duplicate ids before adding the PK
+      await db.query(`DELETE FROM articles a USING articles b WHERE a.id = b.id AND a.ctid < b.ctid`);
+      await db.query('ALTER TABLE articles ADD PRIMARY KEY (id)');
+      // Recreate event_articles FK after CASCADE drop
+      await db.query(`
+        ALTER TABLE event_articles DROP CONSTRAINT IF EXISTS event_articles_articleId_fkey;
+        ALTER TABLE event_articles ADD CONSTRAINT event_articles_articleId_fkey
+          FOREIGN KEY ("articleId") REFERENCES articles(id) ON DELETE CASCADE
+      `).catch(() => {});
+    }
+  } catch (pkErr) {
+    console.warn('[storage] Primary key check/fix warning:', pkErr.message);
+  }
 }
 
 let schemaReady = null;
@@ -197,11 +226,36 @@ export async function writeCoverageHistory(history) {
 
 export async function upsertArticles(articles) {
   const db = await ensureDatabase();
+  const BATCH_SIZE = 50;
+  let inserted = 0;
+  let skipped = 0;
+
+  // Deduplicate by id within the batch (last occurrence wins)
+  const dedupMap = new Map();
   for (const article of articles) {
+    if (!article.id) { skipped++; continue; }
+    dedupMap.set(article.id, article);
+  }
+  const uniqueArticles = [...dedupMap.values()];
+
+  for (let i = 0; i < uniqueArticles.length; i += BATCH_SIZE) {
+    const batch = uniqueArticles.slice(i, i + BATCH_SIZE);
+    const values = [];
+    const params = [];
+    for (let j = 0; j < batch.length; j++) {
+      const a = batch[j];
+      const o = j * 9;
+      values.push(`($${o+1},$${o+2},$${o+3},$${o+4},$${o+5},$${o+6},$${o+7},$${o+8},$${o+9})`);
+      params.push(
+        a.id, a.title, a.url ?? null, a.source ?? null,
+        a.publishedAt ?? null, a.isoA2 ?? null, a.severity ?? null,
+        a.geocodePrecision ?? null, JSON.stringify(a)
+      );
+    }
     try {
       await db.query(`
         INSERT INTO articles (id, title, url, source, "publishedAt", "isoA2", severity, "geocodePrecision", payload)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ${values.join(',')}
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
           url = EXCLUDED.url,
@@ -211,24 +265,36 @@ export async function upsertArticles(articles) {
           severity = EXCLUDED.severity,
           "geocodePrecision" = EXCLUDED."geocodePrecision",
           payload = EXCLUDED.payload
-      `, [
-        article.id,
-        article.title,
-        article.url ?? null,
-        article.source ?? null,
-        article.publishedAt ?? null,
-        article.isoA2 ?? null,
-        article.severity ?? null,
-        article.geocodePrecision ?? null,
-        JSON.stringify(article)
-      ]);
-    } catch (err) {
-      // URL uniqueness conflict or other constraint — skip this article
-      if (!err.message.includes('unique constraint')) {
-        console.warn('[storage] upsertArticle failed for', article.id, ':', err.message);
+      `, params);
+      inserted += batch.length;
+    } catch (batchErr) {
+      // Batch failed — fall back to one-by-one for this batch
+      for (const article of batch) {
+        try {
+          await db.query(`
+            INSERT INTO articles (id, title, url, source, "publishedAt", "isoA2", severity, "geocodePrecision", payload)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            ON CONFLICT (id) DO UPDATE SET
+              title = EXCLUDED.title, url = EXCLUDED.url, source = EXCLUDED.source,
+              "publishedAt" = EXCLUDED."publishedAt", "isoA2" = EXCLUDED."isoA2",
+              severity = EXCLUDED.severity, "geocodePrecision" = EXCLUDED."geocodePrecision",
+              payload = EXCLUDED.payload
+          `, [
+            article.id, article.title, article.url ?? null, article.source ?? null,
+            article.publishedAt ?? null, article.isoA2 ?? null, article.severity ?? null,
+            article.geocodePrecision ?? null, JSON.stringify(article)
+          ]);
+          inserted++;
+        } catch (err) {
+          skipped++;
+          if (err?.code !== '23505') {
+            console.warn('[storage] upsertArticle failed for', article.id, ':', err.message);
+          }
+        }
       }
     }
   }
+  console.log(`[storage] upsertArticles: ${inserted} inserted/updated, ${skipped} skipped (of ${articles.length} input)`);
 }
 
 export async function readArticles({ since, isoA2 } = {}) {
@@ -326,11 +392,37 @@ export async function updateEventLifecycle(eventId, lifecycle) {
 
 export async function linkArticlesToEvent(eventId, articleIds) {
   const db = await ensureDatabase();
-  for (const articleId of articleIds) {
-    await db.query(`
-      INSERT INTO event_articles ("eventId", "articleId") VALUES ($1, $2)
-      ON CONFLICT ("eventId", "articleId") DO NOTHING
-    `, [eventId, articleId]);
+  const validIds = (articleIds || []).filter(Boolean);
+  if (validIds.length === 0) return;
+
+  // Batch insert all links at once
+  const BATCH_SIZE = 100;
+  for (let i = 0; i < validIds.length; i += BATCH_SIZE) {
+    const batch = validIds.slice(i, i + BATCH_SIZE);
+    const values = [];
+    const params = [eventId];
+    for (let j = 0; j < batch.length; j++) {
+      values.push(`($1, $${j + 2})`);
+      params.push(batch[j]);
+    }
+    try {
+      await db.query(`
+        INSERT INTO event_articles ("eventId", "articleId") VALUES ${values.join(',')}
+        ON CONFLICT ("eventId", "articleId") DO NOTHING
+      `, params);
+    } catch (batchErr) {
+      // Batch failed (FK violation likely) — fall back to one-by-one
+      for (const articleId of batch) {
+        try {
+          await db.query(`
+            INSERT INTO event_articles ("eventId", "articleId") VALUES ($1, $2)
+            ON CONFLICT ("eventId", "articleId") DO NOTHING
+          `, [eventId, articleId]);
+        } catch (err) {
+          // FK violation — skip silently
+        }
+      }
+    }
   }
 }
 

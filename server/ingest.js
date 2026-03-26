@@ -709,7 +709,9 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
 
       // --- Persistent event store ---
       // 1. Persist individual articles
+      console.log(`[ingest] Persisting ${mergedArticles.length} articles...`);
       await upsertArticles(mergedArticles);
+      console.log(`[ingest] Articles persisted.`);
 
       // --- Velocity tracking ---
       // Compute 2-hour bucket timestamp (e.g. "2026-03-22T14" rounded to even hours)
@@ -747,13 +749,30 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       const mergedEvents = mergeArticlesIntoEvents(mergedArticles, existingEvents);
 
       // 4. Update lifecycle for all events
+      console.log(`[ingest] Processing ${mergedEvents.length} events...`);
+      let eventIdx = 0;
       for (const event of mergedEvents) {
-        // Link articles first so readEventArticles works
-        try {
-          await linkArticlesToEvent(event.id, event.articleIds);
-        } catch (linkErr) {
-          // FK violation — some articleIds were deduped. Non-fatal.
-        }
+        eventIdx++;
+        if (eventIdx % 200 === 0) console.log(`[ingest]   event ${eventIdx}/${mergedEvents.length}`);
+        // Persist the event first so FK constraints are satisfied for new events
+        await upsertEvent({
+          id: event.id,
+          title: event.title,
+          primaryCountry: event.primaryCountry,
+          countries: event.countries,
+          lifecycle: event.lifecycle ?? 'emerging',
+          severity: event.severity ?? 0,
+          category: event.category ?? null,
+          firstSeenAt: event.firstSeenAt,
+          lastUpdatedAt: event.lastUpdatedAt,
+          topicFingerprint: event.topicFingerprint,
+          coordinates: event.coordinates,
+          enrichment: '{}'
+        });
+
+        // Now link articles (event exists in DB, per-row FK errors handled inside)
+        await linkArticlesToEvent(event.id, event.articleIds);
+
         // Get ALL articles for this event (from DB, not just current batch)
         const allEventArticles = await readEventArticles(event.id);
         const now = Date.now();
@@ -789,7 +808,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         // Use composite severity instead of the old weighted max/avg blend
         const regionSpike = velocitySpikes.find(s => s.iso === event.primaryCountry);
         const severityCtx = {
-          keywordSeverity: Math.max(...allEventArticles.map(a => a.severity || 0)),
+          keywordSeverity: allEventArticles.length > 0 ? Math.max(...allEventArticles.map(a => a.severity || 0)) : (event.severity || 0),
           articleCount: allEventArticles.length,
           diversityScore: sourceProfile.diversityScore,
           entities: event.entities,
