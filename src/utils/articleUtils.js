@@ -96,7 +96,9 @@ export function deriveSeverity(title, summary, entityContext) {
       articleCount: entityContext.articleCount || 1,
       diversityScore: entityContext.diversityScore || 0,
       entities: entityContext.entities || { organizations: [], people: [] },
-      category: entityContext.category || 'General'
+      category: entityContext.category || 'General',
+      isoA2: entityContext.isoA2 || null,
+      regionalBaselineRatio: entityContext.regionalBaselineRatio || null
     });
   }
 

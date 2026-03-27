@@ -99,7 +99,7 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
       await updateSourceCredibility(sourceKey, isCorroborated);
     }
 
-    // Use composite severity model
+    // Use composite severity model with entity significance, conflict zones, and baseline
     const regionSpike = velocitySpikes.find(s => s.iso === event.primaryCountry);
     const severityCtx = {
       keywordSeverity: allEventArticles.length > 0
@@ -108,10 +108,14 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
       articleCount: allEventArticles.length,
       diversityScore: sourceProfile.diversityScore,
       entities: event.entities,
-      category: event.nerCategory || event.category
+      category: event.nerCategory || event.category,
+      isoA2: event.primaryCountry || null
     };
     if (regionSpike) {
       severityCtx.velocitySignal = Math.min(100, regionSpike.zScore * 30);
+      // Derive regional baseline ratio from z-score:
+      // z-score of 2 means ~2x normal activity (assuming std ≈ mean/2)
+      severityCtx.regionalBaselineRatio = 1 + Math.max(0, regionSpike.zScore * 0.5);
     }
     event.severity = computeCompositeSeverity(severityCtx);
 
