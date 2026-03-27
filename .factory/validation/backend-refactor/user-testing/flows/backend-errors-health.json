@@ -1,0 +1,48 @@
+{
+  "surface": "backend-api",
+  "groupId": "backend-errors-health",
+  "assertions": [
+    {
+      "id": "VAL-BACKEND-002",
+      "status": "pass",
+      "reason": "The API returned consistent structured error responses for both a missing required query parameter and an unknown route.",
+      "evidence": [
+        "GET /api/region-briefing returned 400 with body {'error': 'Missing iso query parameter', 'code': 'BAD_REQUEST'}",
+        "GET /api/nonexistent returned 404 with body {'error': 'Not found', 'code': 'NOT_FOUND'}",
+        "server/index.js line 70 classifies structured error responses and lines 197 and 242 emit BAD_REQUEST and NOT_FOUND payloads",
+        "Evidence files: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/backend-refactor/backend-errors-health/region-briefing-missing-iso.json, /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/backend-refactor/backend-errors-health/not-found-response.json"
+      ]
+    },
+    {
+      "id": "VAL-BACKEND-004",
+      "status": "pass",
+      "reason": "The backend remained responsive while tracking failed feeds, and the circuit breaker implementation records failures and skips open circuits on later fetches.",
+      "evidence": [
+        "GET /api/health returned 200 while reporting service status=stale and refreshInProgress=True, showing the backend remained responsive during a background refresh.",
+        "Health summary reported rssFeedCount=303, failedFeedCount=56, circuitBreaker={'total': 112, 'open': 0, 'halfOpen': 0, 'closed': 112}",
+        "server/circuitBreaker.js lines 14, 81, 86, and 115 define thresholding/opening/summary behavior",
+        "server/pipeline/fetchSources.js lines 141 and 159 record failures and skip sources whose circuits are open",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/backend-refactor/backend-errors-health/health-summary.json"
+      ]
+    },
+    {
+      "id": "VAL-BACKEND-006",
+      "status": "pass",
+      "reason": "Two simultaneous briefing requests both succeeded with matching article counts, demonstrating concurrent request handling without crashes or malformed responses.",
+      "evidence": [
+        "Concurrent GET /api/briefing statuses=[200, 200]",
+        "Concurrent GET /api/briefing articleCounts=[2293, 2293] eventCounts=[3373, 3373]",
+        "server/index.js line 54 wraps request handlers with timeout protection",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/backend-refactor/backend-errors-health/health-summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "python3",
+    "urllib.request"
+  ],
+  "frictions": [
+    "Read-only validation ran while /api/health reported refreshInProgress=true and status=\"stale\", but the backend still served a usable cached snapshot from the last successful ingestion."
+  ],
+  "blockers": []
+}

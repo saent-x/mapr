@@ -1,0 +1,22 @@
+{
+  "surface": "backend-api",
+  "groupId": "backend-structure-audit",
+  "assertions": [
+    {
+      "id": "VAL-BACKEND-001",
+      "status": "pass",
+      "reason": "The backend ingestion pipeline is explicitly staged in refreshSnapshot() and broken out into separate pipeline modules for fetching, normalization, enrichment, correlation, persistence, and velocity tracking.",
+      "evidence": [
+        "server/pipeline files: correlateEvents.js, enrichEntities.js, fetchSources.js, index.js, normalizeArticles.js, persistData.js, trackVelocity.js",
+        "server/ingest.js lines 457-530 enumerate Stage 1 through Stage 9 in the orchestrator",
+        "server/pipeline/correlateEvents.js line 35 handles event correlation as a dedicated module",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/backend-refactor/backend-structure-audit/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "python3"
+  ],
+  "frictions": [],
+  "blockers": []
+}
