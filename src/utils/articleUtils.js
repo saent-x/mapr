@@ -146,13 +146,59 @@ function normalizeUrl(url) {
     .replace(/\/$/, '');
 }
 
+// --- Title similarity helpers for cross-source deduplication ---
+
+const DEDUP_STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'from', 'that', 'this', 'into', 'near', 'amid',
+  'after', 'before', 'over', 'under', 'across', 'new', 'says', 'say',
+  'report', 'reports', 'news', 'update', 'updates', 'officials', 'official',
+  'warns', 'warning', 'warn', 'region', 'state', 'province', 'continues',
+  'continue', 'told', 'via', 'also', 'been', 'has', 'have', 'had', 'are',
+  'were', 'was', 'will', 'can', 'could', 'would', 'should', 'may', 'about'
+]);
+
+/** Minimum Jaccard similarity to consider two titles as near-duplicates. */
+const TITLE_SIMILARITY_THRESHOLD = 0.65;
+
+/** Minimum meaningful token count for title comparison. */
+const MIN_TOKENS_FOR_SIMILARITY = 3;
+
+function tokenizeForDedup(title) {
+  return (title || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter((token) => token.length > 2 && !DEDUP_STOP_WORDS.has(token));
+}
+
+function jaccardTokenSimilarity(leftTokens, rightTokens) {
+  if (!leftTokens.length || !rightTokens.length) return 0;
+  const right = new Set(rightTokens);
+  let intersection = 0;
+  for (const token of leftTokens) {
+    if (right.has(token)) intersection++;
+  }
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
 /**
- * Deduplicate exact article duplicates while preserving cross-source corroboration.
- * Uses canonical URL when available; otherwise falls back to source + normalized title.
+ * Deduplicate articles using URL matching and title similarity.
+ *
+ * Phase 1: URL-based dedup (exact URL or source+title key).
+ * Phase 2: Cross-source title similarity using Jaccard token overlap.
+ *
+ * When a duplicate is found, the version with the better (non-title) summary
+ * is preferred.
  */
 export function deduplicateArticles(articles) {
+  if (!articles || !articles.length) return [];
+
+  // Phase 1: URL-based and source+title key deduplication
   const seen = new Map();
-  const result = [];
+  const urlDeduped = [];
 
   for (const article of articles) {
     const urlKey = normalizeUrl(article.url);
@@ -165,14 +211,49 @@ export function deduplicateArticles(articles) {
       const existing = seen.get(key);
       // Prefer the version with a real summary
       if (article.summary !== article.title && existing.summary === existing.title) {
-        const idx = result.indexOf(existing);
-        if (idx !== -1) result[idx] = article;
+        const idx = urlDeduped.indexOf(existing);
+        if (idx !== -1) urlDeduped[idx] = article;
         seen.set(key, article);
       }
       continue;
     }
     seen.set(key, article);
+    urlDeduped.push(article);
+  }
+
+  // Phase 2: Title-similarity deduplication across sources
+  const result = [];
+  const tokenCache = [];
+
+  for (const article of urlDeduped) {
+    const tokens = tokenizeForDedup(article.title);
+
+    if (tokens.length >= MIN_TOKENS_FOR_SIMILARITY) {
+      let bestMatchIdx = -1;
+      let bestSimilarity = 0;
+
+      for (let i = 0; i < result.length; i++) {
+        if (tokenCache[i].length < MIN_TOKENS_FOR_SIMILARITY) continue;
+        const similarity = jaccardTokenSimilarity(tokens, tokenCache[i]);
+        if (similarity >= TITLE_SIMILARITY_THRESHOLD && similarity > bestSimilarity) {
+          bestMatchIdx = i;
+          bestSimilarity = similarity;
+        }
+      }
+
+      if (bestMatchIdx >= 0) {
+        // Near-duplicate found — prefer article with better summary
+        const existing = result[bestMatchIdx];
+        if (article.summary !== article.title && existing.summary === existing.title) {
+          result[bestMatchIdx] = article;
+          tokenCache[bestMatchIdx] = tokens;
+        }
+        continue;
+      }
+    }
+
     result.push(article);
+    tokenCache.push(tokens);
   }
 
   return result;
