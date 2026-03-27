@@ -109,6 +109,33 @@ test('THROTTLE_MS is at least 5000ms (rate limiting preserved)', async () => {
     `THROTTLE_MS should be >= 5000, got ${throttleMs}`);
 });
 
+test('fetchLiveNews default path uses getDefaultQueryProfiles (25 combined profiles)', async () => {
+  // Verify the source code uses getDefaultQueryProfiles() in the no-query fallback
+  const { readFileSync } = await import('node:fs');
+  const source = readFileSync(new URL('../src/services/gdeltService.js', import.meta.url), 'utf8');
+
+  // The default fallback line should reference getDefaultQueryProfiles(), not GDELT_QUERY_PROFILES
+  const fallbackMatch = source.match(/:\s*\(query\s*\?\s*\[\{[^}]+\}\]\s*:\s*(\w+)\(/);
+  assert.ok(fallbackMatch, 'Should find the ternary default fallback in fetchLiveNews');
+  assert.strictEqual(fallbackMatch[1], 'getDefaultQueryProfiles',
+    `Default fallback should use getDefaultQueryProfiles(), found: ${fallbackMatch[1]}`);
+
+  // Also verify the combined count is 25 (7 base + 12 region + 6 language)
+  const combined = getDefaultQueryProfiles();
+  assert.strictEqual(combined.length,
+    GDELT_QUERY_PROFILES.length + GDELT_REGION_QUERIES.length + GDELT_LANGUAGE_QUERIES.length,
+    'getDefaultQueryProfiles should combine all three profile arrays');
+  assert.strictEqual(combined.length, 25,
+    `Expected 25 combined profiles (7+12+6), got ${combined.length}`);
+
+  // Verify the combined set includes sourcecountry: and sourcelang: queries
+  const allQueries = combined.map(p => p.query).join(' ');
+  assert.ok(allQueries.includes('sourcecountry:'),
+    'Default profiles should include sourcecountry: operators for region coverage');
+  assert.ok(allQueries.includes('sourcelang:'),
+    'Default profiles should include sourcelang: operators for language coverage');
+});
+
 test('each query profile has id and query fields', () => {
   const allProfiles = [...GDELT_QUERY_PROFILES, ...GDELT_REGION_QUERIES, ...GDELT_LANGUAGE_QUERIES];
   for (const profile of allProfiles) {

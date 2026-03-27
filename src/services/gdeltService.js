@@ -282,7 +282,7 @@ export async function fetchLiveNews({ query = '', queries = [], timespan = '24h'
         ? { id: `custom-${index}`, query: entry }
         : { id: entry.id || `custom-${index}`, query: entry.query }
     )).filter((entry) => entry.query)
-    : (query ? [{ id: 'custom', query }] : GDELT_QUERY_PROFILES);
+    : (query ? [{ id: 'custom', query }] : getDefaultQueryProfiles());
   if (queryProfiles.length === 0) {
     return [];
   }
