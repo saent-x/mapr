@@ -1,7 +1,23 @@
 import React from 'react';
-import { X, Download, Printer } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { X, Download, Printer, FileText } from 'lucide-react';
+import { generateBriefingMarkdown } from '../utils/briefingMarkdown.js';
 
 const BriefingExport = ({ events = [], filters = {}, onClose }) => {
+  const { t } = useTranslation();
+
+  const handleMarkdownDownload = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const markdown = generateBriefingMarkdown(events, filters);
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mapr-briefing-${today}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleJsonDownload = () => {
     const today = new Date().toISOString().slice(0, 10);
     const payload = {
@@ -38,22 +54,33 @@ const BriefingExport = ({ events = [], filters = {}, onClose }) => {
     <div className="export-modal-overlay" onClick={onClose}>
       <div className="export-modal" onClick={e => e.stopPropagation()}>
         <div className="export-modal-header">
-          <span className="export-modal-title">EXPORT BRIEFING</span>
-          <button className="export-modal-close" onClick={onClose} aria-label="Close">
+          <span className="export-modal-title">{t('export.title')}</span>
+          <button className="export-modal-close" onClick={onClose} aria-label={t('panel.closePanel')}>
             <X size={16} />
           </button>
         </div>
 
         <div className="export-modal-body">
+          <button className="export-modal-card" onClick={handleMarkdownDownload}>
+            <div className="export-modal-card-icon">
+              <FileText size={22} />
+            </div>
+            <div className="export-modal-card-text">
+              <span className="export-modal-card-title">{t('export.markdownTitle')}</span>
+              <span className="export-modal-card-desc">
+                {t('export.markdownDesc', { count: events.length })}
+              </span>
+            </div>
+          </button>
+
           <button className="export-modal-card" onClick={handleJsonDownload}>
             <div className="export-modal-card-icon">
               <Download size={22} />
             </div>
             <div className="export-modal-card-text">
-              <span className="export-modal-card-title">JSON Snapshot</span>
+              <span className="export-modal-card-title">{t('export.jsonTitle')}</span>
               <span className="export-modal-card-desc">
-                Download a structured JSON file containing all {events.length} filtered
-                events with metadata.
+                {t('export.jsonDesc', { count: events.length })}
               </span>
             </div>
           </button>
@@ -63,10 +90,9 @@ const BriefingExport = ({ events = [], filters = {}, onClose }) => {
               <Printer size={22} />
             </div>
             <div className="export-modal-card-text">
-              <span className="export-modal-card-title">Print to PDF</span>
+              <span className="export-modal-card-title">{t('export.printTitle')}</span>
               <span className="export-modal-card-desc">
-                Open the browser print dialog to save as PDF. The news panel will be
-                formatted for print automatically.
+                {t('export.printDesc')}
               </span>
             </div>
           </button>

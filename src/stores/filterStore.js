@@ -70,6 +70,12 @@ const useFilterStore = create((set, get) => ({
     if (filters.minConfidence !== undefined) updates.minConfidence = filters.minConfidence;
     if (filters.dateWindow !== undefined) updates.dateWindow = filters.dateWindow;
     if (filters.sortMode !== undefined) updates.sortMode = filters.sortMode;
+    if (filters.verificationFilter !== undefined) updates.verificationFilter = filters.verificationFilter;
+    if (filters.sourceTypeFilter !== undefined) updates.sourceTypeFilter = filters.sourceTypeFilter;
+    if (filters.languageFilter !== undefined) updates.languageFilter = filters.languageFilter;
+    if (filters.accuracyMode !== undefined) updates.accuracyMode = filters.accuracyMode;
+    if (filters.precisionFilter !== undefined) updates.precisionFilter = filters.precisionFilter;
+    if (filters.hideAmplified !== undefined) updates.hideAmplified = filters.hideAmplified;
     if (mapState.mapOverlay !== undefined) updates.mapOverlay = mapState.mapOverlay;
     set(updates);
   },

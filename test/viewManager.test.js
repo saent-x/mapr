@@ -52,3 +52,41 @@ test('encodeViewToURL omits empty/default values', () => {
   const url = encodeViewToURL({ filters: { searchQuery: '', minSeverity: 0 }, mapState: {} });
   assert.equal(url, '');
 });
+
+test('createView stores all filter fields including advanced filters', () => {
+  const filters = {
+    searchQuery: 'sahel',
+    minSeverity: 50,
+    minConfidence: 30,
+    dateWindow: '24h',
+    sortMode: 'recent',
+    selectedRegion: 'ML',
+    verificationFilter: 'verified',
+    sourceTypeFilter: 'official',
+    languageFilter: 'en',
+    accuracyMode: 'strict',
+    precisionFilter: 'locality',
+    hideAmplified: true,
+  };
+  const view = createView('Full Filter View', filters, { mapMode: 'flat', mapOverlay: 'coverage' });
+  assert.equal(view.filters.verificationFilter, 'verified');
+  assert.equal(view.filters.sourceTypeFilter, 'official');
+  assert.equal(view.filters.languageFilter, 'en');
+  assert.equal(view.filters.accuracyMode, 'strict');
+  assert.equal(view.filters.precisionFilter, 'locality');
+  assert.equal(view.filters.hideAmplified, true);
+  assert.equal(view.mapState.mapOverlay, 'coverage');
+});
+
+test('saved view round-trips through serialize/deserialize with all fields', () => {
+  const view = createView('Test All', {
+    searchQuery: 'test',
+    verificationFilter: 'official',
+    hideAmplified: true,
+  }, { mapMode: 'flat' });
+  const json = serializeViews([view]);
+  const parsed = deserializeViews(json);
+  assert.equal(parsed[0].filters.verificationFilter, 'official');
+  assert.equal(parsed[0].filters.hideAmplified, true);
+  assert.equal(parsed[0].mapState.mapMode, 'flat');
+});

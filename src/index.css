@@ -2493,6 +2493,159 @@ button {
 }
 
 /* =============================
+   SAVE VIEW DIALOG
+   ============================= */
+
+.save-view-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.save-view-dialog {
+  width: 100%;
+  max-width: 340px;
+  background: #0d1117;
+  border: 1px solid #1a2030;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  animation: slideUp 0.15s ease-out;
+}
+
+.save-view-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1a2030;
+  color: var(--cyan);
+}
+
+.save-view-title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.save-view-close {
+  background: transparent;
+  border: none;
+  color: rgba(170, 170, 170, 0.5);
+  cursor: pointer;
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+}
+
+.save-view-close:hover {
+  color: #fff;
+}
+
+.save-view-form {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.save-view-label {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: rgba(170, 170, 170, 0.6);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.save-view-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #1a2030;
+  border-radius: 6px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  outline: none;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.save-view-input:focus {
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.save-view-input::placeholder {
+  color: rgba(170, 170, 170, 0.3);
+}
+
+.save-view-hint {
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  color: rgba(170, 170, 170, 0.35);
+  line-height: 1.4;
+}
+
+.save-view-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.save-view-cancel,
+.save-view-confirm {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 0.4rem 0.8rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.save-view-cancel {
+  background: transparent;
+  border: 1px solid #1a2030;
+  color: rgba(170, 170, 170, 0.6);
+}
+
+.save-view-cancel:hover {
+  border-color: rgba(170, 170, 170, 0.3);
+  color: #fff;
+}
+
+.save-view-confirm {
+  background: rgba(0, 212, 255, 0.12);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: var(--cyan);
+}
+
+.save-view-confirm:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: rgba(0, 212, 255, 0.5);
+}
+
+.save-view-confirm:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* =============================
    BRAND LIVE — LOADING STATE
    ============================= */
 

@@ -10,6 +10,7 @@ import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
 import ArcPanel from './components/ArcPanel';
 import BriefingExport from './components/BriefingExport';
+import SaveViewDialog from './components/SaveViewDialog';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
@@ -180,15 +181,24 @@ function App() {
   }, [addToast]);
 
   /* ── Saved views ── */
+  const [showSaveDialog, setShowSaveDialog] = React.useState(false);
+
   const handleSaveView = useCallback(() => {
-    const name = window.prompt('Name this view:');
-    if (!name?.trim()) return;
+    setShowSaveDialog(true);
+  }, []);
+
+  const handleConfirmSaveView = useCallback((name) => {
     useUIStore.getState().saveCurrentView(
-      name.trim(),
-      { searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion },
+      name,
+      { searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion,
+        verificationFilter, sourceTypeFilter, languageFilter, accuracyMode, precisionFilter, hideAmplified },
       { mapMode, mapOverlay },
     );
-  }, [searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay]);
+    setShowSaveDialog(false);
+    addToast(`View "${name}" saved`, 'info');
+  }, [searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion,
+    verificationFilter, sourceTypeFilter, languageFilter, accuracyMode, precisionFilter,
+    hideAmplified, mapMode, mapOverlay, addToast]);
 
   const handleSelectView = useCallback((view) => {
     useUIStore.getState().selectView(view);
@@ -356,6 +366,13 @@ function App() {
             </div>
           ))}
         </div>
+      )}
+
+      {showSaveDialog && (
+        <SaveViewDialog
+          onSave={handleConfirmSaveView}
+          onClose={() => setShowSaveDialog(false)}
+        />
       )}
 
       {showExport && (

@@ -310,6 +310,23 @@
     "amplified": "Amplified",
     "sourceCount": "{{count}} sources"
   },
+  "savedViews": {
+    "saveDialogTitle": "Save View",
+    "nameLabel": "View name",
+    "namePlaceholder": "e.g. Sahel Watch, Critical Only…",
+    "hint": "Saves current filter and map settings. Views persist across sessions.",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "export": {
+    "title": "Export Briefing",
+    "markdownTitle": "Markdown Report",
+    "markdownDesc": "Download a formatted markdown file with all {{count}} events, severity breakdown, and region statistics.",
+    "jsonTitle": "JSON Snapshot",
+    "jsonDesc": "Download a structured JSON file containing all {{count}} filtered events with metadata.",
+    "printTitle": "Print to PDF",
+    "printDesc": "Open the browser print dialog to save as PDF."
+  },
   "sourceType": {
     "official": "official",
     "wire": "wire",
