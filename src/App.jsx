@@ -305,7 +305,8 @@ function App() {
         onRegionSelect={handleRegionSelect} />
 
       <EventTimeline events={activeNews} snapshotHistory={snapshotHistory}
-        scrubTime={scrubTime} onScrub={useUIStore.getState().setScrubTime} />
+        scrubTime={scrubTime} onScrub={useUIStore.getState().setScrubTime}
+        onEventSelect={handleStorySelect} selectedStoryId={selectedStoryId} />
 
       <div className={`intel-ticker ${panelOpen ? 'is-shifted' : ''}`}>
         <span className="intel-ticker-label">INTEL</span>

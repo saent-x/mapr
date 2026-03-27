@@ -1,84 +1,62 @@
-import React, { useMemo, useRef, useCallback, useEffect } from 'react';
+import React, { useMemo, useRef, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import useNewsStore from '../stores/newsStore';
+import {
+  buildBuckets,
+  pickTimelineEvents,
+  timestampToFraction,
+  fractionToTimestamp,
+  getLifecycleColor,
+  getPredominantColor,
+  generateDayTicks,
+  LIFECYCLE_COLORS,
+  BUCKET_COUNT,
+} from '../utils/timelineHelpers.js';
 
-const BUCKET_COUNT = 50;
-const WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_VISIBLE_EVENTS = 20;
 
-const LIFECYCLE_COLORS = {
-  emerging: '#00d4ff',
-  developing: '#00e5a0',
-  escalating: '#ff5555',
-  stabilizing: '#ffaa00',
-  resolved: '#666666',
-};
+/**
+ * Try to find the matching activeNews story for a backend event.
+ * Matches on title prefix overlap (first 40 chars) + same country.
+ */
+function findMatchingStory(backendEvent, activeNews) {
+  if (!backendEvent || !activeNews) return null;
+  const titlePrefix = (backendEvent.title || '').toLowerCase().slice(0, 40);
+  const country = backendEvent.primaryCountry;
 
-const LIFECYCLE_PRIORITY = ['escalating', 'developing', 'emerging', 'stabilizing', 'resolved'];
+  // Exact title match first
+  let match = activeNews.find(
+    (s) => (s.title || '').toLowerCase().slice(0, 40) === titlePrefix
+  );
+  if (match) return match;
 
-function getPredominantColor(lifecycleCounts) {
-  for (const lc of LIFECYCLE_PRIORITY) {
-    if (lifecycleCounts[lc] > 0) return LIFECYCLE_COLORS[lc];
-  }
-  return '#334155';
-}
-
-function buildBuckets(events, snapshotHistory) {
-  const now = Date.now();
-  const windowStart = now - WINDOW_MS;
-  const bucketSize = WINDOW_MS / BUCKET_COUNT;
-
-  // buckets[i] = { count: number, lifecycleCounts: { [lifecycle]: number } }
-  const buckets = Array.from({ length: BUCKET_COUNT }, () => ({
-    count: 0,
-    lifecycleCounts: {},
-  }));
-
-  function addToBucket(ts, lifecycle) {
-    if (!ts || ts < windowStart || ts > now) return;
-    const idx = Math.min(
-      Math.floor((ts - windowStart) / bucketSize),
-      BUCKET_COUNT - 1
+  // Country + partial title overlap
+  if (country) {
+    match = activeNews.find(
+      (s) => s.isoA2 === country && (s.title || '').toLowerCase().includes(titlePrefix.slice(0, 20))
     );
-    buckets[idx].count += 1;
-    const lc = lifecycle || 'unknown';
-    buckets[idx].lifecycleCounts[lc] = (buckets[idx].lifecycleCounts[lc] || 0) + 1;
   }
-
-  if (snapshotHistory && snapshotHistory.length > 0) {
-    // Use snapshot history to fill historical buckets
-    for (const snapshot of snapshotHistory) {
-      const savedAt = snapshot.savedAt ? new Date(snapshot.savedAt).getTime() : null;
-      if (!savedAt) continue;
-      const snapshotEvents = snapshot.events || [];
-      for (const ev of snapshotEvents) {
-        addToBucket(savedAt, ev.lifecycle);
-      }
-    }
-  }
-
-  // Always layer in current events by firstSeenAt (fills recent buckets and
-  // any gap when snapshotHistory is empty)
-  for (const ev of (events || [])) {
-    const ts = ev.firstSeenAt ? new Date(ev.firstSeenAt).getTime() : null;
-    addToBucket(ts, ev.lifecycle);
-  }
-
-  return buckets;
+  return match || null;
 }
 
-function timestampToX(ts, now, containerWidth) {
-  const windowStart = now - WINDOW_MS;
-  return Math.max(0, Math.min(containerWidth, ((ts - windowStart) / WINDOW_MS) * containerWidth));
-}
-
-function xToTimestamp(x, containerWidth) {
-  const now = Date.now();
-  const windowStart = now - WINDOW_MS;
-  return windowStart + (x / containerWidth) * WINDOW_MS;
-}
-
-const EventTimeline = ({ events = [], snapshotHistory = [], onScrub, scrubTime }) => {
+const EventTimeline = ({
+  events = [],
+  snapshotHistory = [],
+  onScrub,
+  scrubTime,
+  onEventSelect,
+  selectedStoryId,
+}) => {
+  const { t } = useTranslation();
   const containerRef = useRef(null);
   const isDragging = useRef(false);
+  const [hoveredEvent, setHoveredEvent] = useState(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
+  // Get backend events (with lifecycle data) from the store
+  const backendEvents = useNewsStore((s) => s.backendEvents);
+
+  // Build histogram buckets
   const buckets = useMemo(
     () => buildBuckets(events, snapshotHistory),
     [events, snapshotHistory]
@@ -91,23 +69,31 @@ const EventTimeline = ({ events = [], snapshotHistory = [], onScrub, scrubTime }
 
   const hasAnyData = buckets.some((b) => b.count > 0);
 
-  const getPlayheadX = useCallback(() => {
-    if (!containerRef.current) return null;
-    const width = containerRef.current.offsetWidth;
-    if (scrubTime == null) return width; // "now" = right edge
-    const now = Date.now();
-    return timestampToX(scrubTime, now, width);
-  }, [scrubTime]);
+  // Pick top events for individual markers (using backendEvents for lifecycle)
+  const timelineEvents = useMemo(() => {
+    const picked = pickTimelineEvents(backendEvents, MAX_VISIBLE_EVENTS);
+    return picked.map((ev) => ({
+      ...ev,
+      fraction: timestampToFraction(new Date(ev.firstSeenAt).getTime()),
+    }));
+  }, [backendEvents]);
 
+  // Generate day ticks
+  const dayTicks = useMemo(() => generateDayTicks(), []);
+
+  // Scrub handlers
   const handlePointerEvent = useCallback((e) => {
     if (!containerRef.current || !onScrub) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const ts = xToTimestamp(x, rect.width);
+    const fraction = x / rect.width;
+    const ts = fractionToTimestamp(fraction);
     onScrub(ts);
   }, [onScrub]);
 
   const handlePointerDown = useCallback((e) => {
+    // Don't start scrubbing if clicking on an event dot
+    if (e.target.closest('.event-timeline-dot')) return;
     isDragging.current = true;
     containerRef.current?.setPointerCapture(e.pointerId);
     handlePointerEvent(e);
@@ -124,12 +110,57 @@ const EventTimeline = ({ events = [], snapshotHistory = [], onScrub, scrubTime }
     containerRef.current?.releasePointerCapture(e.pointerId);
   }, []);
 
-  // Compute playhead X for rendering
-  const playheadX = getPlayheadX();
+  // Event click handler
+  const handleEventClick = useCallback((ev, e) => {
+    e.stopPropagation();
+    if (!onEventSelect) return;
+
+    // Try to find matching story in activeNews for proper selection
+    const matchingStory = findMatchingStory(ev, events);
+    if (matchingStory) {
+      onEventSelect(matchingStory);
+    } else {
+      // Fallback: construct minimal story-like object for selection
+      onEventSelect({
+        id: ev.id,
+        isoA2: ev.primaryCountry,
+        title: ev.title,
+        severity: ev.severity,
+        coordinates: ev.coordinates,
+      });
+    }
+  }, [onEventSelect, events]);
+
+  // Tooltip handlers
+  const handleEventMouseEnter = useCallback((ev, e) => {
+    const rect = e.target.getBoundingClientRect();
+    setHoveredEvent(ev);
+    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
+  }, []);
+
+  const handleEventMouseLeave = useCallback(() => {
+    setHoveredEvent(null);
+  }, []);
+
+  // Compute playhead position
+  const playheadFraction = useMemo(() => {
+    if (scrubTime == null) return 1; // "now" = right edge
+    return timestampToFraction(scrubTime);
+  }, [scrubTime]);
+
+  // Lifecycle legend data
+  const activeCycles = useMemo(() => {
+    const seen = new Set(backendEvents.map((e) => e.lifecycle).filter(Boolean));
+    return ['emerging', 'developing', 'escalating', 'stabilizing', 'resolved'].filter(
+      (lc) => seen.has(lc)
+    );
+  }, [backendEvents]);
 
   return (
-    <div className="event-timeline">
-      <span className="event-timeline-label event-timeline-label--left">7d ago</span>
+    <div className="event-timeline" role="region" aria-label={t('timeline.label', 'Event timeline')}>
+      <span className="event-timeline-label event-timeline-label--left">
+        {t('timeline.past', '7d ago')}
+      </span>
 
       <div
         ref={containerRef}
@@ -139,6 +170,7 @@ const EventTimeline = ({ events = [], snapshotHistory = [], onScrub, scrubTime }
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
+        {/* Histogram bars */}
         {hasAnyData ? (
           <div className="event-timeline-bars">
             {buckets.map((bucket, i) => {
@@ -153,7 +185,7 @@ const EventTimeline = ({ events = [], snapshotHistory = [], onScrub, scrubTime }
                   style={{
                     height: `${heightPct * 100}%`,
                     background: color,
-                    opacity: bucket.count > 0 ? 0.85 : 0,
+                    opacity: bucket.count > 0 ? 0.45 : 0,
                   }}
                 />
               );
@@ -163,16 +195,91 @@ const EventTimeline = ({ events = [], snapshotHistory = [], onScrub, scrubTime }
           <div className="event-timeline-empty" />
         )}
 
-        {/* Playhead */}
-        {playheadX !== null && (
+        {/* Day tick marks */}
+        {dayTicks.map((tick, i) => (
           <div
-            className="event-timeline-playhead"
-            style={{ left: `${playheadX}px` }}
-          />
-        )}
+            key={`tick-${i}`}
+            className="event-timeline-tick"
+            style={{ left: `${tick.fraction * 100}%` }}
+          >
+            <span className="event-timeline-tick-label">{tick.label}</span>
+          </div>
+        ))}
+
+        {/* Individual event dots */}
+        <div className="event-timeline-events">
+          {timelineEvents.map((ev) => {
+            const isSelected = selectedStoryId && findMatchingStory(ev, events)?.id === selectedStoryId;
+            return (
+              <button
+                key={ev.id}
+                type="button"
+                className={`event-timeline-dot${isSelected ? ' is-selected' : ''}`}
+                style={{
+                  left: `${ev.fraction * 100}%`,
+                  '--dot-color': getLifecycleColor(ev.lifecycle),
+                }}
+                onClick={(e) => handleEventClick(ev, e)}
+                onMouseEnter={(e) => handleEventMouseEnter(ev, e)}
+                onMouseLeave={handleEventMouseLeave}
+                aria-label={`${ev.title} - ${ev.lifecycle}`}
+              />
+            );
+          })}
+        </div>
+
+        {/* Playhead */}
+        <div
+          className="event-timeline-playhead"
+          style={{ left: `${playheadFraction * 100}%` }}
+        />
       </div>
 
-      <span className="event-timeline-label event-timeline-label--right">now</span>
+      <span className="event-timeline-label event-timeline-label--right">
+        {t('timeline.now', 'now')}
+      </span>
+
+      {/* Lifecycle legend */}
+      {activeCycles.length > 0 && (
+        <div className="event-timeline-legend">
+          {activeCycles.map((lc) => (
+            <span key={lc} className="event-timeline-legend-item">
+              <span
+                className="event-timeline-legend-dot"
+                style={{ background: LIFECYCLE_COLORS[lc] }}
+              />
+              {t(`timeline.lifecycle.${lc}`, lc)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Tooltip */}
+      {hoveredEvent && (
+        <div
+          className="event-timeline-tooltip"
+          style={{
+            left: `${tooltipPos.x}px`,
+            top: `${tooltipPos.y}px`,
+          }}
+        >
+          <span
+            className="event-timeline-tooltip-lifecycle"
+            style={{ color: getLifecycleColor(hoveredEvent.lifecycle) }}
+          >
+            {hoveredEvent.lifecycle}
+          </span>
+          <span className="event-timeline-tooltip-title">
+            {(hoveredEvent.title || '').slice(0, 60)}
+            {(hoveredEvent.title || '').length > 60 ? '…' : ''}
+          </span>
+          <span className="event-timeline-tooltip-time">
+            {new Date(hoveredEvent.firstSeenAt).toLocaleString(undefined, {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            })}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

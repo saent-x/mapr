@@ -292,6 +292,18 @@
       "detail": "{{count}} covered regions have no recent mapped updates."
     }
   },
+  "timeline": {
+    "label": "Event timeline",
+    "past": "7d ago",
+    "now": "now",
+    "lifecycle": {
+      "emerging": "Emerging",
+      "developing": "Developing",
+      "escalating": "Escalating",
+      "stabilizing": "Stabilizing",
+      "resolved": "Resolved"
+    }
+  },
   "credibility": {
     "corroborated": "Corroborated",
     "singleSource": "Single source",
