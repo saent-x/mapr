@@ -250,6 +250,12 @@
       "detail": "{{count}} 个已覆盖区域缺少近期地图更新。"
     }
   },
+  "credibility": {
+    "corroborated": "已核实",
+    "singleSource": "单一来源",
+    "amplified": "疑似放大",
+    "sourceCount": "{{count}} 个来源"
+  },
   "sourceType": {
     "official": "官方",
     "wire": "通讯社",

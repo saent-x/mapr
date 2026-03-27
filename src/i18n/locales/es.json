@@ -250,6 +250,12 @@
       "detail": "{{count}} regiones cubiertas no tienen actualizaciones recientes mapeadas."
     }
   },
+  "credibility": {
+    "corroborated": "Corroborado",
+    "singleSource": "Fuente única",
+    "amplified": "Amplificado",
+    "sourceCount": "{{count}} fuentes"
+  },
   "sourceType": {
     "official": "oficiales",
     "wire": "agencias",

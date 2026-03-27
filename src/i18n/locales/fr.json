@@ -250,6 +250,12 @@
       "detail": "{{count}} regions couvertes n'ont plus de mises a jour cartographiees recentes."
     }
   },
+  "credibility": {
+    "corroborated": "Corroboré",
+    "singleSource": "Source unique",
+    "amplified": "Amplifié",
+    "sourceCount": "{{count}} sources"
+  },
   "sourceType": {
     "official": "officielles",
     "wire": "agences",

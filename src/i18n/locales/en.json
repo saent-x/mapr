@@ -292,6 +292,12 @@
       "detail": "{{count}} covered regions have no recent mapped updates."
     }
   },
+  "credibility": {
+    "corroborated": "Corroborated",
+    "singleSource": "Single source",
+    "amplified": "Amplified",
+    "sourceCount": "{{count}} sources"
+  },
   "sourceType": {
     "official": "official",
     "wire": "wire",

@@ -250,6 +250,12 @@
       "detail": "هناك {{count}} مناطق مغطاة بلا تحديثات مرسومة حديثة."
     }
   },
+  "credibility": {
+    "corroborated": "مؤكد",
+    "singleSource": "مصدر واحد",
+    "amplified": "مضخم",
+    "sourceCount": "{{count}} مصادر"
+  },
   "sourceType": {
     "official": "رسمية",
     "wire": "وكالات",

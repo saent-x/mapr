@@ -3181,6 +3181,48 @@ button {
   cursor: help;
 }
 
+/* ── Source credibility badge ─────────────────────────────────── */
+.credibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 1px 5px;
+  border: 1px solid;
+  border-radius: 2px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.credibility-badge svg {
+  flex-shrink: 0;
+}
+
+.credibility-label {
+  line-height: 1;
+}
+
+.credibility-count {
+  font-weight: 600;
+  opacity: 0.8;
+  margin-left: 1px;
+}
+
+.credibility-corroborated {
+  background: rgba(0, 229, 160, 0.08);
+}
+
+.credibility-single-source {
+  background: rgba(255, 170, 0, 0.06);
+}
+
+.credibility-amplified {
+  background: rgba(255, 85, 85, 0.08);
+}
+
 .velocity-badge {
   font-size: 0.5rem;
   font-family: 'JetBrains Mono', monospace;

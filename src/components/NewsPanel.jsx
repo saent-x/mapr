@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ExternalLink, ChevronUp } from 'lucide-react';
+import { X, ExternalLink, ChevronUp, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { enUS, es, fr, ar, zhCN } from 'date-fns/locale';
 import { getSeverityMeta } from '../utils/mockData';
@@ -29,6 +29,42 @@ function LifecycleBadge({ lifecycle }) {
       style={{ color: LIFECYCLE_COLORS[lifecycle] || '#666', borderColor: LIFECYCLE_COLORS[lifecycle] || '#666' }}
     >
       {lifecycle}
+    </span>
+  );
+}
+
+const CREDIBILITY_CONFIG = {
+  corroborated: { icon: ShieldCheck, accent: '#00e5a0', labelKey: 'credibility.corroborated' },
+  'single-source': { icon: ShieldAlert, accent: '#ffaa00', labelKey: 'credibility.singleSource' },
+  amplified: { icon: AlertTriangle, accent: '#ff5555', labelKey: 'credibility.amplified' }
+};
+
+function getCredibilityLevel(story) {
+  if (story.amplification?.isAmplified) return 'amplified';
+  if ((story.independentSourceCount || 0) >= 2) return 'corroborated';
+  return 'single-source';
+}
+
+function CredibilityBadge({ story, t }) {
+  const level = getCredibilityLevel(story);
+  const config = CREDIBILITY_CONFIG[level];
+  const Icon = config.icon;
+  const articleCount = story.articleCount || 1;
+  const sourceLabel = articleCount > 1
+    ? t('credibility.sourceCount', { count: articleCount })
+    : '';
+
+  return (
+    <span
+      className={`credibility-badge credibility-${level}`}
+      style={{ color: config.accent, borderColor: config.accent }}
+      title={sourceLabel || t(config.labelKey)}
+    >
+      <Icon size={10} />
+      <span className="credibility-label">{t(config.labelKey)}</span>
+      {articleCount > 1 && (
+        <span className="credibility-count">{articleCount}</span>
+      )}
     </span>
   );
 }
@@ -374,12 +410,8 @@ const NewsPanel = ({
                     )}
                   </span>
                   <span className="arc-panel-story-badges">
+                    <CredibilityBadge story={story} t={t} />
                     <LifecycleBadge lifecycle={story.lifecycle} />
-                    {story.amplification?.isAmplified && (
-                      <span className="amplification-badge" title={story.amplification.reason}>
-                        ⚠ amplified
-                      </span>
-                    )}
                     {velocitySpikes?.some((s) => s.iso === story.isoA2) && (
                       <span className="velocity-badge">SPIKE</span>
                     )}
