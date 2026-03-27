@@ -144,6 +144,31 @@ test('source catalog covers Oceania Pacific island nations', () => {
   assert(pacificFeeds.length >= 2, `Expected 2+ Pacific island feeds, got ${pacificFeeds.length}`);
 });
 
+test('source catalog has 5+ enabled HTML sources (VAL-DATA-006)', () => {
+  const catalog = getDefaultSourceCatalog();
+  const htmlSources = catalog.filter((e) => e.fetchMode === 'html' && e.enabled);
+  assert(htmlSources.length >= 5, `Expected 5+ enabled HTML sources, got ${htmlSources.length}`);
+
+  // Verify HTML sources have required fields
+  for (const source of htmlSources.slice(0, 10)) {
+    assert(source.id, `HTML source missing id: ${source.name}`);
+    assert(source.name, `HTML source missing name: ${source.id}`);
+    assert(source.url, `HTML source missing url: ${source.id}`);
+    assert.equal(source.fetchMode, 'html');
+    assert.equal(source.enabled, true);
+  }
+});
+
+test('source catalog includes HTML sources from underrepresented regions', () => {
+  const catalog = getDefaultSourceCatalog();
+  const htmlSources = catalog.filter((e) => e.fetchMode === 'html' && e.enabled);
+
+  // Check for specific underrepresented regions with HTML sources
+  const targetISOs = new Set(['MM', 'KH', 'TJ', 'CM', 'SN', 'MZ', 'HT', 'PG']);
+  const underrepResources = htmlSources.filter((e) => targetISOs.has(e.isoA2));
+  assert(underrepResources.length >= 5, `Expected 5+ HTML sources from underrepresented regions (MM, KH, TJ, CM, SN, MZ, HT, PG), got ${underrepResources.length}`);
+});
+
 test('source catalog covers Eastern European countries', () => {
   const catalog = getDefaultSourceCatalog();
   const eeISOs = new Set(['BY', 'MD', 'MK', 'XK', 'LV', 'LT', 'EE']);

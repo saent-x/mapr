@@ -963,5 +963,85 @@
     "language": "en",
     "priority": "medium",
     "notes": "Site still surfaced recently, but corporate/publication status needs re-check before onboarding."
+  },
+  {
+    "country": "Myanmar",
+    "isoA2": "MM",
+    "source": "The Irrawaddy",
+    "website": "https://www.irrawaddy.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Leading independent English-language Myanmar news outlet covering politics, conflict, and society."
+  },
+  {
+    "country": "Cambodia",
+    "isoA2": "KH",
+    "source": "Khmer Times",
+    "website": "https://www.khmertimeskh.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Major English-language Cambodian newspaper with domestic and regional coverage."
+  },
+  {
+    "country": "Tajikistan",
+    "isoA2": "TJ",
+    "source": "Asia-Plus",
+    "website": "https://asiaplustj.info/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Major independent Central Asian news outlet with English coverage of Tajikistan and the region."
+  },
+  {
+    "country": "Cameroon",
+    "isoA2": "CM",
+    "source": "Journal du Cameroun",
+    "website": "https://www.journalducameroun.com/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Cameroonian digital news outlet with national coverage."
+  },
+  {
+    "country": "Senegal",
+    "isoA2": "SN",
+    "source": "Dakaractu",
+    "website": "https://www.dakaractu.com/",
+    "mode": "html",
+    "language": "fr",
+    "priority": "high",
+    "notes": "Major Senegalese digital news platform with broad national reporting."
+  },
+  {
+    "country": "Mozambique",
+    "isoA2": "MZ",
+    "source": "Club of Mozambique",
+    "website": "https://clubofmozambique.com/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Mozambique-focused news outlet covering national politics and economy."
+  },
+  {
+    "country": "Haiti",
+    "isoA2": "HT",
+    "source": "Haiti Libre",
+    "website": "https://www.haitilibre.com/en/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "English-language Haitian news outlet with comprehensive national coverage."
+  },
+  {
+    "country": "Papua New Guinea",
+    "isoA2": "PG",
+    "source": "The National PNG",
+    "website": "https://www.thenational.com.pg/",
+    "mode": "html",
+    "language": "en",
+    "priority": "high",
+    "notes": "Major Papua New Guinea daily newspaper with national and Pacific Islands coverage."
   }
 ]
