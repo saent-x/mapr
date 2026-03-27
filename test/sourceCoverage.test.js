@@ -6,12 +6,12 @@ test('buildSourceCoverageAudit highlights countries with no or thin local feeds'
   const audit = buildSourceCoverageAudit({
     byIso: {
       NG: { status: 'developing', eventCount: 3 },
-      OM: { status: 'uncovered', eventCount: 0 }
+      YE: { status: 'uncovered', eventCount: 0 }
     }
   });
 
   assert(audit.stats.countriesWithoutLocalFeeds > 0);
-  assert(audit.expansionTargets.some((entry) => entry.iso === 'OM'));
+  assert(audit.expansionTargets.some((entry) => entry.iso === 'YE'));
   assert(audit.byIso.NG.localFeedCount >= 1);
 });
 

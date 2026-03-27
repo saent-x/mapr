@@ -149,6 +149,31 @@ export const RSS_FEEDS = [
   { name: 'Addis Standard', url: 'https://addisstandard.com/feed/', id: 'addisstandard-et', country: 'Ethiopia' },
   { name: 'The Citizen Tanzania', url: 'https://www.thecitizen.co.tz/tanzania/rss.xml', id: 'citizen-tz', country: 'Tanzania' },
   { name: 'Daily Monitor Uganda', url: 'https://www.monitor.co.ug/uganda/rss.xml', id: 'monitor-ug', country: 'Uganda' },
+  // East Africa — underrepresented countries
+  { name: 'AllAfrica Eritrea', url: 'https://allafrica.com/tools/headlines/rdf/eritrea/headlines.rdf', id: 'aa-er', country: 'Eritrea' },
+  { name: 'AllAfrica Djibouti', url: 'https://allafrica.com/tools/headlines/rdf/djibouti/headlines.rdf', id: 'aa-dj', country: 'Djibouti' },
+  { name: 'AllAfrica Comoros', url: 'https://allafrica.com/tools/headlines/rdf/comoros/headlines.rdf', id: 'aa-km', country: 'Comoros' },
+  { name: 'AllAfrica Mauritius', url: 'https://allafrica.com/tools/headlines/rdf/mauritius/headlines.rdf', id: 'aa-mu', country: 'Mauritius' },
+  { name: 'AllAfrica Seychelles', url: 'https://allafrica.com/tools/headlines/rdf/seychelles/headlines.rdf', id: 'aa-sc', country: 'Seychelles' },
+  { name: 'Seychelles News Agency', url: 'http://www.seychellesnewsagency.com/rss', id: 'sna-sc', country: 'Seychelles' },
+  { name: 'Defimedia Mauritius', url: 'http://www.defimedia.info/?format=feed&type=rss', id: 'defimedia-mu', country: 'Mauritius' },
+  // West Africa — underrepresented countries
+  { name: 'AllAfrica Togo', url: 'https://allafrica.com/tools/headlines/rdf/togo/headlines.rdf', id: 'aa-tg', country: 'Togo' },
+  { name: 'AllAfrica Sierra Leone', url: 'https://allafrica.com/tools/headlines/rdf/sierraleone/headlines.rdf', id: 'aa-sl', country: 'Sierra Leone' },
+  { name: 'AllAfrica Liberia', url: 'https://allafrica.com/tools/headlines/rdf/liberia/headlines.rdf', id: 'aa-lr', country: 'Liberia' },
+  { name: 'AllAfrica Guinea-Bissau', url: 'https://allafrica.com/tools/headlines/rdf/guinea-bissau/headlines.rdf', id: 'aa-gw', country: 'Guinea-Bissau' },
+  { name: 'AllAfrica Gambia', url: 'https://allafrica.com/tools/headlines/rdf/gambia/headlines.rdf', id: 'aa-gm', country: 'Gambia' },
+  { name: 'AllAfrica Cabo Verde', url: 'https://allafrica.com/tools/headlines/rdf/capeverde/headlines.rdf', id: 'aa-cv', country: 'Cabo Verde' },
+  { name: 'AllAfrica Mauritania', url: 'https://allafrica.com/tools/headlines/rdf/mauritania/headlines.rdf', id: 'aa-mr', country: 'Mauritania' },
+  { name: 'Sierra Leone Telegraph', url: 'https://www.thesierraleonetelegraph.com/feed/', id: 'sltelegraph-sl', country: 'Sierra Leone' },
+  { name: 'FrontPageAfrica', url: 'https://frontpageafricaonline.com/feed/', id: 'fpa-lr', country: 'Liberia' },
+  { name: 'The Point Gambia', url: 'https://thepoint.gm/feed', id: 'thepoint-gm', country: 'Gambia' },
+  // Central Africa — underrepresented countries
+  { name: 'AllAfrica Central African Republic', url: 'https://allafrica.com/tools/headlines/rdf/centralafricanrepublic/headlines.rdf', id: 'aa-cf', country: 'Central African Republic' },
+  { name: 'AllAfrica Congo-Brazzaville', url: 'https://allafrica.com/tools/headlines/rdf/congo-brazzaville/headlines.rdf', id: 'aa-cg', country: 'Congo-Brazzaville' },
+  { name: 'AllAfrica Equatorial Guinea', url: 'https://allafrica.com/tools/headlines/rdf/equatorialguinea/headlines.rdf', id: 'aa-gq', country: 'Equatorial Guinea' },
+  { name: 'AllAfrica Gabon', url: 'https://allafrica.com/tools/headlines/rdf/gabon/headlines.rdf', id: 'aa-ga', country: 'Gabon' },
+  { name: 'AllAfrica Sao Tome and Principe', url: 'https://allafrica.com/tools/headlines/rdf/saotomeandprincipe/headlines.rdf', id: 'aa-st', country: 'Sao Tome and Principe' },
 
   // ═══════════════════════════════════════════
   // ─── MIDDLE EAST ───────────────────────────
@@ -166,6 +191,16 @@ export const RSS_FEEDS = [
   { name: 'Jerusalem Post', url: 'https://www.jpost.com/rss/rssfeedsfrontpage.aspx', id: 'jpost-il', country: 'Israel' },
   { name: 'Gulf Times Qatar', url: 'https://www.gulf-times.com/rss', id: 'gulftimes-qa', country: 'Qatar' },
   { name: 'Arab Times Kuwait', url: 'https://www.arabtimesonline.com/feed/', id: 'arabtimes-kw', country: 'Kuwait' },
+  // MENA — underrepresented countries and additional Libya outlets
+  { name: 'Times of Oman', url: 'https://timesofoman.com/feed/oman', id: 'timesofoman-om', country: 'Oman' },
+  { name: 'Oman Observer', url: 'https://www.omanobserver.om/rss', id: 'omanobserver-om', country: 'Oman' },
+  { name: 'Muscat Daily', url: 'https://www.muscatdaily.com/feed/', id: 'muscatdaily-om', country: 'Oman' },
+  { name: 'Daily Tribune Bahrain', url: 'https://dt.bh/feed/', id: 'dailytribune-bh', country: 'Bahrain' },
+  { name: 'News of Bahrain', url: 'https://www.newsofbahrain.com/rss/all.xml', id: 'newsofbahrain-bh', country: 'Bahrain' },
+  { name: 'Bahrain News Agency', url: 'https://www.bna.bh/en/rss', id: 'bna-bh', country: 'Bahrain' },
+  { name: 'Libya Herald', url: 'https://libyaherald.com/feed/', id: 'libyaherald-ly', country: 'Libya' },
+  { name: 'Libya Observer', url: 'https://libyaobserver.ly/feed', id: 'libyaobserver-ly', country: 'Libya' },
+  { name: 'Libyan Express', url: 'https://www.libyanexpress.com/feed/', id: 'libyanexpress-ly', country: 'Libya' },
 
   // ═══════════════════════════════════════════
   // ─── ASIA ──────────────────────────────────
