@@ -27,10 +27,12 @@ Environment variables, external dependencies, and setup notes.
 
 ## Database
 
-- **Neon PostgreSQL** (remote only, no local DB)
+- **Local PostgreSQL** via Docker container `mapr-postgres` on port 5432
+- DATABASE_URL=postgresql://mapr:mapr@localhost:5432/mapr
 - Tables: metadata, refresh_history, coverage_history, articles, events, event_articles, source_credibility, velocity_history
-- Connection uses SSL with `rejectUnauthorized: false`
+- Connection auto-detects local vs remote: skips SSL for localhost, uses SSL for remote hosts
 - Schema auto-created on first connect via `ensureSchema()`
+- To start if stopped: `docker start mapr-postgres`
 
 ## Node.js
 

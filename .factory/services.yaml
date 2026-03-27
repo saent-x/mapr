@@ -7,12 +7,19 @@ commands:
   dev: node scripts/dev.js
 
 services:
+  postgres:
+    start: docker start mapr-postgres || docker run -d --name mapr-postgres -p 5432:5432 -e POSTGRES_USER=mapr -e POSTGRES_PASSWORD=mapr -e POSTGRES_DB=mapr -v mapr-pgdata:/var/lib/postgresql/data postgres:17-alpine
+    stop: docker stop mapr-postgres
+    healthcheck: docker exec mapr-postgres pg_isready -U mapr
+    port: 5432
+    depends_on: []
+
   backend:
     start: node server/index.js
     stop: lsof -ti :3030 | xargs kill -9 2>/dev/null || true
     healthcheck: curl -sf http://localhost:3030/api/health
     port: 3030
-    depends_on: []
+    depends_on: [postgres]
 
   frontend:
     start: npx vite --port 5173
