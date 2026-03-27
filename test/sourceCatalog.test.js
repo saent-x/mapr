@@ -79,3 +79,76 @@ test('getDefaultSourceCatalog includes bundled candidate sources', () => {
   assert.equal(candidate.candidate, true);
   assert.equal(candidate.cadenceMinutes, 240);
 });
+
+test('source catalog contains 200+ total sources (VAL-DATA-001)', () => {
+  const catalog = getDefaultSourceCatalog();
+  assert(catalog.length >= 200, `Expected 200+ sources, got ${catalog.length}`);
+  const enabled = catalog.filter((e) => e.enabled);
+  assert(enabled.length >= 180, `Expected 180+ enabled sources, got ${enabled.length}`);
+});
+
+test('source catalog has 25+ feeds covering Asian countries including Central Asia (VAL-DATA-003)', () => {
+  const catalog = getDefaultSourceCatalog();
+  const asianISOs = new Set(['AF','BD','BN','BT','KH','CN','IN','ID','JP','KZ','KG','LA','MY','MV','MN','MM','NP','KP','PK','PH','SG','KR','LK','TW','TJ','TH','TL','TM','UZ','VN']);
+  const asianFeeds = catalog.filter((e) => {
+    if (asianISOs.has(e.isoA2)) return true;
+    if (e.coverageIsoA2s?.some((iso) => asianISOs.has(iso))) return true;
+    return false;
+  });
+  assert(asianFeeds.length >= 25, `Expected 25+ Asian feeds, got ${asianFeeds.length}`);
+
+  // Verify Central Asia coverage
+  const centralAsiaISOs = new Set(['UZ', 'TM', 'TJ', 'KG', 'MN']);
+  const centralAsiaFeeds = asianFeeds.filter((e) =>
+    centralAsiaISOs.has(e.isoA2) || e.coverageIsoA2s?.some((iso) => centralAsiaISOs.has(iso))
+  );
+  assert(centralAsiaFeeds.length >= 3, `Expected 3+ Central Asia feeds, got ${centralAsiaFeeds.length}`);
+});
+
+test('source catalog has 15+ feeds covering Americas beyond existing major countries (VAL-DATA-004)', () => {
+  const catalog = getDefaultSourceCatalog();
+  const americasISOs = new Set(['AR','BS','BB','BZ','BO','BR','CA','CL','CO','CR','CU','DO','EC','SV','GT','GY','HT','HN','JM','MX','NI','PA','PY','PE','SR','TT','UY','VE']);
+  const americasFeeds = catalog.filter((e) => {
+    if (americasISOs.has(e.isoA2)) return true;
+    if (e.coverageIsoA2s?.some((iso) => americasISOs.has(iso))) return true;
+    return false;
+  });
+  assert(americasFeeds.length >= 15, `Expected 15+ Americas feeds, got ${americasFeeds.length}`);
+
+  // Verify Caribbean/Central America coverage
+  const caribbeanISOs = new Set(['TT', 'BS', 'BB', 'GY', 'SR', 'BZ']);
+  const caribbeanFeeds = americasFeeds.filter((e) =>
+    caribbeanISOs.has(e.isoA2) || e.coverageIsoA2s?.some((iso) => caribbeanISOs.has(iso))
+  );
+  assert(caribbeanFeeds.length >= 3, `Expected 3+ Caribbean feeds, got ${caribbeanFeeds.length}`);
+});
+
+test('new RSS feeds have proper metadata fields', () => {
+  const catalog = getDefaultSourceCatalog();
+  const rssFeeds = catalog.filter((e) => e.fetchMode === 'rss' && !e.candidate);
+
+  for (const feed of rssFeeds) {
+    assert(feed.id, `Feed missing id: ${feed.name}`);
+    assert(feed.name, `Feed missing name: ${feed.id}`);
+    assert(feed.url, `Feed missing url: ${feed.id}`);
+    assert(typeof feed.enabled === 'boolean', `Feed ${feed.id} enabled should be boolean`);
+  }
+});
+
+test('source catalog covers Oceania Pacific island nations', () => {
+  const catalog = getDefaultSourceCatalog();
+  const pacificISOs = new Set(['WS', 'TO', 'SB', 'VU']);
+  const pacificFeeds = catalog.filter((e) =>
+    pacificISOs.has(e.isoA2) || e.coverageIsoA2s?.some((iso) => pacificISOs.has(iso))
+  );
+  assert(pacificFeeds.length >= 2, `Expected 2+ Pacific island feeds, got ${pacificFeeds.length}`);
+});
+
+test('source catalog covers Eastern European countries', () => {
+  const catalog = getDefaultSourceCatalog();
+  const eeISOs = new Set(['BY', 'MD', 'MK', 'XK', 'LV', 'LT', 'EE']);
+  const eeFeeds = catalog.filter((e) =>
+    eeISOs.has(e.isoA2) || e.coverageIsoA2s?.some((iso) => eeISOs.has(iso))
+  );
+  assert(eeFeeds.length >= 5, `Expected 5+ Eastern Europe feeds, got ${eeFeeds.length}`);
+});

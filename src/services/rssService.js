@@ -50,10 +50,12 @@ const MENA_COVERAGE_COUNTRIES = [
 ];
 
 const ASIA_COVERAGE_COUNTRIES = [
-  'Afghanistan', 'Bangladesh', 'Cambodia', 'China', 'India', 'Indonesia',
-  'Japan', 'Kazakhstan', 'Laos', 'Malaysia', 'Mongolia', 'Myanmar',
-  'Nepal', 'North Korea', 'Pakistan', 'Philippines', 'Singapore',
-  'South Korea', 'Sri Lanka', 'Taiwan', 'Thailand', 'Uzbekistan', 'Vietnam'
+  'Afghanistan', 'Bangladesh', 'Bhutan', 'Brunei', 'Cambodia', 'China',
+  'India', 'Indonesia', 'Japan', 'Kazakhstan', 'Kyrgyzstan', 'Laos',
+  'Malaysia', 'Maldives', 'Mongolia', 'Myanmar', 'Nepal', 'North Korea',
+  'Pakistan', 'Philippines', 'Singapore', 'South Korea', 'Sri Lanka',
+  'Taiwan', 'Tajikistan', 'Thailand', 'Timor-Leste', 'Turkmenistan',
+  'Uzbekistan', 'Vietnam'
 ];
 
 
@@ -66,7 +68,9 @@ const EUROPE_COVERAGE_COUNTRIES = [
 
 const CAUCASUS_COVERAGE_COUNTRIES = ['Armenia', 'Azerbaijan', 'Georgia'];
 const BALKANS_COVERAGE_COUNTRIES = ['Albania', 'Bosnia', 'Bulgaria', 'Croatia', 'Montenegro', 'Romania', 'Serbia', 'Slovenia'];
-const PACIFIC_COVERAGE_COUNTRIES = ['Australia', 'Fiji', 'New Zealand', 'Papua New Guinea'];
+const PACIFIC_COVERAGE_COUNTRIES = ['Australia', 'Fiji', 'New Zealand', 'Papua New Guinea', 'Samoa', 'Solomon Islands', 'Tonga', 'Vanuatu'];
+const BALTICS_COVERAGE_COUNTRIES = ['Estonia', 'Latvia', 'Lithuania'];
+const EASTERN_EUROPE_COVERAGE_COUNTRIES = ['Belarus', 'Moldova', 'North Macedonia', 'Kosovo'];
 
 const DISABLED_FEED_IDS = new Set([
   // Dead or obsolete endpoints that consistently return 404/403 and distort source health.
@@ -228,6 +232,21 @@ export const RSS_FEEDS = [
   { name: 'Laotian Times', url: 'https://laotiantimes.com/feed/', id: 'laotiantimes-la', country: 'Laos' },
   { name: 'Daily Mirror Sri Lanka', url: 'https://www.dailymirror.lk/rss', id: 'dailymirror-lk', country: 'Sri Lanka' },
   { name: 'Astana Times', url: 'https://astanatimes.com/feed/', id: 'astanatimes-kz', country: 'Kazakhstan' },
+  // Central Asia — underrepresented countries
+  { name: 'Gazeta.uz', url: 'https://www.gazeta.uz/en/rss/', id: 'gazeta-uz', country: 'Uzbekistan' },
+  { name: 'Kun.uz English', url: 'https://kun.uz/en/rss', id: 'kun-uz', country: 'Uzbekistan' },
+  { name: 'Asia-Plus Tajikistan', url: 'https://asiaplustj.info/en/rss', id: 'asiaplus-tj', country: 'Tajikistan' },
+  { name: 'Chronicles of Turkmenistan', url: 'https://en.hronikatm.com/feed/', id: 'chronicles-tm', country: 'Turkmenistan' },
+  { name: '24.kg English', url: 'https://24.kg/english/rss/', id: '24kg-kg', country: 'Kyrgyzstan' },
+  { name: 'UB Post Mongolia', url: 'https://theubpost.mn/feed/', id: 'ubpost-mn', country: 'Mongolia' },
+  // South Asia — underrepresented countries
+  { name: 'The Edition Maldives', url: 'https://edition.mv/feed', id: 'edition-mv', country: 'Maldives' },
+  { name: 'Sun Online Maldives', url: 'https://en.sun.mv/feed', id: 'sun-mv', country: 'Maldives' },
+  { name: 'Kuensel Bhutan', url: 'https://kuenselonline.com/feed/', id: 'kuensel-bt', country: 'Bhutan' },
+  { name: 'The Bhutanese', url: 'https://thebhutanese.bt/feed/', id: 'thebhutanese-bt', country: 'Bhutan' },
+  // Southeast Asia — underrepresented countries
+  { name: 'Borneo Bulletin Brunei', url: 'https://borneobulletin.com.bn/feed/', id: 'borneobulletin-bn', country: 'Brunei' },
+  { name: 'Tatoli Timor-Leste', url: 'https://en.tatoli.tl/feed/', id: 'tatoli-tl', country: 'Timor-Leste' },
 
   // ═══════════════════════════════════════════
   // ─── EUROPE ────────────────────────────────
@@ -254,6 +273,18 @@ export const RSS_FEEDS = [
   { name: 'Romania Insider', url: 'https://www.romania-insider.com/feed', id: 'romaniainsider-ro', country: 'Romania' },
   { name: 'Prague Morning', url: 'https://praguemorning.cz/feed/', id: 'praguemorning-cz', country: 'Czech Republic' },
   { name: 'Daily News Hungary', url: 'https://dailynewshungary.com/feed/', id: 'dailynewshungary-hu', country: 'Hungary' },
+  // Eastern Europe — underrepresented countries
+  { name: 'Baltic Times', url: 'https://www.baltictimes.com/rss/', id: 'baltictimes', country: null, sourceType: 'regional', coverageCountries: BALTICS_COVERAGE_COUNTRIES },
+  { name: 'ERR News Estonia', url: 'https://news.err.ee/rss', id: 'err-ee', country: 'Estonia' },
+  { name: 'LRT English Lithuania', url: 'https://www.lrt.lt/en/rss', id: 'lrt-lt', country: 'Lithuania' },
+  { name: 'LSM Latvia', url: 'https://eng.lsm.lv/rss/', id: 'lsm-lv', country: 'Latvia' },
+  { name: 'Charter97 Belarus', url: 'https://charter97.org/en/rss/', id: 'charter97-by', country: 'Belarus' },
+  { name: 'Belarus in Focus', url: 'https://belarusinfocus.info/feed/', id: 'bif-by', country: 'Belarus' },
+  { name: 'Moldova.org', url: 'https://www.moldova.org/en/feed/', id: 'moldovaorg-md', country: 'Moldova' },
+  { name: 'Meta.mk North Macedonia', url: 'https://meta.mk/en/feed/', id: 'metamk-mk', country: 'North Macedonia' },
+  { name: 'MIA North Macedonia', url: 'https://mia.mk/en/feed/', id: 'mia-mk', country: 'North Macedonia' },
+  { name: 'Prishtina Insight Kosovo', url: 'https://prishtinainsight.com/feed/', id: 'pinsight-xk', country: 'Kosovo' },
+  { name: 'Kosovo Online', url: 'https://www.kosovo-online.com/en/rss.xml', id: 'kosovoonline-xk', country: 'Kosovo' },
 
   // ═══════════════════════════════════════════
   // ─── AMERICAS ──────────────────────────────
@@ -277,6 +308,27 @@ export const RSS_FEEDS = [
   { name: 'MercoPress Paraguay', url: 'https://en.mercopress.com/rss/paraguay', id: 'merco-py', country: 'Paraguay' },
   { name: 'MercoPress Bolivia', url: 'https://en.mercopress.com/rss/bolivia', id: 'merco-bo', country: 'Bolivia' },
   { name: 'MercoPress Ecuador', url: 'https://en.mercopress.com/rss/ecuador', id: 'merco-ec', country: 'Ecuador' },
+  // Caribbean — underrepresented countries
+  { name: 'Trinidad Express', url: 'https://trinidadexpress.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc', id: 'trinexpress-tt', country: 'Trinidad and Tobago' },
+  { name: 'Loop Trinidad', url: 'https://tt.loopnews.com/rss.xml', id: 'loop-tt', country: 'Trinidad and Tobago' },
+  { name: 'Tribune242 Bahamas', url: 'https://tribune242.com/feed/', id: 'tribune-bs', country: 'Bahamas' },
+  { name: 'Eyewitness News Bahamas', url: 'https://ewnews.com/feed', id: 'ewn-bs', country: 'Bahamas' },
+  { name: 'Barbados Today', url: 'https://barbadostoday.bb/feed/', id: 'barbadostoday-bb', country: 'Barbados' },
+  { name: 'Loop Barbados', url: 'https://barbados.loopnews.com/rss.xml', id: 'loop-bb', country: 'Barbados' },
+  { name: 'Stabroek News Guyana', url: 'https://www.stabroeknews.com/feed/', id: 'stabroek-gy', country: 'Guyana' },
+  { name: 'Kaieteur News Guyana', url: 'https://www.kaieteurnewsonline.com/feed/', id: 'kaieteur-gy', country: 'Guyana' },
+  { name: 'Starnieuws Suriname', url: 'https://www.starnieuws.com/rss/index.rss', id: 'starnieuws-sr', country: 'Suriname' },
+  { name: 'Breaking Belize News', url: 'https://www.breakingbelizenews.com/feed/', id: 'bbn-bz', country: 'Belize' },
+  // Central America — underrepresented countries
+  { name: 'Prensa Libre Guatemala', url: 'https://www.prensalibre.com/feed/', id: 'prensalibre-gt', country: 'Guatemala' },
+  { name: 'La Prensa Honduras', url: 'https://www.laprensa.hn/feed/', id: 'laprensa-hn', country: 'Honduras' },
+  { name: 'El Faro El Salvador', url: 'https://elfaro.net/en/feed/', id: 'elfaro-sv', country: 'El Salvador' },
+  { name: 'Confidencial Nicaragua', url: 'https://confidencial.digital/feed/', id: 'confidencial-ni', country: 'Nicaragua' },
+  // South America — additional local outlets
+  { name: 'ABC Color Paraguay', url: 'https://www.abc.com.py/rss/', id: 'abccolor-py', country: 'Paraguay' },
+  { name: 'El Observador Uruguay', url: 'https://www.elobservador.com.uy/rss/', id: 'elobservador-uy', country: 'Uruguay' },
+  { name: 'Pagina Siete Bolivia', url: 'https://www.paginasiete.bo/rss/', id: 'paginasiete-bo', country: 'Bolivia' },
+  { name: 'El Comercio Ecuador', url: 'https://www.elcomercio.com/feed/', id: 'elcomercio-ec', country: 'Ecuador' },
 
   // ═══════════════════════════════════════════
   // ─── OCEANIA / PACIFIC ─────────────────────
@@ -287,6 +339,13 @@ export const RSS_FEEDS = [
   { name: 'RNZ New Zealand', url: 'https://www.rnz.co.nz/rss/national.xml', id: 'rnz-nz', country: 'New Zealand' },
   { name: 'Loop PNG', url: 'https://www.looppng.com/rss.xml', id: 'loop-pg', country: 'Papua New Guinea' },
   { name: 'Islands Business', url: 'https://islandsbusiness.com/feed/', id: 'islands-fj', country: 'Fiji', coverageCountries: PACIFIC_COVERAGE_COUNTRIES },
+  // Pacific Islands — underrepresented countries
+  { name: 'Samoa Observer', url: 'https://www.samoaobserver.ws/feed', id: 'observer-ws', country: 'Samoa' },
+  { name: 'Talamua Samoa', url: 'https://www.talamua.com/feed/', id: 'talamua-ws', country: 'Samoa' },
+  { name: 'Matangi Tonga', url: 'https://matangitonga.to/feed', id: 'matangi-to', country: 'Tonga' },
+  { name: 'Solomon Star', url: 'https://www.solomonstarnews.com/feed/', id: 'solomonstar-sb', country: 'Solomon Islands' },
+  { name: 'Solomon Times', url: 'https://www.solomontimes.com/rss', id: 'solomontimes-sb', country: 'Solomon Islands' },
+  { name: 'Vanuatu Daily Post', url: 'https://www.dailypost.vu/feed/', id: 'dailypost-vu', country: 'Vanuatu' },
 ];
 
 // Cache + fetch lock (prevents StrictMode double-fetch)
