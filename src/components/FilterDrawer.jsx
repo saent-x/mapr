@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { DATE_WINDOWS, SORT_OPTIONS, getSeverityMeta } from '../utils/mockData';
+import useFilterStore from '../stores/filterStore';
 
 const VERIFICATION_OPTIONS = ['all', 'official', 'verified', 'developing', 'single-source'];
 const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local', 'unknown'];
@@ -27,27 +28,7 @@ const FilterDrawer = ({
   isOpen,
   defaultTab = 'filters',
   onClose,
-  dateWindow,
-  setDateWindow,
-  mapOverlay,
-  setMapOverlay,
-  verificationFilter,
-  setVerificationFilter,
-  sourceTypeFilter,
-  setSourceTypeFilter,
-  languageFilter,
-  setLanguageFilter,
-  accuracyMode,
-  setAccuracyMode,
   sourceCoverageAudit,
-  precisionFilter,
-  setPrecisionFilter,
-  minSeverity,
-  setMinSeverity,
-  minConfidence,
-  setMinConfidence,
-  sortMode,
-  setSortMode,
   coverageMetrics,
   coverageDiagnostics,
   coverageTrends,
@@ -57,11 +38,33 @@ const FilterDrawer = ({
   filteredNews = [],
   sourceHealth,
   onRegionSelect,
-  hideAmplified = false,
-  setHideAmplified
 }) => {
   const { t } = useTranslation();
   const [tab, setTab] = useState(defaultTab);
+
+  /* ── Filter state from Zustand store ── */
+  const dateWindow = useFilterStore((s) => s.dateWindow);
+  const setDateWindow = useFilterStore((s) => s.setDateWindow);
+  const mapOverlay = useFilterStore((s) => s.mapOverlay);
+  const setMapOverlay = useFilterStore((s) => s.setMapOverlay);
+  const verificationFilter = useFilterStore((s) => s.verificationFilter);
+  const setVerificationFilter = useFilterStore((s) => s.setVerificationFilter);
+  const sourceTypeFilter = useFilterStore((s) => s.sourceTypeFilter);
+  const setSourceTypeFilter = useFilterStore((s) => s.setSourceTypeFilter);
+  const languageFilter = useFilterStore((s) => s.languageFilter);
+  const setLanguageFilter = useFilterStore((s) => s.setLanguageFilter);
+  const accuracyMode = useFilterStore((s) => s.accuracyMode);
+  const setAccuracyMode = useFilterStore((s) => s.setAccuracyMode);
+  const precisionFilter = useFilterStore((s) => s.precisionFilter);
+  const setPrecisionFilter = useFilterStore((s) => s.setPrecisionFilter);
+  const minSeverity = useFilterStore((s) => s.minSeverity);
+  const setMinSeverity = useFilterStore((s) => s.setMinSeverity);
+  const minConfidence = useFilterStore((s) => s.minConfidence);
+  const setMinConfidence = useFilterStore((s) => s.setMinConfidence);
+  const sortMode = useFilterStore((s) => s.sortMode);
+  const setSortMode = useFilterStore((s) => s.setSortMode);
+  const hideAmplified = useFilterStore((s) => s.hideAmplified);
+  const setHideAmplified = useFilterStore((s) => s.setHideAmplified);
 
   // Sync tab when opened from a specific button
   React.useEffect(() => {
@@ -258,19 +261,17 @@ const FilterDrawer = ({
             <input type="range" className="severity-slider-track" min="0" max="100" step="5" value={minConfidence} onChange={(e) => setMinConfidence(Number(e.target.value))} />
           </div>
 
-          {setHideAmplified && (
-            <div className="filter-section">
-              <div className="filter-label">Signal quality</div>
-              <label className="filter-toggle amplification-toggle">
-                <input
-                  type="checkbox"
-                  checked={hideAmplified}
-                  onChange={(e) => setHideAmplified(e.target.checked)}
-                />
-                <span>Hide amplified events</span>
-              </label>
-            </div>
-          )}
+          <div className="filter-section">
+            <div className="filter-label">Signal quality</div>
+            <label className="filter-toggle amplification-toggle">
+              <input
+                type="checkbox"
+                checked={hideAmplified}
+                onChange={(e) => setHideAmplified(e.target.checked)}
+              />
+              <span>Hide amplified events</span>
+            </label>
+          </div>
         </div>
       )}
 
@@ -287,7 +288,6 @@ const FilterDrawer = ({
           : (gdeltHealthy === 0 && rssHealthy < rssTotal * 0.5) ? 'degraded' : 'operational';
         const statusColor = dataStatus === 'operational' ? 'var(--low)' : dataStatus === 'degraded' ? 'var(--elevated)' : 'var(--critical)';
 
-        // Feed health trend indicator
         const feedHealthRatio = rssTotal > 0 ? rssHealthy / rssTotal : null;
         const feedTrendIndicator = feedHealthRatio === null
           ? null
@@ -297,7 +297,6 @@ const FilterDrawer = ({
               ? { symbol: '→', color: 'var(--watch)', label: 'partial' }
               : { symbol: '↓', color: 'var(--critical)', label: 'degraded' };
 
-        // Sparse/silent regions from diagnostics
         const sparseDiagnosticCount = (coverageDiagnostics?.diagnosticCounts?.sourceSparseCountries || 0)
           + (coverageDiagnostics?.diagnosticCounts?.ingestionRiskCountries || 0);
         const sparseRegions = (coverageDiagnostics?.lowConfidenceRegions || [])
@@ -306,7 +305,6 @@ const FilterDrawer = ({
 
         return (
           <div className="filter-drawer-body">
-            {/* Data pipeline status — single compact strip */}
             <div className="filter-section">
               <div className="filter-label">DATA PIPELINE</div>
               <div className="coverage-grid">
@@ -328,7 +326,6 @@ const FilterDrawer = ({
                 </div>
               </div>
 
-              {/* Feed status strip */}
               {rssTotal > 0 && (
                 <div className="feed-status-strip">
                   <span className="feed-status-count">
@@ -347,7 +344,6 @@ const FilterDrawer = ({
               )}
             </div>
 
-            {/* Coverage overview */}
             <div className="filter-section">
               <div className="filter-label">{t('filters.coverage')}</div>
               <div className="coverage-progress">
@@ -362,7 +358,6 @@ const FilterDrawer = ({
               </div>
             </div>
 
-            {/* Sparse / silent regions note */}
             {sparseDiagnosticCount > 0 && (
               <div className="filter-section">
                 <div className="filter-label">COVERAGE GAPS</div>
@@ -387,7 +382,6 @@ const FilterDrawer = ({
               </div>
             )}
 
-            {/* Source breakdown */}
             <div className="filter-section">
               <div className="filter-label">{t('filters.sourceMix')}</div>
               <div className="coverage-mix">
@@ -401,7 +395,6 @@ const FilterDrawer = ({
               </div>
             </div>
 
-            {/* Low confidence regions — actionable */}
             {lowConfidenceRegions.length > 0 && (
               <div className="filter-section">
                 <div className="filter-label">{t('filters.lowConfidenceRegions')}</div>
@@ -415,7 +408,6 @@ const FilterDrawer = ({
               </div>
             )}
 
-            {/* Trends — actionable */}
             {hasTrendData && (
               <div className="filter-section">
                 <div className="filter-label">{t('filters.trendWatch')}</div>
