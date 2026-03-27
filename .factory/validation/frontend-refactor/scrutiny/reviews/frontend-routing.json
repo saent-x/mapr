@@ -1,0 +1,36 @@
+{
+  "featureId": "frontend-routing",
+  "reviewedAt": "2026-03-27T06:21:04.006679Z",
+  "commitId": "2e37308",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The routing shell, layout, and placeholder pages satisfy the required routes and SPA navigation pattern. I found one non-blocking normalization bug on lowercase region URLs.",
+    "issues": [
+      {
+        "file": "src/pages/RegionDetailPage.jsx",
+        "line": 35,
+        "severity": "non_blocking",
+        "description": "RegionDetailPage fetches coverage and backfill data with the raw `iso` route param, but later reads cached backfill data from `regionBackfills[iso.toUpperCase()]` and filters live stories with the uppercase form. Visiting lowercase URLs like `/region/us` can therefore write cache data under `us` and then read from `US`, leaving the page stuck in `idle`/empty state on the backfill path even though the request succeeded.",
+        "suggestedFix": "Normalize `iso` once near the top of the component (for example `const normalizedIso = iso?.toUpperCase()`) and use that same value for fetches, cache keys, and derived selectors."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass with a non-blocking lowercase-URL bug on the region detail route.",
+  "reviewedArtifacts": [
+    "commit:2e37308",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T05-53-49-529Z__frontend-routing__a336f210-d302-489e-a866-ce7632b0fcab.json",
+    "src/main.jsx",
+    "src/components/Layout.jsx",
+    "src/pages/RegionDetailPage.jsx",
+    "src/pages/AdminPage.jsx",
+    "src/pages/EntityExplorerPage.jsx",
+    "src/index.css",
+    "src/i18n/locales/en.json",
+    "test/routing.test.js"
+  ]
+}

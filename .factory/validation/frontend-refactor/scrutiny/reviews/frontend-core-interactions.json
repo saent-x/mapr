@@ -1,0 +1,31 @@
+{
+  "featureId": "frontend-core-interactions",
+  "reviewedAt": "2026-03-27T06:21:04.006679Z",
+  "commitId": "ce31cb9",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The feature fixed the headline regressions around search, map filtering, and Globe fallback. I found one non-blocking gap where the new keyword-search logic does not cover the region-backfill path.",
+    "issues": [
+      {
+        "file": "src/App.jsx",
+        "line": 161,
+        "severity": "non_blocking",
+        "description": "The new keyword-search predicate only runs inside `activeNews`, but `panelBackfillStories` still filters with `storyMatchesFilters()` only. When a selected region has no live stories and the panel falls back to backfill events, the panel and merged map markers can ignore the active search query and show unrelated backfill stories. That leaves the search interaction incomplete on the sparse-region path.",
+        "suggestedFix": "Apply the same debounced-search predicate used in `activeNews` to `panelBackfillStories` (or extract a shared helper) before those stories are used for the panel and `mapNewsList`."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass with a non-blocking search/backfill gap on sparse-region panels.",
+  "reviewedArtifacts": [
+    "commit:ce31cb9",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T06-12-29-706Z__frontend-core-interactions__aca4c042-1c3b-48d9-b761-754f9fdd5106.json",
+    "src/App.jsx",
+    "src/components/MapErrorBoundary.jsx",
+    "test/frontendInteractions.test.js"
+  ]
+}
