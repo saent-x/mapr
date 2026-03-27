@@ -25,13 +25,17 @@ test('App.jsx applies debouncedSearch keyword filter to activeNews', () => {
 });
 
 test('App.jsx mapNewsList uses activeNews (filtered) not baseArticles (unfiltered)', () => {
-  const appSrc = readFileSync('src/App.jsx', 'utf8');
+  // mapNewsList may live in App.jsx directly or in a custom hook (usePanelState)
+  let src = readFileSync('src/App.jsx', 'utf8');
+  if (!src.includes('const mapNewsList')) {
+    src = readFileSync('src/hooks/usePanelState.js', 'utf8');
+  }
 
   // mapNewsList should derive from activeNews (which includes filter + search)
   // not from baseArticles (which is unfiltered)
-  const mapNewsListBlock = appSrc.slice(
-    appSrc.indexOf('const mapNewsList'),
-    appSrc.indexOf(';', appSrc.indexOf('const mapNewsList')) + 1
+  const mapNewsListBlock = src.slice(
+    src.indexOf('const mapNewsList'),
+    src.indexOf(';', src.indexOf('const mapNewsList')) + 1
   );
 
   assert.ok(
