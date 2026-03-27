@@ -237,17 +237,18 @@ test('ensureSchema drops articles_url_key constraint and index', async () => {
   );
 });
 
-test('ingest.js upserts event before linking articles (FK ordering)', async () => {
+test('pipeline correlateEvents.js upserts event before linking articles (FK ordering)', async () => {
   const { readFileSync } = await import('node:fs');
   const { resolve, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
-  const ingestSource = readFileSync(resolve(__dirname, '..', 'server', 'ingest.js'), 'utf-8');
+  // After modularization, event correlation logic lives in server/pipeline/correlateEvents.js
+  const correlateSource = readFileSync(resolve(__dirname, '..', 'server', 'pipeline', 'correlateEvents.js'), 'utf-8');
 
   // Find the event processing loop - upsertEvent should come BEFORE linkArticlesToEvent
-  const upsertEventPos = ingestSource.indexOf('await upsertEvent({');
-  const linkArticlesPos = ingestSource.indexOf('await linkArticlesToEvent(event.id, event.articleIds)');
+  const upsertEventPos = correlateSource.indexOf('await upsertEvent({');
+  const linkArticlesPos = correlateSource.indexOf('await linkArticlesToEvent(event.id, event.articleIds)');
 
   assert.ok(upsertEventPos > 0, 'should find upsertEvent call');
   assert.ok(linkArticlesPos > 0, 'should find linkArticlesToEvent call');

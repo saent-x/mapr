@@ -1,72 +1,88 @@
+/**
+ * Ingestion Pipeline Orchestrator
+ *
+ * Coordinates the data ingestion pipeline through discrete stages:
+ *   1. Source Fetching     (GDELT + RSS + HTML)
+ *   2. Article Normalization & Deduplication
+ *   3. Entity Enrichment  (NER)
+ *   4. Event Canonicalization
+ *   5. Article Persistence
+ *   6. Velocity Tracking
+ *   7. Event Correlation & Enrichment
+ *   8. Event Persistence & Pruning
+ *   9. Snapshot Finalization
+ *
+ * Each stage is implemented in a separate module under server/pipeline/.
+ */
+
 import {
   buildRegionFocusQueries,
   clearCache as clearGdeltCache,
-  fetchLiveNews,
-  getGdeltFetchHealth
+  fetchLiveNews
 } from '../src/services/gdeltService.js';
-import { deriveCategory, deriveSeverity, deduplicateArticles } from '../src/utils/articleUtils.js';
+import { deduplicateArticles } from '../src/utils/articleUtils.js';
 import { buildCoverageDiagnostics } from '../src/utils/coverageDiagnostics.js';
-import { buildRegionSourcePlan, getFeedCoverageCountries, getFeedCoverageIsos } from '../src/utils/sourceCoverage.js';
+import { buildRegionSourcePlan } from '../src/utils/sourceCoverage.js';
 import {
   buildCoverageSnapshot,
-  buildCoverageTransitions,
-  getRegionCoverageHistory as getRegionCoverageHistoryFromSnapshots,
   mergeCoverageHistory,
   summarizeCoverageHistory,
+  buildCoverageTransitions,
+  getRegionCoverageHistory as getRegionCoverageHistoryFromSnapshots,
   summarizeCoverageTrends
 } from '../src/utils/coverageHistory.js';
-import { countryToIso, geocodeArticleAll, isoToCountry } from '../src/utils/geocoder.js';
+import { countryToIso, isoToCountry } from '../src/utils/geocoder.js';
 import { deriveBriefingCoverage } from '../src/utils/healthSummary.js';
-import { detectLanguage } from '../src/utils/languageUtils.js';
 import { calculateCoverageMetrics, canonicalizeArticles } from '../src/utils/newsPipeline.js';
 import { buildOpsAlerts, buildRegionLagDiagnostics } from '../src/utils/opsDiagnostics.js';
-import { classifySourceType, getSourceNetworkKey } from '../src/utils/sourceMetadata.js';
 import {
   getDefaultSourceCatalog,
-  mergeSourceState,
   readSourceCatalog,
   readSourceState,
-  selectSourcesForRun,
-  summarizeSourceCatalog,
-  writeSourceState
+  summarizeSourceCatalog
 } from './sourceCatalog.js';
 import {
-  appendHistory,
   DATABASE_PATH,
-  linkArticlesToEvent,
-  pruneOrphanedArticles,
-  pruneResolvedEvents,
-  readActiveEvents,
   readCoverageHistory,
   readEventArticles,
   readHistory,
   readSnapshot,
-  upsertArticles,
-  upsertEvent,
-  upsertVelocityBucket,
-  readVelocityHistory,
-  updateSourceCredibility,
   writeCoverageHistory,
   writeSnapshot
 } from './storage.js';
-import { fetchCatalogSource } from './sourceFetcher.js';
-import { mergeArticlesIntoEvents, aggregateEntities, computeSourceProfile } from './eventStore.js';
-import { computeLifecycleTransition } from '../src/utils/eventModel.js';
-import { extractEntities } from './entityExtractor.js';
-import { computeCompositeSeverity } from '../src/utils/severityModel.js';
-import { detectAmplification } from '../src/utils/amplificationDetector.js';
-import { computeVelocitySpikes } from './velocityTracker.js';
+
+// ── Pipeline stage imports ───────────────────────────────────────────────────
+import {
+  fetchAllSources,
+  createEmptyRssHealth,
+  buildRssHealthFromCatalog,
+  getRegionBackfillFeedPlan,
+  fetchRegionRssBackfill,
+  mergeRssArticles
+} from './pipeline/fetchSources.js';
+import { mergeAndDeduplicateArticles } from './pipeline/normalizeArticles.js';
+import { enrichArticlesWithEntities } from './pipeline/enrichEntities.js';
+import { trackAndComputeVelocity } from './pipeline/trackVelocity.js';
+import { correlateAndEnrichEvents, persistEnrichedEvents } from './pipeline/correlateEvents.js';
+import {
+  persistArticles,
+  pruneOldData,
+  persistSnapshot,
+  persistCoverageHistory,
+  persistHistoryEntry,
+  buildHistoryEntry
+} from './pipeline/persistData.js';
+
+// ── Constants ────────────────────────────────────────────────────────────────
 const DEFAULT_TIMESPAN = '24h';
 const DEFAULT_MAX_RECORDS = 750;
 const REGION_BACKFILL_TIMESPAN = '168h';
 const REGION_BACKFILL_MAX_RECORDS = 80;
 const REGION_BACKFILL_FEED_LIMIT = 12;
-const REGION_BACKFILL_TARGET_ARTICLES = 18;
-const RSS_BATCH_SIZE = 6;
-const RSS_BATCH_DELAY_MS = 400;
 const REFRESH_INTERVAL_MS = Number(process.env.MAPR_REFRESH_MS || 10 * 60 * 1000);
 const STALE_AFTER_MS = Number(process.env.MAPR_STALE_AFTER_MS || 30 * 60 * 1000);
 
+// ── Module state ─────────────────────────────────────────────────────────────
 let currentSnapshot = null;
 let refreshPromise = null;
 let refreshTimer = null;
@@ -89,107 +105,10 @@ let ingestHealth = {
 let sourceCatalog = [];
 let sourceState = {};
 
-function createEmptyRssHealth() {
-  return {
-    lastUpdated: null,
-    fromCache: false,
-    totalFeeds: 0,
-    dueFeeds: 0,
-    healthyFeeds: 0,
-    emptyFeeds: 0,
-    failedFeeds: 0,
-    articlesFound: 0,
-    catalogSummary: null,
-    feeds: []
-  };
-}
+// ── State accessors ──────────────────────────────────────────────────────────
 
 function getSourceCatalog() {
   return sourceCatalog.length > 0 ? sourceCatalog : getDefaultSourceCatalog();
-}
-
-function getArticleFeedId(article, feeds = getSourceCatalog()) {
-  if (article?.feedId) {
-    return article.feedId;
-  }
-
-  const articleId = article?.id || '';
-  if (!articleId.startsWith('rss-server-')) {
-    return null;
-  }
-
-  const remainder = articleId.slice('rss-server-'.length);
-  const matchedFeed = feeds.find((feed) => remainder.startsWith(`${feed.id}-`));
-  return matchedFeed?.id || null;
-}
-
-function buildRssHealthFromCatalog(catalog, state, checkedFeedResults = [], {
-  checkedAt = new Date().toISOString(),
-  fromCache = false,
-  dueFeeds = null
-} = {}) {
-  const resultsById = new Map((checkedFeedResults || []).map((result) => [result.feedId, result]));
-  const hydratedFeeds = (catalog || []).map((feed) => {
-    const prior = state?.[feed.id] || {};
-    const result = resultsById.get(feed.id);
-    const lastStatus = result?.status || prior.lastStatus || 'never-checked';
-    const lastCheckedAt = result ? checkedAt : prior.lastCheckedAt || null;
-    const lastSuccessAt = result
-      ? (result.status === 'failed' ? prior.lastSuccessAt || null : checkedAt)
-      : prior.lastSuccessAt || null;
-
-    return {
-      feedId: feed.id,
-      name: feed.name,
-      sourceType: feed.sourceType || null,
-      sourceClass: feed.sourceClass || null,
-      fetchMode: feed.fetchMode || 'rss',
-      country: feed.country || null,
-      isoA2: feed.isoA2 || null,
-      coverageCountries: feed.coverageCountries || [],
-      coverageIsoA2s: feed.coverageIsoA2s || [],
-      cadenceMinutes: feed.cadenceMinutes || null,
-      status: lastStatus,
-      articleCount: result ? result.articleCount : (prior.lastArticleCount || 0),
-      proxy: result?.proxy || prior.proxy || null,
-      error: result ? result.error || null : prior.lastError || null,
-      lastCheckedAt,
-      lastSuccessAt,
-      nextCheckAt: prior.nextCheckAt || null,
-      checkedThisRun: Boolean(result)
-    };
-  });
-
-  return {
-    lastUpdated: checkedAt,
-    fromCache,
-    totalFeeds: hydratedFeeds.length,
-    dueFeeds: dueFeeds ?? hydratedFeeds.filter((feed) => feed.checkedThisRun).length,
-    healthyFeeds: hydratedFeeds.filter((feed) => feed.status === 'ok').length,
-    emptyFeeds: hydratedFeeds.filter((feed) => feed.status === 'empty').length,
-    failedFeeds: hydratedFeeds.filter((feed) => feed.status === 'failed').length,
-    articlesFound: hydratedFeeds.reduce((total, feed) => total + (feed.articleCount || 0), 0),
-    catalogSummary: summarizeSourceCatalog(catalog, state),
-    feeds: hydratedFeeds
-  };
-}
-
-function mergeRssArticles(previousArticles, refreshedFeedIds, nextRssArticles, feeds = getSourceCatalog()) {
-  const refreshedIds = refreshedFeedIds instanceof Set ? refreshedFeedIds : new Set(refreshedFeedIds || []);
-  const retainedPreviousArticles = (previousArticles || []).filter((article) => {
-    const feedId = getArticleFeedId(article, feeds);
-    if (!feedId) {
-      return false;
-    }
-
-    return !refreshedIds.has(feedId);
-  });
-
-  return [...retainedPreviousArticles, ...(nextRssArticles || [])];
-}
-
-function retainPreviousGdeltArticles(previousArticles) {
-  return (previousArticles || []).filter((article) => String(article?.id || '').startsWith('gdelt-'));
 }
 
 function getSnapshotAgeMs() {
@@ -205,6 +124,17 @@ function isSnapshotStale() {
   const ageMs = getSnapshotAgeMs();
   return ageMs == null ? true : ageMs > STALE_AFTER_MS;
 }
+
+function persistIngestHealth(snapshot) {
+  ingestHealth = {
+    lastAttemptAt: snapshot?.ingestHealth?.lastAttemptAt || null,
+    lastSuccessAt: snapshot?.ingestHealth?.lastSuccessAt || null,
+    consecutiveFailures: snapshot?.ingestHealth?.consecutiveFailures || 0,
+    lastError: snapshot?.ingestHealth?.lastError || null
+  };
+}
+
+// ── Health & response builders ───────────────────────────────────────────────
 
 function buildBackendHealth() {
   const snapshotAgeMs = getSnapshotAgeMs();
@@ -281,158 +211,11 @@ async function createResponsePayload() {
   };
 }
 
-function buildHistoryEntry({ status, reason, startedAt, articles, events, error }) {
-  return {
-    at: new Date().toISOString(),
-    status,
-    reason,
-    durationMs: Date.now() - startedAt,
-    articleCount: articles?.length || 0,
-    eventCount: events?.length || 0,
-    error: error || null
-  };
-}
-
-async function fetchRssFeed(feed) {
-  return fetchCatalogSource(feed, { idPrefix: 'server' });
-}
-
-async function fetchRssNewsDirect({ force = false } = {}) {
-  const catalog = getSourceCatalog();
-  const selectedFeeds = selectSourcesForRun(catalog, sourceState, { force });
-  const checkedAt = new Date().toISOString();
-
-  if (selectedFeeds.length === 0) {
-    return {
-      articles: [],
-      checkedFeedIds: [],
-      health: buildRssHealthFromCatalog(catalog, sourceState, [], {
-        checkedAt,
-        fromCache: true,
-        dueFeeds: 0
-      })
-    };
-  }
-
-  const articles = [];
-  const feeds = [];
-
-  for (let index = 0; index < selectedFeeds.length; index += RSS_BATCH_SIZE) {
-    const batch = selectedFeeds.slice(index, index + RSS_BATCH_SIZE);
-    const results = await Promise.all(batch.map((feed) => fetchRssFeed(feed)));
-
-    results.forEach((result) => {
-      articles.push(...result.articles);
-      feeds.push({
-        feedId: result.feedId,
-        name: result.name,
-        sourceType: result.sourceType,
-        sourceClass: result.sourceClass,
-        fetchMode: result.fetchMode || 'rss',
-        cadenceMinutes: result.cadenceMinutes || null,
-        country: result.country,
-        isoA2: result.isoA2,
-        coverageCountries: result.coverageCountries,
-        coverageIsoA2s: result.coverageIsoA2s,
-        status: result.status,
-        articleCount: result.articleCount,
-        proxy: 'direct',
-        error: result.error
-      });
-    });
-
-    if (index + RSS_BATCH_SIZE < selectedFeeds.length) {
-      await new Promise((resolve) => setTimeout(resolve, RSS_BATCH_DELAY_MS));
-    }
-  }
-
-  articles.sort((left, right) => right.severity - left.severity);
-  sourceState = mergeSourceState(catalog, sourceState, feeds, checkedAt);
-  await writeSourceState(sourceState);
-
-  return {
-    articles,
-    checkedFeedIds: selectedFeeds.map((feed) => feed.id),
-    health: buildRssHealthFromCatalog(catalog, sourceState, feeds, {
-      checkedAt,
-      fromCache: false,
-      dueFeeds: selectedFeeds.length
-    })
-  };
-}
-
-export function getRegionBackfillFeedPlan(regionName) {
-  const catalog = getSourceCatalog();
-  return buildRegionSourcePlan(regionName, {
-    limit: REGION_BACKFILL_FEED_LIMIT,
-    feeds: catalog
-  }).plannedFeeds
-    .map((plannedFeed) => catalog.find((feed) => feed.id === plannedFeed.id))
-    .filter(Boolean);
-}
-
-async function fetchRegionRssBackfill(regionName, iso) {
-  const feeds = getRegionBackfillFeedPlan(regionName);
-  if (feeds.length === 0) {
-    return {
-      articles: [],
-      feedHealth: []
-    };
-  }
-
-  const regionArticles = [];
-  const feedHealth = [];
-
-  for (let index = 0; index < feeds.length; index += RSS_BATCH_SIZE) {
-    const batch = feeds.slice(index, index + RSS_BATCH_SIZE);
-    const results = await Promise.all(batch.map((feed) => fetchRssFeed(feed)));
-
-    results.forEach((result) => {
-        feedHealth.push({
-          feedId: result.feedId,
-          name: result.name,
-          sourceType: result.sourceType,
-          sourceClass: result.sourceClass,
-          fetchMode: result.fetchMode || 'rss',
-          cadenceMinutes: result.cadenceMinutes || null,
-          country: result.country,
-        isoA2: result.isoA2,
-        coverageCountries: result.coverageCountries,
-        coverageIsoA2s: result.coverageIsoA2s,
-        status: result.status,
-        articleCount: result.articleCount,
-        proxy: 'direct',
-        error: result.error
-      });
-
-      regionArticles.push(...result.articles.filter((article) => article.isoA2 === iso));
-    });
-
-    if (regionArticles.length >= REGION_BACKFILL_TARGET_ARTICLES) {
-      break;
-    }
-
-    if (index + RSS_BATCH_SIZE < feeds.length) {
-      await new Promise((resolve) => setTimeout(resolve, RSS_BATCH_DELAY_MS));
-    }
-  }
-
-  return {
-    articles: deduplicateArticles(regionArticles).slice(0, REGION_BACKFILL_MAX_RECORDS),
-    feedHealth
-  };
-}
-
-function persistIngestHealth(snapshot) {
-  ingestHealth = {
-    lastAttemptAt: snapshot?.ingestHealth?.lastAttemptAt || null,
-    lastSuccessAt: snapshot?.ingestHealth?.lastSuccessAt || null,
-    consecutiveFailures: snapshot?.ingestHealth?.consecutiveFailures || 0,
-    lastError: snapshot?.ingestHealth?.lastError || null
-  };
-}
+// ── Initialization & scheduling ──────────────────────────────────────────────
 
 export async function initializeIngestion() {
+  const { mergeSourceState, writeSourceState } = await import('./sourceCatalog.js');
+
   sourceCatalog = await readSourceCatalog();
   sourceState = await readSourceState();
   currentSnapshot = await readSnapshot();
@@ -510,6 +293,8 @@ export function stopScheduler() {
   }
 }
 
+// ── Public API ───────────────────────────────────────────────────────────────
+
 export async function getBriefing() {
   return createResponsePayload();
 }
@@ -586,6 +371,12 @@ export function getRegionCoverageHistory(iso, limit = 10, transitionLimit = 8) {
   return getRegionCoverageHistoryFromSnapshots(coverageHistory, iso, limit, transitionLimit);
 }
 
+export function getRegionBackfillFeedPlanForRegion(regionName) {
+  return getRegionBackfillFeedPlan(regionName, getSourceCatalog());
+}
+// Keep backward-compatible export name
+export { getRegionBackfillFeedPlanForRegion as getRegionBackfillFeedPlan };
+
 export async function getRegionBriefing(iso) {
   const normalizedIso = (iso || '').trim().toUpperCase();
   if (!normalizedIso) {
@@ -597,12 +388,13 @@ export async function getRegionBriefing(iso) {
     throw new Error(`Unknown region iso: ${normalizedIso}`);
   }
 
+  const catalog = getSourceCatalog();
   const coverageMetrics = calculateCoverageMetrics(currentSnapshot?.events || []);
   const coverageDiagnostics = buildCoverageDiagnostics(coverageMetrics, currentSnapshot?.sourceHealth || {});
   const sourcePlan = buildRegionSourcePlan(regionName, {
     limit: REGION_BACKFILL_FEED_LIMIT,
     coverageDiagnostics,
-    feeds: getSourceCatalog()
+    feeds: catalog
   });
 
   const existingArticles = (currentSnapshot?.articles || []).filter((article) => article.isoA2 === normalizedIso);
@@ -632,7 +424,7 @@ export async function getRegionBriefing(iso) {
       console.warn(`Region GDELT backfill failed for ${normalizedIso}:`, error.message);
       return [];
     }),
-    fetchRegionRssBackfill(regionName, normalizedIso).catch((error) => {
+    fetchRegionRssBackfill(regionName, normalizedIso, catalog).catch((error) => {
       console.warn(`Region RSS backfill failed for ${normalizedIso}:`, error.message);
       return { articles: [], feedHealth: [] };
     })
@@ -659,6 +451,22 @@ export async function getRegionBriefing(iso) {
   };
 }
 
+// ── Main pipeline orchestrator ───────────────────────────────────────────────
+
+/**
+ * refreshSnapshot — the main ingestion pipeline orchestrator.
+ *
+ * Executes the full data pipeline as a clear sequence of stages:
+ *   1. Fetch sources          → GDELT + RSS/HTML articles
+ *   2. Normalize & deduplicate → Merged, unique article set
+ *   3. Enrich entities        → NER extraction (people, orgs, locations)
+ *   4. Canonicalize events    → Group articles into events
+ *   5. Persist articles       → Write to database
+ *   6. Track velocity         → Detect regional activity spikes
+ *   7. Correlate events       → Merge into existing events, lifecycle, severity
+ *   8. Persist events & prune → Write events, clean up old data
+ *   9. Finalize snapshot      → Coverage metrics, snapshot, history
+ */
 export async function refreshSnapshot({ force = false, reason = 'manual' } = {}) {
   if (refreshPromise) {
     return refreshPromise;
@@ -668,222 +476,74 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
     const startedAt = Date.now();
     const attemptedAt = new Date().toISOString();
 
-    ingestHealth = {
-      ...ingestHealth,
-      lastAttemptAt: attemptedAt
-    };
+    ingestHealth = { ...ingestHealth, lastAttemptAt: attemptedAt };
 
     if (force) {
       clearGdeltCache();
     }
 
     try {
-      const [gdeltArticles, rssResult] = await Promise.all([
-        fetchLiveNews({ timespan: DEFAULT_TIMESPAN, maxRecords: DEFAULT_MAX_RECORDS }).catch((error) => {
-          console.warn('GDELT ingest failed:', error.message);
-          return [];
-        }),
-        fetchRssNewsDirect({ force }).catch((error) => {
-          console.warn('RSS ingest failed:', error.message);
-          return { articles: [], checkedFeedIds: [], health: createEmptyRssHealth() };
-        })
-      ]);
+      // ── Stage 1: Fetch from all sources (GDELT + RSS + HTML) ──
+      const { gdeltArticles, rssResult, updatedSourceState, gdeltHealth } = await fetchAllSources({
+        force,
+        timespan: DEFAULT_TIMESPAN,
+        maxRecords: DEFAULT_MAX_RECORDS,
+        catalog: getSourceCatalog(),
+        sourceState
+      });
+      sourceState = updatedSourceState;
 
-      console.log(`[ingest] GDELT returned ${gdeltArticles.length} articles, RSS returned ${rssResult.articles?.length || 0} articles from ${rssResult.checkedFeedIds?.length || 0} feeds`);
-      const effectiveGdeltArticles = gdeltArticles.length > 0
-        ? gdeltArticles
-        : retainPreviousGdeltArticles(currentSnapshot?.articles || []);
-      const mergedRssArticles = mergeRssArticles(
-        currentSnapshot?.articles || [],
-        rssResult.checkedFeedIds || [],
-        rssResult.articles,
-        getSourceCatalog()
-      );
-      const mergedArticles = deduplicateArticles([...effectiveGdeltArticles, ...mergedRssArticles]);
+      // ── Stage 2: Normalize and deduplicate articles ──
+      const mergedArticles = mergeAndDeduplicateArticles({
+        gdeltArticles,
+        rssResult,
+        previousArticles: currentSnapshot?.articles || [],
+        catalog: getSourceCatalog()
+      });
+
       if (mergedArticles.length === 0) {
         throw new Error('No articles available from GDELT or RSS sources');
       }
 
-      // Run NER on articles before persisting
-      for (const article of mergedArticles) {
-        if (!article.entities) {
-          try {
-            const extracted = await extractEntities(article.title);
-            article.entities = extracted;
-            if (extracted.category !== 'general') {
-              article.nerCategory = extracted.category;
-            }
-          } catch (nerErr) {
-            // Don't let one bad article crash the entire ingest
-            article.entities = { people: [], organizations: [], locations: [], category: 'general' };
-          }
-        }
-      }
+      // ── Stage 3: Enrich articles with named entities ──
+      await enrichArticlesWithEntities(mergedArticles);
 
+      // ── Stage 4: Canonicalize articles into events ──
       const events = canonicalizeArticles(mergedArticles);
 
-      // --- Persistent event store ---
-      // 1. Persist individual articles
-      console.log(`[ingest] Persisting ${mergedArticles.length} articles...`);
-      await upsertArticles(mergedArticles);
-      console.log(`[ingest] Articles persisted.`);
+      // ── Stage 5: Persist articles to database ──
+      await persistArticles(mergedArticles);
 
-      // --- Velocity tracking ---
-      // Compute 2-hour bucket timestamp (e.g. "2026-03-22T14" rounded to even hours)
-      const nowDate = new Date();
-      const bucketHour = Math.floor(nowDate.getUTCHours() / 2) * 2;
-      const bucketAt = `${nowDate.toISOString().slice(0, 10)}T${String(bucketHour).padStart(2, '0')}`;
+      // ── Stage 6: Track velocity and detect spikes ──
+      const velocitySpikes = await trackAndComputeVelocity(mergedArticles);
 
-      // Count articles per ISO code in this batch
-      const isoCounts = {};
-      for (const article of mergedArticles) {
-        const iso = article.isoA2;
-        if (iso) {
-          isoCounts[iso] = (isoCounts[iso] || 0) + 1;
-        }
-      }
+      // ── Stage 7: Correlate and enrich events ──
+      const enrichedEvents = await correlateAndEnrichEvents({
+        articles: mergedArticles,
+        velocitySpikes
+      });
 
-      // Persist velocity buckets and build history map
-      const regionHistory = {};
-      for (const [iso, count] of Object.entries(isoCounts)) {
-        await upsertVelocityBucket(iso, bucketAt, count);
-        const historyRows = await readVelocityHistory(iso, 7);
-        const counts = historyRows
-          .filter(row => row.bucketAt !== bucketAt)
-          .map(row => row.articleCount);
-        regionHistory[iso] = { counts, currentCount: count };
-      }
+      // ── Stage 8: Persist events and prune old data ──
+      await persistEnrichedEvents(enrichedEvents);
+      await pruneOldData();
 
-      // Compute velocity spikes
-      const velocitySpikes = computeVelocitySpikes(regionHistory);
-
-      // 2. Load existing events from DB (only last 72h per spec)
-      const existingEvents = await readActiveEvents({ maxAgeHours: 72 });
-
-      // 3. Merge new articles into events
-      const mergedEvents = mergeArticlesIntoEvents(mergedArticles, existingEvents);
-
-      // 4. Update lifecycle for all events
-      console.log(`[ingest] Processing ${mergedEvents.length} events...`);
-      let eventIdx = 0;
-      for (const event of mergedEvents) {
-        eventIdx++;
-        if (eventIdx % 200 === 0) console.log(`[ingest]   event ${eventIdx}/${mergedEvents.length}`);
-        // Persist the event first so FK constraints are satisfied for new events
-        await upsertEvent({
-          id: event.id,
-          title: event.title,
-          primaryCountry: event.primaryCountry,
-          countries: event.countries,
-          lifecycle: event.lifecycle ?? 'emerging',
-          severity: event.severity ?? 0,
-          category: event.category ?? null,
-          firstSeenAt: event.firstSeenAt,
-          lastUpdatedAt: event.lastUpdatedAt,
-          topicFingerprint: event.topicFingerprint,
-          coordinates: event.coordinates,
-          enrichment: '{}'
-        });
-
-        // Now link articles (event exists in DB, per-row FK errors handled inside)
-        await linkArticlesToEvent(event.id, event.articleIds);
-
-        // Get ALL articles for this event (from DB, not just current batch)
-        const allEventArticles = await readEventArticles(event.id);
-        const now = Date.now();
-        const twoHoursAgo = now - 2 * 60 * 60 * 1000;
-        const fourHoursAgo = now - 4 * 60 * 60 * 1000;
-        const currWindow = allEventArticles.filter(a => new Date(a.publishedAt).getTime() >= twoHoursAgo).length;
-        const prevWindow = allEventArticles.filter(a => {
-          const t = new Date(a.publishedAt).getTime();
-          return t >= fourHoursAgo && t < twoHoursAgo;
-        }).length;
-
-        event.lifecycle = computeLifecycleTransition({
-          lifecycle: event.lifecycle,
-          firstSeenAt: event.firstSeenAt,
-          articleCount: event.articleIds.length,
-          lastUpdatedAt: event.lastUpdatedAt,
-          prevWindowArticleCount: prevWindow,
-          currWindowArticleCount: currWindow
-        });
-
-        // Entity aggregation and source profile
-        const sourceProfile = computeSourceProfile(allEventArticles);
-        event.sourceProfile = sourceProfile;
-        event.entities = aggregateEntities(allEventArticles);
-
-        // Update source credibility based on corroboration
-        const isCorroborated = allEventArticles.length >= 2 && sourceProfile.diversityScore > 0.3;
-        for (const article of allEventArticles) {
-          const sourceKey = getSourceNetworkKey(article);
-          await updateSourceCredibility(sourceKey, isCorroborated);
-        }
-
-        // Use composite severity instead of the old weighted max/avg blend
-        const regionSpike = velocitySpikes.find(s => s.iso === event.primaryCountry);
-        const severityCtx = {
-          keywordSeverity: allEventArticles.length > 0 ? Math.max(...allEventArticles.map(a => a.severity || 0)) : (event.severity || 0),
-          articleCount: allEventArticles.length,
-          diversityScore: sourceProfile.diversityScore,
-          entities: event.entities,
-          category: event.nerCategory || event.category
-        };
-        if (regionSpike) {
-          severityCtx.velocitySignal = Math.min(100, regionSpike.zScore * 30);
-        }
-        event.severity = computeCompositeSeverity(severityCtx);
-
-        // Run amplification detection
-        const amplification = detectAmplification(allEventArticles);
-        event.amplification = amplification;
-
-        // Compute confidence
-        const confidence = Math.min(1, Math.max(0,
-          (sourceProfile.diversityScore * 0.4) +
-          (Math.min(1, Math.log2(Math.max(1, allEventArticles.length)) / 4) * 0.35) +
-          (sourceProfile.wireCount > 0 ? 0.15 : 0) +
-          (amplification.isAmplified ? -0.2 : 0.1)
-        ));
-        event.confidence = Math.round(confidence * 100) / 100;
-      }
-
-      // 5. Persist events
-      for (const event of mergedEvents) {
-        await upsertEvent({
-          ...event,
-          countries: event.countries,
-          topicFingerprint: event.topicFingerprint,
-          coordinates: event.coordinates,
-          enrichment: JSON.stringify({
-            entities: event.entities,
-            sourceProfile: event.sourceProfile,
-            confidence: event.confidence,
-            amplification: event.amplification
-          })
-        });
-      }
-
-      // 6. Prune old data
-      await pruneResolvedEvents(30);
-      await pruneOrphanedArticles(7);
-
-      // Use persistent events for the snapshot
-      const persistentEvents = mergedEvents.filter(e => e.lifecycle !== 'resolved');
-
+      // ── Stage 9: Finalize snapshot ──
+      const persistentEvents = enrichedEvents.filter(e => e.lifecycle !== 'resolved');
       const nextSourceHealth = {
-        gdelt: getGdeltFetchHealth(),
+        gdelt: gdeltHealth,
         rss: rssResult.health
       };
       const coverageMetrics = calculateCoverageMetrics(events);
       const diagnostics = buildCoverageDiagnostics(coverageMetrics, nextSourceHealth);
       const fetchedAt = new Date().toISOString();
+
       coverageHistory = mergeCoverageHistory(
         coverageHistory,
         buildCoverageSnapshot(diagnostics, fetchedAt),
         48
       );
       coverageTrends = summarizeCoverageTrends(coverageHistory);
+
       currentSnapshot = {
         fetchedAt,
         articles: mergedArticles,
@@ -900,9 +560,10 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
 
       loadedFromDisk = false;
       persistIngestHealth(currentSnapshot);
-      await writeSnapshot(currentSnapshot);
-      await writeCoverageHistory(coverageHistory);
-      await appendHistory(buildHistoryEntry({
+
+      await persistSnapshot(currentSnapshot);
+      await persistCoverageHistory(coverageHistory);
+      await persistHistoryEntry(buildHistoryEntry({
         status: 'ok',
         reason,
         startedAt,
@@ -914,6 +575,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
     } catch (error) {
       console.error('[ingest] refreshSnapshot FAILED:', error.message);
       console.error('[ingest] Stack:', error.stack?.split('\n').slice(0, 4).join('\n'));
+
       ingestHealth = {
         lastAttemptAt: attemptedAt,
         lastSuccessAt: ingestHealth.lastSuccessAt,
@@ -922,14 +584,11 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       };
 
       if (currentSnapshot) {
-        currentSnapshot = {
-          ...currentSnapshot,
-          ingestHealth
-        };
-        await writeSnapshot(currentSnapshot).catch(() => {});
+        currentSnapshot = { ...currentSnapshot, ingestHealth };
+        await persistSnapshot(currentSnapshot).catch(() => {});
       }
 
-      await appendHistory(buildHistoryEntry({
+      await persistHistoryEntry(buildHistoryEntry({
         status: 'failed',
         reason,
         startedAt,
