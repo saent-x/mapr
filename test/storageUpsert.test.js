@@ -215,7 +215,7 @@ test('schema CREATE TABLE does not include UNIQUE on url column', async () => {
   assert.ok(!urlLine.includes('UNIQUE'), 'url column should NOT have UNIQUE constraint');
 });
 
-test('ensureSchema drops articles_url_key constraint', async () => {
+test('ensureSchema drops articles_url_key constraint and index', async () => {
   const { readFileSync } = await import('node:fs');
   const { resolve, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -226,6 +226,14 @@ test('ensureSchema drops articles_url_key constraint', async () => {
   assert.ok(
     storageSource.includes('DROP CONSTRAINT IF EXISTS articles_url_key'),
     'ensureSchema should explicitly drop the articles_url_key constraint'
+  );
+  assert.ok(
+    storageSource.includes('DROP INDEX IF EXISTS articles_url_key'),
+    'ensureSchema should also drop articles_url_key as an index'
+  );
+  assert.ok(
+    storageSource.includes("c.contype = 'u'") && storageSource.includes("a.attname = 'url'"),
+    'ensureSchema should introspect for any unique constraint on url column'
   );
 });
 

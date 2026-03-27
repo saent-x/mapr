@@ -244,12 +244,22 @@ async function createResponsePayload() {
     sourceHealth
   });
 
-  const enrichedEvents = await Promise.all(
-    (currentSnapshot?.events || []).map(async (evt) => {
-      const articles = await readEventArticles(evt.id);
-      return { ...evt, supportingArticles: articles, articleCount: articles.length };
-    })
-  );
+  let enrichedEvents;
+  try {
+    enrichedEvents = await Promise.all(
+      (currentSnapshot?.events || []).map(async (evt) => {
+        const articles = await readEventArticles(evt.id);
+        return { ...evt, supportingArticles: articles, articleCount: articles.length };
+      })
+    );
+  } catch (err) {
+    console.warn('[briefing] Failed to enrich events from DB:', err.message);
+    enrichedEvents = (currentSnapshot?.events || []).map((evt) => ({
+      ...evt,
+      supportingArticles: [],
+      articleCount: evt.articleIds?.length || 0
+    }));
+  }
 
   return {
     meta: {
@@ -505,7 +515,12 @@ export async function getBriefing() {
 }
 
 export async function getHealth() {
-  const history = await readHistory();
+  let history = [];
+  try {
+    history = await readHistory();
+  } catch (err) {
+    console.warn('[health] Failed to read history from DB:', err.message);
+  }
   const backend = buildBackendHealth();
   const sourceHealth = currentSnapshot?.sourceHealth || {
     gdelt: null,

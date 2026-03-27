@@ -104,9 +104,22 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_articles_publishedAt ON articles("publishedAt");
   `);
 
-  // Fix schema: drop url UNIQUE constraint that causes spurious conflicts during
-  // ON CONFLICT (id) upserts.  The id column is the canonical dedup key.
+  // Fix schema: drop url UNIQUE constraint/index that causes spurious conflicts
+  // during ON CONFLICT (id) upserts.  The id column is the canonical dedup key.
   await db.query(`ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_url_key`).catch(() => {});
+  // Also drop any unique index on url (constraint name may differ across DB versions)
+  await db.query(`DROP INDEX IF EXISTS articles_url_key`).catch(() => {});
+  // Find and drop any remaining unique constraint on url column by introspection
+  try {
+    const urlUniques = await db.query(`
+      SELECT c.conname FROM pg_constraint c
+      JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
+      WHERE c.conrelid = 'articles'::regclass AND c.contype = 'u' AND a.attname = 'url'
+    `);
+    for (const { conname } of urlUniques.rows) {
+      await db.query(`ALTER TABLE articles DROP CONSTRAINT IF EXISTS "${conname}"`).catch(() => {});
+    }
+  } catch { /* table may not exist yet on first run */ }
 
   // Ensure id column is the primary key (older DB instances may have url as PK)
   try {
