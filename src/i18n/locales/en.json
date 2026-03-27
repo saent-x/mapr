@@ -1,4 +1,30 @@
 {
+  "nav": {
+    "ariaLabel": "Main navigation",
+    "map": "Map",
+    "admin": "Admin",
+    "entities": "Entities",
+    "expand": "Expand navigation",
+    "collapse": "Collapse navigation",
+    "backToMap": "Back to map"
+  },
+  "regionDetail": {
+    "articles": "articles",
+    "avgSeverity": "avg severity",
+    "loading": "Loading region data…",
+    "noArticles": "No articles found for this region",
+    "readMore": "Read more"
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "placeholder": "Source health monitoring, ingestion status, and coverage gap visualization will appear here.",
+    "comingSoon": "Coming soon"
+  },
+  "entities": {
+    "title": "Entity Explorer",
+    "placeholder": "Interactive entity relationship visualization showing connections between people, organizations, locations, and events will appear here.",
+    "comingSoon": "Coming soon"
+  },
   "header": {
     "live": "Live",
     "loading": "Loading",

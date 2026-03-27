@@ -2,17 +2,26 @@ import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './i18n'
+import Layout from './components/Layout.jsx'
 import App from './App.jsx'
 import './index.css'
 
 const HealthPage = lazy(() => import('./pages/HealthPage.jsx'))
+const RegionDetailPage = lazy(() => import('./pages/RegionDetailPage.jsx'))
+const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
+const EntityExplorerPage = lazy(() => import('./pages/EntityExplorerPage.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/health" element={<Suspense fallback={null}><HealthPage /></Suspense>} />
-        <Route path="*" element={<App />} />
+        <Route element={<Layout />}>
+          <Route path="/" element={<App />} />
+          <Route path="/region/:iso" element={<Suspense fallback={null}><RegionDetailPage /></Suspense>} />
+          <Route path="/admin" element={<Suspense fallback={null}><AdminPage /></Suspense>} />
+          <Route path="/entities" element={<Suspense fallback={null}><EntityExplorerPage /></Suspense>} />
+        </Route>
       </Routes>
     </BrowserRouter>
   </React.StrictMode>,
