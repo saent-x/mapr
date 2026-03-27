@@ -1,0 +1,24 @@
+{
+  "featureId": "deduplication-and-source-health",
+  "reviewedAt": "2026-03-27T04:05:21.689334Z",
+  "commitId": "9b5bb6f",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The deduplication change adds focused Jaccard-based title matching, keeps the existing URL path intact, and is covered by comprehensive tests. Manual validation and the current health payload are consistent with the implementation, and I did not find a high-confidence correctness issue in this feature.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass. Title-similarity dedup and source-health verification look correct and well tested.",
+  "reviewedArtifacts": [
+    "commit:9b5bb6f",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs",
+    "src/utils/articleUtils.js",
+    "server/ingest.js",
+    "test/deduplication.test.js",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T03-51-18-060Z__deduplication-and-source-health__fa3af2a7-56e0-4a4e-ab54-704edbe91fc1.json"
+  ]
+}

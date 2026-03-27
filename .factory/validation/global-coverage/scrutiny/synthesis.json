@@ -1,0 +1,62 @@
+{
+  "milestone": "global-coverage",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "node --test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"no typecheck configured (JSX project)\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "echo \"no lint configured\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 6,
+    "passed": 4,
+    "failed": 2,
+    "failedFeatures": [
+      "gdelt-advanced-querying",
+      "html-scraper-sources"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "gdelt-advanced-querying",
+      "severity": "blocking",
+      "description": "fetchLiveNews() still falls back to GDELT_QUERY_PROFILES when no explicit queries are supplied, even though getDefaultQueryProfiles() was introduced for the new region/language coverage. Both refreshSnapshot() and the default client/server fallbacks call fetchLiveNews() without a queries argument, so the new sourcecountry:/sourcelang: profiles are dead code in the main ingest path.",
+      "suggestedFix": "Use getDefaultQueryProfiles() for the no-query default path (or otherwise merge GDELT_REGION_QUERIES and GDELT_LANGUAGE_QUERIES into the normal ingest query set), then add a regression test that asserts the default profile count includes the advanced query groups."
+    },
+    {
+      "featureId": "html-scraper-sources",
+      "severity": "blocking",
+      "description": "Four of the eight newly added HTML candidates duplicate outlets that already exist as RSS feeds: The Irrawaddy (src/services/rssService.js:223), Khmer Times (src/services/rssService.js:231), Asia-Plus (src/services/rssService.js:238), and Haiti Libre (src/services/rssService.js:302). Because those publishers already have working RSS sources, this change contributes only four genuinely new non-RSS outlets and falls short of the feature goal to add 5+ HTML sources for sites that do not offer RSS.",
+      "suggestedFix": "Replace the overlapping candidates with outlets that truly lack RSS feeds, or explicitly disable the redundant HTML entries and add additional non-RSS sources so the feature contributes at least five genuinely new HTML-only sources."
+    }
+  ],
+  "appliedUpdates": [
+    {
+      "target": "library",
+      "description": "Added .factory/library/source-catalog.md documenting that source-catalog ISO normalization uses exact countryToIso() matches, so alias-style country names need canonical labels or explicit ISO codes.",
+      "sourceFeature": "expand-geocoder-database"
+    }
+  ],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "backend-worker skill",
+      "suggestion": "Clarify that strict TDD can be relaxed for purely declarative data-catalog expansion tasks, where the useful verification work is often adding or updating assertions after the data change rather than forcing an artificial red/green cycle.",
+      "evidence": "The expand-rss-feeds-africa-mena handoff explicitly called out that the backend-worker TDD procedure did not fit a feed-catalog expansion and only required a coverage-audit assertion update after Oman gained local feeds.",
+      "isSystemic": false
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": null
+}

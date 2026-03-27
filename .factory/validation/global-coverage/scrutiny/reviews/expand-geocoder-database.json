@@ -1,0 +1,39 @@
+{
+  "featureId": "expand-geocoder-database",
+  "reviewedAt": "2026-03-27T04:05:21.689334Z",
+  "commitId": "d550487",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The geocoder expansion materially improves coverage and the new tests exercise the expected regions and aliases. The implementation is broadly sound, though one alias-resolution gap remains in the exact country-to-ISO lookup path used by the source catalog.",
+    "issues": [
+      {
+        "file": "src/utils/geocoder.js",
+        "line": 1214,
+        "severity": "non_blocking",
+        "description": "countryToIso() still performs a direct COUNTRY_TO_ISO lookup and never consults COUNTRY_ALIASES, so alternate country strings such as \"Congo-Brazzaville\" are still unresolved in callers like server/sourceCatalog.js:81. In the final catalog, the feed src/services/rssService.js:177 (aa-cg) ends up with a null isoA2 even though COUNTRY_ALIASES already maps \"congo brazzaville\" to the canonical \"Congo\" entry.",
+        "suggestedFix": "Normalize countryToIso() through the alias map (or require catalog entries with alias country names to supply explicit isoA2 values) so source-catalog normalization benefits from the alias expansion work."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "library",
+      "observation": "Source-catalog normalization depends on exact countryToIso() matches; alias-like country strings in feed metadata silently produce null isoA2 values unless the entry uses a canonical geocoder country name or explicit isoA2.",
+      "evidence": "server/sourceCatalog.js:81 uses countryToIso(feed.country) directly, and the final catalog still leaves aa-cg unresolved because the feed country string is \"Congo-Brazzaville\"."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Pass with a non-blocking alias-normalization gap. The geocoder expansion works overall, but exact country-to-ISO resolution still misses some alias strings.",
+  "reviewedArtifacts": [
+    "commit:d550487",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs",
+    "src/utils/geocoder.js",
+    "server/sourceCatalog.js",
+    "src/services/rssService.js",
+    "test/geocoder.test.js",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T03-44-34-039Z__expand-geocoder-database__6286454e-0a6e-43dd-a585-30edaafe2731.json"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "featureId": "html-scraper-sources",
+  "reviewedAt": "2026-03-27T04:05:21.689334Z",
+  "commitId": "8edd927",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature successfully adds HTML candidates to the catalog, but half of the claimed new sources already have RSS feeds configured elsewhere in the project. That means the change does not actually add 5+ new non-RSS sources as described and instead introduces redundant dual-mode ingestion for several outlets.",
+    "issues": [
+      {
+        "file": "data/source-candidates.json",
+        "line": 970,
+        "severity": "blocking",
+        "description": "Four of the eight newly added HTML candidates duplicate outlets that already exist as RSS feeds: The Irrawaddy (src/services/rssService.js:223), Khmer Times (src/services/rssService.js:231), Asia-Plus (src/services/rssService.js:238), and Haiti Libre (src/services/rssService.js:302). Because those publishers already have working RSS sources, this change contributes only four genuinely new non-RSS outlets and falls short of the feature goal to add 5+ HTML sources for sites that do not offer RSS.",
+        "suggestedFix": "Replace the overlapping candidates with outlets that truly lack RSS feeds, or explicitly disable the redundant HTML entries and add additional non-RSS sources so the feature contributes at least five genuinely new HTML-only sources."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Fail. The change adds HTML entries, but 4 of the 8 overlap existing RSS publishers, so it does not deliver 5+ new non-RSS sources as promised.",
+  "reviewedArtifacts": [
+    "commit:8edd927",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs",
+    "data/source-candidates.json",
+    "src/services/rssService.js",
+    "server/sourceCandidates.js",
+    "test/sourceCatalog.test.js",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T03-36-09-189Z__html-scraper-sources__bda4b867-64e3-46b6-b00b-101be4b53e88.json"
+  ]
+}

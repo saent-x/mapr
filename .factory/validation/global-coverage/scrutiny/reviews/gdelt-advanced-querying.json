@@ -1,0 +1,32 @@
+{
+  "featureId": "gdelt-advanced-querying",
+  "reviewedAt": "2026-03-27T04:05:21.689334Z",
+  "commitId": "9fd2c759ed1a75a62d21c198759536e2f9163009",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The commit adds the new region and language query tables plus tests, but the production default fetch path still ignores them. As a result, normal ingestion continues to run only the original thematic profiles and does not gain the intended global-coverage targeting.",
+    "issues": [
+      {
+        "file": "src/services/gdeltService.js",
+        "line": 285,
+        "severity": "blocking",
+        "description": "fetchLiveNews() still falls back to GDELT_QUERY_PROFILES when no explicit queries are supplied, even though getDefaultQueryProfiles() was introduced for the new region/language coverage. Both refreshSnapshot() and the default client/server fallbacks call fetchLiveNews() without a queries argument, so the new sourcecountry:/sourcelang: profiles are dead code in the main ingest path.",
+        "suggestedFix": "Use getDefaultQueryProfiles() for the no-query default path (or otherwise merge GDELT_REGION_QUERIES and GDELT_LANGUAGE_QUERIES into the normal ingest query set), then add a regression test that asserts the default profile count includes the advanced query groups."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Fail. Advanced GDELT query definitions were added, but default ingestion never uses them, so the feature does not deliver its intended runtime behavior.",
+  "reviewedArtifacts": [
+    "commit:9fd2c759ed1a75a62d21c198759536e2f9163009",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs",
+    "src/services/gdeltService.js",
+    "server/ingest.js",
+    "test/gdeltAdvancedQuerying.test.js",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T03-31-01-279Z__gdelt-advanced-querying__1375f86b-d07a-4824-8890-21b54ac7fe30.json"
+  ]
+}
