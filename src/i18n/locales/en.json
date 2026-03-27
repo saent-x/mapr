@@ -23,7 +23,21 @@
   "entities": {
     "title": "Entity Explorer",
     "placeholder": "Interactive entity relationship visualization showing connections between people, organizations, locations, and events will appear here.",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "entitiesLabel": "entities",
+    "connectionsLabel": "connections",
+    "people": "People",
+    "organizations": "Organizations",
+    "locations": "Locations",
+    "person": "Person",
+    "organization": "Organization",
+    "location": "Location",
+    "loading": "Loading entity data…",
+    "noEntities": "No entities found. Try refreshing the data.",
+    "mentions": "mentions",
+    "relatedEvents": "events",
+    "relatedEventsTitle": "Related Events",
+    "noRelatedEvents": "No related events found"
   },
   "header": {
     "live": "Live",

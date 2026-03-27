@@ -54,6 +54,7 @@ function upsertRegionBackfill(cache, entry) {
 const useNewsStore = create((set, get) => ({
   /* ── raw data ── */
   liveNews: null,
+  backendEvents: [],
   dataSource: 'loading',
   dataError: null,
   sourceHealth: { gdelt: null, rss: null, backend: null },
@@ -90,6 +91,7 @@ const useNewsStore = create((set, get) => ({
 
         set({
           liveNews: briefing.articles,
+          backendEvents: Array.isArray(briefing.events) ? briefing.events : [],
           sourceHealth: briefing.sourceHealth || { gdelt: null, rss: null, backend: null },
           coverageTrends: historyPayload?.trends || briefing.coverageTrends || null,
           coverageHistory: historyPayload || null,
