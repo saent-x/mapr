@@ -1,0 +1,33 @@
+{
+  "milestone": "hotfix",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-HOTFIX-001",
+    "VAL-HOTFIX-002"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented backend env loading, local PostgreSQL usage, and Backend API flow isolation guidance for refresh-driven validation.",
+      "source": "setup"
+    },
+    {
+      "target": "services.yaml",
+      "description": "Corrected backend start command to load .env with node --env-file=.env server/index.js during validation setup.",
+      "source": "setup"
+    }
+  ],
+  "executionNotes": [
+    "Task-based flow validator launches failed because custom droids resolved to invalid model custom:GPT-5.4-(XHigh)-3, so the main validator ran the hotfix API flow directly and wrote the equivalent flow report."
+  ],
+  "previousRound": null
+}

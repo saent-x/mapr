@@ -15,7 +15,7 @@ services:
     depends_on: []
 
   backend:
-    start: node server/index.js
+    start: node --env-file=.env server/index.js
     stop: lsof -ti :3030 | xargs kill -9 2>/dev/null || true
     healthcheck: curl -sf http://localhost:3030/api/health
     port: 3030

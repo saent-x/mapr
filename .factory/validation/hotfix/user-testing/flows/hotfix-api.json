@@ -1,0 +1,42 @@
+{
+  "milestone": "hotfix",
+  "groupId": "hotfix-api",
+  "surface": "backend-api",
+  "status": "pass",
+  "toolsUsed": [
+    "curl",
+    "python3"
+  ],
+  "assertions": [
+    {
+      "id": "VAL-HOTFIX-001",
+      "status": "pass",
+      "summary": "POST /api/refresh returned HTTP 200 with 2598 articles and 3392 events; appended backend log contained no 'duplicate key' text.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/hotfix/hotfix-api/refresh-response.json",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/hotfix/hotfix-api/refresh-log-tail.txt",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/hotfix/hotfix-api/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-HOTFIX-002",
+      "status": "pass",
+      "summary": "GET /api/briefing returned 2598 articles with fetchedAt 2026-03-27T03:07:08.993Z (0.424655 seconds old at verification).",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/hotfix/hotfix-api/briefing-response.json",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/hotfix/hotfix-api/summary.json"
+      ]
+    }
+  ],
+  "frictions": [
+    {
+      "type": "tooling",
+      "description": "Task-based flow validator subagents could not be launched because the configured custom model name was invalid; the main validator executed the single API flow directly and produced the same report artifacts."
+    }
+  ],
+  "blockers": [],
+  "notes": {
+    "startedAt": "2026-03-27T03:05:04.167807Z",
+    "finishedAt": "2026-03-27T03:07:09.417655Z"
+  }
+}
