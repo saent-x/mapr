@@ -229,6 +229,28 @@ test('countryToIso covers newly added countries', () => {
   }
 });
 
+test('countryToIso resolves country aliases', () => {
+  // Aliases should resolve through COUNTRY_ALIASES → canonical name → ISO
+  assert.equal(countryToIso('Congo-Brazzaville'), 'CG', 'Congo-Brazzaville alias');
+  assert.equal(countryToIso('Congo Brazzaville'), 'CG', 'Congo Brazzaville alias');
+  assert.equal(countryToIso('DR Congo'), 'CD', 'DR Congo alias');
+  assert.equal(countryToIso('DRC'), 'CD', 'DRC alias');
+  assert.equal(countryToIso('Ivory Coast'), 'CI', 'Ivory Coast canonical');
+  assert.equal(countryToIso('Cote d\'Ivoire'), 'CI', 'Cote d\'Ivoire alias');
+  assert.equal(countryToIso('UAE'), 'AE', 'UAE alias');
+  assert.equal(countryToIso('Burma'), 'MM', 'Burma alias');
+  assert.equal(countryToIso('Czechia'), 'CZ', 'Czechia alias');
+  assert.equal(countryToIso('East Timor'), 'TL', 'East Timor alias');
+  assert.equal(countryToIso('Cape Verde'), 'CV', 'Cape Verde alias');
+  // Direct lookups should still work
+  assert.equal(countryToIso('Congo'), 'CG', 'Congo direct');
+  assert.equal(countryToIso('Myanmar'), 'MM', 'Myanmar direct');
+  // null/undefined inputs
+  assert.equal(countryToIso(null), null, 'null input');
+  assert.equal(countryToIso(''), null, 'empty string input');
+  assert.equal(countryToIso('Narnia'), null, 'unknown country');
+});
+
 test('demonyms match newly added countries', () => {
   const demonymTests = [
     ['Eritrean forces advance north', 'Eritrea'],

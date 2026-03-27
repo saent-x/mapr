@@ -177,3 +177,41 @@ test('source catalog covers Eastern European countries', () => {
   );
   assert(eeFeeds.length >= 5, `Expected 5+ Eastern Europe feeds, got ${eeFeeds.length}`);
 });
+
+test('previously overlapping HTML sources (Irrawaddy, Khmer Times, Asia-Plus, Haiti Libre) are replaced', () => {
+  const catalog = getDefaultSourceCatalog();
+  const htmlSources = catalog.filter((e) => e.fetchMode === 'html');
+
+  // These 4 entries previously duplicated existing RSS feeds and should now be replaced
+  const overlapNames = ['The Irrawaddy', 'Khmer Times', 'Asia-Plus', 'Haiti Libre'];
+  const overlapDomains = ['irrawaddy.com', 'khmertimeskh.com', 'asiaplustj.info', 'haitilibre.com'];
+
+  for (const name of overlapNames) {
+    const found = htmlSources.find((e) => e.name === name);
+    assert.equal(found, undefined, `Overlapping HTML source "${name}" should have been replaced`);
+  }
+
+  for (const domain of overlapDomains) {
+    const found = htmlSources.find((e) => (e.url || '').includes(domain));
+    assert.equal(found, undefined, `Overlapping HTML domain "${domain}" should have been replaced`);
+  }
+});
+
+test('at least 5 HTML source candidates are truly unique non-RSS sources', () => {
+  const catalog = getDefaultSourceCatalog();
+  const rssSources = catalog.filter((e) => e.fetchMode === 'rss');
+  const htmlSources = catalog.filter((e) => e.fetchMode === 'html' && e.enabled);
+
+  const rssHostnames = new Set(rssSources.map((e) => {
+    try { return new URL(e.url).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; }
+  }).filter(Boolean));
+
+  const uniqueHtml = htmlSources.filter((e) => {
+    try {
+      const htmlHost = new URL(e.url).hostname.replace(/^www\./, '').toLowerCase();
+      return !rssHostnames.has(htmlHost);
+    } catch { return false; }
+  });
+
+  assert(uniqueHtml.length >= 5, `Expected 5+ unique HTML sources, got ${uniqueHtml.length}`);
+});

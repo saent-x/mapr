@@ -1212,7 +1212,13 @@ const ISO_TO_COUNTRY = Object.entries(COUNTRY_TO_ISO).reduce((accumulator, [coun
 }, {});
 
 export function countryToIso(countryName) {
-  return COUNTRY_TO_ISO[countryName] || null;
+  if (!countryName) return null;
+  // Direct lookup first
+  const direct = COUNTRY_TO_ISO[countryName];
+  if (direct) return direct;
+  // Resolve through aliases (e.g. "Congo-Brazzaville" → "Congo" → "CG")
+  const canonical = COUNTRY_LOOKUP.get(normalizeGeoText(countryName));
+  return canonical ? (COUNTRY_TO_ISO[canonical] || null) : null;
 }
 
 export function isoToCountry(iso) {

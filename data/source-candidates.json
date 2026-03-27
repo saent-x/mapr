@@ -967,32 +967,32 @@
   {
     "country": "Myanmar",
     "isoA2": "MM",
-    "source": "The Irrawaddy",
-    "website": "https://www.irrawaddy.com/",
+    "source": "Mizzima",
+    "website": "https://mizzima.com/",
     "mode": "html",
     "language": "en",
     "priority": "high",
-    "notes": "Leading independent English-language Myanmar news outlet covering politics, conflict, and society."
+    "notes": "Independent Myanmar news outlet covering politics, human rights, and conflict since 1998."
   },
   {
     "country": "Cambodia",
     "isoA2": "KH",
-    "source": "Khmer Times",
-    "website": "https://www.khmertimeskh.com/",
+    "source": "Phnom Penh Post",
+    "website": "https://www.phnompenhpost.com/",
     "mode": "html",
     "language": "en",
     "priority": "high",
-    "notes": "Major English-language Cambodian newspaper with domestic and regional coverage."
+    "notes": "Major English-language Cambodian daily newspaper with national and regional coverage."
   },
   {
     "country": "Tajikistan",
     "isoA2": "TJ",
-    "source": "Asia-Plus",
-    "website": "https://asiaplustj.info/en/",
+    "source": "CABAR.asia",
+    "website": "https://cabar.asia/en",
     "mode": "html",
     "language": "en",
     "priority": "high",
-    "notes": "Major independent Central Asian news outlet with English coverage of Tajikistan and the region."
+    "notes": "Central Asian Bureau for Analytical Reporting; covers Tajikistan and the wider Central Asian region."
   },
   {
     "country": "Cameroon",
@@ -1027,12 +1027,12 @@
   {
     "country": "Haiti",
     "isoA2": "HT",
-    "source": "Haiti Libre",
-    "website": "https://www.haitilibre.com/en/",
+    "source": "Le Nouvelliste",
+    "website": "https://lenouvelliste.com/",
     "mode": "html",
-    "language": "en",
+    "language": "fr",
     "priority": "high",
-    "notes": "English-language Haitian news outlet with comprehensive national coverage."
+    "notes": "Haiti's oldest daily newspaper with comprehensive national political and social coverage."
   },
   {
     "country": "Papua New Guinea",
