@@ -15,9 +15,10 @@ function getPool() {
   // Strip channel_binding parameter which some pg versions don't support
   const cleanUrl = connectionString.replace(/[&?]channel_binding=[^&]*/g, '');
 
+  const isLocal = /localhost|127\.0\.0\.1/.test(cleanUrl);
   pool = new Pool({
     connectionString: cleanUrl,
-    ssl: { rejectUnauthorized: false },
+    ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
     max: 5,
     idleTimeoutMillis: 30000
   });
