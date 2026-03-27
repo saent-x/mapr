@@ -28,6 +28,7 @@ Testing surface, required testing skills/tools, resource cost classification per
 - **3D Globe (react-globe.gl)**: Uses WebGL/Three.js. Browser automation may not be able to interact with 3D elements directly. Test globe rendering (no errors) but use flat map mode for interaction testing.
 - **Ingestion timing**: Backend ingestion takes 1-2 minutes. Validators must wait for ingestion to complete before checking data freshness.
 - **Backend env loading**: `node server/index.js` alone does not load `.env`; use `node --env-file=.env server/index.js` or `npm run dev`.
+- **Backend bootstrap refresh**: After a cold backend start, `/api/health` may report `refreshInProgress: true` and `status: "stale"` for several minutes while the server still serves the last successful snapshot. Read-only validators can use that snapshot for non-freshness assertions, but should avoid starting a second refresh while bootstrap is active.
 - **Local PostgreSQL**: Mission runs against local PostgreSQL (`mapr-postgres` on `localhost:5432`) via `DATABASE_URL` from `.env`.
 
 ## Validation Concurrency

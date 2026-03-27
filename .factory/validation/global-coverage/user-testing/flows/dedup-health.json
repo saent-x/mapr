@@ -1,0 +1,35 @@
+{
+  "surface": "backend-api",
+  "groupId": "dedup-health",
+  "assertions": [
+    {
+      "id": "VAL-DATA-008",
+      "status": "pass",
+      "reason": "The briefing API response contained no duplicate article URLs.",
+      "evidence": [
+        "GET /api/briefing articleCount=2598",
+        "Unique URL scan found duplicateUrlCount=0",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/dedup-health/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-DATA-009",
+      "status": "pass",
+      "reason": "The health API exposes per-feed status, timestamps, and article counts across the RSS feed catalog.",
+      "evidence": [
+        "GET /api/health sourceHealth.rss.feeds length=213",
+        "Feeds with status=213, with lastCheckedAt=212, with articleCount=213",
+        "Status distribution: ok=91, empty=91, failed=30, never-checked=1",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/dedup-health/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "python3",
+    "urllib.request"
+  ],
+  "frictions": [
+    "After backend startup, GET /api/health continued to report refreshInProgress=true and status=\"stale\" while serving the last successful snapshot; validation used that snapshot for these read-only assertions."
+  ],
+  "blockers": []
+}

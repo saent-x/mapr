@@ -1,0 +1,37 @@
+{
+  "surface": "backend-api",
+  "groupId": "query-geocoder-audit",
+  "assertions": [
+    {
+      "id": "VAL-DATA-005",
+      "status": "pass",
+      "reason": "gdeltService.js includes region-specific sourcecountry queries, language-specific sourcelang queries, and a default profile combiner for broad targeting.",
+      "evidence": [
+        "src/services/gdeltService.js lines 24-32 define 7 thematic profiles",
+        "src/services/gdeltService.js lines 40-58 define 12 GDELT_REGION_QUERIES using sourcecountry:",
+        "src/services/gdeltService.js lines 64-70 define 6 GDELT_LANGUAGE_QUERIES using sourcelang:",
+        "src/services/gdeltService.js lines 77-78 and 285 use getDefaultQueryProfiles() with 25 total profiles",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/query-geocoder-audit/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-DATA-007",
+      "status": "pass",
+      "reason": "The geocoder source contains more than 500 location entries and alias support for broad global matching.",
+      "evidence": [
+        "src/utils/geocoder.js LOCATIONS count=532",
+        "src/utils/geocoder.js line 678 defines COUNTRY_ALIASES for alternate country names",
+        "src/utils/geocoder.js line 1214 exports countryToIso()",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/query-geocoder-audit/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "grep",
+    "read",
+    "python3",
+    "node"
+  ],
+  "frictions": [],
+  "blockers": []
+}

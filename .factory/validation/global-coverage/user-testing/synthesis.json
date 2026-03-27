@@ -1,0 +1,32 @@
+{
+  "milestone": "global-coverage",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-DATA-001",
+    "VAL-DATA-002",
+    "VAL-DATA-003",
+    "VAL-DATA-004",
+    "VAL-DATA-005",
+    "VAL-DATA-006",
+    "VAL-DATA-007",
+    "VAL-DATA-008",
+    "VAL-DATA-009"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented that cold backend starts can leave /api/health in refreshInProgress/stale mode while the last successful snapshot remains usable for read-only validation.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": null
+}

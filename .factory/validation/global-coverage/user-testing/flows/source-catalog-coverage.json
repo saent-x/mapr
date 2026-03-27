@@ -1,0 +1,64 @@
+{
+  "surface": "backend-api",
+  "groupId": "source-catalog-coverage",
+  "assertions": [
+    {
+      "id": "VAL-DATA-001",
+      "status": "pass",
+      "reason": "The source catalog summary exceeds the required total and enabled source thresholds.",
+      "evidence": [
+        "GET /api/source-catalog/state summary.totalSources=303",
+        "GET /api/source-catalog/state summary.enabledSources=302",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/source-catalog-coverage/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-DATA-002",
+      "status": "pass",
+      "reason": "African coverage includes substantially more than 30 dedicated feeds.",
+      "evidence": [
+        "African feed count from coverageIsoA2s=87",
+        "Sample African feeds: africanews, allafrica, aa-ma, aa-tn, aa-ly, aa-sn",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/source-catalog-coverage/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-DATA-003",
+      "status": "pass",
+      "reason": "Asian coverage exceeds the threshold and explicitly includes Central, South, and Southeast Asia.",
+      "evidence": [
+        "Asian feed count from coverageIsoA2s=81",
+        "Central Asia covered: KG,KZ,TJ,TM,UZ",
+        "South Asia covered: AF,BD,BT,IN,LK,MV,NP,PK",
+        "Southeast Asia covered: BN,ID,KH,LA,MM,MY,PH,SG,TH,TL,VN",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/source-catalog-coverage/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-DATA-004",
+      "status": "pass",
+      "reason": "Latin American and Caribbean coverage is well above the required count.",
+      "evidence": [
+        "Americas feed count from Latin America + Caribbean ISO coverage=50",
+        "Sample Americas feeds: mxnewsdaily, riotimes-br, batimes-ar, colreports-co, caracas-ve",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/source-catalog-coverage/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-DATA-006",
+      "status": "pass",
+      "reason": "Enabled HTML scraper sources are present far beyond the minimum requirement.",
+      "evidence": [
+        "Enabled fetchMode=html entries=106",
+        "Sample HTML feeds: candidate-bi-iwacu, candidate-cf-radio-ndeke-luka, candidate-sv-el-faro",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/global-coverage/source-catalog-coverage/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "python3",
+    "urllib.request"
+  ],
+  "frictions": [],
+  "blockers": []
+}
