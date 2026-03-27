@@ -43,3 +43,13 @@ export {
   persistHistoryEntry,
   buildHistoryEntry
 } from './persistData.js';
+
+export {
+  isCircuitOpen,
+  recordSuccess,
+  recordFailure,
+  getCircuitStates,
+  getCircuitSummary,
+  resetAllCircuits,
+  resetCircuit
+} from '../circuitBreaker.js';

@@ -17,6 +17,7 @@ import {
   summarizeSourceCatalog,
   writeSourceState
 } from '../sourceCatalog.js';
+import { isCircuitOpen, recordSuccess, recordFailure, getCircuitSummary } from '../circuitBreaker.js';
 import { fetchCatalogSource } from '../sourceFetcher.js';
 
 const RSS_BATCH_SIZE = 6;
@@ -133,7 +134,16 @@ export function retainPreviousGdeltArticles(previousArticles) {
 // ── Main fetch functions ─────────────────────────────────────────────────────
 
 async function fetchRssFeed(feed) {
-  return fetchCatalogSource(feed, { idPrefix: 'server' });
+  const result = await fetchCatalogSource(feed, { idPrefix: 'server' });
+
+  // Record circuit breaker outcome
+  if (result.status === 'failed') {
+    recordFailure(feed.id);
+  } else {
+    recordSuccess(feed.id);
+  }
+
+  return result;
 }
 
 /**
@@ -141,7 +151,22 @@ async function fetchRssFeed(feed) {
  * Returns articles, checked feed IDs, health summary, and updated source state.
  */
 export async function fetchRssNewsDirect({ force = false, catalog, sourceState: inputSourceState } = {}) {
-  const selectedFeeds = selectSourcesForRun(catalog, inputSourceState, { force });
+  const allSelectedFeeds = selectSourcesForRun(catalog, inputSourceState, { force });
+
+  // Filter out feeds with open circuit breakers
+  const skippedByCircuitBreaker = [];
+  const selectedFeeds = allSelectedFeeds.filter((feed) => {
+    if (isCircuitOpen(feed.id)) {
+      skippedByCircuitBreaker.push(feed.id);
+      return false;
+    }
+    return true;
+  });
+
+  if (skippedByCircuitBreaker.length > 0) {
+    console.log(`[circuit-breaker] Skipped ${skippedByCircuitBreaker.length} feeds with open circuits: ${skippedByCircuitBreaker.slice(0, 5).join(', ')}${skippedByCircuitBreaker.length > 5 ? '...' : ''}`);
+  }
+
   const checkedAt = new Date().toISOString();
 
   if (selectedFeeds.length === 0) {
@@ -233,13 +258,18 @@ export async function fetchAllSources({ force = false, timespan, maxRecords, cat
     })
   ]);
 
+  const circuitBreakerSummary = getCircuitSummary();
   console.log(`[ingest] GDELT returned ${gdeltArticles.length} articles, RSS returned ${rssResult.articles?.length || 0} articles from ${rssResult.checkedFeedIds?.length || 0} feeds`);
+  if (circuitBreakerSummary.open > 0) {
+    console.log(`[circuit-breaker] ${circuitBreakerSummary.open} source(s) have open circuits (temporarily skipped)`);
+  }
 
   return {
     gdeltArticles,
     rssResult,
     updatedSourceState: rssResult.updatedSourceState || inputSourceState,
-    gdeltHealth: getGdeltFetchHealth()
+    gdeltHealth: getGdeltFetchHealth(),
+    circuitBreakerSummary
   };
 }
 

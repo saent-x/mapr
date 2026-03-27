@@ -13,6 +13,7 @@ import {
   startScheduler,
   stopScheduler
 } from './ingest.js';
+import { getCircuitSummary } from './circuitBreaker.js';
 
 // Import Vercel API handlers for stateless routes (no duplication)
 import adminAuthHandler from '../api/admin-auth.js';
@@ -20,6 +21,7 @@ import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
+const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -43,6 +45,44 @@ function sendText(response, statusCode, text) {
     'content-type': 'text/plain; charset=utf-8'
   });
   response.end(text);
+}
+
+/**
+ * Wrap an async handler with a timeout. If the handler takes longer than
+ * API_TIMEOUT_MS, the request is aborted with a 504 Gateway Timeout.
+ */
+function withTimeout(asyncFn, timeoutMs = API_TIMEOUT_MS) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(Object.assign(new Error('Request timed out'), { code: 'REQUEST_TIMEOUT', statusCode: 504 }));
+    }, timeoutMs);
+
+    asyncFn()
+      .then((result) => { clearTimeout(timer); resolve(result); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
+/**
+ * Classify an error into an HTTP status code and structured response.
+ * Maps known error patterns to appropriate status codes.
+ */
+function classifyError(error) {
+  const message = error?.message || 'Internal server error';
+  const code = error?.code || undefined;
+
+  // Timeout errors → 504
+  if (code === 'REQUEST_TIMEOUT' || error?.statusCode === 504) {
+    return { status: 504, body: { error: message, code: 'REQUEST_TIMEOUT' } };
+  }
+
+  // Bad request patterns (missing/invalid parameters)
+  if (/^Missing\b/i.test(message) || /^Unknown region/i.test(message) || /^Invalid\b/i.test(message)) {
+    return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
+  }
+
+  // Default → 500
+  return { status: 500, body: { error: message, code: code || 'INTERNAL_ERROR' } };
 }
 
 /**
@@ -111,14 +151,14 @@ const server = http.createServer(async (request, response) => {
     // ── Stateful routes (use server's cache/SQLite) ──
 
     if (request.method === 'GET' && url.pathname === '/api/briefing') {
-      const briefing = await getBriefing();
+      const briefing = await withTimeout(() => getBriefing());
       const hasSnapshot = briefing.meta.fetchedAt || briefing.articles.length > 0;
       sendJson(response, hasSnapshot ? 200 : 503, briefing);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/events') {
-      const briefing = await getBriefing();
+      const briefing = await withTimeout(() => getBriefing());
       const hasSnapshot = briefing.meta.fetchedAt || briefing.events.length > 0;
       sendJson(response, hasSnapshot ? 200 : 503, {
         meta: briefing.meta,
@@ -130,12 +170,14 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(response, 200, await getHealth());
+      const health = await withTimeout(() => getHealth());
+      health.circuitBreaker = getCircuitSummary();
+      sendJson(response, 200, health);
       return;
     }
 
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname === '/api/source-catalog') {
-      return runVercelHandler(sourceCatalogHandler, request, response, url);
+      return withTimeout(() => runVercelHandler(sourceCatalogHandler, request, response, url));
     }
 
     if (request.method === 'GET' && url.pathname === '/api/source-catalog/state') {
@@ -152,7 +194,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/coverage-region') {
       const iso = (url.searchParams.get('iso') || '').trim().toUpperCase();
-      if (!iso) { sendJson(response, 400, { error: 'Missing iso query parameter' }); return; }
+      if (!iso) { sendJson(response, 400, { error: 'Missing iso query parameter', code: 'BAD_REQUEST' }); return; }
       const limit = Math.max(1, Math.min(24, Number(url.searchParams.get('limit') || 10)));
       const transitions = Math.max(1, Math.min(24, Number(url.searchParams.get('transitions') || 8)));
       sendJson(response, 200, getRegionCoverageHistory(iso, limit, transitions));
@@ -161,13 +203,13 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/region-briefing') {
       const iso = (url.searchParams.get('iso') || '').trim().toUpperCase();
-      if (!iso) { sendJson(response, 400, { error: 'Missing iso query parameter' }); return; }
-      sendJson(response, 200, await getRegionBriefing(iso));
+      if (!iso) { sendJson(response, 400, { error: 'Missing iso query parameter', code: 'BAD_REQUEST' }); return; }
+      sendJson(response, 200, await withTimeout(() => getRegionBriefing(iso)));
       return;
     }
 
     if (request.method === 'POST' && url.pathname === '/api/refresh') {
-      const briefing = await refreshSnapshot({ force: true, reason: 'manual' });
+      const briefing = await withTimeout(() => refreshSnapshot({ force: true, reason: 'manual' }), 120_000);
       sendJson(response, 200, briefing);
       return;
     }
@@ -177,19 +219,19 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/admin-health') {
       const authHeader = String(request.headers['x-admin-password'] || '').trim();
       const adminPw = String(process.env.ADMIN_PASSWORD || '').trim();
-      if (!adminPw || authHeader !== adminPw) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
-      sendJson(response, 200, await buildAdminHealthResponse());
+      if (!adminPw || authHeader !== adminPw) { sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' }); return; }
+      sendJson(response, 200, await withTimeout(() => buildAdminHealthResponse()));
       return;
     }
 
     // ── Stateless routes (delegate to Vercel API handlers — no duplication) ──
 
     if (url.pathname === '/api/admin-auth') {
-      return runVercelHandler(adminAuthHandler, request, response, url);
+      return withTimeout(() => runVercelHandler(adminAuthHandler, request, response, url));
     }
 
     if (url.pathname === '/api/gdelt-proxy') {
-      return runVercelHandler(gdeltProxyHandler, request, response, url);
+      return withTimeout(() => runVercelHandler(gdeltProxyHandler, request, response, url));
     }
 
     if (request.method === 'GET' && url.pathname === '/') {
@@ -197,9 +239,10 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    sendJson(response, 404, { error: 'Not found' });
+    sendJson(response, 404, { error: 'Not found', code: 'NOT_FOUND' });
   } catch (error) {
-    sendJson(response, 500, { error: error.message });
+    const { status, body } = classifyError(error);
+    sendJson(response, status, body);
   }
 });
 
