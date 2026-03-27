@@ -1,0 +1,57 @@
+{
+  "surface": "web-browser",
+  "groupId": "frontend-shell-routing",
+  "assertions": [
+    {
+      "id": "VAL-FRONTEND-001",
+      "status": "pass",
+      "reason": "The app loaded successfully at /, displayed the map surface with live story stats, and no browser errors were reported after clearing and reloading the headed validation session.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/home-headed-annotated.png shows the globe rendered with live stats and UI controls.",
+        "Headed session reload followed by agent-browser errors returned no entries.",
+        "Page title was \"Mapr\" at http://localhost:5173/.",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FRONTEND-003",
+      "status": "pass",
+      "reason": "Routing works both via in-app navigation and direct URL access, and at least one in-app navigation occurred without a full page reload.",
+      "evidence": [
+        "Clicking the Admin nav link changed the path to /admin while window.__spaMarker remained \"alive\" and performance navigation entry count stayed at 1.",
+        "Direct navigation to /region/US loaded the region detail route with heading \"United States\", ISO \"US\", and 145 rendered article cards.",
+        "Screenshots: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/admin-annotated.png and /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/region-us-annotated.png",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FRONTEND-007",
+      "status": "pass",
+      "reason": "Switching between globe and flat modes worked, and both views preserved the same live data counts.",
+      "evidence": [
+        "Globe mode displayed stats of 133 regions, 1975 stories, 29 verified, and 174 critical.",
+        "After clicking the Flat tab, the selected mode changed to Flat while the same stats remained visible.",
+        "Screenshots: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/home-headed-annotated.png and /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/flat-mode-annotated.png",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FRONTEND-008",
+      "status": "pass",
+      "reason": "At a 375px-wide mobile viewport the map remained visible, the bottom controls were reachable, and the drawer was not overlapping the main map surface.",
+      "evidence": [
+        "At viewport 375x812, DOM inspection reported hasDrawerOpen=false, mapCanvasCount=2, and hasNewsPanel=true.",
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/mobile-home-fresh-annotated.png shows the mobile layout with map, search, and bottom action buttons.",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-shell-routing/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "Headless Chromium could not create a WebGL context for react-globe.gl, so globe rendering was validated in a headed browser session.",
+    "Canvas-based map surfaces are not reliably clickable through accessibility refs, so route and region assertions relied on URL navigation and supported region-selection affordances."
+  ],
+  "blockers": []
+}

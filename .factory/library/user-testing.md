@@ -52,3 +52,11 @@ Testing surface, required testing skills/tools, resource cost classification per
 - Assertions that depend on refreshed data (such as `/api/briefing` freshness) should be grouped into the same validator that triggered refresh.
 - Stay within local surfaces only: `http://localhost:3030/api/*` for API checks and local server logs if needed for evidence.
 - Use the shared local PostgreSQL instance configured by `.env`; do not modify `.env` or point the app at a different database.
+
+## Flow Validator Guidance: Web Browser
+
+- Use the assigned isolated browser session only (for this run: `62241cfc00e4__u1`, `62241cfc00e4__u2`, or another explicitly assigned session). Do not use the default browser session.
+- Stay on the local validation surface at `http://localhost:5173` and its proxied local API calls; do not open unrelated external sites.
+- Do not trigger manual refreshes or any other mutation-heavy backend actions during frontend-refactor validation. Validate against the currently served snapshot, even if `/api/health` reports `refreshInProgress: true`.
+- Prefer flat-map interactions for filters and region selection because the 3D globe is difficult to drive reliably in automation; only verify globe mode renders and does not throw console errors.
+- Keep evidence within the assigned mission evidence directory, and close the browser session before finishing the flow report.

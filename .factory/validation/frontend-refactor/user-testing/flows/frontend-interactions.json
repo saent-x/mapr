@@ -1,0 +1,48 @@
+{
+  "surface": "web-browser",
+  "groupId": "frontend-interactions",
+  "assertions": [
+    {
+      "id": "VAL-FRONTEND-004",
+      "status": "pass",
+      "reason": "Changing the severity filter reduced visible story counts to zero, and resetting the slider restored the original article counts.",
+      "evidence": [
+        "Baseline flat-map stats showed 133 regions and 1975 stories.",
+        "After moving the severity slider to 100, the visible stats dropped to 0 regions and 0 stories.",
+        "After resetting the slider to 0, the stats returned to 133 regions and 1975 stories.",
+        "Screenshots: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/severity-filter-max-annotated.png and /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/severity-filter-reset-annotated.png",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FRONTEND-005",
+      "status": "pass",
+      "reason": "Selecting the Bangladesh region via the app\u2019s region search affordance opened the news panel for Bangladesh with region-specific story entries.",
+      "evidence": [
+        "Clicking the search region result \"Bangladesh 5 stories\" cleared the search box and set the news panel title to \"Bangladesh\".",
+        "DOM inspection of the panel found 5 region article buttons for Bangladesh, including titles about the Bangladesh ferry crash and Padma River incident.",
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/region-bangladesh-annotated.png",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/summary.json"
+      ]
+    },
+    {
+      "id": "VAL-FRONTEND-006",
+      "status": "pass",
+      "reason": "Searching for Bangladesh reduced the displayed stories to matching results, and clearing the search restored the full data set.",
+      "evidence": [
+        "Typing \"Bangladesh\" reduced the visible stats to 2 regions and 6 stories, and the top visible titles all matched Bangladesh/Bangladeshi terms.",
+        "The search dropdown showed 11 result rows, including a Bangladesh region result and Bangladesh-related stories.",
+        "Clearing the search restored the stats to 133 regions and 1975 stories.",
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/search-bangladesh-annotated.png",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-interactions/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "Because the map is rendered as canvas/WebGL, region-selection validation used the app search region affordance, which the contract explicitly allows as an alternative to clicking the map."
+  ],
+  "blockers": []
+}

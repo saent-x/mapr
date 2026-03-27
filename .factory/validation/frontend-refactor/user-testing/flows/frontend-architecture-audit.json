@@ -1,0 +1,25 @@
+{
+  "surface": "code-review",
+  "groupId": "frontend-architecture-audit",
+  "assertions": [
+    {
+      "id": "VAL-FRONTEND-002",
+      "status": "pass",
+      "reason": "The frontend now reads and mutates application state through dedicated Zustand stores, and App.jsx is reduced to 372 lines.",
+      "evidence": [
+        "wc -l src/App.jsx reported 372 lines, below the <400 requirement.",
+        "src/stores/newsStore.js, src/stores/filterStore.js, and src/stores/uiStore.js exist and expose state/actions used by App.jsx.",
+        "src/App.jsx imports useNewsStore, useFilterStore, and useUIStore at lines 14-16 and consumes store actions throughout the component.",
+        "Evidence file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/frontend-refactor/frontend-architecture-audit/summary.json"
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "Read",
+    "Glob",
+    "Grep",
+    "wc"
+  ],
+  "frictions": [],
+  "blockers": []
+}
