@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, Radio } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
+import MapErrorBoundary from './components/MapErrorBoundary';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
@@ -111,8 +112,18 @@ function App() {
         return ts <= scrubTime;
       });
     }
-    return sortStories(pool.filter((s) => storyMatchesFilters(s, filterParams)), sortMode);
-  }, [canonicalNews, scrubTime, filterParams, sortMode]);
+    let filtered = pool.filter((s) => storyMatchesFilters(s, filterParams));
+    // Apply search keyword filter
+    const q = (debouncedSearch || '').trim().toLowerCase();
+    if (q.length >= 2) {
+      filtered = filtered.filter((s) => {
+        const haystack = [s.title, s.summary, s.locality, s.category, s.region]
+          .filter(Boolean).join(' ').toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+    return sortStories(filtered, sortMode);
+  }, [canonicalNews, scrubTime, filterParams, sortMode, debouncedSearch]);
 
   const regionSeverities = useMemo(() => calculateRegionSeverity(activeNews), [activeNews]);
 
@@ -166,11 +177,10 @@ function App() {
   ), [coverageHistory, panelRegion]);
 
   /* ── Map data ── */
-  const mapArticles = useMemo(() => baseArticles.filter((a) => a.coordinates && a.isoA2), [baseArticles]);
   const mapNewsList = useMemo(() => {
-    const base = mapArticles.length > 0 ? mapArticles : activeNews;
+    const base = activeNews.filter((a) => a.coordinates && a.isoA2);
     return (!panelRegion || panelNews.length === 0) ? base : mergeStoryLists(base, panelNews);
-  }, [mapArticles, activeNews, panelNews, panelRegion]);
+  }, [activeNews, panelNews, panelRegion]);
   const mapRegionSeverities = useMemo(() => (
     (!panelRegion || !panelRegionData || regionSeverities[panelRegion]) ? regionSeverities : { ...regionSeverities, [panelRegion]: panelRegionData }
   ), [panelRegion, panelRegionData, regionSeverities]);
@@ -265,22 +275,29 @@ function App() {
     setSearchParams(params, { replace: true });
   }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, setSearchParams]);
 
+  /* ── Globe fallback ── */
+  const handleGlobeFallback = useCallback(() => {
+    useUIStore.getState().setMapMode('flat');
+  }, []);
+
   /* ── Render ── */
   return (
     <ErrorBoundary>
     <div className="app">
       <Suspense fallback={null}>
-        {mapMode === 'globe' ? (
-          <Globe newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
-            coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
-            selectedRegion={selectedRegion} selectedStory={selectedStory}
-            onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
-        ) : (
-          <FlatMap newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
-            coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
-            selectedRegion={selectedRegion} selectedStory={selectedStory}
-            onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
-        )}
+        <MapErrorBoundary mapMode={mapMode} onFallbackToFlat={handleGlobeFallback}>
+          {mapMode === 'globe' ? (
+            <Globe newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
+              coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
+              selectedRegion={selectedRegion} selectedStory={selectedStory}
+              onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
+          ) : (
+            <FlatMap newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
+              coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
+              selectedRegion={selectedRegion} selectedStory={selectedStory}
+              onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
+          )}
+        </MapErrorBoundary>
       </Suspense>
 
       <Header searchQuery={searchQuery} debouncedSearch={debouncedSearch}
