@@ -1,0 +1,19 @@
+{
+  "featureId": "fix-ingestion-duplicate-key",
+  "status": "pass",
+  "summary": "Manual scrutiny review found no blocking correctness issues in the hotfix. The change removes URL-based uniqueness from article persistence, upserts articles by id, ensures events are inserted before junction rows, and adds focused tests covering the regression scenarios that previously broke ingestion.",
+  "issues": [],
+  "sharedStateObservations": [],
+  "reviewedArtifacts": [
+    "commit:948df6d",
+    "commit:d18c773",
+    "commit:54e0b1c",
+    "server/storage.js",
+    "server/ingest.js",
+    "test/storageUpsert.test.js",
+    ".factory/services.yaml",
+    ".factory/library/environment.md",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T02-31-48-483Z__fix-ingestion-duplicate-key__d77f6335-84fa-4345-9aca-22d3d25545bb.json",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T02-51-07-846Z__fix-ingestion-duplicate-key__11fd8faa-d8c6-49d2-b28c-8e3eeb9ee53e.json"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "milestone": "hotfix",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "node --test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"no typecheck configured (JSX project)\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "echo \"no lint configured\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}
