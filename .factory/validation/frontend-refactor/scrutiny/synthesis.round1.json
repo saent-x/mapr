@@ -1,7 +1,7 @@
 {
   "milestone": "frontend-refactor",
-  "round": 2,
-  "status": "pass",
+  "round": 1,
+  "status": "fail",
   "validatorsRun": {
     "test": {
       "passed": true,
@@ -20,12 +20,20 @@
     }
   },
   "reviewsSummary": {
-    "total": 1,
-    "passed": 1,
-    "failed": 0,
-    "failedFeatures": []
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "failedFeatures": [
+      "frontend-state-management"
+    ]
   },
-  "blockingIssues": [],
+  "blockingIssues": [
+    {
+      "featureId": "frontend-state-management",
+      "severity": "blocking",
+      "description": "The frontend-refactor milestone still fails its App.jsx size gate. `git show 74c1aef:src/App.jsx | wc -l` returns `400` instead of the required `< 400`, and the current milestone head is already back up to 417 lines, so VAL-FRONTEND-002 will fail its code-review check."
+    }
+  ],
   "appliedUpdates": [],
   "suggestedGuidanceUpdates": [
     {
@@ -36,5 +44,5 @@
     }
   ],
   "rejectedObservations": [],
-  "previousRound": "/Users/tor/Documents/projects/mapr/.factory/validation/frontend-refactor/scrutiny/synthesis.round1.json"
+  "previousRound": null
 }

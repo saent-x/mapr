@@ -1,0 +1,24 @@
+{
+  "featureId": "fix-app-jsx-line-count",
+  "reviewedAt": "2026-03-27T06:34:50Z",
+  "commitId": "c32ded6",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix extracts panel-derived state, panel backfill effects, and map list computation into `usePanelState`, which drops `src/App.jsx` from 417 lines to 372 while preserving the filter-aware map data flow. The updated regression test now follows the moved `mapNewsList` logic in either `App.jsx` or `usePanelState.js`, and the existing build/test checks still pass.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/frontend-refactor/scrutiny/reviews/frontend-state-management.json",
+  "summary": "Pass. The original `App.jsx < 400` scrutiny failure is resolved: `src/App.jsx` is now 372 lines, the extracted hook keeps the panel/map derivations intact, and the existing suite plus Vite build both stay green.",
+  "reviewedArtifacts": [
+    "commit:c32ded6",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T06-31-30-612Z__fix-app-jsx-line-count__c69a7470-d768-4f82-8747-84129a98ffc3.json",
+    "/Users/tor/Documents/projects/mapr/.factory/validation/frontend-refactor/scrutiny/reviews/frontend-state-management.json",
+    "src/App.jsx",
+    "src/hooks/usePanelState.js",
+    "test/frontendInteractions.test.js"
+  ]
+}
