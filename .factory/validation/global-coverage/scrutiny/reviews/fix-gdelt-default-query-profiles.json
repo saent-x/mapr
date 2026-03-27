@@ -1,0 +1,15 @@
+{
+  "featureId": "fix-gdelt-default-query-profiles",
+  "reviewedAt": "2026-03-27T04:24:30.721299Z",
+  "commitId": "436ff0c",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix changes fetchLiveNews() so the normal no-query path now calls getDefaultQueryProfiles(), activating the combined base, region, and language profile set in production. The added regression test covers the exact fallback path and asserts the 25-profile combined set still includes sourcecountry: and sourcelang: operators.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/global-coverage/scrutiny/reviews/gdelt-advanced-querying.json",
+  "summary": "Pass. The original dead-code gap is closed: default ingestion now uses the advanced regional and language-targeted GDELT profiles, and the regression test protects the behavior."
+}

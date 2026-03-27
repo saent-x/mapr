@@ -1,0 +1,15 @@
+{
+  "featureId": "fix-html-source-overlap",
+  "reviewedAt": "2026-03-27T04:24:30.721299Z",
+  "commitId": "635a320",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The four overlapping HTML candidates were replaced with distinct publishers on hostnames absent from the RSS catalog, satisfying the original requirement for 5+ genuinely new non-RSS sources. The geocoder alias fix also correctly routes alias names such as Congo-Brazzaville through COUNTRY_LOOKUP before ISO resolution, and both behaviors are covered by focused regression tests.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/global-coverage/scrutiny/reviews/html-scraper-sources.json",
+  "summary": "Pass. The overlap problem is resolved, the milestone still retains well above five unique enabled HTML sources, and the alias-to-ISO regression is covered by tests."
+}
