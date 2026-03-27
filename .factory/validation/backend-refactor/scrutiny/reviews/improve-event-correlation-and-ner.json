@@ -1,0 +1,23 @@
+{
+  "featureId": "improve-event-correlation-and-ner",
+  "reviewedAt": "2026-03-27T05:11:20.828648Z",
+  "commitId": "4191913",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The entity-overlap matching logic, temporal weighting, and gazetteer expansion align with the intended behavior, and the added tests cover the new grouping paths. I did not find a high-confidence correctness bug in the reviewed changes.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass. The reviewed entity-correlation and gazetteer changes appear correct and sufficiently covered for the claimed behavior.",
+  "reviewedArtifacts": [
+    "commit:4191913",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T05-03-17-218Z__improve-event-correlation-and-ner__a3150303-7807-4d36-8da6-dd58de692024.json",
+    "server/eventStore.js",
+    "server/entityGazetteer.js",
+    "test/eventCorrelation.test.js"
+  ]
+}

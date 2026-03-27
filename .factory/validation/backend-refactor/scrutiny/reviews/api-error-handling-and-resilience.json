@@ -1,0 +1,33 @@
+{
+  "featureId": "api-error-handling-and-resilience",
+  "reviewedAt": "2026-03-27T05:11:20.828648Z",
+  "commitId": "12693c4",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The error-format standardization, timeout wrapper, and fetch-path circuit breaker integration are broadly sound. I found one non-blocking bug in the health-summary accounting for cooled-down circuits.",
+    "issues": [
+      {
+        "file": "server/circuitBreaker.js",
+        "line": 125,
+        "severity": "non_blocking",
+        "description": "Fix cooled-down circuit accounting in getCircuitSummary(). When an OPEN circuit has passed its cooldown, the function executes `open--` before any open count was added, so the `/api/health` summary can report negative `open` values and an inconsistent breakdown until the next probe transitions the source. This misreports circuit-breaker health exactly in the state operators rely on for diagnostics.",
+        "suggestedFix": "Count cooled-down OPEN circuits as half-open directly (or transition the stored state first) instead of decrementing the open accumulator."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass with a non-blocking diagnostics bug. Runtime behavior is sound, but circuit-breaker health summaries miscount sources whose cooldowns have expired.",
+  "reviewedArtifacts": [
+    "commit:12693c4",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T04-56-27-349Z__api-error-handling-and-resilience__b42b5e90-cb34-42c4-9861-5c3fb413fc2a.json",
+    "server/index.js",
+    "server/circuitBreaker.js",
+    "server/pipeline/fetchSources.js",
+    "test/apiErrorHandling.test.js",
+    "test/circuitBreaker.test.js"
+  ]
+}
