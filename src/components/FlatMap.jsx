@@ -324,6 +324,30 @@ const FlatMap = ({
     return selectedRegion ? ['==', ['get', '_iso'], String(selectedRegion)] : ['==', 1, 0];
   }, [selectedRegion]);
 
+  /* ── velocity spike border highlight for countries ── */
+  const spikeIsos = useMemo(() => velocitySpikes.map((s) => s.iso), [velocitySpikes]);
+
+  const spikeBorderFilter = useMemo(() => {
+    if (spikeIsos.length === 0) return ['==', 1, 0]; // never match
+    return ['in', ['get', '_iso'], ['literal', spikeIsos]];
+  }, [spikeIsos]);
+
+  const spikeBorderPaint = useMemo(() => {
+    // Build a match expression for spike vs elevated colors
+    const matchEntries = [];
+    for (const spike of velocitySpikes) {
+      matchEntries.push(spike.iso, spike.level === 'spike' ? 'rgba(255, 85, 119, 0.6)' : 'rgba(255, 170, 51, 0.5)');
+    }
+    const colorExpr = matchEntries.length > 0
+      ? ['match', ['get', '_iso'], ...matchEntries, 'rgba(255, 170, 51, 0.3)']
+      : 'rgba(255, 170, 51, 0.3)';
+    return {
+      'line-color': colorExpr,
+      'line-width': 2,
+      'line-blur': 1.5,
+    };
+  }, [velocitySpikes]);
+
   /* ── article markers GeoJSON ── */
   const articlesGeoJson = useMemo(() => ({
     type: 'FeatureCollection',
@@ -349,9 +373,9 @@ const FlatMap = ({
       })),
   }), [newsList]);
 
-  /* ── velocity spike markers GeoJSON (coverage overlay only) ── */
+  /* ── velocity spike markers GeoJSON (shown in ALL overlay modes) ── */
   const velocitySpikesGeoJson = useMemo(() => {
-    if (mapOverlay !== 'coverage' || velocitySpikes.length === 0) {
+    if (velocitySpikes.length === 0) {
       return { type: 'FeatureCollection', features: [] };
     }
     // Build ISO → representative story lookup
@@ -372,7 +396,7 @@ const FlatMap = ({
           iso: spike.iso,
           level: spike.level,
           zScore: spike.zScore === Infinity ? 99 : spike.zScore,
-          color: spike.level === 'spike' ? '#ffaa00' : '#8aa7ff',
+          color: spike.level === 'spike' ? '#ff5577' : '#ffaa33',
         },
         geometry: {
           type: 'Point',
@@ -381,7 +405,7 @@ const FlatMap = ({
       });
     }
     return { type: 'FeatureCollection', features };
-  }, [mapOverlay, velocitySpikes, newsList]);
+  }, [velocitySpikes, newsList]);
 
   /* ── selected story marker ── */
   const selectedStoryGeoJson = useMemo(() => {
@@ -780,6 +804,13 @@ const FlatMap = ({
               type="line"
               filter={selectedGlowFilter}
               paint={selectedGlowPaint || { 'line-color': 'transparent', 'line-width': 0 }}
+            />
+            {/* Velocity spike border highlight on anomalous regions */}
+            <Layer
+              id="country-spike-border"
+              type="line"
+              filter={spikeBorderFilter}
+              paint={spikeBorderPaint}
             />
           </Source>
         )}

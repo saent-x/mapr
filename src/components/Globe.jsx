@@ -247,19 +247,29 @@ const Globe = ({
       return coverageRings;
     }
 
-    // Severity mode: ambient activity rings
+    // Severity mode: ambient activity rings + velocity spike rings
     if (selectedStory) return [selectedStory];
     const ambient = newsList
       .filter((s) => s.severity >= 60)
       .slice(0, 12);
+
+    // Add velocity spike rings in severity mode too
+    const spikeRings = [];
+    for (const spike of velocitySpikes.slice(0, 10)) {
+      const story = isoToStoryRef[spike.iso];
+      if (story && !ambient.some(a => a.id === story.id)) {
+        spikeRings.push({ ...story, _velocitySpike: true, _spikeLevel: spike.level, _zScore: spike.zScore });
+      }
+    }
+
     if (selectedRegion) {
       const regionRings = newsList
         .filter((s) => s.isoA2 === selectedRegion && s.severity >= 40)
         .slice(0, 6);
       const ids = new Set(regionRings.map((s) => s.id));
-      return [...regionRings, ...ambient.filter((s) => !ids.has(s.id))].slice(0, 14);
+      return [...regionRings, ...ambient.filter((s) => !ids.has(s.id)), ...spikeRings].slice(0, 20);
     }
-    return ambient;
+    return [...ambient, ...spikeRings];
   }, [coverageStatusByIso, isoToStoryRef, mapOverlay, newsList, selectedRegion, selectedStory, velocitySpikes]);
 
   // Arcs: connect countries from events' multi-country countries arrays
@@ -585,7 +595,7 @@ const Globe = ({
               return [c, `${c}88`, `${c}33`, 'rgba(255,255,255,0)'];
             }
             if (s._velocitySpike) {
-              const color = s._spikeLevel === 'spike' ? '#ffaa00' : '#8aa7ff';
+              const color = s._spikeLevel === 'spike' ? '#ff5577' : '#ffaa33';
               return [color, `${color}88`, `${color}33`, 'rgba(255,255,255,0)'];
             }
             const meta = getSeverityMeta(s.severity);

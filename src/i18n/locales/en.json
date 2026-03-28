@@ -352,5 +352,23 @@
     "regional": "regional",
     "local": "local",
     "unknown": "unknown"
+  },
+  "anomaly": {
+    "title": "Anomaly Detection",
+    "spikes": "spikes",
+    "silences": "silences",
+    "noAnomalies": "No anomalies detected",
+    "velocitySpikes": "Velocity Spikes",
+    "silenceDetection": "Silence Detection",
+    "level": {
+      "spike": "Spike",
+      "elevated": "Elevated"
+    },
+    "status": {
+      "anomalous-silence": "Anomalous Silence",
+      "blind-spot": "Blind Spot",
+      "limited-access": "Limited Access"
+    },
+    "toggleLabel": "Anomalies"
   }
 }

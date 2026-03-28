@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, Radio } from 'lucide-react';
+import { SlidersHorizontal, Radio, AlertTriangle } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
@@ -9,6 +9,7 @@ import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
 import ArcPanel from './components/ArcPanel';
+import AnomalyPanel from './components/AnomalyPanel';
 import BriefingExport from './components/BriefingExport';
 import SaveViewDialog from './components/SaveViewDialog';
 import EventTimeline from './components/EventTimeline';
@@ -24,6 +25,7 @@ import { sortStories, storyMatchesFilters } from './utils/storyFilters';
 import { isoToCountry } from './utils/geocoder';
 import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import { encodeViewToURL } from './utils/viewManager';
+import { computeSilenceEntries } from './utils/anomalyUtils';
 import { MOCK_NEWS, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
 
 const Globe = lazy(() => import('./components/Globe'));
@@ -143,6 +145,18 @@ function App() {
   const coverageDiagnostics = useMemo(() => buildCoverageDiagnostics(coverageMetrics, sourceHealth), [coverageMetrics, sourceHealth]);
   const sourceCoverageAudit = useMemo(() => buildSourceCoverageAudit(coverageDiagnostics), [coverageDiagnostics]);
   const coverageStatusByIso = coverageDiagnostics.byIso;
+
+  /* ── Silence detection ── */
+  const silenceEntries = useMemo(() => computeSilenceEntries({
+    articles: activeNews,
+    regionSeverities,
+    coverageStatusByIso,
+    velocitySpikes,
+  }), [activeNews, regionSeverities, coverageStatusByIso, velocitySpikes]);
+
+  /* ── Anomaly panel state ── */
+  const [anomalyPanelOpen, setAnomalyPanelOpen] = React.useState(false);
+  const anomalyCount = velocitySpikes.length + silenceEntries.length;
 
   /* ── Lifecycle messages ── */
   const prevEventsRef = useRef([]);
@@ -304,6 +318,12 @@ function App() {
           onClick={() => setDrawerMode(drawerMode === 'intel' ? null : 'intel')}>
           <Radio size={12} /> INTEL
         </button>
+        <button className={`anomaly-toggle ${anomalyPanelOpen ? 'is-active' : ''}`}
+          onClick={() => setAnomalyPanelOpen((v) => !v)}
+          aria-pressed={anomalyPanelOpen}>
+          <AlertTriangle size={12} /> {t('anomaly.toggleLabel')}
+          {anomalyCount > 0 && <span className="anomaly-toggle-count">{anomalyCount}</span>}
+        </button>
       </div>
 
       <FilterDrawer
@@ -347,6 +367,14 @@ function App() {
           onStorySelect={handleStorySelect} onRegionSelect={handleRegionSelect}
           onClose={() => useUIStore.setState({ selectedArc: null })} />
       )}
+
+      <AnomalyPanel
+        velocitySpikes={velocitySpikes}
+        silenceEntries={silenceEntries}
+        isOpen={anomalyPanelOpen}
+        onClose={() => setAnomalyPanelOpen(false)}
+        onRegionSelect={handleRegionSelect}
+      />
 
       <NewsPanel key={panelRegion || 'closed'} isOpen={panelOpen && !selectedArc}
         regionName={panelRegionName} regionStatus={panelRegionStatus} regionData={panelRegionData}
