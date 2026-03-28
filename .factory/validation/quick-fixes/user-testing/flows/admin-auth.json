@@ -1,0 +1,32 @@
+{
+  "surface": "web-browser",
+  "groupId": "admin-auth",
+  "assertions": [
+    {
+      "id": "VAL-QFIX-001",
+      "status": "pass",
+      "reason": "Direct navigation to /admin showed a password form, an incorrect password produced the localized incorrect-password error, and the configured ADMIN_PASSWORD from the local .env unlocked the admin dashboard.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/quick-fixes/admin-auth/admin-gate-annotated.png",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/quick-fixes/admin-auth/admin-wrong-password-annotated.png",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/quick-fixes/admin-auth/admin-after-submit-annotated.png",
+        "Visible text after the wrong-password submit included: \"Incorrect password. Please try again.\"",
+        "Visible text after the successful submit included: \"Admin Dashboard\", \"Source Health\", and the source catalog table."
+      ]
+    },
+    {
+      "id": "VAL-QFIX-002",
+      "status": "pass",
+      "reason": "The sidebar/navigation only exposed Map, Entities, and Trends; there was no Admin link before navigating directly to /admin.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/quick-fixes/admin-auth/home-annotated.png",
+        "Annotated home screenshot refs showed only the Map, Entities, and Trends links in the sidebar nav."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [],
+  "blockers": []
+}
