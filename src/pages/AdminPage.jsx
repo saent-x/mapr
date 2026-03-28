@@ -141,21 +141,8 @@ export default function AdminPage() {
   const feeds = useMemo(() => catalogData?.feeds || [], [catalogData]);
   const summary = useMemo(() => catalogData?.summary || {}, [catalogData]);
 
-  /* Count statuses from source-catalog feeds */
-  const statusCounts = useMemo(() => {
-    const counts = { ok: 0, empty: 0, failed: 0, 'never-checked': 0 };
-    feeds.forEach((f) => {
-      const norm = normalizeStatus(f.lastStatus);
-      if (norm in counts) counts[norm]++;
-    });
-    return counts;
-  }, [feeds]);
-
   /* Also count from health API rss feeds for more up-to-date data */
   const rssHealth = healthData?.sourceHealth?.rss || {};
-  const healthyCount = rssHealth.healthyFeeds ?? statusCounts.ok;
-  const failedCount = rssHealth.failedFeeds ?? statusCounts.failed;
-  const emptyCount = rssHealth.emptyFeeds ?? statusCounts.empty;
 
   /* Merge health API feed data with catalog feeds for best freshness */
   const mergedFeeds = useMemo(() => {
@@ -174,6 +161,20 @@ export default function AdminPage() {
       };
     });
   }, [feeds, rssHealth.feeds]);
+
+  /* Count statuses from merged feeds (same data source as filteredFeeds) */
+  const statusCounts = useMemo(() => {
+    const counts = { ok: 0, empty: 0, failed: 0, 'never-checked': 0 };
+    mergedFeeds.forEach((f) => {
+      const norm = normalizeStatus(f.lastStatus);
+      if (norm in counts) counts[norm]++;
+    });
+    return counts;
+  }, [mergedFeeds]);
+
+  const healthyCount = rssHealth.healthyFeeds ?? statusCounts.ok;
+  const failedCount = rssHealth.failedFeeds ?? statusCounts.failed;
+  const emptyCount = rssHealth.emptyFeeds ?? statusCounts.empty;
 
   /* Filter and sort feeds */
   const filteredFeeds = useMemo(() => {

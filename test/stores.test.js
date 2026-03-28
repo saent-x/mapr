@@ -102,7 +102,7 @@ describe('uiStore', async () => {
   const { default: useUIStore } = await import('../src/stores/uiStore.js');
 
   const DEFAULTS = {
-    mapMode: 'globe',
+    mapMode: 'flat',
     drawerMode: null,
     selectedRegion: null,
     selectedStoryId: null,
@@ -115,6 +115,12 @@ describe('uiStore', async () => {
 
   beforeEach(() => {
     useUIStore.setState(DEFAULTS);
+  });
+
+  it('initializes mapMode to flat for desktop sessions', () => {
+    const initial = useUIStore.getInitialState();
+    assert.equal(initial.mapMode, 'flat',
+      'desktop sessions must default to flat map mode to avoid loading the heavy Three.js/vendor-globe chunk');
   });
 
   it('selectRegion toggles region on/off', () => {

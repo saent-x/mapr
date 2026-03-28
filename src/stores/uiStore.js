@@ -6,7 +6,7 @@ import { loadViews, saveViews, createView } from '../utils/viewManager.js';
  */
 const useUIStore = create((set, get) => ({
   /* ── map ── */
-  mapMode: typeof window !== 'undefined' && window.innerWidth < 768 ? 'flat' : 'globe',
+  mapMode: 'flat',
 
   /* ── drawer ── */
   drawerMode: null, // null | 'filters' | 'intel'
