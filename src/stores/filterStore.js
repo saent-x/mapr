@@ -65,7 +65,7 @@ const useFilterStore = create((set, get) => ({
   applyView: (view) => {
     const { filters = {}, mapState = {} } = view;
     const updates = {};
-    if (filters.searchQuery !== undefined) updates.searchQuery = filters.searchQuery;
+    if (filters.searchQuery !== undefined) { updates.searchQuery = filters.searchQuery; updates.debouncedSearch = filters.searchQuery; }
     if (filters.minSeverity !== undefined) updates.minSeverity = filters.minSeverity;
     if (filters.minConfidence !== undefined) updates.minConfidence = filters.minConfidence;
     if (filters.dateWindow !== undefined) updates.dateWindow = filters.dateWindow;

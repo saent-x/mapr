@@ -78,6 +78,16 @@ describe('filterStore', async () => {
     assert.equal(s.mapOverlay, 'coverage');
   });
 
+  it('applyView sets debouncedSearch when searchQuery is present', () => {
+    useFilterStore.getState().applyView({
+      filters: { searchQuery: 'earthquake' },
+      mapState: {},
+    });
+    const s = useFilterStore.getState();
+    assert.equal(s.searchQuery, 'earthquake');
+    assert.equal(s.debouncedSearch, 'earthquake', 'debouncedSearch must be set immediately so saved search filters apply without re-typing');
+  });
+
   it('applyView does not overwrite fields not present in the view', () => {
     useFilterStore.getState().setHideAmplified(true);
     useFilterStore.getState().applyView({ filters: { minSeverity: 10 }, mapState: {} });
