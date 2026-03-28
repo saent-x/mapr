@@ -7,7 +7,67 @@
  * Uses multiple signals to detect co-occurrence:
  * 1. Events with multi-country `countries` arrays (direct co-occurrence)
  * 2. Shared entities (organizations/people) appearing in events from different countries
+ *
+ * Filtering:
+ * - High-frequency global organization names (UN, NATO, EU, etc.) are excluded
+ *   from entity co-occurrence to prevent false arcs between unrelated countries.
+ * - Remaining entity pairs require title similarity (Jaccard > 0.15) to confirm
+ *   topical relatedness.
  */
+
+/**
+ * Common global organizations that appear in many countries' news without
+ * implying a genuine bilateral relationship. Mentions of these entities
+ * are skipped when computing entity-based co-occurrence.
+ */
+export const HIGH_FREQUENCY_ENTITIES = new Set([
+  'UN', 'United Nations',
+  'NATO', 'North Atlantic Treaty Organization',
+  'EU', 'European Union',
+  'WHO', 'World Health Organization',
+  'IMF', 'International Monetary Fund',
+  'World Bank',
+  'ASEAN', 'Association of Southeast Asian Nations',
+  'AU', 'African Union',
+  'ECOWAS', 'Economic Community of West African States',
+  'G7', 'G8', 'G20',
+  'ICC', 'International Criminal Court',
+  'WTO', 'World Trade Organization',
+  'UNICEF',
+  'UNESCO',
+  'UNHCR',
+  'Red Cross', 'ICRC',
+  'Amnesty International',
+  'Human Rights Watch',
+  'Doctors Without Borders', 'MSF',
+  'Greenpeace',
+  'Interpol',
+  'OSCE',
+  'BRICS',
+  'OPEC',
+]);
+
+/**
+ * Compute Jaccard token overlap between two title strings.
+ * Tokenizes by splitting on non-word characters and filtering short tokens.
+ *
+ * @param {string} titleA - First title
+ * @param {string} titleB - Second title
+ * @returns {number} Jaccard similarity in [0, 1]
+ */
+export function jaccardTokenSimilarity(titleA, titleB) {
+  if (!titleA || !titleB) return 0;
+  const tokenize = (s) => new Set(s.toLowerCase().split(/\W+/).filter((t) => t.length > 1));
+  const setA = tokenize(titleA);
+  const setB = tokenize(titleB);
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const t of setA) {
+    if (setB.has(t)) intersection++;
+  }
+  const union = new Set([...setA, ...setB]).size;
+  return union > 0 ? intersection / union : 0;
+}
 
 /**
  * Add a co-occurrence pair to the pairs map.
@@ -89,11 +149,14 @@ export function buildCountryCoOccurrences(events) {
     for (const entity of allEntities) {
       const name = entity.name || entity;
       if (!name || typeof name !== 'string' || name.length < 3) continue;
+      // Skip high-frequency global organizations that cause false co-occurrence
+      if (HIGH_FREQUENCY_ENTITIES.has(name)) continue;
       if (!entityCountryMap[name]) entityCountryMap[name] = [];
       entityCountryMap[name].push({
         iso: event.isoA2,
         severity: event.severity || 0,
         eventId: event.id,
+        title: event.title || '',
       });
     }
   }
@@ -108,11 +171,34 @@ export function buildCountryCoOccurrences(events) {
     const isos = Object.keys(byCountry);
     if (isos.length < 2) continue;
 
-    // Create pairs between all countries sharing this entity
+    // Create pairs between all countries sharing this entity,
+    // but only if the paired events have sufficient title similarity.
     for (let i = 0; i < isos.length; i++) {
       for (let j = i + 1; j < isos.length; j++) {
+        const occsA = byCountry[isos[i]];
+        const occsB = byCountry[isos[j]];
+
+        // Title similarity gate: require Jaccard > 0.15 between at least
+        // one pair of event titles from the two countries.
+        // If either side lacks titles entirely, allow the pairing (be lenient).
+        const titlesA = occsA.map((o) => o.title).filter(Boolean);
+        const titlesB = occsB.map((o) => o.title).filter(Boolean);
+        let hasSimilarTitles = titlesA.length === 0 || titlesB.length === 0;
+        if (!hasSimilarTitles) {
+          for (const a of occsA) {
+            for (const b of occsB) {
+              if (a.title && b.title && jaccardTokenSimilarity(a.title, b.title) > 0.15) {
+                hasSimilarTitles = true;
+                break;
+              }
+            }
+            if (hasSimilarTitles) break;
+          }
+        }
+        if (!hasSimilarTitles) continue;
+
         // Accumulate ALL event IDs from both countries via addPair's dedup logic
-        const allOccs = [...byCountry[isos[i]], ...byCountry[isos[j]]];
+        const allOccs = [...occsA, ...occsB];
         for (const occ of allOccs) {
           addPair(pairs, isos[i], isos[j], occ.severity, occ.eventId);
         }

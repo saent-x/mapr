@@ -6,6 +6,8 @@ import {
   coOccurrenceToStroke,
   coOccurrenceToColor,
   buildCountryStoryMap,
+  HIGH_FREQUENCY_ENTITIES,
+  jaccardTokenSimilarity,
 } from '../src/utils/geopoliticalArcs.js';
 
 describe('buildCountryCoOccurrences', () => {
@@ -56,9 +58,9 @@ describe('buildCountryCoOccurrences', () => {
 
   it('builds pairs from shared entities across countries with ALL event IDs', () => {
     const events = [
-      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'NATO' }], people: [] } },
-      { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, entities: { organizations: [{ name: 'NATO' }], people: [] } },
-      { id: 'e3', isoA2: 'DE', countries: ['DE'], severity: 50, entities: { organizations: [{ name: 'NATO' }], people: [] } },
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Zelensky meets Biden to discuss military aid for Ukraine', entities: { organizations: [], people: [{ name: 'Zelensky' }] } },
+      { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, title: 'France hosts Zelensky for Ukraine military aid summit', entities: { organizations: [], people: [{ name: 'Zelensky' }] } },
+      { id: 'e3', isoA2: 'DE', countries: ['DE'], severity: 50, title: 'Germany pledges Zelensky military aid package for Ukraine', entities: { organizations: [], people: [{ name: 'Zelensky' }] } },
     ];
     const result = buildCountryCoOccurrences(events);
     assert.ok(result.size >= 3, 'Should have at least 3 pairs: US-FR, US-DE, FR-DE');
@@ -82,9 +84,9 @@ describe('buildCountryCoOccurrences', () => {
 
   it('combines multi-country and entity signals', () => {
     const events = [
-      { id: 'e1', isoA2: 'US', countries: ['US', 'IR'], severity: 90, entities: { organizations: [], people: [] } },
-      { id: 'e2', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
-      { id: 'e3', isoA2: 'IR', countries: ['IR'], severity: 70, entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
+      { id: 'e1', isoA2: 'US', countries: ['US', 'IR'], severity: 90, title: 'US Iran tensions escalate over nuclear deal', entities: { organizations: [], people: [] } },
+      { id: 'e2', isoA2: 'US', countries: ['US'], severity: 80, title: 'Pentagon officials discuss Iran military buildup', entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
+      { id: 'e3', isoA2: 'IR', countries: ['IR'], severity: 70, title: 'Iran responds to Pentagon military threats', entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
     ];
     const result = buildCountryCoOccurrences(events);
     const irUs = result.get('IR-US');
@@ -95,15 +97,15 @@ describe('buildCountryCoOccurrences', () => {
   it('extracts entities from supportingArticles', () => {
     const events = [
       {
-        id: 'e1', isoA2: 'US', countries: ['US'], severity: 80,
+        id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Macron visits Washington for defense cooperation talks',
         supportingArticles: [
-          { entities: { organizations: [{ name: 'NATO' }], people: [] } },
+          { entities: { organizations: [{ name: 'Elysée Palace' }], people: [] } },
         ],
       },
       {
-        id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60,
+        id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, title: 'France and Washington announce defense cooperation deal',
         supportingArticles: [
-          { entities: { organizations: [{ name: 'NATO' }], people: [] } },
+          { entities: { organizations: [{ name: 'Elysée Palace' }], people: [] } },
         ],
       },
     ];
@@ -229,12 +231,12 @@ describe('coOccurrenceToColor', () => {
 
 describe('entity-derived arc drilldown', () => {
   it('storyIds on entity-derived arcs resolve correct events for drilldown', () => {
-    // Entity-derived arcs: events share an entity (NATO) across countries,
+    // Entity-derived arcs: events share a specific entity (Zelensky) across countries,
     // but each event only has a single country in its countries array.
     const events = [
-      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'NATO' }], people: [] }, coordinates: [38.9, -77.0] },
-      { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, entities: { organizations: [{ name: 'NATO' }], people: [] }, coordinates: [48.8, 2.3] },
-      { id: 'e3', isoA2: 'DE', countries: ['DE'], severity: 50, entities: { organizations: [{ name: 'NATO' }], people: [] }, coordinates: [52.5, 13.4] },
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Biden meets Zelensky to discuss Ukraine military aid', entities: { organizations: [], people: [{ name: 'Zelensky' }] }, coordinates: [38.9, -77.0] },
+      { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, title: 'France hosts Zelensky for Ukraine military aid talks', entities: { organizations: [], people: [{ name: 'Zelensky' }] }, coordinates: [48.8, 2.3] },
+      { id: 'e3', isoA2: 'DE', countries: ['DE'], severity: 50, title: 'Germany pledges Zelensky military aid for Ukraine defense', entities: { organizations: [], people: [{ name: 'Zelensky' }] }, coordinates: [52.5, 13.4] },
     ];
 
     const coOccurrences = buildCountryCoOccurrences(events);
@@ -268,10 +270,10 @@ describe('entity-derived arc drilldown', () => {
   it('storyIds include both multi-country and entity-linked event IDs', () => {
     const events = [
       // Multi-country event
-      { id: 'mc1', isoA2: 'US', countries: ['US', 'IR'], severity: 90, entities: { organizations: [], people: [] }, coordinates: [38.9, -77.0] },
+      { id: 'mc1', isoA2: 'US', countries: ['US', 'IR'], severity: 90, title: 'US Iran tensions escalate over nuclear dispute', entities: { organizations: [], people: [] }, coordinates: [38.9, -77.0] },
       // Entity-linked events (shared entity Pentagon)
-      { id: 'ent1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [38.9, -77.0] },
-      { id: 'ent2', isoA2: 'IR', countries: ['IR'], severity: 70, entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [35.7, 51.4] },
+      { id: 'ent1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Pentagon officials discuss Iran military buildup', entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [38.9, -77.0] },
+      { id: 'ent2', isoA2: 'IR', countries: ['IR'], severity: 70, title: 'Iran responds to Pentagon military threats', entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [35.7, 51.4] },
     ];
 
     const coOccurrences = buildCountryCoOccurrences(events);
@@ -328,5 +330,106 @@ describe('buildCountryStoryMap', () => {
     ];
     const map = buildCountryStoryMap(stories);
     assert.equal(Object.keys(map).length, 0);
+  });
+});
+
+describe('HIGH_FREQUENCY_ENTITIES', () => {
+  it('contains common global organizations', () => {
+    for (const org of ['UN', 'NATO', 'EU', 'WHO', 'IMF', 'World Bank', 'ASEAN', 'AU', 'ECOWAS']) {
+      assert.ok(HIGH_FREQUENCY_ENTITIES.has(org), `Should contain ${org}`);
+    }
+  });
+
+  it('does not contain specific entities', () => {
+    for (const name of ['Zelensky', 'Pentagon', 'Kremlin', 'White House']) {
+      assert.ok(!HIGH_FREQUENCY_ENTITIES.has(name), `Should NOT contain ${name}`);
+    }
+  });
+});
+
+describe('jaccardTokenSimilarity', () => {
+  it('returns 0 for empty or null inputs', () => {
+    assert.equal(jaccardTokenSimilarity('', 'hello'), 0);
+    assert.equal(jaccardTokenSimilarity(null, 'hello'), 0);
+    assert.equal(jaccardTokenSimilarity('hello', undefined), 0);
+  });
+
+  it('returns 1 for identical titles', () => {
+    assert.equal(jaccardTokenSimilarity('hello world', 'hello world'), 1);
+  });
+
+  it('returns 0 for completely different titles', () => {
+    assert.equal(jaccardTokenSimilarity('apple banana cherry', 'dog elephant fox'), 0);
+  });
+
+  it('computes partial overlap correctly', () => {
+    // "ukraine military aid" vs "france military cooperation"
+    // Set A: {ukraine, military, aid}, Set B: {france, military, cooperation}
+    // Intersection: {military} = 1, Union = 5, Jaccard = 0.2
+    const sim = jaccardTokenSimilarity('ukraine military aid', 'france military cooperation');
+    assert.ok(sim > 0.15, `Expected > 0.15, got ${sim}`);
+    assert.ok(sim < 0.5, `Expected < 0.5, got ${sim}`);
+  });
+
+  it('is case-insensitive', () => {
+    assert.equal(
+      jaccardTokenSimilarity('Ukraine Crisis', 'ukraine crisis'),
+      1,
+    );
+  });
+});
+
+describe('co-occurrence relevance filtering', () => {
+  it('NATO mention in US+France news does NOT create entity arc', () => {
+    const events = [
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 70, title: 'US announces new NATO defense spending commitments', entities: { organizations: [{ name: 'NATO' }], people: [] } },
+      { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, title: 'France holds bilateral trade talks with Germany', entities: { organizations: [{ name: 'NATO' }], people: [] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    // NATO is a high-frequency entity, so no entity-based arc should be created.
+    // There is no multi-country co-occurrence either (each event has only one country).
+    assert.ok(!result.has('FR-US'), 'FR-US pair should NOT exist when only shared entity is NATO');
+  });
+
+  it('specific entity like Zelensky in US+Ukraine news DOES create arc', () => {
+    const events = [
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Biden meets Zelensky to discuss Ukraine military aid', entities: { organizations: [], people: [{ name: 'Zelensky' }] } },
+      { id: 'e2', isoA2: 'UA', countries: ['UA'], severity: 75, title: 'Ukraine president Zelensky seeks military aid from allies', entities: { organizations: [], people: [{ name: 'Zelensky' }] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    assert.ok(result.has('UA-US'), 'UA-US pair SHOULD exist for specific entity Zelensky with related titles');
+    const uaUs = result.get('UA-US');
+    assert.ok(uaUs.storyIds.includes('e1'), 'Should include US event');
+    assert.ok(uaUs.storyIds.includes('e2'), 'Should include UA event');
+  });
+
+  it('multi-country events still create arcs without filtering', () => {
+    // Even if the only shared entity is NATO, multi-country events are not filtered
+    const events = [
+      { id: 'e1', countries: ['US', 'FR'], severity: 70, title: 'US and France discuss NATO defense spending', entities: { organizations: [{ name: 'NATO' }], people: [] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    assert.ok(result.has('FR-US'), 'FR-US pair SHOULD exist from multi-country event (unfiltered)');
+  });
+
+  it('title similarity filters topically unrelated entity pairs', () => {
+    // Same specific entity (SpaceX) appears in completely unrelated stories
+    const events = [
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 50, title: 'SpaceX launches new satellite constellation', entities: { organizations: [{ name: 'SpaceX' }], people: [] } },
+      { id: 'e2', isoA2: 'BR', countries: ['BR'], severity: 40, title: 'Brazil Amazon deforestation reaches record levels', entities: { organizations: [{ name: 'SpaceX' }], people: [] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    // Titles are completely unrelated (Jaccard ≈ 0), so no arc should be created
+    assert.ok(!result.has('BR-US'), 'BR-US pair should NOT exist when shared entity appears in unrelated stories');
+  });
+
+  it('allows entity pairing when events lack titles (lenient fallback)', () => {
+    const events = [
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
+      { id: 'e2', isoA2: 'IR', countries: ['IR'], severity: 70, entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    // No titles means similarity check is skipped (lenient), so arc should still be created
+    assert.ok(result.has('IR-US'), 'IR-US pair SHOULD exist when events have no titles (lenient fallback)');
   });
 });
