@@ -283,3 +283,100 @@ test('canonicalizeArticles assigns distinct ids to separate events with similar 
   assert.equal(events.length, 2);
   assert.notEqual(events[0].id, events[1].id);
 });
+
+test('canonicalizeArticles uses best-located article coordinates when precision differs', () => {
+  // Primary article (highest severity) has country-level precision
+  // Secondary article has locality-level precision with more accurate coordinates
+  const events = canonicalizeArticles([
+    createArticle({
+      id: 'primary-1',
+      severity: 95,
+      title: 'Major earthquake strikes near Tokyo, Japan',
+      coordinates: [36.2, 138.3], // country centroid (less precise)
+      geocodePrecision: 'country',
+      geocodeMatchedOn: 'title-country',
+      source: 'GDELT',
+      sourceCountry: 'JP',
+      publishedAt: '2026-03-15T11:00:00.000Z'
+    }),
+    createArticle({
+      id: 'secondary-1',
+      severity: 70,
+      title: 'Major earthquake strikes near Tokyo, Japan — local reports',
+      coordinates: [35.6764, 139.65], // city-level (more precise)
+      geocodePrecision: 'locality',
+      geocodeMatchedOn: 'title-city',
+      source: 'Japan Times',
+      sourceCountry: 'JP',
+      publishedAt: '2026-03-15T10:30:00.000Z'
+    })
+  ]);
+
+  assert.equal(events.length, 1);
+  const event = events[0];
+  // Event should use the locality-precision coordinates, not the country-level ones
+  assert.deepEqual(event.coordinates, [35.6764, 139.65]);
+  assert.equal(event.geocodePrecision, 'locality');
+  assert.equal(event.geocodeMatchedOn, 'title-city');
+});
+
+test('canonicalizeArticles keeps primary article coordinates when precisions are equal', () => {
+  const events = canonicalizeArticles([
+    createArticle({
+      id: 'primary-2',
+      severity: 90,
+      title: 'Tokyo earthquake shakes buildings in central district',
+      coordinates: [35.6764, 139.65],
+      geocodePrecision: 'locality',
+      geocodeMatchedOn: 'title-city',
+      source: 'Reuters',
+      sourceCountry: 'GB',
+      publishedAt: '2026-03-15T11:00:00.000Z'
+    }),
+    createArticle({
+      id: 'secondary-2',
+      severity: 70,
+      title: 'Tokyo earthquake shakes buildings, strong tremors reported',
+      coordinates: [35.68, 139.68],
+      geocodePrecision: 'locality',
+      geocodeMatchedOn: 'title-city',
+      source: 'Japan Times',
+      sourceCountry: 'JP',
+      publishedAt: '2026-03-15T10:30:00.000Z'
+    })
+  ]);
+
+  assert.equal(events.length, 1);
+  const event = events[0];
+  // When precisions match, should use primary article's coordinates
+  assert.deepEqual(event.coordinates, [35.6764, 139.65]);
+});
+
+test('canonicalizeArticles never produces events with [0,0] coordinates', () => {
+  const events = canonicalizeArticles([
+    createArticle({
+      id: 'valid-1',
+      title: 'Tokyo earthquake warning issued by officials',
+      coordinates: [35.6764, 139.65],
+      geocodePrecision: 'locality'
+    }),
+    createArticle({
+      id: 'valid-2',
+      title: 'Berlin protests escalate against government reforms',
+      isoA2: 'DE',
+      region: 'Germany',
+      locality: 'Berlin',
+      coordinates: [52.52, 13.405],
+      geocodePrecision: 'locality'
+    })
+  ]);
+
+  for (const event of events) {
+    assert.ok(event.coordinates, `Event ${event.id} has coordinates`);
+    assert.ok(Array.isArray(event.coordinates), `Event ${event.id} coordinates is array`);
+    assert.ok(
+      !(event.coordinates[0] === 0 && event.coordinates[1] === 0),
+      `Event ${event.id} should not have [0,0] coordinates`
+    );
+  }
+});

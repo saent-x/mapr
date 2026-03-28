@@ -197,6 +197,12 @@ const Globe = ({
   }, [newsList, regionSeverities, selectedRegion, selectedStory]);
 
   // Points: show all articles globally, highlight active region
+  // Filter out any articles with invalid coordinates (null, missing, or [0,0])
+  const safeNewsList = useMemo(() => newsList.filter((s) =>
+    s.coordinates && Array.isArray(s.coordinates) && s.coordinates.length >= 2
+    && !(s.coordinates[0] === 0 && s.coordinates[1] === 0)
+  ), [newsList]);
+
   const activeRegion = selectedRegion || (hoveredCountry ? getIso(hoveredCountry) : null);
 
   const isActivePoint = (s) => s.isoA2 === activeRegion;
@@ -459,7 +465,7 @@ const Globe = ({
           }}
 
           /* === POINTS (all articles, highlighted for active region) === */
-          pointsData={newsList}
+          pointsData={safeNewsList}
           pointLat={(s) => s.coordinates[0]}
           pointLng={(s) => s.coordinates[1]}
           pointAltitude={(s) => {

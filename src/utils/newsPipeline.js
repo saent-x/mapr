@@ -358,6 +358,13 @@ function buildCanonicalEvent(articles) {
     getPrimaryArticleScore(right, latestPublishedAt) - getPrimaryArticleScore(left, latestPublishedAt)
   ))[0];
 
+  // Use the best-located article's geographic data when it has higher precision
+  // than the primary article, so events get the most accurate coordinates available.
+  const primaryPrecisionRank = PRECISION_RANK[getEffectivePrecision(primaryArticle)] || 0;
+  const bestPrecisionRank = PRECISION_RANK[bestPrecision] || 0;
+  const useLocationFrom = (bestPrecisionRank > primaryPrecisionRank && bestLocationArticle)
+    ? bestLocationArticle : primaryArticle;
+
   return {
     ...primaryArticle,
     id: buildEventId(primaryArticle, articles),
@@ -380,6 +387,10 @@ function buildCanonicalEvent(articles) {
     confidence,
     confidenceReasons,
     verificationStatus,
+    coordinates: useLocationFrom.coordinates,
+    region: useLocationFrom.region || primaryArticle.region,
+    isoA2: useLocationFrom.isoA2 || primaryArticle.isoA2,
+    locality: useLocationFrom.locality || primaryArticle.locality,
     geocodePrecision: bestPrecision,
     geocodeMatchedOn: bestLocationArticle?.geocodeMatchedOn || primaryArticle.geocodeMatchedOn || null,
     supportingArticles: articles

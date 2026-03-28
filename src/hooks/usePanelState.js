@@ -51,7 +51,11 @@ export default function usePanelState({
 
   /* ── Map data ── */
   const mapNewsList = useMemo(() => {
-    const base = activeNews.filter((a) => a.coordinates && a.isoA2);
+    const base = activeNews.filter((a) =>
+      a.coordinates && a.isoA2
+      && Array.isArray(a.coordinates) && a.coordinates.length >= 2
+      && !(a.coordinates[0] === 0 && a.coordinates[1] === 0)
+    );
     return (!panelRegion || panelNews.length === 0) ? base : mergeStoryLists(base, panelNews);
   }, [activeNews, panelNews, panelRegion]);
   const mapRegionSeverities = useMemo(() => (

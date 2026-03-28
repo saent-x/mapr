@@ -328,7 +328,8 @@ const FlatMap = ({
   const articlesGeoJson = useMemo(() => ({
     type: 'FeatureCollection',
     features: newsList
-      .filter((s) => s.coordinates && s.coordinates.length >= 2)
+      .filter((s) => s.coordinates && s.coordinates.length >= 2
+        && !(s.coordinates[0] === 0 && s.coordinates[1] === 0))
       .map((story) => ({
         type: 'Feature',
         properties: {
