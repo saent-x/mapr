@@ -267,13 +267,15 @@ describe('entity-derived arc drilldown', () => {
     assert.equal(countriesOnlyShared.length, 0, 'Countries-only filter finds nothing for entity-derived arcs');
   });
 
-  it('storyIds include both multi-country and entity-linked event IDs', () => {
+  it('storyIds include both multi-country and entity-linked event IDs but exclude unrelated stories', () => {
     const events = [
       // Multi-country event
       { id: 'mc1', isoA2: 'US', countries: ['US', 'IR'], severity: 90, title: 'US Iran tensions escalate over nuclear dispute', entities: { organizations: [], people: [] }, coordinates: [38.9, -77.0] },
-      // Entity-linked events (shared entity Pentagon)
+      // Entity-linked events (shared entity Pentagon) — related to Iran
       { id: 'ent1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Pentagon officials discuss Iran military buildup', entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [38.9, -77.0] },
       { id: 'ent2', isoA2: 'IR', countries: ['IR'], severity: 70, title: 'Iran responds to Pentagon military threats', entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [35.7, 51.4] },
+      // Unrelated US event that also mentions Pentagon — should NOT leak into IR-US arc
+      { id: 'unrel1', isoA2: 'US', countries: ['US'], severity: 50, title: 'Pentagon budget debate continues in Congress', entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [38.9, -77.0] },
     ];
 
     const coOccurrences = buildCountryCoOccurrences(events);
@@ -283,11 +285,13 @@ describe('entity-derived arc drilldown', () => {
     const irUs = arcs.find((a) => a.id === 'IR-US');
     assert.ok(irUs, 'IR-US arc should exist');
 
-    // Should include the multi-country event AND entity-linked events
+    // Should include the multi-country event AND the related entity-linked events
     assert.ok(irUs.storyIds.includes('mc1'), 'storyIds should include multi-country event');
-    // At least one entity-linked event should be in storyIds
-    const hasEntityEvent = irUs.storyIds.includes('ent1') || irUs.storyIds.includes('ent2');
-    assert.ok(hasEntityEvent, 'storyIds should include at least one entity-linked event');
+    assert.ok(irUs.storyIds.includes('ent1'), 'storyIds should include related Pentagon/Iran US event');
+    assert.ok(irUs.storyIds.includes('ent2'), 'storyIds should include related Pentagon/Iran IR event');
+
+    // The unrelated Pentagon budget event should NOT be included
+    assert.ok(!irUs.storyIds.includes('unrel1'), 'storyIds should NOT include unrelated Pentagon budget debate');
 
     // Drilldown via storyIds resolves all contributing events
     const storyIdSet = new Set(irUs.storyIds);

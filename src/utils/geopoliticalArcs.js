@@ -172,34 +172,34 @@ export function buildCountryCoOccurrences(events) {
     if (isos.length < 2) continue;
 
     // Create pairs between all countries sharing this entity,
-    // but only if the paired events have sufficient title similarity.
+    // but only include the SPECIFIC events whose titles pass the similarity check.
     for (let i = 0; i < isos.length; i++) {
       for (let j = i + 1; j < isos.length; j++) {
         const occsA = byCountry[isos[i]];
         const occsB = byCountry[isos[j]];
 
-        // Title similarity gate: require Jaccard > 0.15 between at least
-        // one pair of event titles from the two countries.
-        // If either side lacks titles entirely, allow the pairing (be lenient).
-        const titlesA = occsA.map((o) => o.title).filter(Boolean);
-        const titlesB = occsB.map((o) => o.title).filter(Boolean);
-        let hasSimilarTitles = titlesA.length === 0 || titlesB.length === 0;
-        if (!hasSimilarTitles) {
-          for (const a of occsA) {
-            for (const b of occsB) {
-              if (a.title && b.title && jaccardTokenSimilarity(a.title, b.title) > 0.15) {
-                hasSimilarTitles = true;
-                break;
+        // Compare each cross-country event pair individually.
+        // Only events that participate in at least one passing pair are included.
+        // If either event in a pair lacks a title, allow the pairing (be lenient).
+        const matchedIds = new Set();
+        const matchedOccs = [];
+        for (const a of occsA) {
+          for (const b of occsB) {
+            const lenient = !a.title || !b.title;
+            if (lenient || jaccardTokenSimilarity(a.title, b.title) > 0.15) {
+              if (!matchedIds.has(a.eventId)) {
+                matchedIds.add(a.eventId);
+                matchedOccs.push(a);
+              }
+              if (!matchedIds.has(b.eventId)) {
+                matchedIds.add(b.eventId);
+                matchedOccs.push(b);
               }
             }
-            if (hasSimilarTitles) break;
           }
         }
-        if (!hasSimilarTitles) continue;
 
-        // Accumulate ALL event IDs from both countries via addPair's dedup logic
-        const allOccs = [...occsA, ...occsB];
-        for (const occ of allOccs) {
+        for (const occ of matchedOccs) {
           addPair(pairs, isos[i], isos[j], occ.severity, occ.eventId);
         }
       }
