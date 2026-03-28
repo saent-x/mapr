@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-geopolitical-arc-storyids-complete",
+  "reviewedAt": "2026-03-28T04:17:22Z",
+  "commitId": "bcaf97e",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The follow-up fix fully addresses the remaining provenance gap. `buildCountryCoOccurrences()` now adds every entity-linked occurrence from both countries into the pair, so `storyIds` accumulates the complete contributing event set, and the updated regression test plus a direct probe confirm FR↔US entity-derived arcs now carry both event IDs for ArcPanel's shared-intel drilldown.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The scrutiny-validator skill should document a manual-review fallback when `scrutiny-feature-reviewer` Task launches fail because the current subagent path can still terminate before producing any report.",
+      "evidence": "This osint-advanced scrutiny rerun again failed to launch `scrutiny-feature-reviewer` due to `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the remaining fix review had to be completed manually."
+    }
+  ],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-advanced/scrutiny/reviews/fix-geopolitical-arc-drilldown.json",
+  "summary": "Pass. Entity-derived geopolitical arcs now accumulate all contributing event IDs, so ArcPanel's storyIds-based shared-intel drilldown has complete supporting evidence."
+}

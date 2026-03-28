@@ -1,0 +1,48 @@
+{
+  "milestone": "osint-advanced",
+  "round": 2,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "node --test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"no typecheck configured (JSX project)\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "echo \"no lint configured\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 2,
+    "passed": 1,
+    "failed": 1,
+    "failedFeatures": [
+      "fix-geopolitical-arc-drilldown"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "fix-geopolitical-arc-drilldown",
+      "severity": "blocking",
+      "description": "`buildCountryCoOccurrences()` still stores only one representative event ID for each entity-derived country pair, so `arc.storyIds` omits other contributing stories and ArcPanel's shared-intel drilldown remains incomplete for those geopolitical arcs."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "scrutiny-validator skill",
+      "suggestion": "Document an explicit manual-review fallback when `scrutiny-feature-reviewer` Task launches fail, including what artifacts to write and how to report the infrastructure issue.",
+      "evidence": "This osint-advanced rerun again failed to launch `scrutiny-feature-reviewer` because the Task path exited with `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the two fix reviews had to be written manually even though the skill only specifies the subagent workflow.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-advanced/scrutiny/synthesis.round1.json"
+}
