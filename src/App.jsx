@@ -175,12 +175,14 @@ function App() {
   const watchNotificationCount = watchNotifications.reduce((sum, n) => sum + n.newCount, 0);
 
   /* ── Watchlist: check new articles on data change or watchlist change ── */
+  // Use canonicalNews (full unfiltered dataset) so watched items outside
+  // the current filter view still trigger notifications.
   const prevWatchNewsRef = useRef(null);
   useEffect(() => {
-    if (!activeNews?.length || !watchItems.length) return;
+    if (!canonicalNews?.length || !watchItems.length) return;
 
-    const isNewData = activeNews !== prevWatchNewsRef.current;
-    useWatchStore.getState().checkNewArticles(activeNews);
+    const isNewData = canonicalNews !== prevWatchNewsRef.current;
+    useWatchStore.getState().checkNewArticles(canonicalNews);
 
     // Only show toast notifications when new DATA arrives (not when adding items)
     if (isNewData && prevWatchNewsRef.current !== null) {
@@ -194,8 +196,8 @@ function App() {
         }
       }
     }
-    prevWatchNewsRef.current = activeNews;
-  }, [activeNews, watchItems, addToast, t]);
+    prevWatchNewsRef.current = canonicalNews;
+  }, [canonicalNews, watchItems, addToast, t]);
 
   /* ── Lifecycle messages ── */
   const prevEventsRef = useRef([]);
