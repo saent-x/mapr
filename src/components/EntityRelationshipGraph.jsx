@@ -37,7 +37,8 @@ function initSimulation(nodes, edges, width, height) {
     radius: nodeRadius(n.mentionCount, nodes),
   }));
 
-  const nodeIndex = new Map(simNodes.map((n) => [n.name, n]));
+  // Index nodes by their typed id (e.g. "person:antonio guterres")
+  const nodeIndex = new Map(simNodes.map((n) => [n.id, n]));
 
   const simEdges = edges
     .map((e) => ({
@@ -119,13 +120,13 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
 function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width, height) {
   ctx.clearRect(0, 0, width, height);
 
-  // Build connected set for selection highlighting
-  const connectedNames = new Set();
+  // Build connected set for selection highlighting (using typed ids)
+  const connectedIds = new Set();
   if (selectedEntity) {
-    connectedNames.add(selectedEntity);
+    connectedIds.add(selectedEntity);
     for (const edge of simEdges) {
-      if (edge.source === selectedEntity) connectedNames.add(edge.target);
-      if (edge.target === selectedEntity) connectedNames.add(edge.source);
+      if (edge.source === selectedEntity) connectedIds.add(edge.target);
+      if (edge.target === selectedEntity) connectedIds.add(edge.source);
     }
   }
 
@@ -134,7 +135,7 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
     const a = edge.sourceNode;
     const b = edge.targetNode;
     const isHighlighted = selectedEntity
-      ? connectedNames.has(edge.source) && connectedNames.has(edge.target)
+      ? connectedIds.has(edge.source) && connectedIds.has(edge.target)
       : false;
 
     ctx.beginPath();
@@ -151,9 +152,9 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
 
   // Draw nodes
   for (const node of simNodes) {
-    const isSelected = node.name === selectedEntity;
-    const isHovered = node.name === hoveredEntity;
-    const isConnected = connectedNames.has(node.name);
+    const isSelected = node.id === selectedEntity;
+    const isHovered = node.id === hoveredEntity;
+    const isConnected = connectedIds.has(node.id);
     const dimmed = selectedEntity && !isConnected;
     const color = TYPE_COLORS[node.type] || '#999';
 
@@ -277,7 +278,7 @@ export default function EntityRelationshipGraph({
   const handleClick = useCallback((e) => {
     const node = findNodeAt(e.clientX, e.clientY);
     if (node) {
-      onEntitySelect?.(node.name === selectedEntity ? null : node.name);
+      onEntitySelect?.(node.id === selectedEntity ? null : node.id);
     } else {
       onEntitySelect?.(null);
     }
@@ -285,9 +286,9 @@ export default function EntityRelationshipGraph({
 
   const handleMouseMove = useCallback((e) => {
     const node = findNodeAt(e.clientX, e.clientY);
-    const name = node ? node.name : null;
-    if (name !== hoveredRef.current) {
-      setHoveredEntity(name);
+    const id = node ? node.id : null;
+    if (id !== hoveredRef.current) {
+      setHoveredEntity(id);
     }
     if (canvasRef.current) {
       canvasRef.current.style.cursor = node ? 'pointer' : 'default';

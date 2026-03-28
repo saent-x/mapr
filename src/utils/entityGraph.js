@@ -6,13 +6,26 @@
  */
 
 /**
+ * Build a typed entity key from type and name.
+ * This ensures entities with the same name but different types
+ * (e.g. "Georgia" the org vs "Georgia" the location) stay separate.
+ *
+ * @param {string} type - Entity type (person|organization|location)
+ * @param {string} name - Entity name
+ * @returns {string} Typed key like "location:georgia"
+ */
+export function entityKey(type, name) {
+  return `${type}:${name.toLowerCase()}`;
+}
+
+/**
  * Extract a graph of entity nodes and co-occurrence edges from events.
  *
  * Each unique entity becomes a node with:
- *  - name, type (person|organization|location), mentionCount, eventIds
+ *  - id (typed key), name, type (person|organization|location), mentionCount, eventIds
  *
  * Entities that co-occur in the same event are connected by edges with:
- *  - source, target, weight (number of shared events), sharedEventIds
+ *  - source, target (typed keys), weight (number of shared events), sharedEventIds
  *
  * @param {Array|null} events - Array of event objects from the backend
  * @param {{ maxNodes?: number }} options - Optional limits for performance
@@ -23,10 +36,10 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
     return { nodes: [], edges: [] };
   }
 
-  // Accumulate unique entities keyed by lowercase name
-  const entityMap = new Map(); // key → { name, type, mentionCount, eventIds }
+  // Accumulate unique entities keyed by type:lowercase_name
+  const entityMap = new Map(); // key → { id, name, type, mentionCount, eventIds }
 
-  // Track co-occurrences: "nameA|nameB" → { source, target, weight, sharedEventIds }
+  // Track co-occurrences: "keyA|keyB" → { source, target, weight, sharedEventIds }
   const edgeMap = new Map();
 
   for (const event of events) {
@@ -34,12 +47,12 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
 
     const { people = [], organizations = [], locations = [] } = event.entities;
 
-    // Collect all entities from this event
+    // Collect all entity keys from this event
     const eventEntities = [];
 
     for (const p of people) {
       if (!p.name) continue;
-      const key = p.name.toLowerCase();
+      const key = entityKey('person', p.name);
       const existing = entityMap.get(key);
       if (existing) {
         existing.mentionCount += p.mentionCount || 1;
@@ -48,6 +61,7 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
         }
       } else {
         entityMap.set(key, {
+          id: key,
           name: p.name,
           type: 'person',
           mentionCount: p.mentionCount || 1,
@@ -59,7 +73,7 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
 
     for (const o of organizations) {
       if (!o.name) continue;
-      const key = o.name.toLowerCase();
+      const key = entityKey('organization', o.name);
       const existing = entityMap.get(key);
       if (existing) {
         existing.mentionCount += o.mentionCount || 1;
@@ -68,6 +82,7 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
         }
       } else {
         entityMap.set(key, {
+          id: key,
           name: o.name,
           type: 'organization',
           mentionCount: o.mentionCount || 1,
@@ -79,7 +94,7 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
 
     for (const l of locations) {
       if (!l.name) continue;
-      const key = l.name.toLowerCase();
+      const key = entityKey('location', l.name);
       const existing = entityMap.get(key);
       if (existing) {
         existing.mentionCount += l.mentionCount || 1;
@@ -88,6 +103,7 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
         }
       } else {
         entityMap.set(key, {
+          id: key,
           name: l.name,
           type: 'location',
           mentionCount: l.mentionCount || 1,
@@ -110,11 +126,9 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
             existing.sharedEventIds.push(event.id);
           }
         } else {
-          const nodeA = entityMap.get(a);
-          const nodeB = entityMap.get(b);
           edgeMap.set(edgeKey, {
-            source: nodeA.name,
-            target: nodeB.name,
+            source: a,
+            target: b,
             weight: 1,
             sharedEventIds: [event.id],
           });
@@ -130,7 +144,7 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
   if (maxNodes > 0 && nodes.length > maxNodes) {
     nodes.sort((a, b) => b.mentionCount - a.mentionCount);
     nodes = nodes.slice(0, maxNodes);
-    const kept = new Set(nodes.map((n) => n.name));
+    const kept = new Set(nodes.map((n) => n.id));
     edges = edges.filter((e) => kept.has(e.source) && kept.has(e.target));
   }
 
@@ -153,22 +167,26 @@ export function filterGraphByType(graph, typeFilter) {
   };
 
   const filteredNodes = graph.nodes.filter((n) => typeMap[n.type]);
-  const nodeNames = new Set(filteredNodes.map((n) => n.name));
+  const nodeIds = new Set(filteredNodes.map((n) => n.id));
   const filteredEdges = graph.edges.filter(
-    (e) => nodeNames.has(e.source) && nodeNames.has(e.target)
+    (e) => nodeIds.has(e.source) && nodeIds.has(e.target)
   );
 
   return { nodes: filteredNodes, edges: filteredEdges };
 }
 
 /**
- * Get all events that reference a given entity name (case-insensitive).
+ * Get all events that reference a given entity (case-insensitive).
+ *
+ * When entityType is provided, only matches entities of that type,
+ * disambiguating e.g. "Georgia" (organization) from "Georgia" (location).
  *
  * @param {Array|null} events - Array of event objects
  * @param {string} entityName - Entity name to look up
+ * @param {string} [entityType] - Optional entity type (person|organization|location)
  * @returns {Array} - Matching events
  */
-export function getRelatedEvents(events, entityName) {
+export function getRelatedEvents(events, entityName, entityType) {
   if (!events || !Array.isArray(events) || !entityName) return [];
 
   const lower = entityName.toLowerCase();
@@ -176,6 +194,22 @@ export function getRelatedEvents(events, entityName) {
   return events.filter((event) => {
     if (!event.entities) return false;
     const { people = [], organizations = [], locations = [] } = event.entities;
+
+    if (entityType) {
+      // Type-specific lookup for disambiguation
+      switch (entityType) {
+        case 'person':
+          return people.some((p) => p.name && p.name.toLowerCase() === lower);
+        case 'organization':
+          return organizations.some((o) => o.name && o.name.toLowerCase() === lower);
+        case 'location':
+          return locations.some((l) => l.name && l.name.toLowerCase() === lower);
+        default:
+          return false;
+      }
+    }
+
+    // No type specified — search all entity lists (backward compatible)
     return (
       people.some((p) => p.name && p.name.toLowerCase() === lower) ||
       organizations.some((o) => o.name && o.name.toLowerCase() === lower) ||

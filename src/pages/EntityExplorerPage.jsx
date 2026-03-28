@@ -67,19 +67,17 @@ export default function EntityExplorerPage() {
     [fullGraph, typeFilter]
   );
 
-  /* ── Related events for selected entity ── */
-  const relatedEvents = useMemo(() => {
-    if (!selectedEntity) return [];
-    return getRelatedEvents(events, selectedEntity);
-  }, [events, selectedEntity]);
-
-  /* ── Selected entity node info ── */
+  /* ── Selected entity node info (selectedEntity is now a typed id) ── */
   const selectedNode = useMemo(() => {
     if (!selectedEntity) return null;
-    return fullGraph.nodes.find(
-      (n) => n.name.toLowerCase() === selectedEntity.toLowerCase()
-    );
+    return fullGraph.nodes.find((n) => n.id === selectedEntity);
   }, [fullGraph, selectedEntity]);
+
+  /* ── Related events for selected entity (using typed identity) ── */
+  const relatedEvents = useMemo(() => {
+    if (!selectedNode) return [];
+    return getRelatedEvents(events, selectedNode.name, selectedNode.type);
+  }, [events, selectedNode]);
 
   /* ── Toggle filter ── */
   const toggleType = useCallback((type) => {

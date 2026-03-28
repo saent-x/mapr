@@ -11,6 +11,7 @@ import {
   extractEntityGraph,
   filterGraphByType,
   getRelatedEvents,
+  entityKey,
 } from '../src/utils/entityGraph.js';
 
 /* ── Test fixtures ── */
@@ -113,10 +114,12 @@ describe('extractEntityGraph', () => {
     const graph = extractEntityGraph(EVENTS);
     assert.ok(graph.edges.length > 0, 'should have edges');
     // Antonio Guterres and United Nations co-occur in evt-1 and evt-2
+    const guterresId = entityKey('person', 'Antonio Guterres');
+    const unId = entityKey('organization', 'United Nations');
     const edge = graph.edges.find(
       (e) =>
-        (e.source === 'Antonio Guterres' && e.target === 'United Nations') ||
-        (e.source === 'United Nations' && e.target === 'Antonio Guterres')
+        (e.source === guterresId && e.target === unId) ||
+        (e.source === unId && e.target === guterresId)
     );
     assert.ok(edge, 'Guterres-UN edge should exist');
     assert.equal(edge.weight, 2, 'they co-occur in 2 events');
@@ -125,13 +128,25 @@ describe('extractEntityGraph', () => {
   it('creates edges between different entity types that co-occur', () => {
     const graph = extractEntityGraph(EVENTS);
     // WHO and Ukraine co-occur in evt-3
+    const whoId = entityKey('organization', 'WHO');
+    const ukraineId = entityKey('location', 'Ukraine');
     const edge = graph.edges.find(
       (e) =>
-        (e.source === 'WHO' && e.target === 'Ukraine') ||
-        (e.source === 'Ukraine' && e.target === 'WHO')
+        (e.source === whoId && e.target === ukraineId) ||
+        (e.source === ukraineId && e.target === whoId)
     );
     assert.ok(edge, 'WHO-Ukraine edge should exist');
     assert.equal(edge.weight, 1);
+  });
+
+  it('assigns typed id to each node', () => {
+    const graph = extractEntityGraph(EVENTS);
+    const guterres = graph.nodes.find((n) => n.name === 'Antonio Guterres');
+    assert.equal(guterres.id, 'person:antonio guterres');
+    const un = graph.nodes.find((n) => n.name === 'United Nations');
+    assert.equal(un.id, 'organization:united nations');
+    const ukraine = graph.nodes.find((n) => n.name === 'Ukraine');
+    assert.equal(ukraine.id, 'location:ukraine');
   });
 
   it('handles events with null or empty entities', () => {
@@ -153,7 +168,7 @@ describe('extractEntityGraph', () => {
     assert.deepEqual(graph.edges, []);
   });
 
-  it('deduplicates entities by lowercase name', () => {
+  it('deduplicates entities by type + lowercase name', () => {
     const events = [
       {
         id: 'evt-a',
@@ -174,7 +189,73 @@ describe('extractEntityGraph', () => {
     ];
     const graph = extractEntityGraph(events);
     const johns = graph.nodes.filter((n) => n.name.toLowerCase() === 'john smith');
-    assert.equal(johns.length, 1, 'should deduplicate by lowercase name');
+    assert.equal(johns.length, 1, 'should deduplicate by type + lowercase name');
+  });
+
+  it('keeps entities with same name but different types as separate nodes', () => {
+    // "Georgia" the organization and "Georgia" the location should remain distinct
+    const events = [
+      {
+        id: 'evt-org',
+        entities: {
+          people: [],
+          organizations: [{ name: 'Georgia', mentionCount: 2 }],
+          locations: [],
+        },
+      },
+      {
+        id: 'evt-loc',
+        entities: {
+          people: [],
+          organizations: [],
+          locations: [{ name: 'Georgia', mentionCount: 3 }],
+        },
+      },
+    ];
+    const graph = extractEntityGraph(events);
+    const georgias = graph.nodes.filter((n) => n.name === 'Georgia');
+    assert.equal(georgias.length, 2, 'should have two separate Georgia nodes');
+    const types = new Set(georgias.map((n) => n.type));
+    assert.ok(types.has('organization'), 'one should be an organization');
+    assert.ok(types.has('location'), 'one should be a location');
+    // They should have different ids
+    const ids = georgias.map((n) => n.id);
+    assert.equal(ids.length, 2);
+    assert.ok(ids.includes('organization:georgia'));
+    assert.ok(ids.includes('location:georgia'));
+    // Mention counts should be tracked separately
+    const orgGeorgia = georgias.find((n) => n.type === 'organization');
+    const locGeorgia = georgias.find((n) => n.type === 'location');
+    assert.equal(orgGeorgia.mentionCount, 2);
+    assert.equal(locGeorgia.mentionCount, 3);
+    assert.deepEqual(orgGeorgia.eventIds, ['evt-org']);
+    assert.deepEqual(locGeorgia.eventIds, ['evt-loc']);
+  });
+
+  it('creates edges between same-name different-type entities when they co-occur', () => {
+    const events = [
+      {
+        id: 'evt-both',
+        entities: {
+          people: [],
+          organizations: [{ name: 'Georgia', mentionCount: 1 }],
+          locations: [{ name: 'Georgia', mentionCount: 1 }],
+        },
+      },
+    ];
+    const graph = extractEntityGraph(events);
+    const georgias = graph.nodes.filter((n) => n.name === 'Georgia');
+    assert.equal(georgias.length, 2, 'two Georgia nodes');
+    // There should be an edge between them
+    const orgId = entityKey('organization', 'Georgia');
+    const locId = entityKey('location', 'Georgia');
+    const edge = graph.edges.find(
+      (e) =>
+        (e.source === orgId && e.target === locId) ||
+        (e.source === locId && e.target === orgId)
+    );
+    assert.ok(edge, 'edge between org Georgia and loc Georgia should exist');
+    assert.equal(edge.weight, 1);
   });
 });
 
@@ -183,10 +264,10 @@ describe('filterGraphByType', () => {
     const graph = extractEntityGraph(EVENTS);
     const filtered = filterGraphByType(graph, { people: true, organizations: false, locations: false });
     assert.ok(filtered.nodes.every((n) => n.type === 'person'));
-    // Edges should only connect persons
+    // Edges should only connect persons (edge source/target are typed ids)
     assert.ok(filtered.edges.every((e) => {
-      const srcNode = filtered.nodes.find((n) => n.name === e.source);
-      const tgtNode = filtered.nodes.find((n) => n.name === e.target);
+      const srcNode = filtered.nodes.find((n) => n.id === e.source);
+      const tgtNode = filtered.nodes.find((n) => n.id === e.target);
       return srcNode && tgtNode;
     }));
   });
@@ -213,6 +294,39 @@ describe('filterGraphByType', () => {
     assert.deepEqual(filtered.nodes, []);
     assert.deepEqual(filtered.edges, []);
   });
+
+  it('filters same-name entities correctly when types differ', () => {
+    // "Georgia" appears as both org and location
+    const crossTypeEvents = [
+      {
+        id: 'evt-org',
+        entities: {
+          people: [],
+          organizations: [{ name: 'Georgia', mentionCount: 1 }],
+          locations: [],
+        },
+      },
+      {
+        id: 'evt-loc',
+        entities: {
+          people: [],
+          organizations: [],
+          locations: [{ name: 'Georgia', mentionCount: 1 }],
+        },
+      },
+    ];
+    const graph = extractEntityGraph(crossTypeEvents);
+    // Filtering to locations-only should keep only the location Georgia
+    const locOnly = filterGraphByType(graph, { people: false, organizations: false, locations: true });
+    assert.equal(locOnly.nodes.length, 1);
+    assert.equal(locOnly.nodes[0].type, 'location');
+    assert.equal(locOnly.nodes[0].name, 'Georgia');
+    // Filtering to orgs-only should keep only the org Georgia
+    const orgOnly = filterGraphByType(graph, { people: false, organizations: true, locations: false });
+    assert.equal(orgOnly.nodes.length, 1);
+    assert.equal(orgOnly.nodes[0].type, 'organization');
+    assert.equal(orgOnly.nodes[0].name, 'Georgia');
+  });
 });
 
 describe('getRelatedEvents', () => {
@@ -235,5 +349,57 @@ describe('getRelatedEvents', () => {
   it('handles null events', () => {
     const related = getRelatedEvents(null, 'test');
     assert.deepEqual(related, []);
+  });
+
+  it('disambiguates same-name entities by type', () => {
+    const crossTypeEvents = [
+      {
+        id: 'evt-org',
+        entities: {
+          people: [],
+          organizations: [{ name: 'Georgia', mentionCount: 1 }],
+          locations: [],
+        },
+      },
+      {
+        id: 'evt-loc',
+        entities: {
+          people: [],
+          organizations: [],
+          locations: [{ name: 'Georgia', mentionCount: 1 }],
+        },
+      },
+      {
+        id: 'evt-both',
+        entities: {
+          people: [],
+          organizations: [{ name: 'Georgia', mentionCount: 1 }],
+          locations: [{ name: 'Georgia', mentionCount: 1 }],
+        },
+      },
+    ];
+    // Without type → matches all
+    const allGeorgia = getRelatedEvents(crossTypeEvents, 'Georgia');
+    assert.equal(allGeorgia.length, 3, 'without type matches all events');
+    // With type=organization → only org events
+    const orgGeorgia = getRelatedEvents(crossTypeEvents, 'Georgia', 'organization');
+    assert.equal(orgGeorgia.length, 2);
+    assert.deepEqual(orgGeorgia.map((e) => e.id).sort(), ['evt-both', 'evt-org']);
+    // With type=location → only location events
+    const locGeorgia = getRelatedEvents(crossTypeEvents, 'Georgia', 'location');
+    assert.equal(locGeorgia.length, 2);
+    assert.deepEqual(locGeorgia.map((e) => e.id).sort(), ['evt-both', 'evt-loc']);
+  });
+});
+
+describe('entityKey', () => {
+  it('builds a typed key from type and name', () => {
+    assert.equal(entityKey('person', 'John Smith'), 'person:john smith');
+    assert.equal(entityKey('organization', 'NATO'), 'organization:nato');
+    assert.equal(entityKey('location', 'Ukraine'), 'location:ukraine');
+  });
+
+  it('normalizes case', () => {
+    assert.equal(entityKey('person', 'JOHN'), entityKey('person', 'john'));
   });
 });
