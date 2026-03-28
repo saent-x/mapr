@@ -1,0 +1,36 @@
+{
+  "featureId": "performance-optimization",
+  "reviewedAt": "2026-03-28T05:29:00Z",
+  "commitId": "a5d33c8",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The chunking and fallback work is directionally good, but the feature misses its core lazy-loading objective for first-load desktop users. The app still defaults to globe mode on non-mobile screens, so the heavy Three.js/globe chunk stays on the critical path instead of being deferred until the user opts into the globe.",
+    "issues": [
+      {
+        "file": "src/stores/uiStore.js",
+        "line": 9,
+        "severity": "blocking",
+        "description": "The new performance work claims that the `vendor-globe` / Three.js bundle is deferred until globe mode is selected, but the UI store still initializes `mapMode` to `'globe'` for desktop widths. Because `App.jsx` renders `<Globe />` whenever `mapMode === 'globe'`, a fresh desktop visit immediately mounts the lazy globe path and downloads the heavy globe chunk on first render. That leaves the biggest bundle on the critical path for the default desktop experience and undermines the intended VAL-POLISH-002 optimization.",
+        "suggestedFix": "Default first-load desktop sessions to `flat` mode, or otherwise gate globe mounting behind explicit user intent/persisted preference. Add a regression check that verifies a fresh desktop load does not render `Globe` until the user switches map modes."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Fail. Code splitting exists, but the desktop default still boots directly into globe mode, so the heavy globe bundle is not actually deferred for first-load users.",
+  "reviewedArtifacts": [
+    "commit:a5d33c8",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-28T04-59-03-002Z__performance-optimization__3853cc27-01e2-45b4-a6cd-6650c229b137.json",
+    "src/App.jsx",
+    "src/stores/uiStore.js",
+    "src/components/MapLoadingFallback.jsx",
+    "src/components/PageLoadingFallback.jsx",
+    "src/components/NewsPanel.jsx",
+    "src/hooks/useProgressiveList.js",
+    "vite.config.js",
+    "test/performance.test.js"
+  ]
+}

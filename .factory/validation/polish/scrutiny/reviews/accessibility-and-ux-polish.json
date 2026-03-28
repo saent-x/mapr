@@ -1,0 +1,26 @@
+{
+  "featureId": "accessibility-and-ux-polish",
+  "reviewedAt": "2026-03-28T05:30:00Z",
+  "commitId": "c443352",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The polish pass adds meaningful accessibility and resilience improvements: visible `:focus-visible` treatment, Escape-key dismissal coverage, initial loading affordances, and a retryable backend-error banner layered over the existing fallback data path. I did not find any blocking correctness gaps in the implemented scope.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass. The accessibility and UX polish work satisfies the keyboard, loading-state, and backend-error requirements without introducing obvious regressions.",
+  "reviewedArtifacts": [
+    "commit:c443352",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-28T05-11-46-497Z__accessibility-and-ux-polish__3a9a9425-89c6-483d-ac23-989b5c841b3b.json",
+    "src/App.jsx",
+    "src/components/DataLoadingOverlay.jsx",
+    "src/components/DataErrorBanner.jsx",
+    "src/index.css",
+    "src/i18n/locales/en.json",
+    "test/accessibility.test.js"
+  ]
+}

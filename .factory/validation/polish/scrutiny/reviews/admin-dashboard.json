@@ -1,0 +1,38 @@
+{
+  "featureId": "admin-dashboard",
+  "reviewedAt": "2026-03-28T05:28:00Z",
+  "commitId": "d64bc4c",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The dashboard replaces the placeholder with a substantive admin surface: it fetches the catalog and health endpoints, renders aggregate stats, ingestion health, coverage gaps, and a filterable/sortable source table. I found one accuracy issue in the filter-tab counters, but the page still satisfies the milestone contract overall.",
+    "issues": [
+      {
+        "file": "src/pages/AdminPage.jsx",
+        "line": 145,
+        "severity": "non_blocking",
+        "description": "The status-tab counters are computed from the raw `catalogData.feeds` list, while the table rows themselves are filtered from `mergedFeeds` after overlaying fresher `/api/health` status data. When the health payload disagrees with the catalog snapshot, the badge counts on the `OK` / `Empty` / `Failed` tabs can diverge from the rows users actually see after filtering.",
+        "suggestedFix": "Derive the tab counts from `mergedFeeds` (or from the same merged status source used by `filteredFeeds`) so the counters and filtered table always describe the same dataset."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The scrutiny-validator workflow needs a documented manual-review fallback when `scrutiny-feature-reviewer` Task launches fail.",
+      "evidence": "All three Task launches for this polish scrutiny run exited before producing a report because the subagent tried to use `custom:GPT-5.4-(XHigh)-3`, so the validator had to complete the feature reviews manually."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Pass. The admin dashboard delivers the required source-health and ingestion-health UI, with one non-blocking issue in the tab counters when health data is fresher than the catalog snapshot.",
+  "reviewedArtifacts": [
+    "commit:d64bc4c",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-28T04-47-56-478Z__admin-dashboard__12b48c00-9fea-407a-a321-3d46f909220c.json",
+    "src/pages/AdminPage.jsx",
+    "src/i18n/locales/en.json",
+    "src/index.css",
+    "test/adminDashboard.test.js"
+  ]
+}
