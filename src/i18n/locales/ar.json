@@ -127,10 +127,14 @@
   "legend": {
     "severity": "الخطورة",
     "coverage": "التغطية",
+    "geopolitical": "الجيوسياسية",
     "critical": "حرجة",
     "elevated": "مرتفعة",
     "watch": "مراقبة",
-    "low": "منخفضة"
+    "low": "منخفضة",
+    "geoLow": "تزامن منخفض",
+    "geoMedium": "تزامن متوسط",
+    "geoHigh": "تزامن مرتفع"
   },
   "coverageStatus": {
     "verified": "موثقة",

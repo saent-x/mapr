@@ -339,6 +339,17 @@ const Header = ({
               <Layers size={12} />
               COV
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mapOverlay === 'geopolitical'}
+              className={`map-toggle-btn ${mapOverlay === 'geopolitical' ? 'is-active' : ''}`}
+              onClick={() => onMapOverlayChange('geopolitical')}
+              title="Geopolitical relationships"
+            >
+              <Layers size={12} />
+              GEO
+            </button>
           </div>
         )}
 

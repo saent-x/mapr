@@ -7,6 +7,13 @@ import skyTexture from '../assets/night-sky.png';
 import { getSeverityMeta } from '../utils/mockData';
 import { getCoverageMeta } from '../utils/coverageMeta';
 import { isoToCountry, areCountriesAdjacent } from '../utils/geocoder';
+import {
+  buildCountryCoOccurrences,
+  buildGeopoliticalArcData,
+  coOccurrenceToStroke,
+  coOccurrenceToColor,
+  buildCountryStoryMap,
+} from '../utils/geopoliticalArcs';
 
 const ARC_COLORS = {
   'same-event': '#ffffff',
@@ -368,6 +375,17 @@ const Globe = ({
       .slice(0, 30);
   }, [newsList]);
 
+  // Geopolitical co-occurrence arcs
+  const geoArcData = useMemo(() => {
+    if (mapOverlay !== 'geopolitical') return [];
+    const coOccurrences = buildCountryCoOccurrences(newsList);
+    const storyMap = buildCountryStoryMap(newsList);
+    return buildGeopoliticalArcData(coOccurrences, storyMap);
+  }, [newsList, mapOverlay]);
+
+  const activeArcData = mapOverlay === 'geopolitical' ? geoArcData : arcData;
+  const geoMaxCount = geoArcData.length > 0 ? geoArcData[0].count : 1;
+
   // Helpers
   const getRegionSev = (f) => {
     const iso = getIso(f);
@@ -522,19 +540,29 @@ const Globe = ({
           }}
           onPointClick={(s) => onStorySelect(s)}
 
-          /* === ARCS (connect countries with related crises) === */
-          arcsData={arcData}
+          /* === ARCS (connect countries with related crises / geopolitical) === */
+          arcsData={activeArcData}
           arcStartLat={(d) => d.startLat}
           arcStartLng={(d) => d.startLng}
           arcEndLat={(d) => d.endLat}
           arcEndLng={(d) => d.endLng}
           arcColor={(d) => {
+            if (d.type === 'geopolitical') {
+              const color = coOccurrenceToColor(d.count, geoMaxCount);
+              const isHov = hoveredArc && hoveredArc.id === d.id;
+              return isHov ? [color, color] : [color, color.replace(/[\d.]+\)$/, '0.3)')];
+            }
             const baseColor = ARC_COLORS[d.type] || ARC_COLORS['same-event'];
             const isHov = hoveredArc && hoveredArc.id === d.id;
             if (isHov) return [baseColor, baseColor];
             return [`${baseColor}90`, `${baseColor}40`];
           }}
           arcStroke={(d) => {
+            if (d.type === 'geopolitical') {
+              const isHov = hoveredArc && hoveredArc.id === d.id;
+              const baseStroke = coOccurrenceToStroke(d.count, geoMaxCount);
+              return isHov ? baseStroke * 1.5 : baseStroke * 0.5;
+            }
             const isHov = hoveredArc && hoveredArc.id === d.id;
             if (isHov) return 1.2;
             if (d.severity >= 85) return 0.4;
@@ -543,14 +571,17 @@ const Globe = ({
             return 0.15;
           }}
           arcDashLength={(d) => {
+            if (d.type === 'geopolitical') return 1; // Solid lines for geopolitical
             const isHov = hoveredArc && hoveredArc.id === d.id;
             return isHov ? 1 : 0.8;
           }}
           arcDashGap={(d) => {
+            if (d.type === 'geopolitical') return 0;
             const isHov = hoveredArc && hoveredArc.id === d.id;
             return isHov ? 0 : 0.3;
           }}
           arcDashAnimateTime={(d) => {
+            if (d.type === 'geopolitical') return 0;
             const isHov = hoveredArc && hoveredArc.id === d.id;
             if (isHov) return 0; // stop animation on hover
             if (d.severity >= 85) return 4000;
@@ -560,6 +591,25 @@ const Globe = ({
           arcAltitudeAutoScale={0.35}
           onArcHover={setHoveredArc}
           arcLabel={(d) => {
+            if (d.type === 'geopolitical') {
+              const startName = isoToCountry(d.startIso) || d.startRegion || d.startIso;
+              const endName = isoToCountry(d.endIso) || d.endRegion || d.endIso;
+              const color = coOccurrenceToColor(d.count, geoMaxCount);
+              return `
+                <div class="globe-tooltip">
+                  <div class="globe-tooltip-name" style="color:${color}">Geopolitical</div>
+                  <div class="globe-tooltip-row">
+                    <span>${startName}</span>
+                    <strong>↔</strong>
+                    <span>${endName}</span>
+                  </div>
+                  <div class="globe-tooltip-row">
+                    <span>Shared stories</span>
+                    <strong style="color:${color}">${d.count}</strong>
+                  </div>
+                </div>
+              `;
+            }
             const meta = getSeverityMeta(d.severity);
             const typeColor = ARC_COLORS[d.type] || ARC_COLORS['same-event'];
             const typeLabel = d.type === 'shared-actor' ? `Actor: ${d.label || d.category}`

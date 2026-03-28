@@ -177,9 +177,11 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
     'same-event': '#ffffff',
     'shared-actor': '#00d4ff',
     'causal-flow': '#ffaa00',
+    'geopolitical': '#00e5a0',
   };
   const arcTypeColor = ARC_TYPE_COLORS[arc.type] || '#ffffff';
-  const arcTypeLabel = arc.type === 'shared-actor' ? 'shared actor'
+  const arcTypeLabel = arc.type === 'geopolitical' ? 'geopolitical'
+    : arc.type === 'shared-actor' ? 'shared actor'
     : arc.type === 'causal-flow' ? 'causal flow'
     : 'same event';
 

@@ -329,6 +329,15 @@ function App() {
                 <div key={key} className="legend-item">
                   <span className="legend-dot" style={{ background: `var(--${key})` }} />{t(`legend.${key}`)}
                 </div>))
+              : mapOverlay === 'geopolitical'
+              ? [
+                { key: 'low', color: 'rgba(0, 212, 255, 0.8)', label: t('legend.geoLow') },
+                { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', label: t('legend.geoMedium') },
+                { key: 'high', color: 'rgba(255, 85, 85, 0.8)', label: t('legend.geoHigh') },
+              ].map(({ key, color, label }) => (
+                <div key={key} className="legend-item">
+                  <span className="legend-dot" style={{ background: color }} />{label}
+                </div>))
               : COVERAGE_STATUS_ORDER.map((status) => {
                 const meta = getCoverageMeta(status);
                 return (<div key={status} className="legend-item">

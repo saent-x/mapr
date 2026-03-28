@@ -7,6 +7,13 @@ import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 import { getSeverityMeta } from '../utils/mockData';
 import { getCoverageMeta } from '../utils/coverageMeta';
 import { isoToCountry, areCountriesAdjacent } from '../utils/geocoder';
+import {
+  buildCountryCoOccurrences,
+  buildGeopoliticalArcData,
+  coOccurrenceToStroke,
+  coOccurrenceToColor,
+  buildCountryStoryMap,
+} from '../utils/geopoliticalArcs';
 
 const ARC_COLORS = {
   'same-event': '#ffffff',
@@ -525,6 +532,48 @@ const FlatMap = ({
     return { type: 'FeatureCollection', features: features.slice(0, 30) };
   }, [newsList]);
 
+  /* ── geopolitical co-occurrence arcs ── */
+  const geoArcsGeoJson = useMemo(() => {
+    if (mapOverlay !== 'geopolitical') return { type: 'FeatureCollection', features: [] };
+
+    const coOccurrences = buildCountryCoOccurrences(newsList);
+    const storyMap = buildCountryStoryMap(newsList);
+    const arcData = buildGeopoliticalArcData(coOccurrences, storyMap);
+    const maxCount = arcData.length > 0 ? arcData[0].count : 1;
+
+    const features = arcData.map((arc) => ({
+      type: 'Feature',
+      properties: {
+        startIso: arc.startIso,
+        endIso: arc.endIso,
+        startRegion: arc.startRegion,
+        endRegion: arc.endRegion,
+        count: arc.count,
+        maxSeverity: arc.maxSeverity,
+        avgSeverity: arc.avgSeverity,
+        color: coOccurrenceToColor(arc.count, maxCount),
+        strokeWidth: coOccurrenceToStroke(arc.count, maxCount),
+        arcType: 'geopolitical',
+        arcLabel: '',
+        severity: arc.avgSeverity,
+        category: 'geopolitical',
+        title: `${isoToCountry(arc.startIso) || arc.startIso} ↔ ${isoToCountry(arc.endIso) || arc.endIso}: ${arc.count} shared stories`,
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [arc.startLng, arc.startLat],
+          [arc.endLng, arc.endLat],
+        ],
+      },
+    }));
+
+    return { type: 'FeatureCollection', features };
+  }, [newsList, mapOverlay]);
+
+  /* ── active arc source: switch between standard and geopolitical ── */
+  const activeArcsGeoJson = mapOverlay === 'geopolitical' ? geoArcsGeoJson : arcsGeoJson;
+
   /* ── hover handling ── */
   const onMouseMove = useCallback((e) => {
     const map = mapRef.current;
@@ -815,13 +864,18 @@ const FlatMap = ({
           </Source>
         )}
 
-        {/* ── Crisis connection arcs ── */}
-        <Source id="arcs" type="geojson" data={arcsGeoJson}>
+        {/* ── Crisis / geopolitical connection arcs ── */}
+        <Source id="arcs" type="geojson" data={activeArcsGeoJson}>
           {/* Soft glow underneath */}
           <Layer
             id="arc-glow"
             type="line"
-            paint={{
+            paint={mapOverlay === 'geopolitical' ? {
+              'line-color': ['get', 'color'],
+              'line-width': ['get', 'strokeWidth'],
+              'line-opacity': 0.12,
+              'line-blur': 6,
+            } : {
               'line-color': ['get', 'color'],
               'line-width': [
                 'interpolate', ['linear'], ['get', 'severity'],
@@ -843,7 +897,11 @@ const FlatMap = ({
             id="arc-lines"
             type="line"
             layout={{ 'line-cap': 'round' }}
-            paint={{
+            paint={mapOverlay === 'geopolitical' ? {
+              'line-color': ['get', 'color'],
+              'line-width': ['coalesce', ['get', 'strokeWidth'], 1],
+              'line-opacity': 0.55,
+            } : {
               'line-color': ['get', 'color'],
               'line-width': [
                 'interpolate', ['linear'], ['get', 'severity'],

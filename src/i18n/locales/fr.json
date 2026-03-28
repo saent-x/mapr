@@ -127,10 +127,14 @@
   "legend": {
     "severity": "Sévérité",
     "coverage": "Couverture",
+    "geopolitical": "Géopolitique",
     "critical": "Critique",
     "elevated": "Élevée",
     "watch": "Vigilance",
-    "low": "Faible"
+    "low": "Faible",
+    "geoLow": "Co-occurrence faible",
+    "geoMedium": "Co-occurrence moyenne",
+    "geoHigh": "Co-occurrence élevée"
   },
   "coverageStatus": {
     "verified": "Vérifiée",

@@ -127,10 +127,14 @@
   "legend": {
     "severity": "严重性",
     "coverage": "覆盖情况",
+    "geopolitical": "地缘政治",
     "critical": "紧急",
     "elevated": "高",
     "watch": "关注",
-    "low": "低"
+    "low": "低",
+    "geoLow": "低共现",
+    "geoMedium": "中共现",
+    "geoHigh": "高共现"
   },
   "coverageStatus": {
     "verified": "已验证",
