@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Network, Users, Building2, MapPin, X, ExternalLink, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Network, Users, Building2, MapPin, X, ExternalLink, ArrowLeft, Map } from 'lucide-react';
 import useNewsStore from '../stores/newsStore.js';
+import useFilterStore from '../stores/filterStore.js';
 import { extractEntityGraph, filterGraphByType, getRelatedEvents } from '../utils/entityGraph.js';
 import { getSeverityMeta } from '../utils/mockData.js';
 
@@ -13,6 +15,7 @@ const EntityRelationshipGraph = lazy(() => import('../components/EntityRelations
  */
 export default function EntityExplorerPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { liveNews, backendEvents, dataSource } = useNewsStore();
 
   /* ── Fetch data on mount — ensure data loads even when navigating directly ── */
@@ -83,6 +86,17 @@ export default function EntityExplorerPage() {
   const toggleType = useCallback((type) => {
     setTypeFilter((prev) => ({ ...prev, [type]: !prev[type] }));
   }, []);
+
+  /* ── Show entity on map ── */
+  const handleShowOnMap = useCallback((node) => {
+    if (!node) return;
+    useFilterStore.getState().setEntityFilter({
+      id: node.id,
+      name: node.name,
+      type: node.type,
+    });
+    navigate('/');
+  }, [navigate]);
 
   /* ── Stats ── */
   const stats = useMemo(() => ({
@@ -194,6 +208,15 @@ export default function EntityExplorerPage() {
                 <span>·</span>
                 <span>{relatedEvents.length} {t('entities.relatedEvents')}</span>
               </div>
+              {relatedEvents.length > 0 && (
+                <button
+                  className="entity-show-on-map-btn"
+                  onClick={() => handleShowOnMap(selectedNode)}
+                >
+                  <Map size={14} />
+                  <span>{t('entities.showOnMap')}</span>
+                </button>
+              )}
             </div>
 
             <div className="entity-detail-events">

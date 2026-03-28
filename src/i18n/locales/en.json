@@ -38,7 +38,10 @@
     "mentions": "mentions",
     "relatedEvents": "events",
     "relatedEventsTitle": "Related Events",
-    "noRelatedEvents": "No related events found"
+    "noRelatedEvents": "No related events found",
+    "showOnMap": "Show on Map",
+    "filterActive": "Filtered by: {{name}}",
+    "clearFilter": "Clear filter"
   },
   "header": {
     "live": "Live",

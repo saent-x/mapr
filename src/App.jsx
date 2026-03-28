@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, Radio, AlertTriangle, Eye } from 'lucide-react';
+import { SlidersHorizontal, Radio, AlertTriangle, Eye, X, Users, Building2, MapPin } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
@@ -24,6 +24,7 @@ import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
 import { buildSourceCoverageAudit } from './utils/sourceCoverage';
 import { sortStories, storyMatchesFilters } from './utils/storyFilters';
+import { getRelatedEvents } from './utils/entityGraph';
 import { isoToCountry } from './utils/geocoder';
 import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import { encodeViewToURL } from './utils/viewManager';
@@ -43,7 +44,7 @@ function App() {
     sessionDiff, snapshotHistory } = useNewsStore();
   const { searchQuery, debouncedSearch, dateWindow, minSeverity, minConfidence, sortMode,
     mapOverlay, verificationFilter, sourceTypeFilter, languageFilter, accuracyMode,
-    precisionFilter, hideAmplified } = useFilterStore();
+    precisionFilter, hideAmplified, entityFilter } = useFilterStore();
   const { mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
     showExport, scrubTime, toasts, savedViews, activeViewId } = useUIStore();
   const filtersOpen = drawerMode !== null;
@@ -127,8 +128,15 @@ function App() {
         return haystack.includes(q);
       });
     }
+    // Apply entity filter — show only events involving the selected entity
+    if (entityFilter) {
+      const entityEvents = new Set(
+        getRelatedEvents(filtered, entityFilter.name, entityFilter.type).map((e) => e.id)
+      );
+      filtered = filtered.filter((s) => entityEvents.has(s.id));
+    }
     return sortStories(filtered, sortMode);
-  }, [canonicalNews, scrubTime, filterParams, sortMode, debouncedSearch]);
+  }, [canonicalNews, scrubTime, filterParams, sortMode, debouncedSearch, entityFilter]);
 
   const regionSeverities = useMemo(() => calculateRegionSeverity(activeNews), [activeNews]);
 
@@ -220,6 +228,8 @@ function App() {
   const setMapMode = useUIStore((s) => s.setMapMode);
   const setDrawerMode = useUIStore((s) => s.setDrawerMode);
   const setShowExport = useUIStore((s) => s.setShowExport);
+
+  const clearEntityFilter = useFilterStore((s) => s.clearEntityFilter);
 
   const handleRefresh = useCallback(() => {
     useNewsStore.getState().refresh(addToast);
@@ -372,6 +382,30 @@ function App() {
           {watchNotificationCount > 0 && <span className="watchlist-toggle-alert">+{watchNotificationCount}</span>}
         </button>
       </div>
+
+      {entityFilter && (
+        <div className="entity-filter-breadcrumb" role="status" aria-live="polite">
+          <div className="entity-filter-breadcrumb-inner">
+            {entityFilter.type === 'person' && <Users size={14} />}
+            {entityFilter.type === 'organization' && <Building2 size={14} />}
+            {entityFilter.type === 'location' && <MapPin size={14} />}
+            <span className="entity-filter-breadcrumb-label">
+              {t('entities.filterActive', { name: entityFilter.name })}
+            </span>
+            <span className="entity-filter-breadcrumb-count">
+              {activeNews.length} {t('entities.relatedEvents')}
+            </span>
+            <button
+              className="entity-filter-breadcrumb-clear"
+              onClick={clearEntityFilter}
+              aria-label={t('entities.clearFilter')}
+            >
+              <X size={14} />
+              <span>{t('entities.clearFilter')}</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <FilterDrawer
         isOpen={filtersOpen} defaultTab={drawerMode || 'filters'} onClose={() => setDrawerMode(null)}

@@ -24,6 +24,9 @@ const useFilterStore = create((set, get) => ({
   precisionFilter: 'all',
   hideAmplified: false,
 
+  /* ── entity filter (set from entity explorer → map integration) ── */
+  entityFilter: null, // null | { id: string, name: string, type: string }
+
   /* ── setters ── */
   setSearchQuery: (q) => {
     clearTimeout(_debounceTimer);
@@ -41,6 +44,8 @@ const useFilterStore = create((set, get) => ({
   setAccuracyMode: (v) => set({ accuracyMode: v }),
   setPrecisionFilter: (v) => set({ precisionFilter: v }),
   setHideAmplified: (v) => set({ hideAmplified: v }),
+  setEntityFilter: (entity) => set({ entityFilter: entity }),
+  clearEntityFilter: () => set({ entityFilter: null }),
 
   /**
    * Returns the current filter parameters in the shape expected by

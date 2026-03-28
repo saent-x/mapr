@@ -4669,6 +4669,88 @@ button {
   color: var(--text-secondary);
 }
 
+/* ── Show on Map button ── */
+
+.entity-show-on-map-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.1);
+  color: #00d4ff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+  width: 100%;
+  justify-content: center;
+}
+
+.entity-show-on-map-btn:hover {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: rgba(0, 212, 255, 0.5);
+}
+
+/* ── Entity filter breadcrumb (map view) ── */
+
+.entity-filter-breadcrumb {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  pointer-events: auto;
+}
+
+.entity-filter-breadcrumb-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.5rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(15, 18, 25, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  color: #00d4ff;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.entity-filter-breadcrumb-label {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.entity-filter-breadcrumb-count {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+}
+
+.entity-filter-breadcrumb-clear {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.entity-filter-breadcrumb-clear:hover {
+  background: rgba(255, 80, 80, 0.15);
+  border-color: rgba(255, 80, 80, 0.35);
+  color: #ff5050;
+}
+
 /* ── Mobile responsive ── */
 
 @media (max-width: 768px) {

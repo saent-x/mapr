@@ -19,7 +19,7 @@ test('App.jsx applies debouncedSearch keyword filter to activeNews', () => {
 
   // Must include debouncedSearch in the useMemo deps for activeNews
   assert.ok(
-    appSrc.includes('debouncedSearch]'),
+    /\[canonicalNews.*debouncedSearch.*\]/.test(appSrc),
     'debouncedSearch should be in the activeNews useMemo dependency array'
   );
 });
