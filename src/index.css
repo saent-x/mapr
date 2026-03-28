@@ -5795,6 +5795,258 @@ button {
   }
 }
 
+/* ── Narrative Panel ── */
+.narrative-panel {
+  margin-top: 10px;
+  padding: 10px 0 0;
+  border-top: 1px solid #1a2030;
+}
+
+.narrative-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.narrative-header-icon {
+  color: #00d4ff;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.narrative-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.narrative-header-title {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #ddd;
+}
+
+.narrative-header-meta {
+  font-size: 0.6rem;
+  color: #888;
+}
+
+/* Source diversity summary */
+.narrative-diversity {
+  margin-bottom: 10px;
+}
+
+.narrative-diversity-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.narrative-diversity-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.narrative-source-chip {
+  font-size: 0.5rem;
+  padding: 1px 6px;
+  border: 1px solid;
+  border-radius: 2px;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Timeline stages */
+.narrative-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 10px;
+}
+
+.narrative-stage {
+  display: flex;
+  gap: 10px;
+  min-height: 36px;
+}
+
+.narrative-stage-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.narrative-stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #444;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.narrative-stage-dot.is-first {
+  background: #00d4ff;
+  box-shadow: 0 0 6px rgba(0, 212, 255, 0.4);
+}
+
+.narrative-stage-line {
+  width: 1px;
+  flex: 1;
+  background: linear-gradient(to bottom, #333, #1a1a1a);
+  min-height: 16px;
+}
+
+.narrative-stage-content {
+  flex: 1;
+  padding-bottom: 10px;
+  min-width: 0;
+}
+
+.narrative-stage-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.narrative-stage-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: #ccc;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.narrative-stage.is-first .narrative-stage-label {
+  color: #00d4ff;
+}
+
+.narrative-stage-time {
+  font-size: 0.55rem;
+  color: #666;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.narrative-stage-articles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.narrative-article {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.6rem;
+}
+
+.narrative-article-type {
+  font-size: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-width: 40px;
+}
+
+.narrative-article-source {
+  color: #aaa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.narrative-article-link {
+  color: #00d4ff;
+  text-decoration: none;
+  font-size: 0.55rem;
+  flex-shrink: 0;
+}
+.narrative-article-link:hover {
+  color: #fff;
+}
+
+.narrative-stage-types {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.narrative-type-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+/* Cross-regional spread */
+.narrative-cross-regional {
+  border-top: 1px solid #1a2030;
+  padding-top: 8px;
+}
+
+.narrative-cross-regional-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.narrative-cross-regional-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.narrative-cross-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.6rem;
+}
+
+.narrative-cross-region {
+  color: #ffaa00;
+  white-space: nowrap;
+  font-weight: 600;
+  min-width: 50px;
+  font-size: 0.55rem;
+  text-transform: uppercase;
+}
+
+.narrative-cross-title {
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.narrative-cross-match {
+  color: #555;
+  font-size: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+}
+
 @media print {
   .header, .filter-drawer, .intel-ticker, .event-timeline-bar, .map-container,
   .globe-container, .flatmap-container, .arc-panel, .export-modal, .anomaly-panel, .watchlist-panel { display: none !important; }

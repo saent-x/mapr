@@ -393,5 +393,16 @@
     "watchRegion": "Watch region",
     "notification": "{{count}} new articles for {{label}}",
     "notificationMultiple": "New articles for {{count}} watched items"
+  },
+  "narrative": {
+    "label": "Story narrative",
+    "title": "Story Timeline",
+    "firstReported": "First reported",
+    "span": "Span",
+    "sourceDiversity": "Source Diversity",
+    "crossRegional": "Cross-Regional Spread",
+    "stageFirst": "First Report",
+    "stageDeveloping": "Developing",
+    "stageContinued": "Continued Coverage"
   }
 }

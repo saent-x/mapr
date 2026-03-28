@@ -10,6 +10,7 @@ import { getConfidenceReasonLabel } from '../utils/confidenceReasons';
 import { normalizeArticleText } from '../utils/articleText';
 import ExpandableText from './ExpandableText';
 import ChangesBanner from './ChangesBanner';
+import NarrativePanel from './NarrativePanel.jsx';
 import useWatchStore from '../stores/watchStore.js';
 import useUIStore from '../stores/uiStore.js';
 
@@ -127,6 +128,7 @@ const NewsPanel = ({
   regionSourcePlan = null,
   regionFeedChecks = [],
   news,
+  allEvents = [],
   selectedStoryId,
   onStorySelect,
   onClose,
@@ -478,6 +480,9 @@ const NewsPanel = ({
                         </div>
                       ))}
                     </div>
+                  )}
+                  {story.supportingArticles?.length >= 1 && (
+                    <NarrativePanel story={story} allEvents={allEvents} />
                   )}
                 </div>
               )}

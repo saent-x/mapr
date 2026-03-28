@@ -425,7 +425,7 @@ function App() {
         coverageEntry={panelCoverageEntry} coverageTransitions={panelCoverageTransitions}
         regionHistory={regionCoverageHistory} regionBackfillStatus={panelBackfillStatus}
         regionSourcePlan={panelBackfillEntry?.sourcePlan || null} regionFeedChecks={panelBackfillEntry?.feedChecks || []}
-        news={panelNews} selectedStoryId={selectedStoryId} onStorySelect={handleStorySelect}
+        news={panelNews} allEvents={activeNews} selectedStoryId={selectedStoryId} onStorySelect={handleStorySelect}
         onClose={handleClosePanel} sessionDiff={sessionDiff} velocitySpikes={velocitySpikes} />
 
       {dataError && <div className="data-error-badge">{t('errors.fallbackData')}</div>}
