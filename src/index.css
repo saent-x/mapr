@@ -4394,6 +4394,85 @@ input[type="range"]:focus-visible {
   background: rgba(0, 212, 255, 0.14);
 }
 
+/* ── Admin password gate ── */
+
+.admin-password-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60%;
+  gap: 1rem;
+  color: var(--text-secondary);
+}
+
+.admin-password-icon {
+  color: var(--accent);
+  opacity: 0.7;
+}
+
+.admin-password-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.admin-password-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.admin-password-input {
+  padding: 0.5rem 0.75rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  outline: none;
+  min-width: 220px;
+  transition: border-color 0.15s var(--ease);
+}
+
+.admin-password-input:focus-visible {
+  border-color: var(--accent);
+}
+
+.admin-password-submit {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+
+.admin-password-submit:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.14);
+}
+
+.admin-password-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-password-error {
+  color: var(--critical);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
 .admin-spinner {
   animation: admin-spin 1s linear infinite;
 }

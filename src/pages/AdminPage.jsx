@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import {
   Shield, RefreshCw, Activity, Database, AlertTriangle,
   CheckCircle, XCircle, MinusCircle, Clock, Search, Globe, Rss,
-  FileText, ChevronDown, ChevronUp, Loader,
+  FileText, ChevronDown, ChevronUp, Loader, Lock,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+
+const SESSION_KEY = 'mapr_admin_auth';
 
 /* ── Status helpers ── */
 
@@ -89,9 +91,71 @@ function Section({ title, subtitle, icon: Icon, children, defaultOpen = true }) 
   );
 }
 
+/* ── Password gate ── */
+
+function PasswordGate({ onAuth }) {
+  const { t } = useTranslation();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setChecking(true);
+    try {
+      const res = await fetch(`/api/admin/verify?password=${encodeURIComponent(password.trim())}`);
+      if (res.ok) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        onAuth();
+      } else {
+        setError(t('admin.wrongPassword'));
+      }
+    } catch {
+      setError(t('admin.wrongPassword'));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <div className="admin-page">
+      <div className="admin-password-gate">
+        <Lock size={32} className="admin-password-icon" />
+        <h1 className="admin-password-title">{t('admin.passwordRequired')}</h1>
+        <form className="admin-password-form" onSubmit={handleSubmit}>
+          <input
+            type="password"
+            className="admin-password-input"
+            placeholder={t('admin.enterPassword')}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+          />
+          <button type="submit" className="admin-password-submit" disabled={checking || !password.trim()}>
+            {checking ? <Loader size={14} className="admin-spinner" /> : null}
+            <span>{t('admin.submit')}</span>
+          </button>
+        </form>
+        {error && <p className="admin-password-error">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 /* ── Main component ── */
 
 export default function AdminPage() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1');
+
+  if (!authed) {
+    return <PasswordGate onAuth={() => setAuthed(true)} />;
+  }
+
+  return <AdminDashboard />;
+}
+
+function AdminDashboard() {
   const { t } = useTranslation();
   const [catalogData, setCatalogData] = useState(null);
   const [healthData, setHealthData] = useState(null);

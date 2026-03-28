@@ -70,7 +70,11 @@
     "noCoverageGaps": "All regions have adequate coverage",
     "lowConfidence": "Low Confidence",
     "ingestionRisk": "Ingestion Risk",
-    "sourceSparse": "Source Sparse"
+    "sourceSparse": "Source Sparse",
+    "passwordRequired": "Admin Password Required",
+    "enterPassword": "Enter admin password",
+    "submit": "Submit",
+    "wrongPassword": "Incorrect password. Please try again."
   },
   "entities": {
     "title": "Entity Explorer",

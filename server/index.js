@@ -232,6 +232,17 @@ const server = http.createServer(async (request, response) => {
       return withTimeout(() => runVercelHandler(adminAuthHandler, request, response, url));
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/admin/verify') {
+      const password = (url.searchParams.get('password') || '').trim();
+      const adminPassword = (process.env.ADMIN_PASSWORD || 'admin').trim();
+      if (password === adminPassword) {
+        sendJson(response, 200, { ok: true });
+      } else {
+        sendJson(response, 401, { error: 'Invalid password' });
+      }
+      return;
+    }
+
     if (url.pathname === '/api/gdelt-proxy') {
       return withTimeout(() => runVercelHandler(gdeltProxyHandler, request, response, url));
     }

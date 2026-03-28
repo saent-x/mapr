@@ -34,7 +34,8 @@ describe('frontend routing', () => {
     assert.ok(src.includes('Link') || src.includes('NavLink'), 'Layout must use Link or NavLink for navigation');
     // Navigation targets
     assert.ok(src.includes('to="/"') || src.includes("to='/'"), 'Link to / must exist');
-    assert.ok(src.includes('to="/admin"') || src.includes("to='/admin'"), 'Link to /admin must exist');
+    // Admin link intentionally removed from sidebar (admin-password-gate feature)
+    assert.ok(!src.includes('to="/admin"') && !src.includes("to='/admin'"), 'Link to /admin must NOT exist in sidebar');
     assert.ok(src.includes('to="/entities"') || src.includes("to='/entities'"), 'Link to /entities must exist');
   });
 
