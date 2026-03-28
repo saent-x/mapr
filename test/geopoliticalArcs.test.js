@@ -214,6 +214,73 @@ describe('coOccurrenceToColor', () => {
   });
 });
 
+describe('entity-derived arc drilldown', () => {
+  it('storyIds on entity-derived arcs resolve correct events for drilldown', () => {
+    // Entity-derived arcs: events share an entity (NATO) across countries,
+    // but each event only has a single country in its countries array.
+    const events = [
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'NATO' }], people: [] }, coordinates: [38.9, -77.0] },
+      { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, entities: { organizations: [{ name: 'NATO' }], people: [] }, coordinates: [48.8, 2.3] },
+      { id: 'e3', isoA2: 'DE', countries: ['DE'], severity: 50, entities: { organizations: [{ name: 'NATO' }], people: [] }, coordinates: [52.5, 13.4] },
+    ];
+
+    const coOccurrences = buildCountryCoOccurrences(events);
+    const countryStoryMap = buildCountryStoryMap(events);
+    const arcs = buildGeopoliticalArcData(coOccurrences, countryStoryMap);
+
+    // Each arc should have storyIds populated from entity co-occurrence
+    for (const arc of arcs) {
+      assert.ok(Array.isArray(arc.storyIds), `Arc ${arc.id} should have storyIds array`);
+      assert.ok(arc.storyIds.length > 0, `Arc ${arc.id} storyIds should not be empty`);
+    }
+
+    // FR-US arc should reference at least one event from each side
+    const frUs = arcs.find((a) => a.id === 'FR-US');
+    assert.ok(frUs, 'FR-US arc should exist');
+    assert.ok(frUs.storyIds.length > 0, 'FR-US arc should have contributing storyIds');
+
+    // Simulate ArcPanel drilldown: resolve shared events from storyIds
+    // (This is the logic now used in ArcPanel.jsx for geopolitical arcs)
+    const storyIdSet = new Set(frUs.storyIds);
+    const resolvedShared = events.filter((e) => storyIdSet.has(e.id));
+    assert.ok(resolvedShared.length > 0, 'Drilldown should resolve contributing events from storyIds');
+
+    // The old countries-only approach would fail here because no event has both FR and US
+    const countriesOnlyShared = events.filter(
+      (e) => Array.isArray(e.countries) && e.countries.includes('FR') && e.countries.includes('US'),
+    );
+    assert.equal(countriesOnlyShared.length, 0, 'Countries-only filter finds nothing for entity-derived arcs');
+  });
+
+  it('storyIds include both multi-country and entity-linked event IDs', () => {
+    const events = [
+      // Multi-country event
+      { id: 'mc1', isoA2: 'US', countries: ['US', 'IR'], severity: 90, entities: { organizations: [], people: [] }, coordinates: [38.9, -77.0] },
+      // Entity-linked events (shared entity Pentagon)
+      { id: 'ent1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [38.9, -77.0] },
+      { id: 'ent2', isoA2: 'IR', countries: ['IR'], severity: 70, entities: { organizations: [{ name: 'Pentagon' }], people: [] }, coordinates: [35.7, 51.4] },
+    ];
+
+    const coOccurrences = buildCountryCoOccurrences(events);
+    const countryStoryMap = buildCountryStoryMap(events);
+    const arcs = buildGeopoliticalArcData(coOccurrences, countryStoryMap);
+
+    const irUs = arcs.find((a) => a.id === 'IR-US');
+    assert.ok(irUs, 'IR-US arc should exist');
+
+    // Should include the multi-country event AND entity-linked events
+    assert.ok(irUs.storyIds.includes('mc1'), 'storyIds should include multi-country event');
+    // At least one entity-linked event should be in storyIds
+    const hasEntityEvent = irUs.storyIds.includes('ent1') || irUs.storyIds.includes('ent2');
+    assert.ok(hasEntityEvent, 'storyIds should include at least one entity-linked event');
+
+    // Drilldown via storyIds resolves all contributing events
+    const storyIdSet = new Set(irUs.storyIds);
+    const resolvedShared = events.filter((e) => storyIdSet.has(e.id));
+    assert.ok(resolvedShared.length >= 2, 'Drilldown should resolve both multi-country and entity-linked events');
+  });
+});
+
 describe('buildCountryStoryMap', () => {
   it('maps ISO codes to highest severity stories', () => {
     const stories = [

@@ -190,10 +190,20 @@ const ArcPanel = ({ arc, newsList, onStorySelect, onRegionSelect, onClose }) => 
     const startIso = arc.startIso;
     const endIso = arc.endIso;
 
-    // Events whose countries array includes BOTH arc endpoints
-    const shared = newsList
-      .filter((s) => Array.isArray(s.countries) && s.countries.includes(startIso) && s.countries.includes(endIso))
-      .sort((a, b) => (b.severity || 0) - (a.severity || 0));
+    // For geopolitical arcs, resolve shared events from the arc's storyIds
+    // (covers both multi-country events AND entity-derived connections).
+    // For other arc types, fall back to countries-array filtering.
+    let shared;
+    if (arc.type === 'geopolitical' && Array.isArray(arc.storyIds) && arc.storyIds.length > 0) {
+      const storyIdSet = new Set(arc.storyIds);
+      shared = newsList
+        .filter((s) => storyIdSet.has(s.id))
+        .sort((a, b) => (b.severity || 0) - (a.severity || 0));
+    } else {
+      shared = newsList
+        .filter((s) => Array.isArray(s.countries) && s.countries.includes(startIso) && s.countries.includes(endIso))
+        .sort((a, b) => (b.severity || 0) - (a.severity || 0));
+    }
 
     const sharedIds = new Set(shared.map((s) => s.id));
 
