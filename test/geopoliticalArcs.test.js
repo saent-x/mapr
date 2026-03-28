@@ -371,7 +371,7 @@ describe('jaccardTokenSimilarity', () => {
     // Set A: {ukraine, military, aid}, Set B: {france, military, cooperation}
     // Intersection: {military} = 1, Union = 5, Jaccard = 0.2
     const sim = jaccardTokenSimilarity('ukraine military aid', 'france military cooperation');
-    assert.ok(sim > 0.15, `Expected > 0.15, got ${sim}`);
+    assert.ok(sim >= 0.2, `Expected >= 0.2, got ${sim}`);
     assert.ok(sim < 0.5, `Expected < 0.5, got ${sim}`);
   });
 
@@ -427,13 +427,34 @@ describe('co-occurrence relevance filtering', () => {
     assert.ok(!result.has('BR-US'), 'BR-US pair should NOT exist when shared entity appears in unrelated stories');
   });
 
-  it('allows entity pairing when events lack titles (lenient fallback)', () => {
+  it('skips entities with names shorter than 4 characters', () => {
+    const events = [
+      { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, title: 'Oil prices surge amid global tensions', entities: { organizations: [{ name: 'API' }], people: [] } },
+      { id: 'e2', isoA2: 'GB', countries: ['GB'], severity: 70, title: 'Oil prices surge amid global energy crisis', entities: { organizations: [{ name: 'API' }], people: [] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    // 'API' is only 3 chars, should be skipped even though titles are similar
+    assert.ok(!result.has('GB-US'), 'GB-US pair should NOT exist when entity name is too short (< 4 chars)');
+  });
+
+  it('real-world: unrelated Bolivia/Guatemala stories sharing entity do NOT produce arc', () => {
+    const events = [
+      { id: 'e1', isoA2: 'BO', countries: ['BO'], severity: 60, title: 'Bolivia lithium mining expansion accelerates in Uyuni salt flats', entities: { organizations: [{ name: 'World Bank' }], people: [{ name: 'Luis Arce' }] } },
+      { id: 'e2', isoA2: 'GT', countries: ['GT'], severity: 55, title: 'Guatemala anti-corruption protests sweep capital city', entities: { organizations: [{ name: 'World Bank' }], people: [{ name: 'Luis Arce' }] } },
+    ];
+    const result = buildCountryCoOccurrences(events);
+    // World Bank is a high-frequency entity (filtered), and Luis Arce appears in topically
+    // unrelated stories (lithium mining vs anti-corruption protests), so no arc should form.
+    assert.ok(!result.has('BO-GT'), 'BO-GT pair should NOT exist for unrelated Bolivia/Guatemala stories');
+  });
+
+  it('does NOT create arc when events lack titles (no lenient fallback)', () => {
     const events = [
       { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
       { id: 'e2', isoA2: 'IR', countries: ['IR'], severity: 70, entities: { organizations: [{ name: 'Pentagon' }], people: [] } },
     ];
     const result = buildCountryCoOccurrences(events);
-    // No titles means similarity check is skipped (lenient), so arc should still be created
-    assert.ok(result.has('IR-US'), 'IR-US pair SHOULD exist when events have no titles (lenient fallback)');
+    // No titles means pair is skipped entirely — entity co-occurrence without topical evidence is too unreliable
+    assert.ok(!result.has('IR-US'), 'IR-US pair should NOT exist when events have no titles');
   });
 });

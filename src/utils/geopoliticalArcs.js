@@ -11,8 +11,9 @@
  * Filtering:
  * - High-frequency global organization names (UN, NATO, EU, etc.) are excluded
  *   from entity co-occurrence to prevent false arcs between unrelated countries.
- * - Remaining entity pairs require title similarity (Jaccard > 0.15) to confirm
+ * - Remaining entity pairs require title similarity (Jaccard > 0.2) to confirm
  *   topical relatedness.
+ * - Entities with names shorter than 4 characters are skipped (too short to be meaningful).
  */
 
 /**
@@ -148,7 +149,7 @@ export function buildCountryCoOccurrences(events) {
 
     for (const entity of allEntities) {
       const name = entity.name || entity;
-      if (!name || typeof name !== 'string' || name.length < 3) continue;
+      if (!name || typeof name !== 'string' || name.length < 4) continue;
       // Skip high-frequency global organizations that cause false co-occurrence
       if (HIGH_FREQUENCY_ENTITIES.has(name)) continue;
       if (!entityCountryMap[name]) entityCountryMap[name] = [];
@@ -180,13 +181,12 @@ export function buildCountryCoOccurrences(events) {
 
         // Compare each cross-country event pair individually.
         // Only events that participate in at least one passing pair are included.
-        // If either event in a pair lacks a title, allow the pairing (be lenient).
+        // Both events must have titles — entity co-occurrence without topical evidence is too unreliable.
         const matchedIds = new Set();
         const matchedOccs = [];
         for (const a of occsA) {
           for (const b of occsB) {
-            const lenient = !a.title || !b.title;
-            if (lenient || jaccardTokenSimilarity(a.title, b.title) > 0.15) {
+            if (a.title && b.title && jaccardTokenSimilarity(a.title, b.title) > 0.2) {
               if (!matchedIds.has(a.eventId)) {
                 matchedIds.add(a.eventId);
                 matchedOccs.push(a);
