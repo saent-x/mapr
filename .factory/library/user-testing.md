@@ -57,7 +57,7 @@ Testing surface, required testing skills/tools, resource cost classification per
 
 ## Flow Validator Guidance: Web Browser
 
-- Use the assigned isolated browser session only (for this run: `62241cfc00e4__u1`, `62241cfc00e4__u2`, or another explicitly assigned session). Do not use the default browser session.
+- Use only the isolated browser session explicitly assigned in the parent validator prompt for the current run. Do not use the default browser session.
 - Stay on the local validation surface at `http://localhost:5173` and its proxied local API calls; do not open unrelated external sites.
 - Do not trigger manual refreshes or any other mutation-heavy backend actions during frontend-refactor validation. Validate against the currently served snapshot, even if `/api/health` reports `refreshInProgress: true`.
 - Prefer flat-map interactions for filters and region selection because the 3D globe is difficult to drive reliably in automation; only verify globe mode renders and does not throw console errors.

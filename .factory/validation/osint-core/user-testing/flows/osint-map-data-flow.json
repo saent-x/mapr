@@ -1,0 +1,42 @@
+{
+  "surface": "web-browser",
+  "groupId": "osint-map-data-flow",
+  "assertions": [
+    {
+      "id": "VAL-CROSS-001",
+      "status": "pass",
+      "reason": "The live home map loaded with a dense global dataset and visible stories from regions that had been sparse earlier in the project, including Oman and Myanmar, indicating the expanded source coverage is flowing into the map experience.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-map-data-flow/home-annotated.png shows the loaded map/globe surface with live stats of 149 regions and 2,340 stories.",
+        "The same home view exposed live underrepresented-region stories in the visible feed, including \"Three dead in separate drowning incidents\" for Oman and multiple Myanmar stories such as \"Human Stories From Myanmar\u2019s Cold War Frontier\"."
+      ]
+    },
+    {
+      "id": "VAL-CROSS-002",
+      "status": "pass",
+      "reason": "On the live home surface, selecting an event opened the regional news panel, and expanding a story exposed its title, source, published time, supporting-source evidence, and external read-more link.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-map-data-flow/panel-expanded-story-annotated.png shows the panel open with regional stories and the expanded West Bank article detail.",
+        "The expanded story displayed source \"Times of Israel\", published timestamp \"Mar 27, 2026, 7:02 PM\", confidence/severity metadata, supporting-source links, and a \"Read full article\" link.",
+        "The panel also showed neighboring region-specific Gaza/West Bank stories, confirming that the selected context drove the article list rather than an empty generic shell."
+      ]
+    },
+    {
+      "id": "VAL-CROSS-006",
+      "status": "pass",
+      "reason": "A first-load browser session landed on a populated home view with a rendered map canvas, live story counts, and actionable UI rather than an empty-state experience.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-map-data-flow/home-annotated.png shows the initial home load with map canvas present, filters, timeline, and populated event feed.",
+        "Initial body text inspection reported hasMapCanvas=1 and visible live stats (149 regions, 2,340 stories, 30 verified, 204 critical) on first load.",
+        "No empty-state copy was shown on the main surface; the session instead loaded directly into the interactive map, timeline, and intel feed."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "Because the map surface is canvas/WebGL, the end-to-end flow was validated through the app\u2019s supported ticker/panel selection path rather than brittle direct marker clicks."
+  ],
+  "blockers": []
+}

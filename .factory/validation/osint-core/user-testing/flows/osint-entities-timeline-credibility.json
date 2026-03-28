@@ -1,0 +1,43 @@
+{
+  "surface": "web-browser",
+  "groupId": "osint-entities-timeline-credibility",
+  "assertions": [
+    {
+      "id": "VAL-OSINT-001",
+      "status": "pass",
+      "reason": "The /entities route rendered a real entity relationship graph with hundreds of connected entities, and selecting a live entity opened a detail panel listing its related events.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-entities-timeline-credibility/entities-annotated.png shows the Entity Explorer with \"150 entities \u00b7 893 connections\" and the graph canvas rendered.",
+        "DOM inspection confirmed a canvas with aria-label \"Entity relationship graph\" on http://localhost:5173/entities.",
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-entities-timeline-credibility/entities-detail-annotated.png shows the related-events detail panel open from the graph selection state, with a list of Sierra Leone-related events and their severities."
+      ]
+    },
+    {
+      "id": "VAL-OSINT-003",
+      "status": "pass",
+      "reason": "The news panel visibly distinguishes corroborated and single-source items: multiple stories rendered SINGLE SOURCE badges, and a West Bank story rendered a CORROBORATED badge with a source count of 2.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-entities-timeline-credibility/credibility-panel-expanded-annotated.png shows the expanded panel state where the story \"A look at the giant Iranian missile hulls scattered across Israel and the West Bank\" is labeled \"CORROBORATED 2\".",
+        "Rendered panel text included both \"SINGLE SOURCE\" badges on neighboring stories and a \"CORROBORATED 2\" badge on the selected West Bank story.",
+        "The expanded story detail also surfaced the confidence signal text \"Corroborated by 2 sources\" with Times of Israel and Jerusalem Post listed as supporting evidence."
+      ]
+    },
+    {
+      "id": "VAL-OSINT-004",
+      "status": "pass",
+      "reason": "The home view exposed an event timeline with chronological day ticks, lifecycle legend, and per-event dots labeled with the live event titles.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-map-data-flow/home-annotated.png shows the horizontal event timeline on the home view beneath the filters and above the intel panel.",
+        "Timeline inspection returned day ticks Sun 22 Mar through Sat 28 Mar and legend labels Emerging, Developing, Escalating, and Stabilizing.",
+        "The timeline rendered interactive event dots whose aria labels included live event titles such as \"Zamir said to warn cabinet that IDF will collapse due to lack of manpower\" and \"How a protracted Iran war will affect you\"."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "The entity graph is a canvas surface, so individual nodes were not exposed as ordinary accessible DOM elements; validation used the rendered component state to drive the same selection path and verify the related-events panel."
+  ],
+  "blockers": []
+}

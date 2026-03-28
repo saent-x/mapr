@@ -1,0 +1,35 @@
+{
+  "surface": "web-browser",
+  "groupId": "osint-saved-views-export",
+  "assertions": [
+    {
+      "id": "VAL-OSINT-005",
+      "status": "pass",
+      "reason": "A Bangladesh search state was saved as a named view, persisted in localStorage, and restored after reload with the search query and reduced story counts reapplied immediately.",
+      "evidence": [
+        "Before saving, the home stats were 151 regions / 2,398 stories; after applying search \"Bangladesh\" they dropped to 3 regions / 6 stories.",
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-saved-views-export/save-view-dialog-annotated.png shows the Save View dialog while saving the filtered state as \"Bangladesh Search View\".",
+        "localStorage recorded mapr_saved_views with filters.searchQuery=\"Bangladesh\" for the saved view.",
+        "After reload, the page returned to an unfiltered state (150 regions / 2,314 stories). Selecting the saved view restored searchValue=\"Bangladesh\" and reduced stats to 3 regions / 5 stories.",
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-saved-views-export/saved-view-loaded-annotated.png shows the loaded saved view with the Bangladesh search active and the view name displayed in the header."
+      ]
+    },
+    {
+      "id": "VAL-OSINT-006",
+      "status": "pass",
+      "reason": "The export modal generated a downloadable markdown briefing for the current filtered view, and the downloaded file contained the expected event summary tables and Bangladesh-filtered events.",
+      "evidence": [
+        "Screenshot: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-saved-views-export/export-modal-annotated.png shows the Export Briefing modal with Markdown Report, JSON Snapshot, and Print to PDF actions.",
+        "Downloaded file: /Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-core/osint-saved-views-export/downloads/mapr-briefing-2026-03-28.md",
+        "The downloaded markdown begins with \"# Mapr Intelligence Briefing\", reports \"Events: 5\", and includes summary tables plus Bangladesh-filtered event rows such as \"24 killed after bus plunges into Padma River in Bangladesh\"."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "The initial browser daemon ignored a late --download-path override, so the session was restarted with the same isolated session name and a fixed download directory before the final markdown export was captured."
+  ],
+  "blockers": []
+}

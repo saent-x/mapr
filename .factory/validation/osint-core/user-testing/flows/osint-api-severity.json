@@ -1,0 +1,22 @@
+{
+  "surface": "backend-api",
+  "groupId": "osint-api-severity",
+  "assertions": [
+    {
+      "id": "VAL-OSINT-002",
+      "status": "pass",
+      "reason": "The live briefing API returned a broad spread of severity scores (9-85 across 3,207 scored events), and the severity model code combines keyword score, corroboration/article volume, entity significance, conflict-zone boost, historical baseline adjustment, and velocity instead of relying on keywords alone.",
+      "evidence": [
+        "GET /api/briefing summary: 3,207 scored events with severity min=9, median=22, max=85 and varied examples such as severity 11, 27, 34, 62, 78, 84, and 85.",
+        "Sample live events showed different factor combinations: e.g. a Saudi airbase strike scored 62 with articleCount=4, sourceDiversity=1, and populated entity/location data, while lower-signal single-article Netherlands stories scored in the teens to 20s.",
+        "Code review: src/utils/severityModel.js lines 210-247 computeCompositeSeverity() combines keywordScore, corroboration, entityScore, significanceBoost, conflictBoost, baselineAdj, and velocityScore."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "python",
+    "read"
+  ],
+  "frictions": [],
+  "blockers": []
+}
