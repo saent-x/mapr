@@ -251,7 +251,10 @@
     "noLocalFeeds": "No local feeds"
   },
   "errors": {
-    "fallbackData": "Using fallback data"
+    "fallbackData": "Using fallback data",
+    "backendUnreachable": "Backend unreachable",
+    "fallbackActive": "Displaying cached data. Some features may be limited.",
+    "retryAction": "Retry"
   },
   "article": {
     "readFull": "Read full article",
@@ -455,7 +458,8 @@
   },
   "loading": {
     "map": "Loading map…",
-    "page": "Loading…"
+    "page": "Loading…",
+    "initialData": "Loading intelligence data…"
   },
   "narrative": {
     "label": "Story narrative",

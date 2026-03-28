@@ -6,6 +6,8 @@ import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
 import MapLoadingFallback from './components/MapLoadingFallback';
+import DataLoadingOverlay from './components/DataLoadingOverlay';
+import DataErrorBanner from './components/DataErrorBanner';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
@@ -269,13 +271,19 @@ function App() {
   /* ── Keyboard shortcuts ── */
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+      // Allow Escape to work even when focused on inputs (for closing panels)
+      if (e.key !== 'Escape' && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
       switch (e.key) {
         case 'r': handleRefresh(); break;
         case '/': e.preventDefault(); document.querySelector('.search-input')?.focus(); break;
         case 'Escape':
-          if (panelOpen) handleClosePanel();
-          else if (filtersOpen) setDrawerMode(null);
+          if (showExport) { setShowExport(false); break; }
+          if (showSaveDialog) { setShowSaveDialog(false); break; }
+          if (selectedArc) { useUIStore.setState({ selectedArc: null }); break; }
+          if (anomalyPanelOpen) { setAnomalyPanelOpen(false); break; }
+          if (watchlistPanelOpen) { setWatchlistPanelOpen(false); break; }
+          if (panelOpen) { handleClosePanel(); break; }
+          if (filtersOpen) { setDrawerMode(null); break; }
           break;
         case 'g': useUIStore.getState().toggleMapMode(); break;
         case 'f': useUIStore.getState().toggleDrawer('filters'); break;
@@ -284,7 +292,8 @@ function App() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [panelOpen, filtersOpen, handleRefresh, handleClosePanel, setDrawerMode]);
+  }, [panelOpen, filtersOpen, handleRefresh, handleClosePanel, setDrawerMode,
+    showExport, setShowExport, showSaveDialog, selectedArc, anomalyPanelOpen, watchlistPanelOpen]);
 
   /* ── URL sync ── */
   useEffect(() => {
@@ -474,7 +483,9 @@ function App() {
         news={panelNews} allEvents={activeNews} selectedStoryId={selectedStoryId} onStorySelect={handleStorySelect}
         onClose={handleClosePanel} sessionDiff={sessionDiff} velocitySpikes={velocitySpikes} />
 
-      {dataError && <div className="data-error-badge">{t('errors.fallbackData')}</div>}
+      {dataSource === 'loading' && !liveNews && <DataLoadingOverlay />}
+
+      {dataError && <DataErrorBanner onRetry={handleRefresh} />}
 
       {toasts.length > 0 && (
         <div className="toast-container">
