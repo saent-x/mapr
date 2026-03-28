@@ -5,6 +5,7 @@ import { SlidersHorizontal, Radio, AlertTriangle, Eye, X, Users, Building2, MapP
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
+import MapLoadingFallback from './components/MapLoadingFallback';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
@@ -306,7 +307,7 @@ function App() {
   return (
     <ErrorBoundary>
     <div className="app">
-      <Suspense fallback={null}>
+      <Suspense fallback={<MapLoadingFallback />}>
         <MapErrorBoundary mapMode={mapMode} onFallbackToFlat={handleGlobeFallback}>
           {mapMode === 'globe' ? (
             <Globe newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}

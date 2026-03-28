@@ -13,6 +13,7 @@ import ChangesBanner from './ChangesBanner';
 import NarrativePanel from './NarrativePanel.jsx';
 import useWatchStore from '../stores/watchStore.js';
 import useUIStore from '../stores/uiStore.js';
+import useProgressiveList from '../hooks/useProgressiveList.js';
 
 const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
 
@@ -151,6 +152,13 @@ const NewsPanel = ({
   const isRegionWatched = regionIso && watchItems.some(
     (item) => item.type === 'region' && item.value.toUpperCase() === regionIso.toUpperCase()
   );
+
+  // Progressive rendering — only render visible articles, load more on scroll
+  const { visibleItems: visibleNews, hasMore, sentinelRef } = useProgressiveList(news, {
+    initialCount: 30,
+    batchSize: 20,
+    resetKey: regionName || '',
+  });
 
   // Reset mobile sheet state when panel closes or region changes
   useEffect(() => {
@@ -422,7 +430,7 @@ const NewsPanel = ({
             <span>{t('panel.noRegionNewsHint')}</span>
           </div>
         )}
-        {news.map((story) => {
+        {visibleNews.map((story) => {
           const meta = getSeverityMeta(story.severity);
           const isExpanded = expandedId === story.id;
 
@@ -489,6 +497,14 @@ const NewsPanel = ({
             </div>
           );
         })}
+        {/* Sentinel element for progressive loading — triggers loading more items when scrolled into view */}
+        {hasMore && (
+          <div ref={sentinelRef} className="news-panel-load-more-sentinel" aria-hidden="true">
+            <span className="news-panel-load-more-text">
+              {t('panel.loadingMore', { shown: visibleNews.length, total: news.length })}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );

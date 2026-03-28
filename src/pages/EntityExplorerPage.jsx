@@ -172,7 +172,12 @@ export default function EntityExplorerPage() {
               <span>{t('entities.noEntities')}</span>
             </div>
           ) : (
-            <Suspense fallback={null}>
+            <Suspense fallback={
+              <div className="entity-graph-loading">
+                <Network size={32} className="entity-graph-loading-icon" />
+                <span>{t('entities.loading')}</span>
+              </div>
+            }>
               <EntityRelationshipGraph
                 nodes={filteredGraph.nodes}
                 edges={filteredGraph.edges}

@@ -216,6 +216,7 @@
     "plannedFeeds": "Planned feeds",
     "checkedFeeds": "Checked feeds",
     "failedChecks": "Failed checks",
+    "loadingMore": "Showing {{shown}} of {{total}}…",
     "noLocalFeedCatalog": "No local feeds are configured for this country yet",
     "noLocalFeedCatalogHint": "Mapr is falling back to regional, official, and global sources until local feeds are added.",
     "noFeedChecks": "No targeted feed checks yet",
@@ -451,6 +452,10 @@
     "watchRegion": "Watch region",
     "notification": "{{count}} new articles for {{label}}",
     "notificationMultiple": "New articles for {{count}} watched items"
+  },
+  "loading": {
+    "map": "Loading map…",
+    "page": "Loading…"
   },
   "narrative": {
     "label": "Story narrative",

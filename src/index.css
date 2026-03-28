@@ -6707,6 +6707,75 @@ button {
   white-space: nowrap;
 }
 
+/* ── Map loading fallback (Suspense) ── */
+.map-loading-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg, #0a0e17);
+  z-index: 1;
+}
+.map-loading-fallback-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary, #8892a4);
+}
+.map-loading-fallback-icon {
+  opacity: 0.5;
+  animation: pulse-loading 1.5s ease-in-out infinite;
+}
+.map-loading-fallback-text {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Page loading fallback (Suspense) ── */
+.page-loading-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 50vh;
+  color: var(--text-secondary, #8892a4);
+}
+.page-loading-fallback-icon {
+  animation: spin-loading 1s linear infinite;
+}
+.page-loading-fallback-text {
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@keyframes pulse-loading {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+@keyframes spin-loading {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ── Progressive list sentinel ── */
+.news-panel-load-more-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+  min-height: 40px;
+}
+.news-panel-load-more-text {
+  font-size: 0.65rem;
+  color: var(--text-tertiary, #555);
+  letter-spacing: 0.03em;
+}
+
 @media print {
   .header, .filter-drawer, .intel-ticker, .event-timeline-bar, .map-container,
   .globe-container, .flatmap-container, .arc-panel, .export-modal, .anomaly-panel, .watchlist-panel { display: none !important; }
