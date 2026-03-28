@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Globe, Map, Shield, Network, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Globe, Map, Shield, Network, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
  * App-wide layout shell with a collapsible navigation sidebar.
@@ -26,6 +26,10 @@ export default function Layout() {
           <NavLink to="/entities" className="layout-nav-link" title={t('nav.entities')}>
             <Network size={18} />
             {!collapsed && <span>{t('nav.entities')}</span>}
+          </NavLink>
+          <NavLink to="/trends" className="layout-nav-link" title={t('nav.trends')}>
+            <TrendingUp size={18} />
+            {!collapsed && <span>{t('nav.trends')}</span>}
           </NavLink>
         </div>
         <button

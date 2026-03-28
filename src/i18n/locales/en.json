@@ -4,6 +4,7 @@
     "map": "Map",
     "admin": "Admin",
     "entities": "Entities",
+    "trends": "Trends",
     "expand": "Expand navigation",
     "collapse": "Collapse navigation",
     "backToMap": "Back to map"
@@ -326,6 +327,23 @@
     "jsonDesc": "Download a structured JSON file containing all {{count}} filtered events with metadata.",
     "printTitle": "Print to PDF",
     "printDesc": "Open the browser print dialog to save as PDF."
+  },
+  "trends": {
+    "title": "Trend Analysis",
+    "subtitle": "Regional activity trends over time — compare event volume across regions.",
+    "loading": "Loading trend data…",
+    "noData": "No trend data available. Data populates after a few ingestion cycles.",
+    "chartAriaLabel": "Line chart showing regional event counts over time",
+    "chartTitle": "Regional Activity Over Time",
+    "activeRegions": "active regions",
+    "spikes": "velocity spikes",
+    "totalEvents": "Total Events",
+    "velocitySpikes": "Velocity Spikes",
+    "dataPoints": "Snapshots",
+    "regions": "Regions",
+    "selectTop10": "Top 10",
+    "deselectAll": "Clear all",
+    "velocitySpikesTitle": "Velocity Anomalies"
   },
   "sourceType": {
     "official": "official",

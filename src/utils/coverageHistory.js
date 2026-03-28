@@ -256,6 +256,72 @@ export function buildCoverageTransitions(history, limit = 16) {
     .slice(0, limit);
 }
 
+/**
+ * Build per-region event count time series from raw coverage history snapshots.
+ * Returns timestamps in chronological order (oldest → newest) with event counts
+ * for the top N most-active regions.
+ *
+ * @param {Array} history - Raw coverage history array (newest-first)
+ * @param {object} [options]
+ * @param {number} [options.topN=20] - Maximum number of regions to include
+ * @returns {{ timestamps: string[], regions: Record<string, { name: string, counts: number[], latestCount: number }> }}
+ */
+export function buildRegionTimeSeries(history, options = {}) {
+  const { topN = 20 } = options;
+  const snapshots = history || [];
+
+  if (snapshots.length === 0) {
+    return { timestamps: [], regions: {} };
+  }
+
+  // Reverse to chronological order (oldest first)
+  const chronological = [...snapshots].reverse();
+  const timestamps = chronological.map((s) => s.at);
+
+  // Collect all regions and their latest event count for ranking
+  const regionMeta = new Map();
+  const latestSnapshot = snapshots[0]; // newest
+  (latestSnapshot.countries || []).forEach((entry) => {
+    regionMeta.set(entry.iso, {
+      name: entry.region || entry.iso,
+      latestCount: entry.eventCount || 0
+    });
+  });
+
+  // Also collect regions from earlier snapshots that may not be in the latest
+  for (let i = 1; i < snapshots.length; i++) {
+    (snapshots[i].countries || []).forEach((entry) => {
+      if (!regionMeta.has(entry.iso)) {
+        regionMeta.set(entry.iso, {
+          name: entry.region || entry.iso,
+          latestCount: 0
+        });
+      }
+    });
+  }
+
+  // Rank by latest event count descending, take topN
+  const ranked = [...regionMeta.entries()]
+    .sort((a, b) => b[1].latestCount - a[1].latestCount)
+    .slice(0, topN);
+
+  // Build count arrays for each selected region
+  const regions = {};
+  for (const [iso, meta] of ranked) {
+    const counts = chronological.map((snapshot) => {
+      const entry = (snapshot.countries || []).find((c) => c.iso === iso);
+      return entry ? (entry.eventCount || 0) : 0;
+    });
+    regions[iso] = {
+      name: meta.name,
+      counts,
+      latestCount: meta.latestCount
+    };
+  }
+
+  return { timestamps, regions };
+}
+
 export function getRegionCoverageHistory(history, iso, limit = 10, transitionLimit = 8) {
   const snapshots = (history || [])
     .map((snapshot) => {

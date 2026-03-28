@@ -28,6 +28,7 @@ import {
   mergeCoverageHistory,
   summarizeCoverageHistory,
   buildCoverageTransitions,
+  buildRegionTimeSeries,
   getRegionCoverageHistory as getRegionCoverageHistoryFromSnapshots,
   summarizeCoverageTrends
 } from '../src/utils/coverageHistory.js';
@@ -359,12 +360,16 @@ export function getSourceCatalogStatus() {
   };
 }
 
-export function getCoverageHistory(limit = 8, transitionLimit = 16) {
-  return {
+export function getCoverageHistory(limit = 8, transitionLimit = 16, { includeRegionSeries = false, topN = 20 } = {}) {
+  const result = {
     snapshots: summarizeCoverageHistory(coverageHistory, limit),
     transitions: buildCoverageTransitions(coverageHistory, transitionLimit),
     trends: coverageTrends
   };
+  if (includeRegionSeries) {
+    result.regionSeries = buildRegionTimeSeries(coverageHistory, { topN });
+  }
+  return result;
 }
 
 export function getRegionCoverageHistory(iso, limit = 10, transitionLimit = 8) {

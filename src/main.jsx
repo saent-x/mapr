@@ -10,6 +10,7 @@ const HealthPage = lazy(() => import('./pages/HealthPage.jsx'))
 const RegionDetailPage = lazy(() => import('./pages/RegionDetailPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const EntityExplorerPage = lazy(() => import('./pages/EntityExplorerPage.jsx'))
+const TrendAnalysisPage = lazy(() => import('./pages/TrendAnalysisPage.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -21,6 +22,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/region/:iso" element={<Suspense fallback={null}><RegionDetailPage /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={null}><AdminPage /></Suspense>} />
           <Route path="/entities" element={<Suspense fallback={null}><EntityExplorerPage /></Suspense>} />
+          <Route path="/trends" element={<Suspense fallback={null}><TrendAnalysisPage /></Suspense>} />
         </Route>
       </Routes>
     </BrowserRouter>

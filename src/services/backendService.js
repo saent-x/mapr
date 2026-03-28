@@ -38,6 +38,10 @@ export function fetchBackendCoverageHistory({ limit = 8, transitions = 16 } = {}
   return request(`/coverage-history?limit=${limit}&transitions=${transitions}`);
 }
 
+export function fetchBackendCoverageHistoryWithRegions({ limit = 24, transitions = 16, topN = 20 } = {}) {
+  return request(`/coverage-history?limit=${limit}&transitions=${transitions}&regions=1&topN=${topN}`);
+}
+
 export function fetchBackendCoverageRegion({ iso, limit = 10, transitions = 8 } = {}) {
   if (!iso) {
     throw new Error('Missing iso for region coverage request');

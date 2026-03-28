@@ -60,6 +60,31 @@ describe('frontend routing', () => {
     assert.ok(src.includes('export default'), 'Must have a default export');
   });
 
+  it('TrendAnalysisPage exists with default export', () => {
+    const pagePath = join(SRC, 'pages', 'TrendAnalysisPage.jsx');
+    assert.ok(existsSync(pagePath), 'TrendAnalysisPage.jsx must exist');
+    const src = readFileSync(pagePath, 'utf8');
+    assert.ok(src.includes('export default'), 'Must have a default export');
+  });
+
+  it('trends route is configured in main.jsx', () => {
+    const src = readFileSync(join(SRC, 'main.jsx'), 'utf8');
+    assert.ok(
+      src.includes('path="/trends"') || src.includes("path='/trends'"),
+      'trends route /trends must exist',
+    );
+    assert.ok(src.includes('TrendAnalysisPage'), 'main.jsx must reference TrendAnalysisPage');
+  });
+
+  it('Layout has navigation link to trends', () => {
+    const layoutPath = join(SRC, 'components', 'Layout.jsx');
+    const src = readFileSync(layoutPath, 'utf8');
+    assert.ok(
+      src.includes('to="/trends"') || src.includes("to='/trends'"),
+      'Link to /trends must exist in Layout',
+    );
+  });
+
   it('routes use Layout as parent wrapper', () => {
     const src = readFileSync(join(SRC, 'main.jsx'), 'utf8');
     assert.ok(src.includes('Layout'), 'main.jsx must reference Layout component');

@@ -186,9 +186,11 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/coverage-history') {
-      const limit = Math.max(1, Math.min(24, Number(url.searchParams.get('limit') || 8)));
+      const limit = Math.max(1, Math.min(48, Number(url.searchParams.get('limit') || 8)));
       const transitions = Math.max(1, Math.min(40, Number(url.searchParams.get('transitions') || 16)));
-      sendJson(response, 200, getCoverageHistory(limit, transitions));
+      const includeRegionSeries = url.searchParams.get('regions') === '1';
+      const topN = Math.max(1, Math.min(30, Number(url.searchParams.get('topN') || 20)));
+      sendJson(response, 200, getCoverageHistory(limit, transitions, { includeRegionSeries, topN }));
       return;
     }
 
