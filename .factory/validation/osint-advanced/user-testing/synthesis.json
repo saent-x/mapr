@@ -1,0 +1,28 @@
+{
+  "milestone": "osint-advanced",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-ADV-001",
+    "VAL-ADV-002",
+    "VAL-ADV-003",
+    "VAL-ADV-004",
+    "VAL-ADV-005",
+    "VAL-CROSS-003",
+    "VAL-CROSS-004"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "executionNotes": [
+    "Task-based flow validator launches failed because the configured custom model resolved to invalid model custom:GPT-5.4-(XHigh)-3, so the main validator executed the equivalent browser flows directly and wrote the flow reports itself.",
+    "Canvas/WebGL-heavy surfaces (entity graph, trend chart, geopolitical arcs) required DOM-assisted inspection or the app\u2019s own live selection handlers to verify the resulting user-visible panels and state."
+  ],
+  "previousRound": null
+}

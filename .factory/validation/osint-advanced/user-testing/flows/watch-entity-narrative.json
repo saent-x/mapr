@@ -1,0 +1,54 @@
+{
+  "surface": "web-browser",
+  "groupId": "watch-entity-narrative",
+  "assertions": [
+    {
+      "id": "VAL-ADV-003",
+      "status": "pass",
+      "reason": "A region watch was added through the watchlist UI, immediately showed visual new-match badges, and persisted across reload with its saved item and count intact.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/watchlist-added-annotated.png shows the watchlist panel after adding region IR, including the toggle badge \"Watchlist 1 +109\" and panel badges \"1 items\" / \"109 new\".",
+        "localStorage stored mapr-watchlist with a persisted IR region watch item and mapr-watchlist-counts with 109 matches.",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/watchlist-persisted-annotated.png shows the same IR watch item after reload, with the toggle count still present and the panel still listing the saved watch."
+      ]
+    },
+    {
+      "id": "VAL-ADV-004",
+      "status": "pass",
+      "reason": "Selecting live stories exposed a narrative timeline with first-reported metadata, source-diversity chips, staged progression, and\u2014on an Iran/Xi story\u2014cross-regional spread into Lebanon and Beijing.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/narrative-expanded-annotated.png shows an expanded story detail with the Story Timeline narrative panel rendered inside the news panel.",
+        "Narrative inspection for the \"Iran\u2019s war propaganda includes memes directed at Trump\" story returned meta \"First reported 2 days ago \u00b7 Span: 1d 14h\", diversity chips [\"wire (2)\", \"local (1)\"], and stages [\"First Report\", \"Developing\", \"Continued Coverage\"].",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/narrative-cross-regional-annotated.png shows the narrative panel for \"Trump Confirms May Meeting with Xi Jinping as Iran War Forces Postponement\", and inspection returned cross-regional matches for Lebanon and Beijing."
+      ]
+    },
+    {
+      "id": "VAL-CROSS-003",
+      "status": "pass",
+      "reason": "The entity explorer graph opened a real entity detail panel from the live canvas graph, and using Show on Map returned to the home view with the entity filter breadcrumb and filtered event count applied.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/entities-overview-annotated.png shows the Entity Explorer with the rendered graph canvas and type filters.",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/entities-detail-annotated.png shows a selected entity detail panel for O.J. with 14 mentions, 12 related events, and a visible Show on Map action.",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/entity-filter-on-map-annotated.png shows the home view after Show on Map, with breadcrumb text \"Filtered by: O.J.\" and an active count of 1 events."
+      ]
+    },
+    {
+      "id": "VAL-CROSS-004",
+      "status": "pass",
+      "reason": "With a persisted IR watchlist item in place, the app surfaced both badge-style and toast-style alerts when unseen matches were detected on the next live load.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/watchlist-added-annotated.png shows the immediate watchlist badge state after adding IR: the toggle displayed +109 and the panel displayed \"109 new\".",
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/watchlist-alert-annotated.png shows the follow-up live load used for alert verification.",
+        "Toast inspection on that follow-up load returned [\"Velocity spike \u00b7 Egypt \u00b7 z=7.6\", \"109 new articles for IR\", \"Intel refreshed \u00b7 2815 stories\"], confirming the watch-alert system emitted a real user-visible notification for the watched region."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "The entity graph is an HTML5 canvas, so ordinary semantic node locators are unavailable; validation clicked the real canvas surface directly and then used the exposed detail-panel action for the map-linking assertion.",
+    "The watch-alert system determines \u201cnew\u201d items by comparing current matches to persisted localStorage counts. To validate alert behavior without waiting for a 5-minute auto-refresh or forcing a heavy backend mutation, the isolated browser session preserved the real watch item and reset only the prior count snapshot before reloading."
+  ],
+  "blockers": []
+}

@@ -1,0 +1,43 @@
+{
+  "surface": "web-browser",
+  "groupId": "advanced-signals",
+  "assertions": [
+    {
+      "id": "VAL-ADV-001",
+      "status": "pass",
+      "reason": "The /trends route rendered a real trend-analysis dashboard with summary cards, a line chart, and multiple simultaneously selected region comparisons.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/trends-annotated.png shows the Trend Analysis page with summary cards, a populated chart area, and region comparison buttons.",
+        "DOM inspection found .trend-chart-svg with aria-label \"Line chart showing regional event counts over time\".",
+        "The page had five active comparison regions at once (United States, United Kingdom, Iran, Guatemala, Romania), confirming multi-region comparison rather than a single-series placeholder."
+      ]
+    },
+    {
+      "id": "VAL-ADV-002",
+      "status": "pass",
+      "reason": "Anomaly detection is exposed through dedicated UI: the home-page anomaly panel rendered spike metadata with severity and z-score, and the trends page separately surfaced velocity anomaly cards.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/anomaly-panel-annotated.png shows the Anomaly Detection panel open from the home view.",
+        "Panel inspection returned badges [\"1 spikes\"] and items [\"Cambodia KHElevated z=1.7\"], confirming region, severity level, and z-score output.",
+        "Trend-page inspection also reported a velocity anomaly card [\"KH z=1.7 elevated\"], matching the dedicated anomaly panel."
+      ]
+    },
+    {
+      "id": "VAL-ADV-005",
+      "status": "pass",
+      "reason": "The GEO overlay produced a geopolitical relationship view, and opening a real France\u2194United States relationship displayed a shared-intel panel with country-pair context and shared stories.",
+      "evidence": [
+        "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/osint-advanced/geopolitical-arc-panel-annotated.png shows the home map with the GEO overlay active and the arc detail panel open.",
+        "Assisted inspection after enabling GEO confirmed overlayButtonActive=true and selected a live FR-US arc with 50 contributing storyIds.",
+        "Arc panel text resolved the pair header to \"France \u2194 United States\" and listed shared stories including \"US proposal to end war is \u2018one-sided\u2019, door to diplomacy still open, Iranian official says\" and \"Rubio says Iran war to last weeks, no US ground troops needed\"."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "frictions": [
+    "The trend chart and geopolitical arc surfaces are rendered in canvas/WebGL layers, so semantic element targeting is limited; validation used DOM-assisted inspection and the app\u2019s real selection handler to verify the rendered arc panel without modifying application code."
+  ],
+  "blockers": []
+}
