@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ExternalLink, ChevronUp, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { X, ExternalLink, ChevronUp, ShieldCheck, ShieldAlert, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { enUS, es, fr, ar, zhCN } from 'date-fns/locale';
 import { getSeverityMeta } from '../utils/mockData';
@@ -10,6 +10,8 @@ import { getConfidenceReasonLabel } from '../utils/confidenceReasons';
 import { normalizeArticleText } from '../utils/articleText';
 import ExpandableText from './ExpandableText';
 import ChangesBanner from './ChangesBanner';
+import useWatchStore from '../stores/watchStore.js';
+import useUIStore from '../stores/uiStore.js';
 
 const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
 
@@ -140,6 +142,14 @@ const NewsPanel = ({
   const sheetRef = useRef(null);
   const dragStartY = useRef(null);
 
+  // Watchlist integration
+  const { watchItems, addWatch, removeWatch } = useWatchStore();
+  const selectedRegionIso = useUIStore((s) => s.selectedRegion);
+  const regionIso = selectedRegionIso || regionData?.iso || regionData?.isoA2 || null;
+  const isRegionWatched = regionIso && watchItems.some(
+    (item) => item.type === 'region' && item.value.toUpperCase() === regionIso.toUpperCase()
+  );
+
   // Reset mobile sheet state when panel closes or region changes
   useEffect(() => {
     setMobileExpanded(false);
@@ -167,6 +177,19 @@ const NewsPanel = ({
   }, [mobileExpanded, onClose]);
 
   const resolvedRegionName = regionName || regionData?.region || t('panel.closePanel');
+
+  const handleWatchToggle = useCallback(() => {
+    if (!regionIso) return;
+    if (isRegionWatched) {
+      const item = watchItems.find(
+        (w) => w.type === 'region' && w.value.toUpperCase() === regionIso.toUpperCase()
+      );
+      if (item) removeWatch(item.id);
+    } else {
+      addWatch('region', regionIso, resolvedRegionName || regionIso);
+    }
+  }, [regionIso, isRegionWatched, watchItems, addWatch, removeWatch, resolvedRegionName]);
+
   const sevMeta = getSeverityMeta(regionData?.averageSeverity || 0);
   const coverageMeta = getCoverageMeta(regionStatus || coverageEntry?.status || 'uncovered');
   const locale = DATE_LOCALES[i18n.language] || enUS;
@@ -345,6 +368,17 @@ const NewsPanel = ({
             >
               <ChevronUp size={14} className={mobileExpanded ? 'is-flipped' : ''} />
             </button>
+            {regionIso && (
+              <button
+                className={`news-panel-watch-btn ${isRegionWatched ? 'is-watched' : ''}`}
+                onClick={handleWatchToggle}
+                aria-label={t('watchlist.watchRegion')}
+                title={t('watchlist.watchRegion')}
+              >
+                {isRegionWatched ? <EyeOff size={10} /> : <Eye size={10} />}
+                {isRegionWatched ? '✓' : t('watchlist.watchRegion')}
+              </button>
+            )}
             <button className="news-panel-close" onClick={onClose} aria-label={t('panel.closePanel')}>
               <X size={14} />
             </button>

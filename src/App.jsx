@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, Radio, AlertTriangle } from 'lucide-react';
+import { SlidersHorizontal, Radio, AlertTriangle, Eye } from 'lucide-react';
 import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
@@ -10,12 +10,14 @@ import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
 import ArcPanel from './components/ArcPanel';
 import AnomalyPanel from './components/AnomalyPanel';
+import WatchlistPanel from './components/WatchlistPanel';
 import BriefingExport from './components/BriefingExport';
 import SaveViewDialog from './components/SaveViewDialog';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
+import useWatchStore from './stores/watchStore';
 import usePanelState from './hooks/usePanelState';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
@@ -157,6 +159,35 @@ function App() {
   /* ── Anomaly panel state ── */
   const [anomalyPanelOpen, setAnomalyPanelOpen] = React.useState(false);
   const anomalyCount = velocitySpikes.length + silenceEntries.length;
+
+  /* ── Watchlist panel state ── */
+  const [watchlistPanelOpen, setWatchlistPanelOpen] = React.useState(false);
+  const watchItems = useWatchStore((s) => s.watchItems);
+  const watchNotifications = useWatchStore((s) => s.notifications);
+  const watchNotificationCount = watchNotifications.reduce((sum, n) => sum + n.newCount, 0);
+
+  /* ── Watchlist: check new articles on data change or watchlist change ── */
+  const prevWatchNewsRef = useRef(null);
+  useEffect(() => {
+    if (!activeNews?.length || !watchItems.length) return;
+
+    const isNewData = activeNews !== prevWatchNewsRef.current;
+    useWatchStore.getState().checkNewArticles(activeNews);
+
+    // Only show toast notifications when new DATA arrives (not when adding items)
+    if (isNewData && prevWatchNewsRef.current !== null) {
+      const notifications = useWatchStore.getState().notifications;
+      if (notifications.length > 0) {
+        if (notifications.length === 1) {
+          const n = notifications[0];
+          addToast(t('watchlist.notification', { count: n.newCount, label: n.label }), 'watch-alert');
+        } else {
+          addToast(t('watchlist.notificationMultiple', { count: notifications.length }), 'watch-alert');
+        }
+      }
+    }
+    prevWatchNewsRef.current = activeNews;
+  }, [activeNews, watchItems, addToast, t]);
 
   /* ── Lifecycle messages ── */
   const prevEventsRef = useRef([]);
@@ -324,6 +355,13 @@ function App() {
           <AlertTriangle size={12} /> {t('anomaly.toggleLabel')}
           {anomalyCount > 0 && <span className="anomaly-toggle-count">{anomalyCount}</span>}
         </button>
+        <button className={`watchlist-toggle ${watchlistPanelOpen ? 'is-active' : ''}`}
+          onClick={() => { setWatchlistPanelOpen((v) => !v); useWatchStore.getState().clearNotifications(); }}
+          aria-pressed={watchlistPanelOpen}>
+          <Eye size={12} /> {t('watchlist.toggleLabel')}
+          {watchItems.length > 0 && <span className="watchlist-toggle-count">{watchItems.length}</span>}
+          {watchNotificationCount > 0 && <span className="watchlist-toggle-alert">+{watchNotificationCount}</span>}
+        </button>
       </div>
 
       <FilterDrawer
@@ -373,6 +411,12 @@ function App() {
         silenceEntries={silenceEntries}
         isOpen={anomalyPanelOpen}
         onClose={() => setAnomalyPanelOpen(false)}
+        onRegionSelect={handleRegionSelect}
+      />
+
+      <WatchlistPanel
+        isOpen={watchlistPanelOpen}
+        onClose={() => setWatchlistPanelOpen(false)}
         onRegionSelect={handleRegionSelect}
       />
 

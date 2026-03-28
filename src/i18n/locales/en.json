@@ -370,5 +370,28 @@
       "limited-access": "Limited Access"
     },
     "toggleLabel": "Anomalies"
+  },
+  "watchlist": {
+    "title": "Watchlist",
+    "items": "items",
+    "articles": "articles",
+    "newMatches": "new",
+    "empty": "No watched items",
+    "emptyHint": "Add regions, topics, or entities to monitor for new articles.",
+    "typeLabel": "Watch type",
+    "typeTopic": "Topic",
+    "typeRegion": "Region (ISO)",
+    "typeEntity": "Entity",
+    "placeholderTopic": "e.g. earthquake, NATO…",
+    "placeholderRegion": "e.g. UA, SY, JP…",
+    "placeholderEntity": "e.g. Zelensky, WHO…",
+    "addLabel": "Add to watchlist",
+    "addAction": "Add",
+    "remove": "Remove from watchlist",
+    "clearAll": "Clear all",
+    "toggleLabel": "Watchlist",
+    "watchRegion": "Watch region",
+    "notification": "{{count}} new articles for {{label}}",
+    "notificationMultiple": "New articles for {{count}} watched items"
   }
 }

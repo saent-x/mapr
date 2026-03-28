@@ -2822,6 +2822,15 @@ button {
   box-shadow: 0 0 6px #ffaa00;
 }
 
+.toast-watch-alert {
+  border-color: rgba(0, 212, 255, 0.2);
+}
+
+.toast-watch-alert .toast-dot {
+  background: #00d4ff;
+  box-shadow: 0 0 6px #00d4ff;
+}
+
 @keyframes toast-in {
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
@@ -5351,6 +5360,423 @@ button {
   fill: none;
 }
 
+/* =============================
+   WATCHLIST PANEL
+   ============================= */
+
+/* Watchlist toggle button (drawer-toggles area) */
+.watchlist-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+  border-radius: 4px;
+  background: var(--glass-bg, rgba(10, 15, 28, 0.6));
+  color: var(--text-secondary, rgba(226, 232, 240, 0.7));
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.watchlist-toggle:hover {
+  border-color: rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.watchlist-toggle.is-active {
+  border-color: rgba(0, 212, 255, 0.4);
+  color: #00d4ff;
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.watchlist-toggle-count {
+  color: #00e5a0;
+  font-weight: 700;
+}
+
+.watchlist-toggle-alert {
+  color: #ff5577;
+  font-weight: 700;
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Watchlist panel */
+.watchlist-panel {
+  position: fixed;
+  top: 52px;
+  right: 0;
+  width: 320px;
+  max-height: calc(100vh - 52px);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg, rgba(10, 15, 28, 0.92));
+  backdrop-filter: blur(18px);
+  border-left: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+  overflow: hidden;
+  animation: watchlist-panel-in 0.25s ease-out;
+}
+
+@keyframes watchlist-panel-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.watchlist-panel-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+  flex-shrink: 0;
+}
+
+.watchlist-panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.watchlist-panel-icon {
+  color: #00d4ff;
+  flex-shrink: 0;
+}
+
+.watchlist-panel-title {
+  font-size: 0.8rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary, #e2e8f0);
+  margin: 0;
+  flex: 1;
+}
+
+.watchlist-panel-close {
+  background: none;
+  border: none;
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.4));
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.watchlist-panel-close:hover {
+  color: var(--text-primary, #e2e8f0);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.watchlist-panel-summary {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.watchlist-panel-badge {
+  font-size: 0.6rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: rgba(0, 212, 255, 0.08);
+  color: rgba(0, 212, 255, 0.8);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.watchlist-panel-badge--new {
+  background: rgba(0, 229, 160, 0.12);
+  color: #00e5a0;
+  font-weight: 600;
+}
+
+/* Add form */
+.watchlist-add-form {
+  display: flex;
+  gap: 4px;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+}
+
+.watchlist-add-type {
+  background: rgba(4, 8, 16, 0.8);
+  border: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+  border-radius: 3px;
+  color: var(--text-secondary, rgba(226, 232, 240, 0.7));
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.55rem;
+  padding: 4px 6px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.watchlist-add-type:focus {
+  border-color: rgba(0, 212, 255, 0.3);
+  outline: none;
+}
+
+.watchlist-add-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(4, 8, 16, 0.8);
+  border: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+  border-radius: 3px;
+  color: var(--text-primary, #e2e8f0);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  padding: 4px 8px;
+}
+
+.watchlist-add-input:focus {
+  border-color: rgba(0, 212, 255, 0.3);
+  outline: none;
+}
+
+.watchlist-add-input::placeholder {
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.3));
+}
+
+.watchlist-add-btn {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 3px;
+  color: #00d4ff;
+  cursor: pointer;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+
+.watchlist-add-btn:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: rgba(0, 212, 255, 0.4);
+}
+
+.watchlist-add-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Watch item list */
+.watchlist-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 200, 255, 0.1) transparent;
+}
+
+.watchlist-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.4));
+  text-align: center;
+}
+
+.watchlist-panel-empty p {
+  margin: 0;
+  font-size: 0.65rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.watchlist-panel-hint {
+  font-size: 0.58rem !important;
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.3)) !important;
+  line-height: 1.4;
+}
+
+.watchlist-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.watchlist-panel-item {
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem 0 0;
+}
+
+.watchlist-panel-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-primary, #e2e8f0);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  min-width: 0;
+}
+
+.watchlist-panel-btn:hover {
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.watchlist-panel-indicator {
+  width: 3px;
+  height: 24px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.watchlist-panel-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.watchlist-panel-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.watchlist-panel-type {
+  font-size: 0.55rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.4));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.watchlist-panel-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+
+.watchlist-panel-count {
+  font-size: 0.65rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--text-secondary, rgba(226, 232, 240, 0.6));
+  font-weight: 600;
+}
+
+.watchlist-panel-new-badge {
+  font-size: 0.55rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-weight: 700;
+  color: #00e5a0;
+  background: rgba(0, 229, 160, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+.watchlist-panel-remove {
+  background: none;
+  border: none;
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.3));
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.watchlist-panel-remove:hover {
+  color: #ff5577;
+  background: rgba(255, 85, 119, 0.1);
+}
+
+.watchlist-clear-all {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0.5rem 0.75rem;
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid rgba(255, 85, 119, 0.15);
+  border-radius: 3px;
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.4));
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.watchlist-clear-all:hover {
+  border-color: rgba(255, 85, 119, 0.3);
+  color: #ff5577;
+  background: rgba(255, 85, 119, 0.06);
+}
+
+/* Watch region button in NewsPanel */
+.news-panel-watch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: none;
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  border-radius: 3px;
+  color: var(--text-tertiary, rgba(226, 232, 240, 0.5));
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.news-panel-watch-btn:hover {
+  border-color: rgba(0, 212, 255, 0.3);
+  color: #00d4ff;
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.news-panel-watch-btn.is-watched {
+  border-color: rgba(0, 229, 160, 0.3);
+  color: #00e5a0;
+  background: rgba(0, 229, 160, 0.06);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .watchlist-panel {
+    width: 100%;
+    max-height: 50vh;
+    top: auto;
+    bottom: 0;
+    border-left: none;
+    border-top: 1px solid var(--glass-border, rgba(0, 200, 255, 0.08));
+    border-radius: 12px 12px 0 0;
+  }
+
+  @keyframes watchlist-panel-in {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .anomaly-panel {
@@ -5371,7 +5797,7 @@ button {
 
 @media print {
   .header, .filter-drawer, .intel-ticker, .event-timeline-bar, .map-container,
-  .globe-container, .flatmap-container, .arc-panel, .export-modal, .anomaly-panel { display: none !important; }
+  .globe-container, .flatmap-container, .arc-panel, .export-modal, .anomaly-panel, .watchlist-panel { display: none !important; }
   .news-panel {
     position: static !important; width: 100% !important; max-width: 100% !important;
     height: auto !important; overflow: visible !important;
