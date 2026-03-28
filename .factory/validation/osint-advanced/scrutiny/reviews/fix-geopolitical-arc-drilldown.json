@@ -1,0 +1,23 @@
+{
+  "featureId": "fix-geopolitical-arc-drilldown",
+  "reviewedAt": "2026-03-28T04:17:00Z",
+  "commitId": "758eb11",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix improves ArcPanel by consuming `arc.storyIds`, so entity-derived geopolitical arcs no longer collapse to the old countries-array lookup. However, the upstream provenance is still incomplete: `buildCountryCoOccurrences()` records only one representative event ID for each entity-derived country pair, so the shared-intel drilldown can still omit the other country's contributing story.",
+    "issues": [
+      {
+        "file": "src/utils/geopoliticalArcs.js",
+        "line": 119,
+        "severity": "blocking",
+        "description": "In the entity-derived branch, `buildCountryCoOccurrences()` collapses each country pair down to a single `eventId` (`byCountry[isos[i]][0]?.eventId || byCountry[isos[j]][0]?.eventId`) before calling `addPair()`. As a result, `arc.storyIds` does not actually contain the full set of events that contributed to the relationship. For a simple FR↔US entity-derived pair, the current code emits `storyIds: [\"e1\"]` instead of both `e1` and `e2`, so ArcPanel's \"SHARED INTEL\" section still presents incomplete evidence for the geopolitical connection.",
+        "suggestedFix": "When building entity-derived pairs, add every contributing event ID from both countries into the pair's `storyIds` collection (not just one representative ID), then keep ArcPanel's storyIds-based drilldown so entity-derived arcs show the complete supporting story set."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-advanced/scrutiny/reviews/geopolitical-relationship-map.json",
+  "summary": "Fail. ArcPanel now uses storyIds, but entity-derived arcs still carry incomplete provenance because the pair builder saves only one side's event ID."
+}

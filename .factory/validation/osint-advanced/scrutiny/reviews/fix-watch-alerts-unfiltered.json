@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-watch-alerts-unfiltered",
+  "reviewedAt": "2026-03-28T04:17:00Z",
+  "commitId": "115463f",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix directly addresses the prior watch-alert failure. App.jsx now drives watch matching and new-data detection from `canonicalNews` instead of filtered `activeNews`, and the new regression tests cover the effect wiring, dependency tracking, ref updates, and a functional example showing why the full dataset is required.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The scrutiny-validator skill should document a manual-review fallback when `scrutiny-feature-reviewer` Task launches fail because the current subagent path can still terminate before producing any report.",
+      "evidence": "This osint-advanced rerun again failed to launch `scrutiny-feature-reviewer` due to `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the fix reviews had to be completed manually despite the skill only specifying the Task-based workflow."
+    }
+  ],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-advanced/scrutiny/reviews/watch-alert-system.json",
+  "summary": "Pass. Watch matching now runs against the unfiltered canonical event set, so active UI filters no longer suppress watch counts or notifications."
+}

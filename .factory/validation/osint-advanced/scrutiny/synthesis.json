@@ -1,6 +1,6 @@
 {
   "milestone": "osint-advanced",
-  "round": 1,
+  "round": 2,
   "status": "fail",
   "validatorsRun": {
     "test": {
@@ -20,24 +20,18 @@
     }
   },
   "reviewsSummary": {
-    "total": 6,
-    "passed": 4,
-    "failed": 2,
+    "total": 2,
+    "passed": 1,
+    "failed": 1,
     "failedFeatures": [
-      "watch-alert-system",
-      "geopolitical-relationship-map"
+      "fix-geopolitical-arc-drilldown"
     ]
   },
   "blockingIssues": [
     {
-      "featureId": "watch-alert-system",
+      "featureId": "fix-geopolitical-arc-drilldown",
       "severity": "blocking",
-      "description": "Watch matching runs against `activeNews`, so active region/search/severity/entity filters suppress watch counts and notifications for articles outside the current view."
-    },
-    {
-      "featureId": "geopolitical-relationship-map",
-      "severity": "blocking",
-      "description": "ArcPanel only derives shared stories from multi-country events, so geopolitical arcs created from shared-entity co-occurrence can open with no usable shared-story drilldown."
+      "description": "`buildCountryCoOccurrences()` still stores only one representative event ID for each entity-derived country pair, so `arc.storyIds` omits other contributing stories and ArcPanel's shared-intel drilldown remains incomplete for those geopolitical arcs."
     }
   ],
   "appliedUpdates": [],
@@ -45,10 +39,10 @@
     {
       "target": "scrutiny-validator skill",
       "suggestion": "Document an explicit manual-review fallback when `scrutiny-feature-reviewer` Task launches fail, including what artifacts to write and how to report the infrastructure issue.",
-      "evidence": "This osint-advanced scrutiny run hit the same Task/subagent failure pattern as the prior osint-core scrutiny rerun: `scrutiny-feature-reviewer` launches did not complete successfully, so the reviews had to be written manually despite the skill only describing the subagent path.",
+      "evidence": "This osint-advanced rerun again failed to launch `scrutiny-feature-reviewer` because the Task path exited with `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the two fix reviews had to be written manually even though the skill only specifies the subagent workflow.",
       "isSystemic": true
     }
   ],
   "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-advanced/scrutiny/synthesis.round1.json"
 }

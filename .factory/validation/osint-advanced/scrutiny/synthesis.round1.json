@@ -1,0 +1,54 @@
+{
+  "milestone": "osint-advanced",
+  "round": 1,
+  "status": "fail",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "node --test",
+      "exitCode": 0
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "echo \"no typecheck configured (JSX project)\"",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "echo \"no lint configured\"",
+      "exitCode": 0
+    }
+  },
+  "reviewsSummary": {
+    "total": 6,
+    "passed": 4,
+    "failed": 2,
+    "failedFeatures": [
+      "watch-alert-system",
+      "geopolitical-relationship-map"
+    ]
+  },
+  "blockingIssues": [
+    {
+      "featureId": "watch-alert-system",
+      "severity": "blocking",
+      "description": "Watch matching runs against `activeNews`, so active region/search/severity/entity filters suppress watch counts and notifications for articles outside the current view."
+    },
+    {
+      "featureId": "geopolitical-relationship-map",
+      "severity": "blocking",
+      "description": "ArcPanel only derives shared stories from multi-country events, so geopolitical arcs created from shared-entity co-occurrence can open with no usable shared-story drilldown."
+    }
+  ],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [
+    {
+      "target": "scrutiny-validator skill",
+      "suggestion": "Document an explicit manual-review fallback when `scrutiny-feature-reviewer` Task launches fail, including what artifacts to write and how to report the infrastructure issue.",
+      "evidence": "This osint-advanced scrutiny run hit the same Task/subagent failure pattern as the prior osint-core scrutiny rerun: `scrutiny-feature-reviewer` launches did not complete successfully, so the reviews had to be written manually despite the skill only describing the subagent path.",
+      "isSystemic": true
+    }
+  ],
+  "rejectedObservations": [],
+  "previousRound": null
+}
