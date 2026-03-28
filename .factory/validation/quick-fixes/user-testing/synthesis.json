@@ -1,30 +1,20 @@
 {
   "milestone": "quick-fixes",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "assertionsSummary": {
     "total": 3,
-    "passed": 2,
-    "failed": 1,
+    "passed": 3,
+    "failed": 0,
     "blocked": 0
   },
   "passedAssertions": [
     "VAL-QFIX-001",
-    "VAL-QFIX-002"
+    "VAL-QFIX-002",
+    "VAL-QFIX-003"
   ],
-  "failedAssertions": [
-    {
-      "id": "VAL-QFIX-003",
-      "reason": "The GEO overlay still produced a false Bolivia \u2194 Guatemala relationship whose SHARED INTEL panel listed unrelated Harry Potter and Semana Santa stories."
-    }
-  ],
+  "failedAssertions": [],
   "blockedAssertions": [],
-  "appliedUpdates": [
-    {
-      "target": "user-testing.md",
-      "description": "Documented the eval-assisted ArcPanel inspection workflow for canvas-rendered geopolitical arcs when direct hit-testing is unreliable in agent-browser.",
-      "source": "flow-report"
-    }
-  ],
-  "previousRound": null
+  "appliedUpdates": [],
+  "previousRound": "/Users/tor/Documents/projects/mapr/.factory/validation/quick-fixes/user-testing/synthesis.round1.json"
 }
