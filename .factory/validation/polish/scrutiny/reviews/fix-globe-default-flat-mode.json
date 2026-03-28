@@ -1,0 +1,29 @@
+{
+  "featureId": "fix-globe-default-flat-mode",
+  "reviewedAt": "2026-03-28T05:26:35Z",
+  "commitId": "cb4b4e3",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix directly resolves the original performance regression by making `flat` the default UI-store state, so a fresh desktop visit no longer mounts the lazy globe path unless the user explicitly switches modes or restores a saved URL/view preference. The same commit also fixes the admin dashboard drift by deriving filter-tab counts from the merged feed collection that powers the rendered table, keeping the badges aligned with the visible rows.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The scrutiny-validator skill should document a manual-review fallback for cases where `scrutiny-feature-reviewer` Task launches fail, including which review artifact to write and how to record the infrastructure failure in the synthesis.",
+      "evidence": "This polish rerun attempted to launch `scrutiny-feature-reviewer` for `fix-globe-default-flat-mode`, but the Task invocation exited with `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the validator had to inspect the transcript skeleton and git diff manually and write the review JSON itself."
+    }
+  ],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/polish/scrutiny/reviews/performance-optimization.json",
+  "summary": "Pass. Desktop sessions now start in flat mode so the globe bundle is deferred until explicit user intent, and the admin filter tabs count the same merged feed data as the table.",
+  "reviewedArtifacts": [
+    "commit:cb4b4e3",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-28T05-23-36-478Z__fix-globe-default-flat-mode__07074ec5-fb95-46ce-a03b-49f8d5349b42.json",
+    "src/stores/uiStore.js",
+    "src/pages/AdminPage.jsx",
+    "test/stores.test.js"
+  ]
+}

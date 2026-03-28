@@ -1,7 +1,7 @@
 {
   "milestone": "polish",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "validatorsRun": {
     "test": {
       "passed": true,
@@ -20,29 +20,21 @@
     }
   },
   "reviewsSummary": {
-    "total": 3,
-    "passed": 2,
-    "failed": 1,
-    "failedFeatures": [
-      "performance-optimization"
-    ]
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
   },
-  "blockingIssues": [
-    {
-      "featureId": "performance-optimization",
-      "severity": "blocking",
-      "description": "The performance optimization feature still initializes desktop users into `globe` mode (`src/stores/uiStore.js`), and `App.jsx` immediately renders `<Globe />` in that mode. That means the heavy `vendor-globe` / Three.js chunk is still downloaded on a fresh desktop load instead of being deferred until the user explicitly opts into the globe, so the milestone misses the intended first-load optimization."
-    }
-  ],
+  "blockingIssues": [],
   "appliedUpdates": [],
   "suggestedGuidanceUpdates": [
     {
       "target": "scrutiny-validator skill",
       "suggestion": "Document a manual-review fallback path for scrutiny validators when `scrutiny-feature-reviewer` Task launches fail, including which review artifacts to write and how to record the infrastructure problem in synthesis output.",
-      "evidence": "All three reviewer Task launches in the polish scrutiny run failed immediately with `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the validator had to produce the review JSON files manually in order to complete the milestone review.",
+      "evidence": "This polish rerun also failed to launch `scrutiny-feature-reviewer` because the Task path exited with `Invalid model: custom:GPT-5.4-(XHigh)-3`, so the validator had to inspect the fix transcript and diff manually and write the review JSON itself.",
       "isSystemic": true
     }
   ],
   "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": "/Users/tor/Documents/projects/mapr/.factory/validation/polish/scrutiny/synthesis.round1.json"
 }
