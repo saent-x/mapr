@@ -1,0 +1,14 @@
+{
+  "featureId": "fix-arc-storyids-per-pair",
+  "reviewedAt": "2026-03-28T14:00:46Z",
+  "commitId": "6ff5f48",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The follow-up patch directly fixes the prior over-collection bug in `buildCountryCoOccurrences()`: instead of widening from one successful title match to all occurrences from both countries, it now records only the specific event IDs that participate in passing cross-country title comparisons. The updated regression test proves the unrelated Pentagon budget story is excluded while the Iran-related Pentagon stories and explicit multi-country event still appear in the IR-US drilldown.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "summary": "Pass. The fix now keeps entity-derived geopolitical arc drilldowns limited to the specific cross-country stories that actually satisfy the relevance gate."
+}
