@@ -1,0 +1,22 @@
+{
+  "featureId": "shared-stories-relevance-fix",
+  "reviewedAt": "2026-03-28T13:48:01Z",
+  "commitId": "8ec9375",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The fix correctly filters out high-frequency global organizations and adds a title-similarity gate, but it still over-collects story provenance once any one cross-country title pair matches. Entity-derived geopolitical arcs can therefore still open with unrelated stories in the drilldown, so the feature does not fully satisfy the quick-fix contract.",
+    "issues": [
+      {
+        "file": "src/utils/geopoliticalArcs.js",
+        "line": 201,
+        "severity": "blocking",
+        "description": "After the Jaccard gate succeeds for any one occurrence pair, `buildCountryCoOccurrences()` concatenates `const allOccs = [...occsA, ...occsB]` and adds every event ID from both countries into the arc. This still leaks unrelated stories into `storyIds` whenever the same entity appears in multiple stories per country. A direct check with the current code using two US Pentagon stories (one Iran-related, one unrelated budget hearing) plus one Iran Pentagon story produces `storyIds: [\"us-related\", \"us-unrelated\", \"ir-related\"]`, so the unrelated budget story would still appear in the geopolitical arc drilldown and violate VAL-QFIX-003's requirement that arc stories stay contextually relevant to the country pair.",
+        "suggestedFix": "Track which specific cross-country occurrence pairs clear the title-similarity threshold and add only those matched event IDs to the pair's `storyIds` and count calculations. Do not bulk-append every occurrence from both countries after a single positive match."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "summary": "Fail. High-frequency entities are filtered, but entity-derived arcs can still include unrelated stories because the matched-pair gate widens back out to all occurrences from both countries."
+}
