@@ -1,0 +1,15 @@
+{
+  "featureId": "anomaly-detection-ui",
+  "reviewedAt": "2026-03-28T03:53:27Z",
+  "commitId": "af4a20e",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The anomaly panel and supporting utilities are cohesive: spike and silence entries are normalized in one place, the map surfaces consume that data in both map modes, and the new tests cover the merge and silence logic well. I did not find a high-confidence correctness issue in the reviewed code.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass. Anomaly UI wiring and helper logic appear correct, with no actionable review findings."
+}

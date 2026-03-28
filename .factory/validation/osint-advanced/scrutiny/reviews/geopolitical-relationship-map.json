@@ -1,0 +1,23 @@
+{
+  "featureId": "geopolitical-relationship-map",
+  "reviewedAt": "2026-03-28T03:53:27Z",
+  "commitId": "08b70f5",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The arc-generation utility successfully creates geopolitical links from both multi-country events and shared entities, but the click-through panel only treats multi-country events as \u201cshared intel.\u201d As a result, valid entity-derived geopolitical arcs can open a panel with zero shared stories, so the interaction does not fully satisfy the feature contract.",
+    "issues": [
+      {
+        "file": "src/components/ArcPanel.jsx",
+        "line": 193,
+        "severity": "blocking",
+        "description": "`buildCountryCoOccurrences()` intentionally creates geopolitical arcs from shared entities across separate country events, but ArcPanel reconstructs `sharedEvents` only from events whose `countries` array contains both endpoints. Entity-derived arcs therefore render as clickable relationships while showing no shared stories in the panel, which breaks the required click-to-inspect behavior for a large class of geopolitical connections.",
+        "suggestedFix": "Carry geopolitical evidence (`storyIds` or equivalent provenance) through arc selection\u2014especially from the flat-map payload\u2014and have ArcPanel resolve the shared items from that evidence instead of recomputing only multi-country events."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Fail. Geopolitical arcs created from shared entities are not backed by a working shared-stories drilldown in ArcPanel."
+}

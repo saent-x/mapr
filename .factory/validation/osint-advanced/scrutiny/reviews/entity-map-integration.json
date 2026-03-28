@@ -1,0 +1,15 @@
+{
+  "featureId": "entity-map-integration",
+  "reviewedAt": "2026-03-28T03:53:27Z",
+  "commitId": "5d18dda",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The feature adds typed entity-filter state, navigates cleanly from the entity explorer into the map surface, and applies the filter through the existing derived-news pipeline with dedicated regression tests. I did not find a high-confidence bug in the reviewed implementation.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass. Entity-to-map integration behaves consistently with the intended filter-and-clear workflow."
+}

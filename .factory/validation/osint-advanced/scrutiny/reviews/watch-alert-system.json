@@ -1,0 +1,23 @@
+{
+  "featureId": "watch-alert-system",
+  "reviewedAt": "2026-03-28T03:53:27Z",
+  "commitId": "47a7fb2",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The watchlist UI, store, and persistence are implemented cleanly, but the alerting path is wired to the filtered `activeNews` view instead of the full incoming dataset. That means counts and notifications are wrong whenever the user has an active region/search/severity/entity filter, which breaks the watch/alert contract.",
+    "issues": [
+      {
+        "file": "src/App.jsx",
+        "line": 180,
+        "severity": "blocking",
+        "description": "The watchlist effect calls `checkNewArticles(activeNews)`, but `activeNews` is already narrowed by the current UI filters. Users who are focused on another region or search term can miss new watched-region/topic/entity hits elsewhere because watch counts and notifications only reflect the filtered view, not the newly arrived dataset.",
+        "suggestedFix": "Drive watch matching from the unfiltered live/canonical event set and reserve `activeNews` for display-only filtering; then recompute notifications from that global dataset on refresh."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Fail. The alert pipeline depends on filtered map state, so watch notifications can silently miss real matches outside the current view."
+}
