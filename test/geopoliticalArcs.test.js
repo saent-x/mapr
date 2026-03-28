@@ -54,7 +54,7 @@ describe('buildCountryCoOccurrences', () => {
     assert.equal(result.get('RU-US').count, 1);
   });
 
-  it('builds pairs from shared entities across countries', () => {
+  it('builds pairs from shared entities across countries with ALL event IDs', () => {
     const events = [
       { id: 'e1', isoA2: 'US', countries: ['US'], severity: 80, entities: { organizations: [{ name: 'NATO' }], people: [] } },
       { id: 'e2', isoA2: 'FR', countries: ['FR'], severity: 60, entities: { organizations: [{ name: 'NATO' }], people: [] } },
@@ -65,6 +65,19 @@ describe('buildCountryCoOccurrences', () => {
     assert.ok(result.has('FR-US'), 'FR-US pair should exist');
     assert.ok(result.has('DE-US'), 'DE-US pair should exist');
     assert.ok(result.has('DE-FR'), 'DE-FR pair should exist');
+
+    // Each pair should have storyIds from BOTH contributing countries
+    const frUs = result.get('FR-US');
+    assert.ok(frUs.storyIds.includes('e1'), 'FR-US should include US event e1');
+    assert.ok(frUs.storyIds.includes('e2'), 'FR-US should include FR event e2');
+
+    const deUs = result.get('DE-US');
+    assert.ok(deUs.storyIds.includes('e1'), 'DE-US should include US event e1');
+    assert.ok(deUs.storyIds.includes('e3'), 'DE-US should include DE event e3');
+
+    const deFr = result.get('DE-FR');
+    assert.ok(deFr.storyIds.includes('e2'), 'DE-FR should include FR event e2');
+    assert.ok(deFr.storyIds.includes('e3'), 'DE-FR should include DE event e3');
   });
 
   it('combines multi-country and entity signals', () => {

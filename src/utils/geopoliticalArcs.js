@@ -111,13 +111,11 @@ export function buildCountryCoOccurrences(events) {
     // Create pairs between all countries sharing this entity
     for (let i = 0; i < isos.length; i++) {
       for (let j = i + 1; j < isos.length; j++) {
-        const maxSev = Math.max(
-          ...byCountry[isos[i]].map((o) => o.severity),
-          ...byCountry[isos[j]].map((o) => o.severity),
-        );
-        // Pick a representative event ID
-        const eventId = byCountry[isos[i]][0]?.eventId || byCountry[isos[j]][0]?.eventId;
-        addPair(pairs, isos[i], isos[j], maxSev, eventId);
+        // Accumulate ALL event IDs from both countries via addPair's dedup logic
+        const allOccs = [...byCountry[isos[i]], ...byCountry[isos[j]]];
+        for (const occ of allOccs) {
+          addPair(pairs, isos[i], isos[j], occ.severity, occ.eventId);
+        }
       }
     }
   }
