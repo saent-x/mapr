@@ -1,0 +1,45 @@
+{
+  "groupId": "keyboard-accessibility",
+  "surface": "web-browser",
+  "status": "pass",
+  "assertions": [
+    {
+      "id": "VAL-POLISH-003",
+      "status": "pass",
+      "reason": "Keyboard-only navigation moved through interactive controls, showed a visible focus indicator, activated a control with Enter, and closed the resulting panel with Escape.",
+      "evidence": [
+        "After pressing Tab on the root view, focus landed on the FILTERS button with outline \"rgb(0, 212, 255) solid 2px\"; additional Tab presses moved focus to INTEL and Close.",
+        "Focusing Watchlist and pressing Enter opened a Watchlist panel with a visible heading; pressing Escape closed the panel and returned focus to the Watchlist button."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "interactiveChecks": [
+    {
+      "action": "Pressed Tab three times on the root view.",
+      "observed": "Focus advanced across FILTERS, INTEL, and Close, and the focused FILTERS control showed a bright cyan outline."
+    },
+    {
+      "action": "Focused Watchlist and pressed Enter.",
+      "observed": "A Watchlist panel opened with a visible \"Watchlist\" heading."
+    },
+    {
+      "action": "Pressed Escape with the Watchlist panel open.",
+      "observed": "The Watchlist panel closed and focus returned to the Watchlist button."
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "artifacts": [
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/keyboard-accessibility/focus-visible.png"
+    },
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/keyboard-accessibility/watchlist-open.png"
+    }
+  ]
+}

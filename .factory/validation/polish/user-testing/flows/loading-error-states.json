@@ -1,0 +1,60 @@
+{
+  "groupId": "loading-error-states",
+  "surface": "web-browser",
+  "status": "pass",
+  "assertions": [
+    {
+      "id": "VAL-POLISH-004",
+      "status": "pass",
+      "reason": "When initial data requests were held in a browser-isolated failure scenario, the app showed a visible loading overlay instead of a blank or broken shell, and a normal run rendered loaded content afterward.",
+      "evidence": [
+        "Screenshot root-loading-overlay.png captured the root view with the loading message \"Loading intelligence data\u2026\" while data requests were blocked.",
+        "Screenshot loaded-state.png shows the same surface after successful loading with the full map shell, stats, timeline, and interactive controls visible."
+      ]
+    },
+    {
+      "id": "VAL-POLISH-005",
+      "status": "pass",
+      "reason": "When backend API requests for /admin were aborted inside the browser session, the frontend displayed a user-friendly error state with a Retry action instead of a blank screen, and navigation remained usable.",
+      "evidence": [
+        "Screenshot admin-error-state.png shows the message \"Failed to load dashboard data\" with a Retry button while the app shell still rendered.",
+        "After the error rendered, clicking the Map navigation link successfully returned to the main application route, demonstrating the UI remained interactive."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "interactiveChecks": [
+    {
+      "action": "Blocked root data requests inside the browser session and opened /.",
+      "observed": "The app displayed a loading overlay with the text \"Loading intelligence data\u2026\" instead of an empty screen."
+    },
+    {
+      "action": "Blocked /api/source-catalog/state and /api/health and opened /admin.",
+      "observed": "The page showed a friendly dashboard error with a Retry button rather than crashing or rendering blank content."
+    },
+    {
+      "action": "Clicked the Map navigation link from the admin error state.",
+      "observed": "The app navigated back to the root route, confirming the shell remained interactive after the error."
+    }
+  ],
+  "frictions": [
+    "The main / route falls back to client-side GDELT fetching, so the admin route provided the fastest deterministic backend-error validation path."
+  ],
+  "blockers": [],
+  "artifacts": [
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/loading-error-states/root-loading-overlay.png"
+    },
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/loading-error-states/loaded-state.png"
+    },
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/loading-error-states/admin-error-state.png"
+    }
+  ]
+}

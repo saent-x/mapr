@@ -1,0 +1,42 @@
+{
+  "groupId": "admin-dashboard",
+  "surface": "web-browser",
+  "status": "pass",
+  "assertions": [
+    {
+      "id": "VAL-POLISH-001",
+      "status": "pass",
+      "reason": "The /admin dashboard rendered aggregate source health cards, ingestion health, coverage gaps, and a populated source table with per-source last-check and article count data.",
+      "evidence": [
+        "Screenshot admin-page.png shows Aggregate Stats, Ingestion Health, Coverage Gaps, and Source Health sections together on the page.",
+        "Visible text included \"303 Total Sources\", \"117 Healthy\", \"55 Failed\", \"130 Empty\", a pipeline status card, and source rows such as \"24.kg English OK ... 53 Kyrgyzstan\"."
+      ]
+    },
+    {
+      "id": "VAL-CROSS-005",
+      "status": "pass",
+      "reason": "The admin route exposed the current source catalog and ingestion health with healthy/failed status badges, last-check timing, article counts, and coverage-gap information.",
+      "evidence": [
+        "The dashboard showed an Updated timestamp plus ingestion metadata such as Last Attempt, Last Success, Consecutive Failures, and refresh state.",
+        "Status filter chips surfaced OK/Empty/Failed counts, and the table rendered per-source status, mode, last-checked time, article count, and country."
+      ]
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "interactiveChecks": [
+    {
+      "action": "Opened http://localhost:5173/admin in an isolated browser session.",
+      "observed": "The Admin Dashboard loaded with source health cards, ingestion health, coverage gaps, and a searchable source table."
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "artifacts": [
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/admin-dashboard/admin-page.png"
+    }
+  ]
+}

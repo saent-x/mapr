@@ -1,0 +1,29 @@
+{
+  "milestone": "polish",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-POLISH-001",
+    "VAL-CROSS-005",
+    "VAL-POLISH-002",
+    "VAL-POLISH-003",
+    "VAL-POLISH-004",
+    "VAL-POLISH-005"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    {
+      "target": "user-testing.md",
+      "description": "Documented a deterministic admin-route strategy for backend error-state validation and the browser-route recipe used to hold the root loading overlay on screen.",
+      "source": "flow-report"
+    }
+  ],
+  "previousRound": null
+}

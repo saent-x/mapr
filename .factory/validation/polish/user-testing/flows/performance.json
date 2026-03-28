@@ -1,0 +1,43 @@
+{
+  "groupId": "performance",
+  "surface": "web-browser",
+  "status": "pass",
+  "assertions": [
+    {
+      "id": "VAL-POLISH-002",
+      "status": "pass",
+      "reason": "A fresh localhost page load completed well under the target, with HTML/render metrics under 1 second and full load under 3 seconds.",
+      "evidence": [
+        "Navigation timing reported responseStart=2.0ms, domInteractive=4.8ms, domContentLoaded=79.5ms, and loadEventEnd=413.2ms.",
+        "After load, clicking the Watchlist control immediately opened the Watchlist panel, confirming the page was interactive within the measured load window."
+      ],
+      "metrics": {
+        "responseStartMs": 2.0,
+        "domInteractiveMs": 4.8,
+        "domContentLoadedMs": 79.5,
+        "loadEventEndMs": 413.2
+      }
+    }
+  ],
+  "toolsUsed": [
+    "agent-browser"
+  ],
+  "interactiveChecks": [
+    {
+      "action": "Opened http://localhost:5173/ in a fresh browser session and waited for network idle.",
+      "observed": "The map shell rendered with live stats and the flat-map view selected."
+    },
+    {
+      "action": "Clicked the Watchlist button after the initial load completed.",
+      "observed": "A Watchlist panel appeared, showing the root view was interactive immediately after load."
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "artifacts": [
+    {
+      "type": "screenshot",
+      "path": "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/evidence/polish/performance/map-home.png"
+    }
+  ]
+}

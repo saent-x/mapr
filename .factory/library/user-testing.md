@@ -61,4 +61,6 @@ Testing surface, required testing skills/tools, resource cost classification per
 - Stay on the local validation surface at `http://localhost:5173` and its proxied local API calls; do not open unrelated external sites.
 - Do not trigger manual refreshes or any other mutation-heavy backend actions during frontend-refactor validation. Validate against the currently served snapshot, even if `/api/health` reports `refreshInProgress: true`.
 - Prefer flat-map interactions for filters and region selection because the 3D globe is difficult to drive reliably in automation; only verify globe mode renders and does not throw console errors.
+- For deterministic polish error-state validation, prefer the `/admin` route and abort `/api/source-catalog/state` plus `/api/health` inside the browser session. The main `/` route falls back to client-side GDELT fetches, which can delay or mask the backend-unreachable banner.
+- To hold the root loading overlay on screen long enough for screenshots, abort `/api/briefing`, `/api/coverage-history`, and `https://api.gdeltproject.org/api/v2/doc/doc*` before opening `/` in the browser session.
 - Keep evidence within the assigned mission evidence directory, and close the browser session before finishing the flow report.
