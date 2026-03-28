@@ -1,0 +1,38 @@
+{
+  "featureId": "entity-relationship-graph",
+  "reviewedAt": "2026-03-28T00:28:15.170884Z",
+  "commitId": "3939c83",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The feature adds a performant canvas graph and detail panel, but the graph model keys entities only by lowercase label. That collapses distinct people/organizations/locations sharing the same name into one node, which breaks the promised type separation and can hide real co-occurrence edges.",
+    "issues": [
+      {
+        "file": "src/utils/entityGraph.js",
+        "line": 42,
+        "severity": "blocking",
+        "description": "Entity deduplication is keyed only by `name.toLowerCase()` and the same scheme is repeated for people, organizations, and locations. Distinct typed entities such as an organization and a location both named \"Georgia\" collapse into a single node, inherit whichever type was seen first, and lose the edge that should connect them. A direct check with `extractEntityGraph()` on one organization+location event returns just one node and zero edges, so the type filter and graph structure are not reliable for same-label cross-type entities.",
+        "suggestedFix": "Key nodes and event-local entity references by both normalized type and normalized name (for example `organization:georgia` vs `location:georgia`) while preserving the display label separately, then update filtering and related-event lookups to use the typed key."
+      }
+    ]
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "Canvas-only UI verification needs a more explicit fallback path in the frontend-worker skill. The entity graph rendered on a single `<canvas>`, so the worker had to use coordinate-based clicks and DOM/eval inspection instead of normal locator-driven browser automation.",
+      "evidence": "Handoff 2026-03-27T13-20-30-799Z__entity-relationship-graph__7085ce0e-cf06-4ba0-b78b-e3d37be5b030.json records this in `skillFeedback.suggestedChanges`, noting that canvas-based components could not be validated with standard agent-browser element interaction."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Fail. Same-label entities from different types collapse into one node, so the graph does not reliably preserve people/org/location distinctions.",
+  "reviewedArtifacts": [
+    "commit:3939c83",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T13-20-30-799Z__entity-relationship-graph__7085ce0e-cf06-4ba0-b78b-e3d37be5b030.json",
+    "src/utils/entityGraph.js",
+    "src/components/EntityRelationshipGraph.jsx",
+    "src/pages/EntityExplorerPage.jsx",
+    "test/entityGraph.test.js"
+  ]
+}

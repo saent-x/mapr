@@ -1,0 +1,31 @@
+{
+  "featureId": "source-credibility-ui",
+  "reviewedAt": "2026-03-28T00:28:15.170884Z",
+  "commitId": "84fc5d1",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The news panel now exposes clear corroborated/single-source/amplified states with i18n coverage, and the status logic is straightforward. One user-visible count, however, overstates corroboration by labeling total article count as a source count.",
+    "issues": [
+      {
+        "file": "src/components/NewsPanel.jsx",
+        "line": 52,
+        "severity": "non_blocking",
+        "description": "The badge status is determined from `independentSourceCount`, but the visible count and tooltip use `articleCount` while rendering `{{count}} sources`. That can show a corroborated badge like \"4 sources\" for an event that actually has only two independent sources and two syndicated duplicates, overstating the credibility signal the UI is meant to communicate.",
+        "suggestedFix": "Drive the badge count/tooltip from `independentSourceCount` and keep `articleCount` as a separate volume indicator in the metadata row if you still want to show total article volume."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass with one non-blocking issue: the badge label uses total article count where it should report independent corroborating sources.",
+  "reviewedArtifacts": [
+    "commit:84fc5d1",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T23-36-37-212Z__source-credibility-ui__d1224c34-b660-470b-8961-a3de94af30a4.json",
+    "src/components/NewsPanel.jsx",
+    "src/i18n/locales/en.json",
+    "test/credibilityBadge.test.js"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "featureId": "cross-area-map-data-flow",
+  "reviewedAt": "2026-03-28T00:28:15.170884Z",
+  "commitId": "4a495ad",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The canonical-event location fix and [0,0] guards are well targeted, and the accompanying regression tests directly cover the precision-selection logic. I did not find a correctness issue in the implementation itself that should block the milestone.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill should explicitly document fallback validation strategies for MapLibre/Three.js surfaces in headless Chrome instead of only treating WebGL interaction failures as a reason to return to orchestrator.",
+      "evidence": "Handoff 2026-03-28T00-17-00-320Z__cross-area-map-data-flow__3001e869-1cae-4fc9-972f-5a4cee0ee0b9.json records expected headless WebGL failures and verifies the feature through indirect flows; `.factory/library/user-testing.md` previously covered the 3D globe limitation but not MapLibre GL or canvas-based visualizations."
+    }
+  ],
+  "addressesFailureFrom": null,
+  "summary": "Pass. Event coordinates now prefer the best-located article and the map surfaces guard against invalid [0,0] markers.",
+  "reviewedArtifacts": [
+    "commit:4a495ad",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-28T00-17-00-320Z__cross-area-map-data-flow__3001e869-1cae-4fc9-972f-5a4cee0ee0b9.json",
+    "src/utils/newsPipeline.js",
+    "src/hooks/usePanelState.js",
+    "src/components/FlatMap.jsx",
+    "src/components/Globe.jsx",
+    "test/newsPipeline.test.js"
+  ]
+}

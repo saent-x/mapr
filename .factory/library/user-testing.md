@@ -26,6 +26,8 @@ Testing surface, required testing skills/tools, resource cost classification per
 
 ### Known Limitations
 - **3D Globe (react-globe.gl)**: Uses WebGL/Three.js. Browser automation may not be able to interact with 3D elements directly. Test globe rendering (no errors) but use flat map mode for interaction testing.
+- **Flat map (MapLibre GL)**: The flat-map surface also depends on WebGL. In headless Chrome it can fail to render markers/popups reliably, so map-centric validations should prefer indirect flows (search/ticker → panel) or API evidence unless a headed browser is available.
+- **Canvas visualizations**: Canvas-only UI (for example the entity relationship graph) does not expose semantic DOM nodes for individual marks. agent-browser checks may need coordinate-based clicks or DOM/eval-assisted inspection instead of standard locator-based interaction.
 - **Ingestion timing**: Backend ingestion takes 1-2 minutes. Validators must wait for ingestion to complete before checking data freshness.
 - **Backend env loading**: `node server/index.js` alone does not load `.env`; use `node --env-file=.env server/index.js` or `npm run dev`.
 - **Backend bootstrap refresh**: After a cold backend start, `/api/health` may report `refreshInProgress: true` and `status: "stale"` for several minutes while the server still serves the last successful snapshot. Read-only validators can use that snapshot for non-freshness assertions, but should avoid starting a second refresh while bootstrap is active.

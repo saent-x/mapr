@@ -1,0 +1,24 @@
+{
+  "featureId": "severity-scoring-enhancement",
+  "reviewedAt": "2026-03-28T00:28:15.170884Z",
+  "commitId": "ba4cc08",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The severity model now threads entity significance, conflict/tension-zone boosts, and baseline adjustments through the correlation pipeline with focused tests covering the new factor combinations. I did not find a correctness issue strong enough to block the milestone.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Pass. The new severity factors are wired through the backend pipeline and covered by targeted tests.",
+  "reviewedArtifacts": [
+    "commit:ba4cc08",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-27T13-29-45-140Z__severity-scoring-enhancement__91e619ed-3308-4861-a4e9-5a0ca43c2b60.json",
+    "src/utils/severityModel.js",
+    "src/utils/articleUtils.js",
+    "server/pipeline/correlateEvents.js",
+    "test/severityModel.test.js"
+  ]
+}

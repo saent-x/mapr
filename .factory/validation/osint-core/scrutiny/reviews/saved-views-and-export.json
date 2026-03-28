@@ -1,0 +1,34 @@
+{
+  "featureId": "saved-views-and-export",
+  "reviewedAt": "2026-03-28T00:28:15.170884Z",
+  "commitId": "379e581",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "fail",
+  "codeReview": {
+    "summary": "The modal save flow and markdown export are strong improvements, but loading a saved view does not actually restore the saved search filter to the active results. That misses the feature\u2019s promise to restore all filter settings.",
+    "issues": [
+      {
+        "file": "src/stores/filterStore.js",
+        "line": 68,
+        "severity": "blocking",
+        "description": "`applyView()` copies `filters.searchQuery` into `searchQuery` but never updates `debouncedSearch`. Because App filtering uses `debouncedSearch`, loading a saved view with a saved search term updates the header input but leaves the result set unfiltered until the user types again. A direct store check after `applyView({ filters: { searchQuery: \"iran\" } })` leaves `debouncedSearch` empty.",
+        "suggestedFix": "When applying a view, set both `searchQuery` and `debouncedSearch` (or route the update through the debounced setter and flush it) so the saved search filter takes effect immediately when the view loads."
+      }
+    ]
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "Fail. Saved views do not immediately restore saved search filters because `applyView()` leaves `debouncedSearch` behind.",
+  "reviewedArtifacts": [
+    "commit:379e581",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/worker-transcripts.jsonl",
+    "/Users/tor/.factory/missions/8436c576-ab8d-4155-ae41-932a6b94051d/handoffs/2026-03-28T00-00-17-616Z__saved-views-and-export__8603e409-95cc-4365-a5ed-20fcb1040e1a.json",
+    "src/stores/filterStore.js",
+    "src/components/SaveViewDialog.jsx",
+    "src/components/BriefingExport.jsx",
+    "src/utils/briefingMarkdown.js",
+    "test/briefingMarkdown.test.js",
+    "test/viewManager.test.js"
+  ]
+}
