@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-entity-graph-type-collision",
+  "reviewedAt": "2026-03-28T00:43:41Z",
+  "commitId": "93e2bff",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix fully addresses the original collision bug. Entity graph nodes and edges now use typed ids, the entity explorer resolves selections by typed identity, and regression tests cover same-label cross-type entities through extraction, filtering, and related-event lookup paths.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill should explicitly allow pure logic/data-transform fixes with direct automated coverage to satisfy verification without requiring agent-browser runs when there is no meaningful user-surface interaction to exercise.",
+      "evidence": "The fix-entity-graph-type-collision handoff reports a pure logic/data-transform repair in src/utils/entityGraph.js plus targeted tests in test/entityGraph.test.js; the worker's skillFeedback notes that browser automation was unnecessary because the expected behavior was fully covered by the added automated checks."
+    }
+  ],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-core/scrutiny/reviews/entity-relationship-graph.json",
+  "summary": "Pass. The original same-label cross-type collision is fixed end-to-end by typed entity ids and regression coverage."
+}

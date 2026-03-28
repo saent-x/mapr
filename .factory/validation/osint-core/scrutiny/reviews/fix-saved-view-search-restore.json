@@ -1,0 +1,21 @@
+{
+  "featureId": "fix-saved-view-search-restore",
+  "reviewedAt": "2026-03-28T00:43:41Z",
+  "commitId": "2ae2a38",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The fix directly resolves the saved-view regression. applyView() now restores debouncedSearch alongside searchQuery, matching the store's URL hydration path, and the new store regression test proves saved search filters take effect immediately after loading a view.",
+    "issues": []
+  },
+  "sharedStateObservations": [
+    {
+      "area": "skills",
+      "observation": "The frontend-worker skill should explicitly allow pure logic/store fixes with direct automated coverage to satisfy verification without requiring agent-browser runs when there is no meaningful user-surface interaction to exercise.",
+      "evidence": "The fix-saved-view-search-restore handoff shows a one-line store correction in src/stores/filterStore.js plus a precise regression test in test/stores.test.js; the worker's skillFeedback notes that browser automation was unnecessary because the bug lived entirely in store state restoration."
+    }
+  ],
+  "addressesFailureFrom": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-core/scrutiny/reviews/saved-views-and-export.json",
+  "summary": "Pass. Saved views now immediately reapply saved search filters because applyView restores both searchQuery and debouncedSearch."
+}

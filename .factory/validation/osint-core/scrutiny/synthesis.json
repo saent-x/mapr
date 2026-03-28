@@ -1,7 +1,7 @@
 {
   "milestone": "osint-core",
-  "round": 1,
-  "status": "fail",
+  "round": 2,
+  "status": "pass",
   "validatorsRun": {
     "test": {
       "passed": true,
@@ -20,41 +20,21 @@
     }
   },
   "reviewsSummary": {
-    "total": 6,
-    "passed": 4,
-    "failed": 2,
-    "failedFeatures": [
-      "entity-relationship-graph",
-      "saved-views-and-export"
-    ]
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "failedFeatures": []
   },
-  "blockingIssues": [
-    {
-      "featureId": "entity-relationship-graph",
-      "severity": "blocking",
-      "description": "The entity graph collapses entities by lowercase label only, so same-label people/organizations/locations merge into one node and type filtering no longer preserves distinct entity types or their co-occurrence edges."
-    },
-    {
-      "featureId": "saved-views-and-export",
-      "severity": "blocking",
-      "description": "Loading a saved view restores `searchQuery` but not `debouncedSearch`, so saved search filters do not actually reapply to the visible results until the user types again."
-    }
-  ],
-  "appliedUpdates": [
-    {
-      "target": "library",
-      "description": "Expanded `.factory/library/user-testing.md` with headless MapLibre GL and canvas-visualization limitations plus recommended validation approaches.",
-      "sourceFeature": "cross-area-map-data-flow"
-    }
-  ],
+  "blockingIssues": [],
+  "appliedUpdates": [],
   "suggestedGuidanceUpdates": [
     {
       "target": "frontend-worker skill",
-      "suggestion": "Document fallback verification strategies for canvas/WebGL surfaces (coordinate-based clicks, DOM/eval inspection, indirect flows, or API-backed evidence) instead of only requiring standard agent-browser interaction or returning to orchestrator when those surfaces are hard to drive headlessly.",
-      "evidence": "Two osint-core reviews surfaced the same pattern: entity-relationship-graph required canvas-specific interaction, and cross-area-map-data-flow could not visually verify MapLibre/Globe rendering in headless Chrome. The current skill mentions WebGL/canvas difficulty but does not tell workers what acceptable fallback evidence looks like.",
+      "suggestion": "Clarify that pure logic/store/data-transform frontend fixes can rely on direct automated coverage instead of agent-browser verification when there is no meaningful user-surface interaction to exercise.",
+      "evidence": "Both osint-core fix reviews reached the same conclusion: fix-entity-graph-type-collision and fix-saved-view-search-restore were resolved entirely in shared logic/store code with targeted regression tests that directly covered the bug, and both worker handoffs called out that browser automation was unnecessary for those fixes.",
       "isSystemic": true
     }
   ],
   "rejectedObservations": [],
-  "previousRound": null
+  "previousRound": "/Users/tor/Documents/projects/mapr/.factory/validation/osint-core/scrutiny/synthesis.round1.json"
 }
