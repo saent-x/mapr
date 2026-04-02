@@ -1,13 +1,11 @@
 import { create } from 'zustand';
 import {
-  fetchBackendBriefing,
-  fetchBackendCoverageHistory,
   fetchBackendCoverageRegion,
   fetchBackendHealth,
   fetchBackendRegionBriefing,
-  refreshBackendBriefing,
 } from '../services/backendService.js';
-import { fetchLiveNews, getGdeltFetchHealth } from '../services/gdeltService.js';
+import { fetchLiveNews } from '../services/gdeltService.js';
+import { runLoadLiveDataPipeline } from '../services/loadLiveDataPipeline.js';
 import {
   saveSnapshot,
   loadLastSnapshot,
@@ -78,93 +76,83 @@ const useNewsStore = create((set, get) => ({
    * Optionally triggers server-side refresh via POST.
    */
   loadLiveData: async ({ forceRefresh = false, addToast } = {}) => {
-    // 1. Try backend
-    try {
-      const [briefing, historyPayload] = await Promise.all([
-        forceRefresh ? refreshBackendBriefing() : fetchBackendBriefing(),
-        fetchBackendCoverageHistory().catch(() => null),
-      ]);
+    const result = await runLoadLiveDataPipeline({ forceRefresh });
 
-      if (Array.isArray(briefing?.articles) && briefing.articles.length > 0) {
-        const count = briefing.articles.length;
-        const prevCount = _prevArticleCount;
+    if (result.kind === 'backend' || result.kind === 'backend_warming') {
+      const { briefing, historyPayload } = result;
+      const articles = briefing.articles || [];
+      const count = articles.length;
+      const prevCount = _prevArticleCount;
+      const isWarming = result.kind === 'backend_warming';
 
-        set({
-          liveNews: briefing.articles,
-          backendEvents: Array.isArray(briefing.events) ? briefing.events : [],
-          sourceHealth: briefing.sourceHealth || { gdelt: null, rss: null, backend: null },
-          coverageTrends: historyPayload?.trends || briefing.coverageTrends || null,
-          coverageHistory: historyPayload || null,
-          velocitySpikes: Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : [],
-          dataSource: 'live',
-          dataError: null,
-        });
+      set({
+        liveNews: articles,
+        backendEvents: Array.isArray(briefing.events) ? briefing.events : [],
+        sourceHealth: briefing.sourceHealth || { gdelt: null, rss: null, backend: null },
+        coverageTrends: historyPayload?.trends || briefing.coverageTrends || null,
+        coverageHistory: historyPayload || null,
+        velocitySpikes: Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : [],
+        dataSource: 'live',
+        dataError: isWarming ? 'Backend briefing not ready yet — ingest may still be running' : null,
+      });
 
-        // Clear region backfills on new data
-        if (_prevLiveNewsRef !== briefing.articles) {
-          set({ regionBackfills: {} });
-        }
-        _prevLiveNewsRef = briefing.articles;
-
-        fetchBackendHealth().then((h) => set({ opsHealth: h })).catch(() => set({ opsHealth: null }));
-
-        // Notify (not on first load)
-        if (!_isFirstLoad && addToast) {
-          const diff = count - prevCount;
-          if (diff > 0) {
-            addToast(`${diff} new stories detected · ${count} total`, 'new-data');
-          } else {
-            addToast(`Intel refreshed · ${count} stories`, 'refresh');
-          }
-        }
-
-        _prevArticleCount = count;
-        _isFirstLoad = false;
-
-        // Session memory: on first data load, diff against last snapshot
-        get()._initSessionMemory(briefing.articles);
-        return;
+      if (_prevLiveNewsRef !== articles) {
+        set({ regionBackfills: {} });
       }
-    } catch (err) {
-      console.warn('Backend briefing failed, trying client-side GDELT fallback:', err.message);
+      _prevLiveNewsRef = articles;
+
+      fetchBackendHealth().then((h) => set({ opsHealth: h })).catch(() => set({ opsHealth: null }));
+
+      if (!_isFirstLoad && addToast && count > 0) {
+        const diff = count - prevCount;
+        if (diff > 0) {
+          addToast(`${diff} new stories detected · ${count} total`, 'new-data');
+        } else {
+          addToast(`Intel refreshed · ${count} stories`, 'refresh');
+        }
+      } else if (!_isFirstLoad && addToast && isWarming) {
+        addToast('Waiting for backend briefing…', 'refresh');
+      }
+
+      _prevArticleCount = count;
+      _isFirstLoad = false;
+
+      if (articles.length > 0) {
+        get()._initSessionMemory(articles);
+      }
+      return;
     }
 
-    // 2. Fallback: client-side GDELT
-    try {
-      const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 750 });
-      if (Array.isArray(clientArticles) && clientArticles.length > 0) {
-        const count = clientArticles.length;
-        const gdeltHealth = getGdeltFetchHealth();
-        set({
-          liveNews: clientArticles,
-          sourceHealth: { gdelt: gdeltHealth, rss: null, backend: null },
-          coverageTrends: null,
-          coverageHistory: null,
-          opsHealth: null,
-          dataSource: 'live',
-          dataError: null,
-        });
+    if (result.kind === 'client_gdelt') {
+      const { articles, gdeltHealth } = result;
+      const count = articles.length;
 
-        if (_prevLiveNewsRef !== clientArticles) {
-          set({ regionBackfills: {} });
-        }
-        _prevLiveNewsRef = clientArticles;
+      set({
+        liveNews: articles,
+        sourceHealth: { gdelt: gdeltHealth, rss: null, backend: null },
+        coverageTrends: null,
+        coverageHistory: null,
+        opsHealth: null,
+        dataSource: 'live',
+        dataError: null,
+      });
 
-        if (!_isFirstLoad && addToast) {
-          addToast(`Client-side refresh · ${count} stories`, 'refresh');
-        }
-
-        _prevArticleCount = count;
-        _isFirstLoad = false;
-        get()._initSessionMemory(clientArticles);
-        return;
+      if (_prevLiveNewsRef !== articles) {
+        set({ regionBackfills: {} });
       }
-    } catch (err) {
-      console.warn('Client-side GDELT fallback also failed:', err.message);
+      _prevLiveNewsRef = articles;
+
+      if (!_isFirstLoad && addToast) {
+        addToast(`Client-side refresh · ${count} stories`, 'refresh');
+      }
+
+      _prevArticleCount = count;
+      _isFirstLoad = false;
+      get()._initSessionMemory(articles);
+      return;
     }
 
-    // 3. Last resort: static mock data
-    set({ liveNews: null, dataSource: 'mock', dataError: 'Both backend and client-side fetching failed' });
+    set({ liveNews: null, dataSource: 'mock', dataError: result.errorMessage });
   },
 
   /** Force a full refresh cycle. */

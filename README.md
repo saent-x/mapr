@@ -47,7 +47,7 @@ Open-source OSINT platform that aggregates global news from 300+ sources, scores
 - **i18next** + **react-i18next** — Internationalization
 - **date-fns** — Date formatting
 - **lucide-react** — Icons
-- **Express** — Backend API server
+- **Node.js `http`** — Backend API server (`server/index.js`)
 - **PostgreSQL** — Article and event persistence (Neon for production, Docker for local dev)
 
 ## Getting Started
@@ -171,9 +171,10 @@ server/
 
 ## Deployment
 
-- **Backend** — Railway (Express server)
-- **Frontend** — Vercel (Vite static build)
-- **Database** — Neon PostgreSQL (serverless)
+- **App** — Single Node process (`npm run start`) for API, ingestion, SSE, and optional static `dist/` behind a reverse proxy
+- **Dev** — `npm run dev` runs Vite + API with `/api` proxied to port 3030
+- **Details** — See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- **Database** — SQLite by default in `server/storage.js` (see repo for Postgres-related options if present)
 
 ## Testing
 

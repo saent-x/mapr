@@ -1,22 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  fetchBackendBriefing,
-  fetchBackendCoverageHistory,
-  fetchBackendHealth,
-  refreshBackendBriefing
-} from '../services/backendService';
-import { fetchLiveNews, getGdeltFetchHealth } from '../services/gdeltService';
+import { runLoadLiveDataPipeline } from '../services/loadLiveDataPipeline.js';
+import { fetchBackendHealth } from '../services/backendService.js';
 
 const REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Custom hook that encapsulates all event/article data fetching with
- * 3-tier fallback: backend → client-side GDELT → mock data.
- *
- * Returns raw articles (liveNews), plus source health, coverage trends,
- * coverage history, ops health, and data source status.
- *
- * Toast/notification logic is delegated to the caller via onNewData callback.
+ * Article/event data via the shared load pipeline (backend → GDELT → mock).
+ * Toast/notification logic is delegated via onNewData.
  */
 export default function useEventData({ onNewData } = {}) {
   const [liveNews, setLiveNews] = useState(null);
@@ -33,84 +23,75 @@ export default function useEventData({ onNewData } = {}) {
   const isFirstLoadRef = useRef(true);
   const onNewDataRef = useRef(onNewData);
 
-  // Keep callback ref up to date without triggering re-renders
   useEffect(() => {
     onNewDataRef.current = onNewData;
   }, [onNewData]);
 
-  const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
-    // 1. Try backend API (Vercel serverless functions)
-    try {
-      const [briefing, historyPayload] = await Promise.all([
-        forceRefresh
-          ? refreshBackendBriefing()
-          : fetchBackendBriefing(),
-        fetchBackendCoverageHistory().catch(() => null)
-      ]);
+  const applyPipelineResult = useCallback((result) => {
+    if (result.kind === 'backend' || result.kind === 'backend_warming') {
+      const { briefing, historyPayload } = result;
+      const articles = briefing.articles || [];
+      const count = articles.length;
+      const prevCount = prevArticleCountRef.current;
 
-      if (Array.isArray(briefing?.articles) && briefing.articles.length > 0) {
-        const count = briefing.articles.length;
-        const prevCount = prevArticleCountRef.current;
-        setLiveNews(briefing.articles);
-        setSourceHealth(briefing.sourceHealth || { gdelt: null, rss: null, backend: null });
-        setCoverageTrends(historyPayload?.trends || briefing.coverageTrends || null);
-        setCoverageHistory(historyPayload || null);
-        setVelocitySpikes(Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : []);
-        fetchBackendHealth().then(setOpsHealth).catch(() => setOpsHealth(null));
-        setDataSource('live');
-        setDataError(null);
+      setLiveNews(articles);
+      setSourceHealth(briefing.sourceHealth || { gdelt: null, rss: null, backend: null });
+      setCoverageTrends(historyPayload?.trends || briefing.coverageTrends || null);
+      setCoverageHistory(historyPayload || null);
+      setVelocitySpikes(Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : []);
+      fetchBackendHealth().then(setOpsHealth).catch(() => setOpsHealth(null));
+      setDataSource('live');
+      setDataError(
+        result.kind === 'backend_warming'
+          ? 'Backend briefing not ready yet — ingest may still be running'
+          : null
+      );
 
-        // Notify caller (not on first load)
-        if (!isFirstLoadRef.current && onNewDataRef.current) {
-          const diff = count - prevCount;
-          if (diff > 0) {
-            onNewDataRef.current({ type: 'new-data', count, diff });
-          } else {
-            onNewDataRef.current({ type: 'refresh', count });
-          }
+      if (!isFirstLoadRef.current && onNewDataRef.current && count > 0) {
+        const diff = count - prevCount;
+        if (diff > 0) {
+          onNewDataRef.current({ type: 'new-data', count, diff });
+        } else {
+          onNewDataRef.current({ type: 'refresh', count });
         }
-        prevArticleCountRef.current = count;
-        isFirstLoadRef.current = false;
-        return;
       }
-    } catch (backendErr) {
-      console.warn('Backend briefing failed, trying client-side GDELT fallback:', backendErr.message);
+
+      prevArticleCountRef.current = count;
+      isFirstLoadRef.current = false;
+      return;
     }
 
-    // 2. Fallback: fetch directly from GDELT client-side
-    try {
-      const clientArticles = await fetchLiveNews({ timespan: '24h', maxRecords: 750 });
-      if (Array.isArray(clientArticles) && clientArticles.length > 0) {
-        const count = clientArticles.length;
-        setLiveNews(clientArticles);
-        const gdeltHealth = getGdeltFetchHealth();
-        setSourceHealth({ gdelt: gdeltHealth, rss: null, backend: null });
-        setCoverageTrends(null);
-        setCoverageHistory(null);
-        setOpsHealth(null);
-        setDataSource('live');
-        setDataError(null);
-        if (!isFirstLoadRef.current && onNewDataRef.current) {
-          onNewDataRef.current({ type: 'client-refresh', count });
-        }
-        prevArticleCountRef.current = count;
-        isFirstLoadRef.current = false;
-        return;
+    if (result.kind === 'client_gdelt') {
+      const { articles, gdeltHealth } = result;
+      const count = articles.length;
+      setLiveNews(articles);
+      setSourceHealth({ gdelt: gdeltHealth, rss: null, backend: null });
+      setCoverageTrends(null);
+      setCoverageHistory(null);
+      setOpsHealth(null);
+      setVelocitySpikes([]);
+      setDataSource('live');
+      setDataError(null);
+      if (!isFirstLoadRef.current && onNewDataRef.current) {
+        onNewDataRef.current({ type: 'client-refresh', count });
       }
-    } catch (clientErr) {
-      console.warn('Client-side GDELT fallback also failed:', clientErr.message);
+      prevArticleCountRef.current = count;
+      isFirstLoadRef.current = false;
+      return;
     }
 
-    // 3. Last resort: static mock data
     setLiveNews(null);
     setDataSource('mock');
-    setDataError('Both backend and client-side fetching failed');
+    setDataError(result.errorMessage);
   }, []);
 
-  // Initial load + auto-refresh
+  const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
+    const result = await runLoadLiveDataPipeline({ forceRefresh });
+    applyPipelineResult(result);
+  }, [applyPipelineResult]);
+
   useEffect(() => {
     loadLiveData();
-
     refreshTimerRef.current = setInterval(loadLiveData, REFRESH_INTERVAL);
     return () => clearInterval(refreshTimerRef.current);
   }, [loadLiveData]);

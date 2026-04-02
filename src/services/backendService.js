@@ -1,14 +1,18 @@
 const API_BASE = import.meta.env.VITE_MAPR_API_BASE || '/api';
 
-async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
-
+async function parseJsonResponse(response) {
   let payload = null;
   try {
     payload = await response.json();
   } catch {
     payload = null;
   }
+  return payload;
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, options);
+  const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
     const message = payload?.error || `Backend request failed (${response.status})`;
@@ -19,6 +23,24 @@ async function request(path, options = {}) {
   }
 
   return payload;
+}
+
+/** @returns {Promise<{ ok: boolean; status: number; data: object | null }>} */
+export async function fetchBackendBriefingRaw() {
+  const response = await fetch(`${API_BASE}/briefing`);
+  const data = await parseJsonResponse(response);
+  return { ok: response.ok, status: response.status, data };
+}
+
+/** @returns {Promise<{ ok: boolean; status: number; data: object | null }>} */
+export async function refreshBackendBriefingRaw() {
+  const response = await fetch(`${API_BASE}/refresh`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  const data = await parseJsonResponse(response);
+  return { ok: response.ok, status: response.status, data };
 }
 
 export function fetchBackendBriefing() {

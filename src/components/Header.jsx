@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon, Download, Layers } from 'lucide-react';
+import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon, Download, Layers, Plane, Ship } from 'lucide-react';
 import { getSeverityMeta } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 import ViewSwitcher from './ViewSwitcher';
+import useFilterStore from '../stores/filterStore';
 
 const LANGUAGES = [
   { code: 'en', label: 'EN' },
@@ -47,6 +48,10 @@ const Header = ({
   children,
 }) => {
   const { t, i18n } = useTranslation();
+  const showFlightsLayer = useFilterStore((s) => s.showFlightsLayer);
+  const showVesselsLayer = useFilterStore((s) => s.showVesselsLayer);
+  const toggleFlightsLayer = useFilterStore((s) => s.toggleFlightsLayer);
+  const toggleVesselsLayer = useFilterStore((s) => s.toggleVesselsLayer);
   const [showResults, setShowResults] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [theme, setTheme] = useState(() => localStorage.getItem('mapr-theme') || 'dark');
@@ -349,6 +354,26 @@ const Header = ({
             >
               <Layers size={12} />
               GEO
+            </button>
+            <button
+              type="button"
+              aria-pressed={showFlightsLayer}
+              className={`map-toggle-btn ${showFlightsLayer ? 'is-active' : ''}`}
+              onClick={toggleFlightsLayer}
+              title={t('header.trackingFlights')}
+            >
+              <Plane size={12} />
+              ADS-B
+            </button>
+            <button
+              type="button"
+              aria-pressed={showVesselsLayer}
+              className={`map-toggle-btn ${showVesselsLayer ? 'is-active' : ''}`}
+              onClick={toggleVesselsLayer}
+              title={t('header.trackingVessels')}
+            >
+              <Ship size={12} />
+              AIS
             </button>
           </div>
         )}

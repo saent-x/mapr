@@ -20,6 +20,8 @@ import {
   clearCache as clearGdeltCache,
   fetchLiveNews
 } from '../src/services/gdeltService.js';
+import { broadcast as sseBroadcast, clientCount as sseClientCount } from './sse.js';
+import { log } from './logger.js';
 import { deduplicateArticles } from '../src/utils/articleUtils.js';
 import { buildCoverageDiagnostics } from '../src/utils/coverageDiagnostics.js';
 import { buildRegionSourcePlan } from '../src/utils/sourceCoverage.js';
@@ -576,8 +578,25 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         events
       }));
 
+      if (sseClientCount() > 0) {
+        sseBroadcast('briefing-updated', {
+          fetchedAt,
+          articleCount: mergedArticles.length,
+          eventCount: persistentEvents.length,
+          reason
+        });
+      }
+
+      log.info('ingest_refresh_ok', {
+        reason,
+        articleCount: mergedArticles.length,
+        eventCount: persistentEvents.length,
+        fetchedAt
+      });
+
       return await createResponsePayload();
     } catch (error) {
+      log.error('ingest_refresh_failed', { reason, message: error.message });
       console.error('[ingest] refreshSnapshot FAILED:', error.message);
       console.error('[ingest] Stack:', error.stack?.split('\n').slice(0, 4).join('\n'));
 

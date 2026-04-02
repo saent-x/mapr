@@ -21,12 +21,11 @@ describe('admin password gate', () => {
   describe('AdminPage has password gate', () => {
     const adminPage = readFileSync(resolve(ROOT, 'src/pages/AdminPage.jsx'), 'utf8');
 
-    it('uses sessionStorage for auth persistence', () => {
-      assert.ok(adminPage.includes('sessionStorage'), 'AdminPage should use sessionStorage');
-    });
-
-    it('has a SESSION_KEY constant', () => {
-      assert.ok(adminPage.includes('SESSION_KEY'), 'AdminPage should define SESSION_KEY');
+    it('restores session via GET /api/admin/session with credentials', () => {
+      assert.ok(
+        adminPage.includes("'/api/admin/session'") && adminPage.includes("'include'"),
+        'AdminPage should probe session cookie on load'
+      );
     });
 
     it('renders a PasswordGate component when not authed', () => {
@@ -37,8 +36,11 @@ describe('admin password gate', () => {
       assert.ok(adminPage.includes('type="password"'), 'AdminPage should have a password input');
     });
 
-    it('calls /api/admin/verify endpoint', () => {
-      assert.ok(adminPage.includes('/api/admin/verify'), 'AdminPage should call /api/admin/verify');
+    it('logs in with POST /api/admin/session and credentials', () => {
+      assert.ok(
+        adminPage.includes("'/api/admin/session'") && adminPage.includes("method: 'POST'"),
+        'AdminPage should POST JSON password to /api/admin/session'
+      );
     });
 
     it('shows error message on wrong password', () => {
@@ -52,39 +54,36 @@ describe('admin password gate', () => {
     });
   });
 
-  describe('Backend verify endpoint', () => {
+  describe('Backend admin session routes', () => {
     const serverCode = readFileSync(resolve(ROOT, 'server/index.js'), 'utf8');
 
-    it('has GET /api/admin/verify route', () => {
-      assert.ok(serverCode.includes("'/api/admin/verify'"), 'server should have /api/admin/verify route');
-    });
-
-    it('reads password from query parameter', () => {
-      assert.ok(serverCode.includes("url.searchParams.get('password')"), 'should read password from query params');
-    });
-
-    it('defaults to admin when ADMIN_PASSWORD is not set', () => {
+    it('has POST /api/admin/session', () => {
       assert.ok(
-        serverCode.includes("process.env.ADMIN_PASSWORD || 'admin'"),
-        'should default to admin password'
+        serverCode.includes("request.method === 'POST' && url.pathname === '/api/admin/session'"),
+        'server should expose POST /api/admin/session'
       );
     });
 
-    it('returns 200 for correct password', () => {
-      // Check that the route sends a 200 JSON response on match
-      const verifyBlock = serverCode.slice(
-        serverCode.indexOf("'/api/admin/verify'"),
-        serverCode.indexOf("'/api/admin/verify'") + 500
+    it('has GET /api/admin/session for cookie probe', () => {
+      assert.ok(
+        serverCode.includes("request.method === 'GET' && url.pathname === '/api/admin/session'"),
+        'GET session probe route'
       );
-      assert.ok(verifyBlock.includes('200'), 'should return 200 for correct password');
     });
 
-    it('returns 401 for wrong password', () => {
-      const verifyBlock = serverCode.slice(
-        serverCode.indexOf("'/api/admin/verify'"),
-        serverCode.indexOf("'/api/admin/verify'") + 500
-      );
-      assert.ok(verifyBlock.includes('401'), 'should return 401 for wrong password');
+    it('has POST /api/admin/logout', () => {
+      assert.ok(serverCode.includes("'/api/admin/logout'"), 'logout route');
+    });
+
+    it('authorizes admin-health via adminAuthorized (cookie or header)', () => {
+      assert.ok(serverCode.includes('adminAuthorized'), 'admin-health should use adminAuthorized');
+    });
+
+    it('returns 401 for wrong password on POST session', () => {
+      const start = serverCode.indexOf("request.method === 'POST' && url.pathname === '/api/admin/session'");
+      assert.ok(start >= 0);
+      const block = serverCode.slice(start, start + 1400);
+      assert.ok(block.includes('401'), 'invalid password → 401');
     });
   });
 

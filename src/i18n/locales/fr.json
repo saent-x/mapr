@@ -10,7 +10,9 @@
     "regions": "régions",
     "stories": "articles",
     "verified": "vérifiées",
-    "critical": "critiques"
+    "critical": "critiques",
+    "trackingFlights": "Avions en direct (ADS-B)",
+    "trackingVessels": "Navires en direct (AIS)"
   },
   "filters": {
     "label": "Filtres",

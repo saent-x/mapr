@@ -2,7 +2,6 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from '
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, Radio, AlertTriangle, Eye, X, Users, Building2, MapPin } from 'lucide-react';
-import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
 import MapLoadingFallback from './components/MapLoadingFallback';
@@ -22,6 +21,8 @@ import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
 import usePanelState from './hooks/usePanelState';
+import useBriefingStream from './hooks/useBriefingStream';
+import useTrackingOverlayData from './hooks/useTrackingOverlayData';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
@@ -46,12 +47,19 @@ function App() {
     opsHealth, velocitySpikes: hookVelocitySpikes, regionCoverageHistory,
     sessionDiff, snapshotHistory } = useNewsStore();
   const { searchQuery, debouncedSearch, dateWindow, minSeverity, minConfidence, sortMode,
-    mapOverlay, verificationFilter, sourceTypeFilter, languageFilter, accuracyMode,
+    mapOverlay, showFlightsLayer, showVesselsLayer, verificationFilter, sourceTypeFilter, languageFilter, accuracyMode,
     precisionFilter, hideAmplified, entityFilter } = useFilterStore();
   const { mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
     showExport, scrubTime, toasts, savedViews, activeViewId } = useUIStore();
   const filtersOpen = drawerMode !== null;
   const addToast = useUIStore((s) => s.addToast);
+
+  const trackingPoints = useTrackingOverlayData(showFlightsLayer, showVesselsLayer);
+
+  const sseReloadBriefing = useCallback(() => {
+    useNewsStore.getState().loadLiveData({ addToast });
+  }, [addToast]);
+  useBriefingStream(sseReloadBriefing);
 
   /* ── RTL + lang attribute ── */
   useEffect(() => {
@@ -321,11 +329,13 @@ function App() {
           {mapMode === 'globe' ? (
             <Globe newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
               coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
+              trackingPoints={trackingPoints}
               selectedRegion={selectedRegion} selectedStory={selectedStory}
               onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
           ) : (
             <FlatMap newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
               coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
+              trackingPoints={trackingPoints}
               selectedRegion={selectedRegion} selectedStory={selectedStory}
               onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
           )}
@@ -510,7 +520,6 @@ function App() {
           onClose={() => setShowExport(false)} />
       )}
 
-      <Analytics />
     </div>
     </ErrorBoundary>
   );

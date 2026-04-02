@@ -28,14 +28,16 @@ const HealthPage = () => {
     e.preventDefault();
     setAuthError('');
     try {
-      const res = await fetch('/api/admin-auth', {
+      const res = await fetch('/api/admin/session', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       });
       if (res.ok) {
         setAuthed(true);
-        sessionStorage.setItem('admin-pw', password);
+      } else if (res.status === 503) {
+        setAuthError('Admin not configured on server');
       } else {
         setAuthError('Invalid password');
       }
@@ -44,30 +46,26 @@ const HealthPage = () => {
     }
   }, [password]);
 
-  // Restore session
   useEffect(() => {
-    const saved = sessionStorage.getItem('admin-pw');
-    if (saved) {
-      setPassword(saved);
-      setAuthed(true);
-    }
+    fetch('/api/admin/session', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.ok) setAuthed(true);
+      })
+      .catch(() => {});
   }, []);
 
   const fetchHealth = useCallback(async () => {
-    const pw = sessionStorage.getItem('admin-pw') || password;
     setLoading(true);
     setError('');
     try {
       const [adminRes, opsRes] = await Promise.all([
-        fetch('/api/admin-health', {
-          headers: { 'X-Admin-Password': pw },
-        }),
+        fetch('/api/admin-health', { credentials: 'include' }),
         fetch('/api/health').catch(() => null),
       ]);
 
       if (adminRes.status === 401) {
         setAuthed(false);
-        sessionStorage.removeItem('admin-pw');
         setError('Session expired');
         return;
       }
@@ -83,7 +81,7 @@ const HealthPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [password]);
+  }, []);
 
   useEffect(() => {
     if (authed) fetchHealth();
@@ -131,7 +129,14 @@ const HealthPage = () => {
             <button onClick={fetchHealth} style={s.btnSmall} disabled={loading}>
               {loading ? 'LOADING...' : 'REFRESH'}
             </button>
-            <button onClick={() => { setAuthed(false); sessionStorage.removeItem('admin-pw'); }} style={s.btnSmall}>
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+                setAuthed(false);
+              }}
+              style={s.btnSmall}
+            >
               LOGOUT
             </button>
           </div>

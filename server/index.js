@@ -14,9 +14,25 @@ import {
   stopScheduler
 } from './ingest.js';
 import { getCircuitSummary } from './circuitBreaker.js';
+import {
+  addClient as addSseClient,
+  removeClient as removeSseClient,
+  broadcast as sseBroadcast,
+  clientCount as sseClientCount
+} from './sse.js';
+import { getCachedAircraft, startFlightTracking, stopFlightTracking } from './flightTracker.js';
+import { getCachedVessels, startShipTracking, stopShipTracking, startBatchPush } from './shipTracker.js';
+import {
+  buildClearSessionCookie,
+  buildSetSessionCookie,
+  canIssueAdminSession,
+  createSessionToken,
+  getSessionTokenFromCookie,
+  verifySessionToken
+} from './adminSession.js';
+import { log } from './logger.js';
 
-// Import Vercel API handlers for stateless routes (no duplication)
-import adminAuthHandler from '../api/admin-auth.js';
+// Shared route handlers (originally written for serverless; invoked from this Node server)
 import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 
@@ -29,13 +45,71 @@ const CORS_HEADERS = {
   'access-control-allow-headers': 'Content-Type, X-Admin-Password',
 };
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, extraHeaders = {}) {
   response.writeHead(statusCode, {
     ...CORS_HEADERS,
     'cache-control': 'no-store',
-    'content-type': 'application/json; charset=utf-8'
+    'content-type': 'application/json; charset=utf-8',
+    ...extraHeaders
   });
   response.end(JSON.stringify(payload));
+}
+
+/** @param {string[]} setCookieValues */
+function sendJsonWithCookies(response, statusCode, payload, setCookieValues) {
+  response.statusCode = statusCode;
+  for (const [k, v] of Object.entries({
+    ...CORS_HEADERS,
+    'cache-control': 'no-store',
+    'content-type': 'application/json; charset=utf-8'
+  })) {
+    response.setHeader(k, v);
+  }
+  for (const c of setCookieValues) {
+    response.appendHeader('Set-Cookie', c);
+  }
+  response.end(JSON.stringify(payload));
+}
+
+function isHttpsRequest(request) {
+  const xfp = String(request.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+  return xfp === 'https';
+}
+
+function getAdminPassword() {
+  return String(process.env.ADMIN_PASSWORD || '').trim();
+}
+
+function adminPasswordConfigured() {
+  return Boolean(getAdminPassword());
+}
+
+function adminAuthorized(request) {
+  const adminPw = getAdminPassword();
+  if (!adminPw) return false;
+  const header = String(request.headers['x-admin-password'] || '').trim();
+  if (header === adminPw) return true;
+  const tok = getSessionTokenFromCookie(request.headers.cookie);
+  return Boolean(tok && verifySessionToken(tok));
+}
+
+async function readJsonBody(request, maxBytes = 32_768) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of request) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      throw Object.assign(new Error('Request body too large'), { code: 'PAYLOAD_TOO_LARGE', statusCode: 413 });
+    }
+    chunks.push(chunk);
+  }
+  const raw = Buffer.concat(chunks).toString('utf8');
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw Object.assign(new Error('Invalid JSON body'), { code: 'BAD_REQUEST', statusCode: 400 });
+  }
 }
 
 function sendText(response, statusCode, text) {
@@ -76,6 +150,14 @@ function classifyError(error) {
     return { status: 504, body: { error: message, code: 'REQUEST_TIMEOUT' } };
   }
 
+  if (code === 'PAYLOAD_TOO_LARGE' || error?.statusCode === 413) {
+    return { status: 413, body: { error: message, code: 'PAYLOAD_TOO_LARGE' } };
+  }
+
+  if (code === 'BAD_REQUEST' && error?.statusCode === 400) {
+    return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
+  }
+
   // Bad request patterns (missing/invalid parameters)
   if (/^Missing\b/i.test(message) || /^Unknown region/i.test(message) || /^Invalid\b/i.test(message)) {
     return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
@@ -86,8 +168,8 @@ function classifyError(error) {
 }
 
 /**
- * Adapter: run a Vercel-style handler (req, res) using Node's http request/response.
- * Vercel handlers use res.status(N).json(obj) — we shim that interface.
+ * Adapter: run a handler written for (req, res) using Node's http request/response.
+ * Handlers use res.status(N).json(obj) — we shim that interface.
  */
 async function runVercelHandler(handler, request, response, url) {
   // Read body for POST requests
@@ -176,6 +258,32 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // ── SSE: real-time event stream ──
+    if (request.method === 'GET' && url.pathname === '/api/stream') {
+      response.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache',
+        ...CORS_HEADERS
+      });
+      response.write(': connected\n\n');
+      addSseClient(response);
+      request.on('close', () => removeSseClient(response));
+      return;
+    }
+
+    // ── Flight tracking data ──
+    if (request.method === 'GET' && url.pathname === '/api/flights') {
+      sendJson(response, 200, { aircraft: getCachedAircraft(), fetchedAt: new Date().toISOString() });
+      return;
+    }
+
+    // ── Ship tracking data ──
+    if (request.method === 'GET' && url.pathname === '/api/vessels') {
+      sendJson(response, 200, { vessels: getCachedVessels(), fetchedAt: new Date().toISOString() });
+      return;
+    }
+
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname === '/api/source-catalog') {
       return withTimeout(() => runVercelHandler(sourceCatalogHandler, request, response, url));
     }
@@ -219,28 +327,84 @@ const server = http.createServer(async (request, response) => {
     // ── Admin health (uses server's cached data, but auth logic is shared) ──
 
     if (request.method === 'GET' && url.pathname === '/api/admin-health') {
-      const authHeader = String(request.headers['x-admin-password'] || '').trim();
-      const adminPw = String(process.env.ADMIN_PASSWORD || '').trim();
-      if (!adminPw || authHeader !== adminPw) { sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' }); return; }
+      if (!adminPasswordConfigured()) {
+        sendJson(response, 503, { error: 'ADMIN_PASSWORD not configured', code: 'SERVICE_UNAVAILABLE' });
+        return;
+      }
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
       sendJson(response, 200, await withTimeout(() => buildAdminHealthResponse()));
       return;
     }
 
-    // ── Stateless routes (delegate to Vercel API handlers — no duplication) ──
+    // ── Admin session (httpOnly cookie; optional X-Admin-Password for scripts) ──
 
-    if (url.pathname === '/api/admin-auth') {
-      return withTimeout(() => runVercelHandler(adminAuthHandler, request, response, url));
+    if (request.method === 'POST' && url.pathname === '/api/admin/session') {
+      if (!adminPasswordConfigured()) {
+        sendJson(response, 503, { error: 'ADMIN_PASSWORD not configured', code: 'SERVICE_UNAVAILABLE' });
+        return;
+      }
+      if (!canIssueAdminSession()) {
+        sendJson(response, 503, { error: 'Admin session signing not configured', code: 'SERVICE_UNAVAILABLE' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch (e) {
+        const { status, body: b } = classifyError(e);
+        sendJson(response, status, b);
+        return;
+      }
+      const password = String(body.password || '').trim();
+      if (password !== getAdminPassword()) {
+        sendJson(response, 401, { error: 'Invalid password', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const token = createSessionToken();
+      if (!token) {
+        sendJson(response, 500, { error: 'Could not create session', code: 'INTERNAL_ERROR' });
+        return;
+      }
+      const secure = isHttpsRequest(request);
+      sendJsonWithCookies(response, 200, { ok: true }, [buildSetSessionCookie(token, secure)]);
+      return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/api/admin/verify') {
-      const password = (url.searchParams.get('password') || '').trim();
-      const adminPassword = (process.env.ADMIN_PASSWORD || 'admin').trim();
-      if (password === adminPassword) {
-        sendJson(response, 200, { ok: true });
-      } else {
-        sendJson(response, 401, { error: 'Invalid password' });
-      }
+    if (request.method === 'GET' && url.pathname === '/api/admin/session') {
+      const tok = getSessionTokenFromCookie(request.headers.cookie);
+      const ok = Boolean(tok && verifySessionToken(tok));
+      sendJson(response, 200, { ok });
       return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/logout') {
+      const secure = isHttpsRequest(request);
+      sendJsonWithCookies(response, 200, { ok: true }, [buildClearSessionCookie(secure)]);
+      return;
+    }
+
+    // Legacy JSON check (no cookie) — used by some API clients
+    if (request.method === 'POST' && url.pathname === '/api/admin-auth') {
+      if (!adminPasswordConfigured()) {
+        sendJson(response, 500, { error: 'ADMIN_PASSWORD not configured' });
+        return;
+      }
+      let body;
+      try {
+        body = await readJsonBody(request);
+      } catch (e) {
+        const { status, body: b } = classifyError(e);
+        sendJson(response, status, b);
+        return;
+      }
+      const password = body.password;
+      if (String(password || '').trim() === getAdminPassword()) {
+        return sendJson(response, 200, { ok: true });
+      }
+      return sendJson(response, 401, { error: 'Invalid password' });
     }
 
     if (url.pathname === '/api/gdelt-proxy') {
@@ -261,19 +425,30 @@ const server = http.createServer(async (request, response) => {
 
 // Start server FIRST so healthcheck passes, then initialize data in background
 const HOST = process.env.HOST || '0.0.0.0';
-console.log(`Starting Mapr backend on ${HOST}:${PORT}...`);
-console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'set (' + process.env.DATABASE_URL.slice(0, 30) + '...)' : 'NOT SET'}`);
+log.info('mapr_server_starting', { host: HOST, port: PORT, databaseUrl: process.env.DATABASE_URL ? 'set' : 'not_set' });
 
 server.listen(PORT, HOST, async () => {
-  console.log(`Mapr backend listening on http://${HOST}:${PORT}`);
+  log.info('mapr_server_listening', { host: HOST, port: PORT });
   try {
     await initializeIngestion();
-    startScheduler();
-    console.log('Ingestion initialized and scheduler started.');
   } catch (err) {
     console.error('Ingestion initialization failed:', err.message);
     console.error(err.stack);
   }
+
+  startScheduler();
+  startFlightTracking();
+  startShipTracking();
+  if (process.env.AISSTREAM_API_KEY) {
+    startBatchPush((vessels) => {
+      if (sseClientCount() === 0) return;
+      sseBroadcast('vessels-update', {
+        vessels,
+        fetchedAt: new Date().toISOString()
+      });
+    });
+  }
+  console.log('Scheduler and trackers started.');
 
   // Keep-alive: self-ping every 4 minutes to prevent Railway from scaling to zero
   if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT) {
@@ -292,6 +467,8 @@ server.on('error', (err) => {
 
 function shutdown() {
   stopScheduler();
+  stopFlightTracking();
+  stopShipTracking();
   server.close(() => {
     closeStorage();
     process.exit(0);

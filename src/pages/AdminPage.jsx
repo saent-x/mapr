@@ -7,8 +7,6 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
-const SESSION_KEY = 'mapr_admin_auth';
-
 /* ── Status helpers ── */
 
 const STATUS_ORDER = { ok: 0, empty: 1, failed: 2, 'never-checked': 3 };
@@ -104,10 +102,16 @@ function PasswordGate({ onAuth }) {
     setError('');
     setChecking(true);
     try {
-      const res = await fetch(`/api/admin/verify?password=${encodeURIComponent(password.trim())}`);
+      const res = await fetch('/api/admin/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: password.trim() }),
+      });
       if (res.ok) {
-        sessionStorage.setItem(SESSION_KEY, '1');
         onAuth();
+      } else if (res.status === 503) {
+        setError(t('admin.wrongPassword'));
       } else {
         setError(t('admin.wrongPassword'));
       }
@@ -146,7 +150,16 @@ function PasswordGate({ onAuth }) {
 /* ── Main component ── */
 
 export default function AdminPage() {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1');
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/admin/session', { credentials: 'include' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.ok) setAuthed(true);
+      })
+      .catch(() => {});
+  }, []);
 
   if (!authed) {
     return <PasswordGate onAuth={() => setAuthed(true)} />;

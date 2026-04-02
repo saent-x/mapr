@@ -109,7 +109,9 @@
     "regions": "regions",
     "stories": "stories",
     "verified": "verified",
-    "critical": "critical"
+    "critical": "critical",
+    "trackingFlights": "Show live aircraft (ADS-B)",
+    "trackingVessels": "Show live ships (AIS)"
   },
   "filters": {
     "label": "Filters",

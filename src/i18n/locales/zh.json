@@ -10,7 +10,9 @@
     "regions": "个地区",
     "stories": "条新闻",
     "verified": "个已验证",
-    "critical": "条紧急"
+    "critical": "条紧急",
+    "trackingFlights": "显示实时航班 (ADS-B)",
+    "trackingVessels": "显示实时船舶 (AIS)"
   },
   "filters": {
     "label": "筛选",

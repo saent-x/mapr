@@ -92,6 +92,7 @@ const FlatMap = ({
   mapOverlay,
   coverageStatusByIso = {},
   velocitySpikes = [],
+  trackingPoints = [],
   selectedRegion,
   selectedStory,
   onRegionSelect,
@@ -379,6 +380,25 @@ const FlatMap = ({
         },
       })),
   }), [newsList]);
+
+  const trackingGeoJson = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: (trackingPoints || [])
+      .filter((p) => p.lat != null && p.lng != null)
+      .map((p) => ({
+        type: 'Feature',
+        properties: {
+          id: p.id,
+          kind: p.kind,
+          label: p.label,
+          color: p.kind === 'air' ? '#7ecbff' : '#44ddb0',
+        },
+        geometry: {
+          type: 'Point',
+          coordinates: [p.lng, p.lat],
+        },
+      })),
+  }), [trackingPoints]);
 
   /* ── velocity spike markers GeoJSON (shown in ALL overlay modes) ── */
   const velocitySpikesGeoJson = useMemo(() => {
@@ -1019,6 +1039,23 @@ const FlatMap = ({
             }}
           />
         </Source>
+
+        {/* ── Live flights / vessels (lazy overlay) ── */}
+        {trackingGeoJson.features.length > 0 && (
+          <Source id="tracking-markers" type="geojson" data={trackingGeoJson}>
+            <Layer
+              id="tracking-dots"
+              type="circle"
+              paint={{
+                'circle-color': ['get', 'color'],
+                'circle-radius': 5,
+                'circle-opacity': 0.85,
+                'circle-stroke-width': 1,
+                'circle-stroke-color': 'rgba(255,255,255,0.35)',
+              }}
+            />
+          </Source>
+        )}
 
         {/* ── Selected story marker (on top) ── */}
         {selectedStoryGeoJson && (

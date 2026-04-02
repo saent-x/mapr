@@ -10,7 +10,9 @@
     "regions": "مناطق",
     "stories": "أخبار",
     "verified": "موثقة",
-    "critical": "حرجة"
+    "critical": "حرجة",
+    "trackingFlights": "عرض الطائرات (ADS-B)",
+    "trackingVessels": "عرض السفن (AIS)"
   },
   "filters": {
     "label": "تصفية",

@@ -69,6 +69,7 @@ const Globe = ({
   mapOverlay,
   coverageStatusByIso = {},
   velocitySpikes = [],
+  trackingPoints = [],
   selectedRegion,
   selectedStory,
   onRegionSelect,
@@ -210,9 +211,28 @@ const Globe = ({
     && !(s.coordinates[0] === 0 && s.coordinates[1] === 0)
   ), [newsList]);
 
+  const mergedPointData = useMemo(() => {
+    const list = [...safeNewsList];
+    for (const p of trackingPoints) {
+      if (p.lat == null || p.lng == null) continue;
+      list.push({
+        id: p.id,
+        __trackKind: p.kind,
+        coordinates: [p.lat, p.lng],
+        isoA2: null,
+        severity: 12,
+        title: p.label,
+        articleCount: 1,
+        locality: p.kind === 'air' ? 'ADS-B' : 'AIS',
+        category: 'tracking',
+      });
+    }
+    return list;
+  }, [safeNewsList, trackingPoints]);
+
   const activeRegion = selectedRegion || (hoveredCountry ? getIso(hoveredCountry) : null);
 
-  const isActivePoint = (s) => s.isoA2 === activeRegion;
+  const isActivePoint = (s) => s.__trackKind ? false : s.isoA2 === activeRegion;
 
   // Build a lookup: ISO → best representative story with coordinates
   const isoToStoryRef = useMemo(() => {
@@ -492,28 +512,42 @@ const Globe = ({
             if (iso) onRegionSelect(iso);
           }}
 
-          /* === POINTS (all articles, highlighted for active region) === */
-          pointsData={safeNewsList}
+          /* === POINTS (articles + optional flight/vessel overlay) === */
+          pointsData={mergedPointData}
           pointLat={(s) => s.coordinates[0]}
           pointLng={(s) => s.coordinates[1]}
           pointAltitude={(s) => {
+            if (s.__trackKind) return 0.0035;
             if (selectedStory?.id === s.id) return 0.015;
             if (isActivePoint(s)) return 0.0075 + s.severity / 2800;
             return 0.0025;
           }}
           pointRadius={(s) => {
+            if (s.__trackKind) return 0.22;
             if (selectedStory?.id === s.id) return 0.35;
             const markerSize = Math.min(0.6, 0.15 + (s.articleCount || 1) * 0.05);
             if (isActivePoint(s)) return markerSize;
             return markerSize * 0.55;
           }}
           pointColor={(s) => {
+            if (s.__trackKind === 'air') return '#7ecbff';
+            if (s.__trackKind === 'sea') return '#44ddb0';
             if (selectedStory?.id === s.id) return '#ffffff';
             const meta = getSeverityMeta(s.severity);
             if (isActivePoint(s)) return meta.accent;
             return meta.muted.replace(/[\d.]+\)$/, (m) => `${Math.min(parseFloat(m) * 1.6, 0.35)})`);
           }}
           pointLabel={(s) => {
+            if (s.__trackKind) {
+              return `
+              <div class="globe-tooltip">
+                <div class="globe-tooltip-name">${s.title}</div>
+                <div class="globe-tooltip-row">
+                  <span>${s.locality}</span>
+                  <strong>${s.__trackKind === 'air' ? 'Aircraft' : 'Vessel'}</strong>
+                </div>
+              </div>`;
+            }
             if (!isActivePoint(s)) return '';
             const meta = getSeverityMeta(s.severity);
             const articleCount = s.articleCount || 1;
@@ -538,7 +572,10 @@ const Globe = ({
               </div>
             `;
           }}
-          onPointClick={(s) => onStorySelect(s)}
+          onPointClick={(s) => {
+            if (s.__trackKind) return;
+            onStorySelect(s);
+          }}
 
           /* === ARCS (connect countries with related crises / geopolitical) === */
           arcsData={activeArcData}
