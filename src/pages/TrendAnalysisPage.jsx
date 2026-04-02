@@ -38,7 +38,7 @@ function Sparkline({ counts, color, width = 80, height = 24 }) {
 /* ── Main SVG area chart ── */
 function TrendChart({ timestamps, regions, selectedRegions, width = 700, height = 340 }) {
   const { t } = useTranslation();
-  const padding = { top: 20, right: 24, bottom: 36, left: 42 };
+  const padding = { top: 20, right: 24, bottom: 36, left: 52 };
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
 
@@ -99,6 +99,17 @@ function TrendChart({ timestamps, regions, selectedRegions, width = 700, height 
       role="img"
       aria-label={t('trends.chartAriaLabel')}
     >
+      {/* Y-axis label */}
+      <text
+        x={14}
+        y={padding.top + chartH / 2}
+        textAnchor="middle"
+        className="trend-chart-axis-label"
+        transform={`rotate(-90, 14, ${padding.top + chartH / 2})`}
+      >
+        {t('trends.chartYLabel')}
+      </text>
+
       {/* Grid lines */}
       {yTicks.map((v) => (
         <line
@@ -235,6 +246,157 @@ function TrendChart({ timestamps, regions, selectedRegions, width = 700, height 
   );
 }
 
+/* ── Severity Distribution bar chart ── */
+const SEVERITY_BANDS = [
+  { label: 'Critical', min: 80, max: 100, color: '#ff3355' },
+  { label: 'High', min: 60, max: 79, color: '#ff8833' },
+  { label: 'Medium', min: 40, max: 59, color: '#ffcc00' },
+  { label: 'Low', min: 20, max: 39, color: '#44ddb0' },
+  { label: 'Minimal', min: 0, max: 19, color: '#4fc3f7' },
+];
+
+function SeverityDistribution({ events, width = 400, height = 220 }) {
+  const { t } = useTranslation();
+  const padding = { top: 16, right: 24, bottom: 24, left: 72 };
+  const chartW = width - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+
+  const bands = useMemo(() => {
+    return SEVERITY_BANDS.map((b) => {
+      const count = (events || []).filter((e) => {
+        const s = e.severity ?? 0;
+        return s >= b.min && s <= b.max;
+      }).length;
+      return { ...b, count };
+    });
+  }, [events]);
+
+  const maxCount = Math.max(1, ...bands.map((b) => b.count));
+  const barH = Math.min(28, (chartH - (bands.length - 1) * 4) / bands.length);
+  const totalH = bands.length * barH + (bands.length - 1) * 4;
+  const startY = padding.top + (chartH - totalH) / 2;
+
+  // x-axis ticks
+  const xTicks = useMemo(() => {
+    const step = Math.max(1, Math.ceil(maxCount / 5));
+    const ticks = [];
+    for (let v = 0; v <= maxCount; v += step) ticks.push(v);
+    return ticks;
+  }, [maxCount]);
+
+  return (
+    <svg width={width} height={height} className="trend-chart-svg" role="img" aria-label={t('trends.severityChartAriaLabel')}>
+      {/* Grid lines */}
+      {xTicks.map((v) => {
+        const x = padding.left + (v / maxCount) * chartW;
+        return (
+          <line key={`sg-${v}`} x1={x} y1={padding.top} x2={x} y2={padding.top + chartH}
+            stroke="rgba(226,232,240,0.06)" strokeDasharray="3,3" />
+        );
+      })}
+      {/* X-axis labels */}
+      {xTicks.map((v) => {
+        const x = padding.left + (v / maxCount) * chartW;
+        return (
+          <text key={`sx-${v}`} x={x} y={height - 6} textAnchor="middle" className="trend-chart-tick">{v}</text>
+        );
+      })}
+      {/* Bars */}
+      {bands.map((b, i) => {
+        const y = startY + i * (barH + 4);
+        const w = b.count > 0 ? Math.max(2, (b.count / maxCount) * chartW) : 0;
+        return (
+          <g key={b.label}>
+            <text x={padding.left - 8} y={y + barH / 2 + 4} textAnchor="end" className="trend-chart-tick">
+              {b.label}
+            </text>
+            <rect x={padding.left} y={y} width={w} height={barH} rx={3} fill={b.color} fillOpacity={0.75} />
+            {b.count > 0 && (
+              <text x={padding.left + w + 6} y={y + barH / 2 + 4} className="trend-chart-tick" fill={b.color}>
+                {b.count}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ── Category breakdown bar chart ── */
+const CATEGORY_COLORS = {
+  conflict: '#ff3355', political: '#ff8833', humanitarian: '#ffcc00',
+  economic: '#4fc3f7', health: '#44ddb0', environment: '#66bb6a',
+  technology: '#a78bfa', disaster: '#f472b6',
+};
+
+function CategoryBreakdown({ events, width = 400, height = 220 }) {
+  const { t } = useTranslation();
+  const padding = { top: 16, right: 24, bottom: 24, left: 90 };
+  const chartW = width - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+
+  const categories = useMemo(() => {
+    const counts = {};
+    for (const e of events || []) {
+      const cat = (e.category || 'uncategorized').toLowerCase();
+      counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count, color: CATEGORY_COLORS[name] || '#8899aa' }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [events]);
+
+  if (categories.length === 0) return null;
+
+  const maxCount = Math.max(1, ...categories.map((c) => c.count));
+  const barH = Math.min(24, (chartH - (categories.length - 1) * 4) / categories.length);
+  const totalH = categories.length * barH + (categories.length - 1) * 4;
+  const startY = padding.top + (chartH - totalH) / 2;
+
+  const xTicks = useMemo(() => {
+    const step = Math.max(1, Math.ceil(maxCount / 5));
+    const ticks = [];
+    for (let v = 0; v <= maxCount; v += step) ticks.push(v);
+    return ticks;
+  }, [maxCount]);
+
+  return (
+    <svg width={width} height={height} className="trend-chart-svg" role="img" aria-label={t('trends.categoryChartAriaLabel')}>
+      {xTicks.map((v) => {
+        const x = padding.left + (v / maxCount) * chartW;
+        return (
+          <line key={`cg-${v}`} x1={x} y1={padding.top} x2={x} y2={padding.top + chartH}
+            stroke="rgba(226,232,240,0.06)" strokeDasharray="3,3" />
+        );
+      })}
+      {xTicks.map((v) => {
+        const x = padding.left + (v / maxCount) * chartW;
+        return (
+          <text key={`cx-${v}`} x={x} y={height - 6} textAnchor="middle" className="trend-chart-tick">{v}</text>
+        );
+      })}
+      {categories.map((c, i) => {
+        const y = startY + i * (barH + 4);
+        const w = Math.max(2, (c.count / maxCount) * chartW);
+        const label = c.name.charAt(0).toUpperCase() + c.name.slice(1);
+        return (
+          <g key={c.name}>
+            <text x={padding.left - 8} y={y + barH / 2 + 4} textAnchor="end" className="trend-chart-tick">
+              {label}
+            </text>
+            <rect x={padding.left} y={y} width={w} height={barH} rx={3} fill={c.color} fillOpacity={0.7} />
+            <text x={padding.left + w + 6} y={y + barH / 2 + 4} className="trend-chart-tick" fill={c.color}>
+              {c.count}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function formatTimestamp(ts) {
   try {
     return format(new Date(ts), 'HH:mm');
@@ -258,7 +420,10 @@ export default function TrendAnalysisPage() {
 
   /* ── Container dimensions ── */
   const [chartWidth, setChartWidth] = useState(700);
+  const [chartHeight, setChartHeight] = useState(400);
+  const [bottomChartWidth, setBottomChartWidth] = useState(400);
   const chartRef = React.useRef(null);
+  const bottomChartRef = React.useRef(null);
 
   useEffect(() => {
     const el = chartRef.current;
@@ -266,6 +431,20 @@ export default function TrendAnalysisPage() {
     const measure = () => {
       const rect = el.getBoundingClientRect();
       setChartWidth(Math.max(300, Math.floor(rect.width)));
+      setChartHeight(Math.max(280, Math.floor(rect.height) - 48)); // subtract header
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = bottomChartRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      setBottomChartWidth(Math.max(200, Math.floor(rect.width)));
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -390,18 +569,22 @@ export default function TrendAnalysisPage() {
               <div className="trend-summary-card">
                 <span className="trend-summary-label">{t('trends.totalEvents')}</span>
                 <span className="trend-summary-value">{backendEvents?.length || 0}</span>
+                <span className="trend-summary-hint">{t('trends.totalEventsHint')}</span>
               </div>
               <div className="trend-summary-card">
                 <span className="trend-summary-label">{t('trends.activeRegions')}</span>
                 <span className="trend-summary-value">{regionStats.length}</span>
+                <span className="trend-summary-hint">{t('trends.activeRegionsHint')}</span>
               </div>
               <div className="trend-summary-card">
                 <span className="trend-summary-label">{t('trends.velocitySpikes')}</span>
                 <span className="trend-summary-value trend-summary-value--spike">{spikeCount}</span>
+                <span className="trend-summary-hint">{t('trends.velocitySpikesHint')}</span>
               </div>
               <div className="trend-summary-card">
                 <span className="trend-summary-label">{t('trends.dataPoints')}</span>
                 <span className="trend-summary-value">{regionSeries.timestamps.length}</span>
+                <span className="trend-summary-hint">{t('trends.dataPointsHint')}</span>
               </div>
             </div>
 
@@ -420,7 +603,7 @@ export default function TrendAnalysisPage() {
                   regions={regionSeries.regions}
                   selectedRegions={selectedRegions}
                   width={chartWidth}
-                  height={340}
+                  height={chartHeight}
                 />
               </div>
 
@@ -455,6 +638,22 @@ export default function TrendAnalysisPage() {
                 </ul>
               </div>
             </div>
+
+            {/* Severity + Category breakdown charts */}
+            {backendEvents && backendEvents.length > 0 && (
+              <div className="trend-breakdown-section">
+                <div className="trend-breakdown-card" ref={bottomChartRef}>
+                  <h2 className="trend-section-title">{t('trends.severityTitle')}</h2>
+                  <p className="trend-breakdown-hint">{t('trends.severityHint')}</p>
+                  <SeverityDistribution events={backendEvents} width={bottomChartWidth} height={220} />
+                </div>
+                <div className="trend-breakdown-card">
+                  <h2 className="trend-section-title">{t('trends.categoryTitle')}</h2>
+                  <p className="trend-breakdown-hint">{t('trends.categoryHint')}</p>
+                  <CategoryBreakdown events={backendEvents} width={bottomChartWidth} height={220} />
+                </div>
+              </div>
+            )}
 
             {/* Velocity spikes section */}
             {velocitySpikes && velocitySpikes.length > 0 && (

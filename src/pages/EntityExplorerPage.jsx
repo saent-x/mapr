@@ -113,14 +113,17 @@ export default function EntityExplorerPage() {
     <div className="entity-explorer">
       {/* Header */}
       <div className="entity-explorer-header">
-        <div className="entity-explorer-title-row">
-          <Network size={20} />
-          <h1 className="entity-explorer-title">{t('entities.title')}</h1>
-          {!isLoading && (
-            <span className="entity-explorer-stats">
-              {stats.totalEntities} {t('entities.entitiesLabel')} · {stats.connections} {t('entities.connectionsLabel')}
-            </span>
-          )}
+        <div className="entity-explorer-title-group">
+          <div className="entity-explorer-title-row">
+            <Network size={20} />
+            <h1 className="entity-explorer-title">{t('entities.title')}</h1>
+            {!isLoading && (
+              <span className="entity-explorer-stats">
+                {stats.totalEntities} {t('entities.entitiesLabel')} · {stats.connections} {t('entities.connectionsLabel')}
+              </span>
+            )}
+          </div>
+          <p className="entity-explorer-subtitle">{t('entities.subtitle')}</p>
         </div>
 
         {/* Type filter toggles */}
@@ -181,6 +184,7 @@ export default function EntityExplorerPage() {
               <EntityRelationshipGraph
                 nodes={filteredGraph.nodes}
                 edges={filteredGraph.edges}
+                events={events}
                 selectedEntity={selectedEntity}
                 onEntitySelect={setSelectedEntity}
                 width={dimensions.width}

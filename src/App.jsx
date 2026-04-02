@@ -33,7 +33,7 @@ import { isoToCountry } from './utils/geocoder';
 import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import { encodeViewToURL } from './utils/viewManager';
 import { computeSilenceEntries } from './utils/anomalyUtils';
-import { MOCK_NEWS, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
+import { getMockNews, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
 
 const Globe = lazy(() => import('./components/Globe'));
 const FlatMap = lazy(() => import('./components/FlatMap'));
@@ -54,7 +54,16 @@ function App() {
   const filtersOpen = drawerMode !== null;
   const addToast = useUIStore((s) => s.addToast);
 
-  const trackingPoints = useTrackingOverlayData(showFlightsLayer, showVesselsLayer);
+  const { points: trackingPoints, vesselsDisabled } = useTrackingOverlayData(showFlightsLayer, showVesselsLayer);
+
+  // Notify user when ship tracking is not configured
+  const shownVesselWarning = useRef(false);
+  useEffect(() => {
+    if (vesselsDisabled && showVesselsLayer && !shownVesselWarning.current) {
+      shownVesselWarning.current = true;
+      addToast('Ship tracking requires AISSTREAM_API_KEY — not configured on server', 'warning');
+    }
+  }, [vesselsDisabled, showVesselsLayer, addToast]);
 
   const sseReloadBriefing = useCallback(() => {
     useNewsStore.getState().loadLiveData({ addToast });
@@ -109,7 +118,7 @@ function App() {
 
   /* ── Computed data ── */
   const baseArticles = useMemo(() => {
-    if (dataSource !== 'live') return liveNews || MOCK_NEWS;
+    if (dataSource !== 'live') return liveNews || getMockNews();
     return liveNews || [];
   }, [dataSource, liveNews]);
 

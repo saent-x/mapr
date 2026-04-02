@@ -54,8 +54,8 @@ const COVERAGE_RING_STYLES = {
 
 // On small screens, don't zoom in as far — the globe fills the viewport quickly
 const isMobile = typeof screen !== 'undefined' && screen.width < 768;
-const STORY_ALTITUDE = isMobile ? 1.4 : 0.7;
-const REGION_ALTITUDE = isMobile ? 1.6 : 0.9;
+const STORY_ALTITUDE = isMobile ? 1.2 : 0.5;
+const REGION_ALTITUDE = isMobile ? 1.4 : 0.65;
 
 const getIso = (f) => {
   const iso = f?.properties?.ISO_A2;
@@ -234,6 +234,8 @@ const Globe = ({
 
   const isActivePoint = (s) => s.__trackKind ? false : s.isoA2 === activeRegion;
 
+  // No locality labels on the globe — labels are flat-map only
+
   // Build a lookup: ISO → best representative story with coordinates
   const isoToStoryRef = useMemo(() => {
     const map = {};
@@ -409,7 +411,7 @@ const Globe = ({
   // Helpers
   const getRegionSev = (f) => {
     const iso = getIso(f);
-    return iso ? regionSeverities[iso]?.averageSeverity || 0 : 0;
+    return iso ? regionSeverities[iso]?.peakSeverity || 0 : 0;
   };
 
   const getCoverageEntry = (featureOrIso) => {
@@ -494,7 +496,7 @@ const Globe = ({
                 <div class="globe-tooltip-name">${f.properties.ADMIN}</div>
                 <div class="globe-tooltip-row">
                   <span>${t('map.severity')}</span>
-                  <strong style="color:${sev ? meta.accent : 'inherit'}">${sev || 'Quiet'}</strong>
+                  <strong style="color:${sev ? meta.accent : 'inherit'}">${sev ? meta.label : 'Quiet'}</strong>
                 </div>
                 <div class="globe-tooltip-row">
                   <span>${t('map.reports')}</span>

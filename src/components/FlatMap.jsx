@@ -7,6 +7,7 @@ import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 import { getSeverityMeta } from '../utils/mockData';
 import { getCoverageMeta } from '../utils/coverageMeta';
 import { isoToCountry, areCountriesAdjacent } from '../utils/geocoder';
+import { getStatesByIso, findStateInStory } from '../utils/statesData';
 import {
   buildCountryCoOccurrences,
   buildGeopoliticalArcData,
@@ -47,7 +48,7 @@ const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style
 
 const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 const STORY_ZOOM = isMobile ? 5 : 8;
-const REGION_ZOOM = isMobile ? 3.5 : 5;
+const REGION_ZOOM = isMobile ? 4 : 6;
 const DEFAULT_ZOOM = isMobile ? 1.5 : 2;
 const DEFAULT_CENTER = { lng: 10, lat: 20 };
 
@@ -134,12 +135,16 @@ const FlatMap = ({
     fetch(countriesUrl)
       .then((r) => r.json())
       .then((geojson) => {
-        // Preprocess: add _iso promoted id
+        // Preprocess: add _iso promoted id and _name for labels
         const processed = {
           ...geojson,
           features: geojson.features.map((f) => ({
             ...f,
-            properties: { ...f.properties, _iso: getIso(f) || '' },
+            properties: {
+              ...f.properties,
+              _iso: getIso(f) || '',
+              _name: f.properties.NAME || f.properties.ADMIN || '',
+            },
           })),
         };
         setCountries(processed);
@@ -163,11 +168,26 @@ const FlatMap = ({
     if (!map) return;
 
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
-      map.flyTo({
-        center: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
-        zoom: STORY_ZOOM,
-        duration: 1200,
-      });
+      // Try to match a state/province from the story text
+      const stateMatch = selectedStory.isoA2
+        ? findStateInStory(selectedStory.isoA2, selectedStory)
+        : null;
+
+      if (stateMatch) {
+        // Fly to the matched state centroid
+        map.flyTo({
+          center: [stateMatch.lng, stateMatch.lat],
+          zoom: STORY_ZOOM,
+          duration: 1200,
+        });
+      } else {
+        // No specific locality — stay at region zoom
+        map.flyTo({
+          center: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
+          zoom: REGION_ZOOM,
+          duration: 1200,
+        });
+      }
       prevStoryRef.current = selectedStory.id;
       hadSelectionRef.current = true;
       return;
@@ -391,7 +411,10 @@ const FlatMap = ({
           id: p.id,
           kind: p.kind,
           label: p.label,
-          color: p.kind === 'air' ? '#7ecbff' : '#44ddb0',
+          heading: p.heading ?? 0,
+          emergency: p.emergency || '',
+          icon: p.kind === 'air' ? 'plane-icon' : 'ship-icon',
+          color: p.emergency ? '#ff4444' : (p.kind === 'air' ? '#7ecbff' : '#44ddb0'),
         },
         geometry: {
           type: 'Point',
@@ -399,6 +422,18 @@ const FlatMap = ({
         },
       })),
   }), [trackingPoints]);
+
+  /* ── locality labels GeoJSON (shown only when a region is selected) ── */
+  const localityLabelsGeoJson = useMemo(() => {
+    if (!selectedRegion) return { type: 'FeatureCollection', features: [] };
+    const states = getStatesByIso(selectedRegion);
+    const features = states.map((c) => ({
+      type: 'Feature',
+      properties: { name: c.name },
+      geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+    }));
+    return { type: 'FeatureCollection', features };
+  }, [selectedRegion]);
 
   /* ── velocity spike markers GeoJSON (shown in ALL overlay modes) ── */
   const velocitySpikesGeoJson = useMemo(() => {
@@ -685,6 +720,34 @@ const FlatMap = ({
     const map = mapRef.current;
     if (!map) return;
 
+    // Check tracking icons (flights/vessels) first
+    const trackFeatures = map.queryRenderedFeatures(e.point, { layers: ['tracking-icons'] });
+    if (trackFeatures.length > 0) {
+      const props = trackFeatures[0].properties;
+      const coords = trackFeatures[0].geometry.coordinates.slice();
+      const isAir = props.kind === 'air';
+      const point = trackingPoints.find((p) => p.id === props.id);
+      const details = [];
+      if (isAir && point) {
+        if (point.altitude != null) details.push(`${Math.round(point.altitude)}m alt`);
+        if (point.velocity != null) details.push(`${Math.round(point.velocity)}m/s`);
+        if (point.originCountry) details.push(point.originCountry);
+      } else if (point) {
+        if (point.speed != null) details.push(`${point.speed.toFixed(1)}kn`);
+      }
+      setPopupInfo({
+        lng: coords[0],
+        lat: coords[1],
+        title: props.label || props.id,
+        severity: isAir ? 'Aircraft' : 'Vessel',
+        severityAccent: isAir ? '#7ecbff' : '#44ddb0',
+        severityMuted: isAir ? 'rgba(126,203,255,0.15)' : 'rgba(68,221,176,0.15)',
+        locality: details.join(' · '),
+        category: props.emergency || '',
+      });
+      return;
+    }
+
     // Check article markers first
     const markerFeatures = map.queryRenderedFeatures(e.point, { layers: ['article-markers'] });
     if (markerFeatures.length > 0) {
@@ -751,7 +814,7 @@ const FlatMap = ({
         setPopupInfo(null);
       }
     }
-  }, [newsList, onStorySelect, onRegionSelect, onArcSelect]);
+  }, [newsList, trackingPoints, onStorySelect, onRegionSelect, onArcSelect]);
 
   /* ── drill navigation ── */
   const handleDrillSelect = useCallback((regionKey) => {
@@ -788,7 +851,48 @@ const FlatMap = ({
 
   /* ── on map load ── */
   const onMapLoad = useCallback(() => {
-    // ResizeObserver is handled in the effect above (with cleanup)
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Register plane icon — compact arrow shape for dense airspace
+    const planeSize = 16;
+    const planeCanvas = document.createElement('canvas');
+    planeCanvas.width = planeSize;
+    planeCanvas.height = planeSize;
+    const pCtx = planeCanvas.getContext('2d');
+    pCtx.fillStyle = '#ffffff';
+    const cx = planeSize / 2;
+    pCtx.beginPath();
+    pCtx.moveTo(cx, 1);          // nose
+    pCtx.lineTo(cx + 6, 11);     // right wing tip
+    pCtx.lineTo(cx, 8);          // center notch
+    pCtx.lineTo(cx - 6, 11);     // left wing tip
+    pCtx.closePath();
+    pCtx.fill();
+    const planeImageData = pCtx.getImageData(0, 0, planeSize, planeSize);
+    if (!map.hasImage('plane-icon')) {
+      map.addImage('plane-icon', planeImageData, { sdf: true });
+    }
+
+    // Register ship icon — small diamond
+    const shipSize = 10;
+    const shipCanvas = document.createElement('canvas');
+    shipCanvas.width = shipSize;
+    shipCanvas.height = shipSize;
+    const sCtx = shipCanvas.getContext('2d');
+    sCtx.fillStyle = '#ffffff';
+    const scx = shipSize / 2;
+    sCtx.beginPath();
+    sCtx.moveTo(scx, 1);
+    sCtx.lineTo(shipSize - 1, scx);
+    sCtx.lineTo(scx, shipSize - 1);
+    sCtx.lineTo(1, scx);
+    sCtx.closePath();
+    sCtx.fill();
+    const shipImageData = sCtx.getImageData(0, 0, shipSize, shipSize);
+    if (!map.hasImage('ship-icon')) {
+      map.addImage('ship-icon', shipImageData, { sdf: true });
+    }
   }, []);
 
   /* ── animated pulses traveling along arc lines ── */
@@ -1041,18 +1145,58 @@ const FlatMap = ({
           />
         </Source>
 
-        {/* ── Live flights / vessels (lazy overlay) ── */}
+        {/* ── Live flights / vessels (rotated icons, zoom-scaled) ── */}
         {trackingGeoJson.features.length > 0 && (
           <Source id="tracking-markers" type="geojson" data={trackingGeoJson}>
             <Layer
-              id="tracking-dots"
-              type="circle"
+              id="tracking-icons"
+              type="symbol"
+              layout={{
+                'icon-image': ['get', 'icon'],
+                'icon-size': [
+                  'interpolate', ['linear'], ['zoom'],
+                  2, 0.3,   // zoomed out — tiny
+                  5, 0.55,
+                  8, 0.8,
+                  12, 1.2,  // zoomed in — full size
+                ],
+                'icon-rotate': ['get', 'heading'],
+                'icon-rotation-alignment': 'map',
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+              }}
               paint={{
-                'circle-color': ['get', 'color'],
-                'circle-radius': 5,
-                'circle-opacity': 0.85,
-                'circle-stroke-width': 1,
-                'circle-stroke-color': 'rgba(255,255,255,0.35)',
+                'icon-color': ['get', 'color'],
+                'icon-opacity': [
+                  'interpolate', ['linear'], ['zoom'],
+                  2, 0.5,
+                  6, 0.85,
+                ],
+              }}
+            />
+          </Source>
+        )}
+
+        {/* ── Locality labels (visible only when a region is selected) ── */}
+        {localityLabelsGeoJson.features.length > 0 && (
+          <Source id="locality-labels" type="geojson" data={localityLabelsGeoJson}>
+            <Layer
+              id="locality-label-text"
+              type="symbol"
+              layout={{
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Semibold'],
+                'text-size': 12,
+                'text-offset': [0, 1.4],
+                'text-anchor': 'top',
+                'text-allow-overlap': false,
+                'text-ignore-placement': false,
+                'text-max-width': 10,
+              }}
+              paint={{
+                'text-color': 'rgba(255, 255, 255, 0.85)',
+                'text-halo-color': 'rgba(0, 0, 0, 0.7)',
+                'text-halo-width': 1.5,
               }}
             />
           </Source>

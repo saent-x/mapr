@@ -19,6 +19,10 @@ try {
     // Strip surrounding quotes (single or double)
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
+    } else {
+      // Strip inline comments (only for unquoted values)
+      const hashIdx = value.indexOf('#');
+      if (hashIdx !== -1) value = value.slice(0, hashIdx).trim();
     }
     if (key && !process.env[key]) process.env[key] = value;
   }
