@@ -13,7 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const briefing = await buildBriefing();
+    const briefing = await buildBriefing({ writeState: false });
     const regionEvents = (briefing.events || []).filter((e) => e.isoA2 === iso);
     const snapshot = {
       timestamp: new Date().toISOString(),

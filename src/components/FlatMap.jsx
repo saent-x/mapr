@@ -550,7 +550,7 @@ const FlatMap = ({
     } else {
       setHoverInfo(null);
     }
-  }, []);
+  }, [regionSeverities, coverageStatusByIso]);
 
   const onMouseLeave = useCallback(() => {
     const map = mapRef.current;
@@ -692,13 +692,9 @@ const FlatMap = ({
     return parts;
   }, [drillRegion, selectedRegion, handleDrillBack]);
 
-  /* ── on map load: set up resize observer properly ── */
+  /* ── on map load ── */
   const onMapLoad = useCallback(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const container = map.getContainer();
-    const observer = new ResizeObserver(() => map.resize());
-    observer.observe(container);
+    // ResizeObserver is handled in the effect above (with cleanup)
   }, []);
 
   /* ── animated pulses traveling along arc lines ── */
@@ -713,8 +709,9 @@ const FlatMap = ({
 
     let frame;
     let t = 0;
+    let lastUpdateTime = 0;
 
-    const animate = () => {
+    const animate = (now) => {
       t = (t + 0.003) % 1;
       const points = [];
       for (let i = 0; i < lines.length; i++) {
@@ -730,7 +727,11 @@ const FlatMap = ({
           geometry: { type: 'Point', coordinates: [lng, lat] },
         });
       }
-      setArcPulses({ type: 'FeatureCollection', features: points });
+      // Throttle state updates to ~10fps to avoid 60fps re-renders
+      if (now - lastUpdateTime >= 100) {
+        setArcPulses({ type: 'FeatureCollection', features: points });
+        lastUpdateTime = now;
+      }
       frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);

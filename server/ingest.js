@@ -717,9 +717,11 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       const bucketHour = Math.floor(nowDate.getUTCHours() / 2) * 2;
       const bucketAt = `${nowDate.toISOString().slice(0, 10)}T${String(bucketHour).padStart(2, '0')}`;
 
-      // Count articles per ISO code in this batch
+      // Count only NEW articles per ISO code (not retained from previous snapshot)
+      const previousIds = new Set((currentSnapshot?.articles || []).map(a => a.id));
+      const newArticles = mergedArticles.filter(a => !previousIds.has(a.id));
       const isoCounts = {};
-      for (const article of mergedArticles) {
+      for (const article of newArticles) {
         const iso = article.isoA2;
         if (iso) {
           isoCounts[iso] = (isoCounts[iso] || 0) + 1;
@@ -752,7 +754,11 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         try {
           await linkArticlesToEvent(event.id, event.articleIds);
         } catch (linkErr) {
-          // FK violation — some articleIds were deduped. Non-fatal.
+          if (linkErr.message.includes('foreign key') || linkErr.message.includes('violates')) {
+            // FK violation — some articleIds were deduped. Non-fatal.
+          } else {
+            console.error('[ingest] linkArticlesToEvent failed for event', event.id, ':', linkErr.message);
+          }
         }
         // Get ALL articles for this event (from DB, not just current batch)
         const allEventArticles = await readEventArticles(event.id);

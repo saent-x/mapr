@@ -159,9 +159,15 @@ export async function saveSnapshot(events) {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const request = store.put(snapshot);
-    request.onsuccess = () => resolve();
     request.onerror = (event) => reject(event.target.error);
-    tx.oncomplete = () => db.close();
+    tx.oncomplete = () => {
+      resolve();
+      db.close();
+    };
+    tx.onerror = (event) => {
+      db.close();
+      reject(event.target.error);
+    };
   });
 }
 

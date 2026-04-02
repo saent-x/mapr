@@ -2,6 +2,8 @@ import { geocodeArticle, countryToIso } from '../utils/geocoder.js';
 import { deriveSeverity, deriveCategory } from '../utils/articleUtils.js';
 import { classifySourceType } from '../utils/sourceMetadata.js';
 import { detectLanguage } from '../utils/languageUtils.js';
+import { stripHtmlTags } from '../utils/articleText.js';
+import { getFeedCoverageCountries, getFeedCoverageIsos } from '../utils/sourceCoverage.js';
 
 export const CORS_PROXIES = [
   'https://corsproxy.io/?',
@@ -277,19 +279,6 @@ function createEmptyRssHealth() {
 
 let lastFetchHealth = createEmptyRssHealth();
 
-function getFeedCoverageCountries(feed) {
-  const coverageCountries = Array.isArray(feed?.coverageCountries)
-    ? feed.coverageCountries.filter(Boolean)
-    : [];
-
-  return [...new Set(feed?.country ? [feed.country, ...coverageCountries] : coverageCountries)];
-}
-
-function getFeedCoverageIsos(feed) {
-  return getFeedCoverageCountries(feed)
-    .map((country) => countryToIso(country))
-    .filter(Boolean);
-}
 
 function getTextContent(item, tagName) {
   const el = item.querySelector(tagName);
@@ -305,12 +294,7 @@ function getFirstText(item, selectors) {
 }
 
 function stripHtml(str) {
-  if (!str) return '';
-  try {
-    return new DOMParser().parseFromString(str, 'text/html').body.textContent.trim();
-  } catch {
-    return str.replace(/<[^>]*>/g, '').trim();
-  }
+  return stripHtmlTags(str).trim();
 }
 
 function getMediaUrl(item) {

@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const briefing = await buildBriefing();
+    const briefing = await buildBriefing({ writeState: false });
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=600');

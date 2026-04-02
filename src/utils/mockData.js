@@ -1,7 +1,5 @@
 import { subDays, subHours } from 'date-fns';
 
-const now = new Date();
-
 export const DATE_WINDOWS = [
   { id: '24h', label: '24h', i18nKey: '24h', hours: 24 },
   { id: '72h', label: '3 days', i18nKey: '3days', hours: 72 },
@@ -15,7 +13,9 @@ export const SORT_OPTIONS = [
   { id: 'latest', label: 'Recent', i18nKey: 'recent' }
 ];
 
-export const MOCK_NEWS = [
+export function getMockNews() {
+  const now = new Date();
+  return [
   {
     id: 'sd-darfur',
     title: 'Displacement surge overwhelms makeshift camps',
@@ -352,7 +352,8 @@ export const MOCK_NEWS = [
     category: 'Civil',
     coordinates: [51.5072, -0.1276]
   }
-];
+  ];
+}
 
 export const getSeverityMeta = (severity) => {
   if (severity >= 85) {

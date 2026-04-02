@@ -111,14 +111,6 @@ export function getSourceNetworkKey({ source, sourceType, sourceCountry, url }) 
   return `type-${classifySourceType({ source, sourceType, sourceCountry })}`;
 }
 
-export function getDynamicTrustScore(staticScore, credibilityRecord) {
-  if (!credibilityRecord || credibilityRecord.totalEvents < 5) {
-    return staticScore; // Not enough history
-  }
-  const corroborationRate = credibilityRecord.corroboratedEvents / credibilityRecord.totalEvents;
-  return staticScore * 0.6 + corroborationRate * 0.4;
-}
-
 export function getSourceTrustScore(sourceMeta) {
   const sourceType = classifySourceType(sourceMeta);
 

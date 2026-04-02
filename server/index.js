@@ -1,4 +1,7 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
 import { closeStorage } from './storage.js';
 import {
@@ -14,12 +17,27 @@ import {
   stopScheduler
 } from './ingest.js';
 
-// Import Vercel API handlers for stateless routes (no duplication)
+// Import shared API handlers for stateless routes
 import adminAuthHandler from '../api/admin-auth.js';
 import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DIST_DIR = path.join(__dirname, '..', 'dist');
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -46,10 +64,9 @@ function sendText(response, statusCode, text) {
 }
 
 /**
- * Adapter: run a Vercel-style handler (req, res) using Node's http request/response.
- * Vercel handlers use res.status(N).json(obj) — we shim that interface.
+ * Adapter: run an API handler with Express-style (req, res) interface.
  */
-async function runVercelHandler(handler, request, response, url) {
+async function runApiHandler(handler, request, response, url) {
   // Read body for POST requests
   let bodyRaw = '';
   if (request.method === 'POST') {
@@ -58,7 +75,7 @@ async function runVercelHandler(handler, request, response, url) {
     bodyRaw = Buffer.concat(chunks).toString();
   }
 
-  // Build a Vercel-compatible req object
+  // Build a compatible req object
   const req = {
     method: request.method,
     headers: request.headers,
@@ -66,7 +83,7 @@ async function runVercelHandler(handler, request, response, url) {
     body: bodyRaw ? (() => { try { return JSON.parse(bodyRaw); } catch { return bodyRaw; } })() : undefined,
   };
 
-  // Build a Vercel-compatible res object
+  // Build a compatible res object
   let statusCode = 200;
   const res = {
     setHeader: () => res,
@@ -135,7 +152,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname === '/api/source-catalog') {
-      return runVercelHandler(sourceCatalogHandler, request, response, url);
+      return runApiHandler(sourceCatalogHandler, request, response, url);
     }
 
     if (request.method === 'GET' && url.pathname === '/api/source-catalog/state') {
@@ -182,19 +199,45 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    // ── Stateless routes (delegate to Vercel API handlers — no duplication) ──
+    // ── Stateless routes (delegate to shared API handlers) ──
 
     if (url.pathname === '/api/admin-auth') {
-      return runVercelHandler(adminAuthHandler, request, response, url);
+      return runApiHandler(adminAuthHandler, request, response, url);
     }
 
     if (url.pathname === '/api/gdelt-proxy') {
-      return runVercelHandler(gdeltProxyHandler, request, response, url);
+      return runApiHandler(gdeltProxyHandler, request, response, url);
     }
 
-    if (request.method === 'GET' && url.pathname === '/') {
-      sendText(response, 200, 'Mapr backend is running.');
-      return;
+    // ── Static file serving (Vite build output in dist/) ──
+
+    if (request.method === 'GET') {
+      const filePath = path.join(DIST_DIR, url.pathname === '/' ? 'index.html' : url.pathname);
+      const safePath = path.resolve(filePath);
+      if (safePath.startsWith(DIST_DIR) && fs.existsSync(safePath) && fs.statSync(safePath).isFile()) {
+        const ext = path.extname(safePath);
+        const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+        const cacheControl = ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable';
+        response.writeHead(200, {
+          ...CORS_HEADERS,
+          'content-type': contentType,
+          'cache-control': cacheControl,
+        });
+        fs.createReadStream(safePath).pipe(response);
+        return;
+      }
+
+      // SPA fallback — serve index.html for client-side routes
+      const indexPath = path.join(DIST_DIR, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        response.writeHead(200, {
+          ...CORS_HEADERS,
+          'content-type': 'text/html',
+          'cache-control': 'no-cache',
+        });
+        fs.createReadStream(indexPath).pipe(response);
+        return;
+      }
     }
 
     sendJson(response, 404, { error: 'Not found' });
@@ -236,8 +279,8 @@ server.on('error', (err) => {
 
 function shutdown() {
   stopScheduler();
-  server.close(() => {
-    closeStorage();
+  server.close(async () => {
+    await closeStorage();
     process.exit(0);
   });
 }

@@ -2,7 +2,6 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, Radio } from 'lucide-react';
-import { Analytics } from '@vercel/analytics/react';
 import ErrorBoundary from './components/ErrorBoundary';
 import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
@@ -34,7 +33,7 @@ import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import { loadViews, saveViews, createView } from './utils/viewManager';
 import { decodeURLToFilters, encodeViewToURL } from './utils/viewManager';
 import {
-  MOCK_NEWS,
+  getMockNews,
   calculateRegionSeverity,
   getSeverityMeta,
   resolveDateFloor
@@ -176,7 +175,6 @@ function App() {
     if (liveNews && liveNews !== prevLiveNewsRef.current) {
       setRegionBackfills({});
     }
-    prevLiveNewsRef.current = liveNews;
   }, [liveNews]);
 
   // ── Session memory: diff against last snapshot on initial data load ──
@@ -214,6 +212,7 @@ function App() {
         console.warn('Snapshot save failed:', err.message);
       }
     })();
+    prevLiveNewsRef.current = liveNews;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveNews]);
 
@@ -285,7 +284,7 @@ function App() {
   // Base articles: live data or fallback to mock
   const baseArticles = useMemo(() => {
     if (dataSource !== 'live') {
-      return liveNews || MOCK_NEWS;
+      return liveNews || getMockNews();
     }
     return liveNews || [];
   }, [dataSource, liveNews]);
@@ -958,7 +957,6 @@ function App() {
         />
       )}
 
-      <Analytics />
     </div>
     </ErrorBoundary>
   );

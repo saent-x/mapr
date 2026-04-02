@@ -18,7 +18,13 @@ export default async function handler(req, res) {
   }
 
   const regionName = isoToCountry(iso) || iso;
-  const sourceCatalog = await readSourceCatalog();
+  let sourceCatalog;
+  try {
+    sourceCatalog = await readSourceCatalog();
+  } catch (err) {
+    console.error('readSourceCatalog failed, using empty catalog:', err);
+    sourceCatalog = [];
+  }
   const runnableFeeds = sourceCatalog.filter((feed) => isRunnableFeed(feed));
 
   // Find feeds relevant to this region

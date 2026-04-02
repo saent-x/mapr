@@ -39,7 +39,6 @@ const FilterDrawer = ({
   setLanguageFilter,
   accuracyMode,
   setAccuracyMode,
-  sourceCoverageAudit,
   precisionFilter,
   setPrecisionFilter,
   minSeverity,
