@@ -238,7 +238,7 @@ export function mergeArticlesIntoEvents(articles, existingEvents) {
         topicFingerprint: fp,
         coordinates: article.coordinates || null,
         articleIds: [article.id],
-        sourceTypes: new Set(),
+        sourceTypes: [],
         entities: { people: [], organizations: [], locations: [] }
       };
       // Populate initial entities from first article

@@ -522,7 +522,8 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       await persistArticles(mergedArticles);
 
       // ── Stage 6: Track velocity and detect spikes ──
-      const velocitySpikes = await trackAndComputeVelocity(mergedArticles);
+      const previousArticleIds = new Set((currentSnapshot?.articles || []).map(a => a.id));
+      const velocitySpikes = await trackAndComputeVelocity(mergedArticles, { previousArticleIds });
 
       // ── Stage 7: Correlate and enrich events ──
       const enrichedEvents = await correlateAndEnrichEvents({

@@ -18,17 +18,21 @@ import { computeVelocitySpikes } from '../velocityTracker.js';
  * compares against historical data, and detects velocity spikes.
  *
  * @param {Array} articles - Merged article array
+ * @param {Object} [options]
+ * @param {Set|Array} [options.previousArticleIds] - IDs of articles from the previous snapshot (to count only new ones)
  * @returns {Promise<Array>} Velocity spikes array with { iso, zScore, classification }
  */
-export async function trackAndComputeVelocity(articles) {
+export async function trackAndComputeVelocity(articles, { previousArticleIds } = {}) {
   // Compute 2-hour bucket timestamp (rounded to even hours)
   const nowDate = new Date();
   const bucketHour = Math.floor(nowDate.getUTCHours() / 2) * 2;
   const bucketAt = `${nowDate.toISOString().slice(0, 10)}T${String(bucketHour).padStart(2, '0')}`;
 
-  // Count articles per ISO code in this batch
+  // Count only NEW articles per ISO code (not retained from previous snapshot)
+  const prevIds = previousArticleIds instanceof Set ? previousArticleIds : new Set(previousArticleIds || []);
+  const newArticles = prevIds.size > 0 ? articles.filter(a => !prevIds.has(a.id)) : articles;
   const isoCounts = {};
-  for (const article of articles) {
+  for (const article of newArticles) {
     const iso = article.isoA2;
     if (iso) {
       isoCounts[iso] = (isoCounts[iso] || 0) + 1;

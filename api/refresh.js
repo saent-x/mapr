@@ -7,6 +7,13 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
+  const authHeader = (req.headers['x-admin-password'] || '').trim();
+  const adminPassword = (process.env.ADMIN_PASSWORD || '').trim();
+
+  if (!adminPassword || authHeader !== adminPassword) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     const briefing = await buildBriefing();
 

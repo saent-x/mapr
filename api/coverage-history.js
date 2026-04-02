@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   try {
     // In serverless mode we don't have persistent storage for historical data.
     // Return a snapshot based on the current briefing as a single data point.
-    const briefing = await buildBriefing();
+    const briefing = await buildBriefing({ writeState: false });
     const snapshot = {
       timestamp: new Date().toISOString(),
       coveredCountries: briefing.coverageMetrics?.coveredCountries || 0,

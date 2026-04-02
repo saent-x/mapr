@@ -63,7 +63,15 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
     });
 
     // Link articles to event (event exists in DB, per-row FK errors handled inside)
-    await linkArticlesToEvent(event.id, event.articleIds);
+    try {
+      await linkArticlesToEvent(event.id, event.articleIds);
+    } catch (linkErr) {
+      if (linkErr.message.includes('foreign key') || linkErr.message.includes('violates')) {
+        // FK violation — some articleIds were deduped. Non-fatal.
+      } else {
+        console.error('[ingest] linkArticlesToEvent failed for event', event.id, ':', linkErr.message);
+      }
+    }
 
     // Get ALL articles for this event (from DB, not just current batch)
     const allEventArticles = await readEventArticles(event.id);
