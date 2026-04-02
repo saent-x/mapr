@@ -20,8 +20,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "@vercel/analytics": "^2.0.1",
-    "afinn-165": "^2.0.2",
+"afinn-165": "^2.0.2",
     "axios": "^1.13.6",
     "compromise": "^14.15.0",
     "date-fns": "^4.1.0",

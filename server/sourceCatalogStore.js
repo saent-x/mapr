@@ -47,7 +47,7 @@ function getNamespacedKey(key, config = getKvConfig()) {
 async function runKvCommand(command) {
   const config = getKvConfig();
   if (!config) {
-    throw new Error('Vercel KV is not configured');
+    throw new Error('KV store is not configured');
   }
 
   const response = await fetch(config.baseUrl, {
@@ -71,13 +71,13 @@ export function getSourceCatalogStorageInfo() {
   const config = getKvConfig();
   if (config) {
     return {
-      backend: 'vercel-kv',
+      backend: 'upstash-kv',
       namespace: config.namespace
     };
   }
 
   return {
-    backend: process.env.VERCEL ? 'in-memory' : 'sqlite-metadata',
+    backend: 'sqlite-metadata',
     namespace: SOURCE_CATALOG_NAMESPACE
   };
 }

@@ -363,8 +363,6 @@ const Globe = ({
     return iso ? coverageStatusByIso[iso] || null : null;
   };
 
-  const getCoverageStatus = (featureOrIso) => getCoverageEntry(featureOrIso)?.status || 'uncovered';
-
   return (
     <div ref={containerRef} className="globe-wrapper">
       {size.width > 0 && size.height > 0 && (

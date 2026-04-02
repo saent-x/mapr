@@ -1,3 +1,4 @@
+// NOTE: This module uses node:crypto and must only be imported from server-side code or tests.
 import { createHash } from 'node:crypto';
 import { tokenizeHeadline } from './newsPipeline.js';
 

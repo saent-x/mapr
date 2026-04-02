@@ -107,7 +107,7 @@ export function mergeArticlesIntoEvents(articles, existingEvents) {
         topicFingerprint: fp,
         coordinates: article.coordinates || null,
         articleIds: [article.id],
-        sourceTypes: new Set()
+        sourceTypes: []
       });
     }
   }

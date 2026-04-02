@@ -49,7 +49,7 @@ async function fetchAllRss(feeds) {
 
 // ── Build Briefing ───────────────────────────────────────────
 
-export async function buildBriefing() {
+export async function buildBriefing({ writeState = true } = {}) {
   const [sourceCatalog, sourceState] = await Promise.all([
     readSourceCatalog(),
     readSourceState()
@@ -61,7 +61,9 @@ export async function buildBriefing() {
   ]);
   const checkedAt = new Date().toISOString();
   const nextSourceState = mergeSourceState(sourceCatalog, sourceState, rssResult.feedHealth, checkedAt);
-  await writeSourceState(nextSourceState);
+  if (writeState) {
+    await writeSourceState(nextSourceState);
+  }
 
   const rssArticles = rssResult.articles;
   const gdeltArticles = gdeltResult;
@@ -79,13 +81,13 @@ export async function buildBriefing() {
     rss: {
       articlesFound: rssArticles.length,
       totalFeeds: rssResult.totalFeeds,
-        healthyFeeds: rssResult.healthyFeeds,
-        failedFeeds: rssResult.failedFeeds,
-        emptyFeeds: rssResult.emptyFeeds,
-        catalogSummary: summarizeSourceCatalog(sourceCatalog, nextSourceState),
-        feeds: rssResult.feedHealth
-      },
-      backend: { status: 'ok', source: 'serverless' }
+      healthyFeeds: rssResult.healthyFeeds,
+      failedFeeds: rssResult.failedFeeds,
+      emptyFeeds: rssResult.emptyFeeds,
+      catalogSummary: summarizeSourceCatalog(sourceCatalog, nextSourceState),
+      feeds: rssResult.feedHealth
+    },
+    backend: { status: 'ok', source: 'serverless' }
   });
   const { coverageMetrics, coverageDiagnostics } = deriveBriefingCoverage({
     events,

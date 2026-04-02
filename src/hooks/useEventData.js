@@ -39,7 +39,7 @@ export default function useEventData({ onNewData } = {}) {
   }, [onNewData]);
 
   const loadLiveData = useCallback(async ({ forceRefresh = false } = {}) => {
-    // 1. Try backend API (Vercel serverless functions)
+    // 1. Try backend API
     try {
       const [briefing, historyPayload] = await Promise.all([
         forceRefresh

@@ -109,7 +109,10 @@ let schemaReady = null;
 
 async function ensureDatabase() {
   if (!schemaReady) {
-    schemaReady = ensureSchema();
+    schemaReady = ensureSchema().catch(err => {
+      schemaReady = null;
+      throw err;
+    });
   }
   await schemaReady;
   return getPool();
@@ -182,14 +185,24 @@ export async function readCoverageHistory() {
 }
 
 export async function writeCoverageHistory(history) {
-  const db = await ensureDatabase();
-  await db.query('DELETE FROM coverage_history');
+  const pool = await ensureDatabase();
   const entries = Array.isArray(history) ? history : [];
-  for (const entry of [...entries].reverse()) {
-    await db.query(
-      'INSERT INTO coverage_history (at, payload) VALUES ($1, $2)',
-      [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
-    );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM coverage_history');
+    for (const entry of [...entries].reverse()) {
+      await client.query(
+        'INSERT INTO coverage_history (at, payload) VALUES ($1, $2)',
+        [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
@@ -231,20 +244,6 @@ export async function upsertArticles(articles) {
   }
 }
 
-export async function readArticles({ since, isoA2 } = {}) {
-  const db = await ensureDatabase();
-  const conditions = [];
-  const params = [];
-  let idx = 1;
-
-  if (since) { conditions.push(`"publishedAt" >= $${idx++}`); params.push(since); }
-  if (isoA2) { conditions.push(`"isoA2" = $${idx++}`); params.push(isoA2); }
-
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  const { rows } = await db.query(`SELECT payload FROM articles ${where} ORDER BY "publishedAt" DESC`, params);
-  return rows.map(r => parseJson(r.payload, null)).filter(Boolean);
-}
-
 // ── Events ───────────────────────────────────────────────────
 
 export async function upsertEvent(event) {
@@ -274,7 +273,7 @@ export async function upsertEvent(event) {
     event.category ?? null,
     event.firstSeenAt,
     event.lastUpdatedAt,
-    event.topicFingerprint ?? null,
+    JSON.stringify(event.topicFingerprint ?? []),
     event.coordinates != null ? JSON.stringify(event.coordinates) : null,
     event.enrichment ?? '{}'
   ]);
@@ -304,24 +303,24 @@ export async function readActiveEvents({ maxAgeHours } = {}) {
     };
   });
 
-  // Populate articleIds from junction table
-  for (const event of events) {
+  // Populate articleIds from junction table (single query for all events)
+  if (events.length > 0) {
+    const eventIds = events.map(e => e.id);
     const { rows: linkRows } = await db.query(
-      'SELECT "articleId" FROM event_articles WHERE "eventId" = $1',
-      [event.id]
+      'SELECT "eventId", "articleId" FROM event_articles WHERE "eventId" = ANY($1)',
+      [eventIds]
     );
-    event.articleIds = linkRows.map(r => r.articleId);
+    const articlesByEvent = {};
+    for (const row of linkRows) {
+      if (!articlesByEvent[row.eventId]) articlesByEvent[row.eventId] = [];
+      articlesByEvent[row.eventId].push(row.articleId);
+    }
+    for (const event of events) {
+      event.articleIds = articlesByEvent[event.id] || [];
+    }
   }
 
   return events;
-}
-
-export async function updateEventLifecycle(eventId, lifecycle) {
-  const db = await ensureDatabase();
-  await db.query(
-    `UPDATE events SET lifecycle = $1, "lastUpdatedAt" = $2 WHERE id = $3`,
-    [lifecycle, new Date().toISOString(), eventId]
-  );
 }
 
 export async function linkArticlesToEvent(eventId, articleIds) {
@@ -353,12 +352,11 @@ export async function pruneResolvedEvents(maxAgeDays = 30) {
 
 export async function pruneOrphanedArticles(maxAgeDays = 30) {
   const db = await ensureDatabase();
-  const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
   await db.query(`
     DELETE FROM articles
     WHERE id NOT IN (SELECT "articleId" FROM event_articles)
-      AND "createdAt" < $1
-  `, [cutoff]);
+      AND "createdAt"::timestamptz < NOW() - INTERVAL '${Number(maxAgeDays)} days'
+  `);
 }
 
 // ── Source Credibility ───────────────────────────────────────
@@ -374,12 +372,6 @@ export async function updateSourceCredibility(sourceKey, wasCorroborated) {
       "corroboratedEvents" = source_credibility."corroboratedEvents" + $2,
       "lastUpdatedAt" = now()::text
   `, [sourceKey, inc]);
-}
-
-export async function readSourceCredibility(sourceKey) {
-  const db = await ensureDatabase();
-  const { rows } = await db.query('SELECT * FROM source_credibility WHERE "sourceKey" = $1', [sourceKey]);
-  return rows.length ? rows[0] : null;
 }
 
 // ── Velocity History ─────────────────────────────────────────

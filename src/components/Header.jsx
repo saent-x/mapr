@@ -68,7 +68,7 @@ const Header = ({
   // Apply saved theme on mount
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-  }, []);
+  }, [theme]);
 
   // Build search results: regions + stories (uses debounced query for performance)
   const searchResults = useMemo(() => {

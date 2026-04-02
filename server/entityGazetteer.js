@@ -104,20 +104,3 @@ export const GAZETTEER_ORGS = [
   { name: 'France 24', aliases: ['France24'], type: 'news_agency' },
 ];
 
-export const GAZETTEER_ROLES = [
-  { pattern: /\bpresident\b/i, type: 'leader' },
-  { pattern: /\bprime\s+minister\b/i, type: 'leader' },
-  { pattern: /\bchancellor\b/i, type: 'leader' },
-  { pattern: /\b(king|queen|emir|sultan|monarch)\b/i, type: 'leader' },
-  { pattern: /\bminister\s+of\s+(defense|defence)\b/i, type: 'official' },
-  { pattern: /\bdefense\s+minister\b/i, type: 'official' },
-  { pattern: /\bdefence\s+minister\b/i, type: 'official' },
-  { pattern: /\bminister\s+of\s+foreign\s+affairs\b/i, type: 'official' },
-  { pattern: /\bforeign\s+minister\b/i, type: 'official' },
-  { pattern: /\bminister\s+of\s+(the\s+)?interior\b/i, type: 'official' },
-  { pattern: /\bsecretary\s+of\s+state\b/i, type: 'official' },
-  { pattern: /\bsecretary[\s-]general\b/i, type: 'official' },
-  { pattern: /\b(general|commander|commander[\s-]in[\s-]chief|chief\s+of\s+(staff|defense))\b/i, type: 'military' },
-  { pattern: /\bambassador\b/i, type: 'diplomat' },
-  { pattern: /\bspecial\s+(envoy|representative)\b/i, type: 'diplomat' },
-];
