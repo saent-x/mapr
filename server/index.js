@@ -1,4 +1,42 @@
 import http from 'node:http';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const DIST_DIR = join(__dirname, '..', 'dist');
+const HAS_DIST = existsSync(DIST_DIR);
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.webp': 'image/webp',
+  '.webm': 'video/webm',
+  '.mp4': 'video/mp4',
+  '.gif': 'image/gif',
+};
+
+function serveStaticFile(response, filePath) {
+  const ext = extname(filePath);
+  const mime = MIME_TYPES[ext] || 'application/octet-stream';
+  const stat = statSync(filePath);
+  response.writeHead(200, {
+    'Content-Type': mime,
+    'Content-Length': stat.size,
+    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+  });
+  createReadStream(filePath).pipe(response);
+}
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
 import { closeStorage } from './storage.js';
 import {
@@ -416,9 +454,21 @@ const server = http.createServer(async (request, response) => {
       return withTimeout(() => runVercelHandler(gdeltProxyHandler, request, response, url));
     }
 
-    if (request.method === 'GET' && url.pathname === '/') {
-      sendText(response, 200, 'Mapr backend is running.');
-      return;
+    // ── Serve static frontend from dist/ ──
+    if (HAS_DIST && request.method === 'GET') {
+      // Try exact file match (e.g. /assets/index-abc.js)
+      const safePath = url.pathname.replace(/\.\./g, '');
+      const filePath = join(DIST_DIR, safePath);
+      if (existsSync(filePath) && statSync(filePath).isFile()) {
+        serveStaticFile(response, filePath);
+        return;
+      }
+      // SPA fallback — serve index.html for all non-API routes
+      const indexPath = join(DIST_DIR, 'index.html');
+      if (existsSync(indexPath)) {
+        serveStaticFile(response, indexPath);
+        return;
+      }
     }
 
     sendJson(response, 404, { error: 'Not found', code: 'NOT_FOUND' });
