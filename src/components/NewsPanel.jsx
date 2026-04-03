@@ -219,8 +219,12 @@ const NewsPanel = ({
     }
   }, [expandedId]);
 
-  // Auto-expand + scroll when a story is selected externally (e.g. search)
+  // Auto-expand + scroll when a story is selected externally (e.g. map click, search)
   useEffect(() => {
+    if (internalToggleRef.current) {
+      internalToggleRef.current = false;
+      return;
+    }
     if (selectedStoryId && news.some((story) => story.id === selectedStoryId)) {
       setExpandedId(selectedStoryId);
     }
@@ -240,9 +244,17 @@ const NewsPanel = ({
     }
   }, [expandedId, news]);
 
+  const internalToggleRef = useRef(false);
   const handleCardClick = (story) => {
-    onStorySelect(story);
-    setExpandedId((prev) => (prev === story.id ? null : story.id));
+    const isCollapsing = expandedId === story.id;
+    internalToggleRef.current = true;
+    if (isCollapsing) {
+      setExpandedId(null);
+      useUIStore.getState().clearStory();
+    } else {
+      setExpandedId(story.id);
+      onStorySelect(story);
+    }
   };
 
   const getSupportingEvidence = (story) => {

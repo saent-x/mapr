@@ -49,6 +49,10 @@ const useUIStore = create((set, get) => ({
     selectedArc: null,
   }),
 
+  clearStory: () => set({
+    selectedStoryId: null,
+  }),
+
   selectArc: (arc) => set({
     selectedArc: arc,
     selectedRegion: null,

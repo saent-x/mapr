@@ -20,7 +20,7 @@ import {
   broadcast as sseBroadcast,
   clientCount as sseClientCount
 } from './sse.js';
-import { getCachedAircraft, startFlightTracking, stopFlightTracking } from './flightTracker.js';
+import { getCachedAircraft, startFlightTracking, stopFlightTracking, getLastPollTime } from './flightTracker.js';
 import { getCachedVessels, startShipTracking, stopShipTracking, startBatchPush } from './shipTracker.js';
 import {
   buildClearSessionCookie,
@@ -274,13 +274,18 @@ const server = http.createServer(async (request, response) => {
 
     // ── Flight tracking data ──
     if (request.method === 'GET' && url.pathname === '/api/flights') {
-      sendJson(response, 200, { aircraft: getCachedAircraft(), fetchedAt: new Date().toISOString() });
+      sendJson(response, 200, { aircraft: getCachedAircraft(), lastPollTime: getLastPollTime(), fetchedAt: new Date().toISOString() });
       return;
     }
 
     // ── Ship tracking data ──
     if (request.method === 'GET' && url.pathname === '/api/vessels') {
-      sendJson(response, 200, { vessels: getCachedVessels(), fetchedAt: new Date().toISOString() });
+      const enabled = !!process.env.AISSTREAM_API_KEY;
+      sendJson(response, 200, {
+        vessels: getCachedVessels(),
+        enabled,
+        fetchedAt: new Date().toISOString(),
+      });
       return;
     }
 
@@ -437,8 +442,12 @@ server.listen(PORT, HOST, async () => {
   }
 
   startScheduler();
-  startFlightTracking();
-  startShipTracking();
+  if (process.env.ENABLE_TRACKING === 'true') {
+    startFlightTracking();
+    startShipTracking();
+  } else {
+    console.log('[server] Tracking disabled (set ENABLE_TRACKING=true to enable)');
+  }
   if (process.env.AISSTREAM_API_KEY) {
     startBatchPush((vessels) => {
       if (sseClientCount() === 0) return;

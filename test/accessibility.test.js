@@ -199,9 +199,9 @@ describe('accessibility and UX polish', () => {
       assert.match(code, /dataSource.*mock/, 'Should fall back to mock data source');
     });
 
-    it('App.jsx imports MOCK_NEWS for fallback', () => {
+    it('App.jsx imports getMockNews for fallback', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      assert.match(code, /MOCK_NEWS/, 'Should use MOCK_NEWS as fallback data');
+      assert.match(code, /getMockNews/, 'Should use getMockNews as fallback data');
     });
 
     it('MapLoadingFallback is rendered during lazy load', () => {

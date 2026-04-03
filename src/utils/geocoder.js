@@ -1353,3 +1353,17 @@ export function areCountriesAdjacent(iso1, iso2) {
 }
 
 export const KNOWN_COUNTRY_NAMES = Object.keys(COUNTRY_TO_ISO).sort();
+
+/**
+ * Return all known cities/localities for a given ISO-A2 country code.
+ * @param {string} iso — e.g. "NG" for Nigeria
+ * @returns {Array<{ name: string, lat: number, lng: number }>}
+ */
+export function getCitiesByIso(iso) {
+  if (!iso) return [];
+  const countryName = ISO_TO_COUNTRY[iso.toUpperCase()];
+  if (!countryName) return [];
+  return LOCATIONS
+    .filter((loc) => loc.country === countryName)
+    .map(({ name, lat, lng }) => ({ name, lat, lng }));
+}

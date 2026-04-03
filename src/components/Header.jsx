@@ -48,6 +48,7 @@ const Header = ({
   children,
 }) => {
   const { t, i18n } = useTranslation();
+  const trackingEnabled = import.meta.env.VITE_ENABLE_TRACKING === 'true';
   const showFlightsLayer = useFilterStore((s) => s.showFlightsLayer);
   const showVesselsLayer = useFilterStore((s) => s.showVesselsLayer);
   const toggleFlightsLayer = useFilterStore((s) => s.toggleFlightsLayer);
@@ -355,26 +356,30 @@ const Header = ({
               <Layers size={12} />
               GEO
             </button>
-            <button
-              type="button"
-              aria-pressed={showFlightsLayer}
-              className={`map-toggle-btn ${showFlightsLayer ? 'is-active' : ''}`}
-              onClick={toggleFlightsLayer}
-              title={t('header.trackingFlights')}
-            >
-              <Plane size={12} />
-              ADS-B
-            </button>
-            <button
-              type="button"
-              aria-pressed={showVesselsLayer}
-              className={`map-toggle-btn ${showVesselsLayer ? 'is-active' : ''}`}
-              onClick={toggleVesselsLayer}
-              title={t('header.trackingVessels')}
-            >
-              <Ship size={12} />
-              AIS
-            </button>
+            {trackingEnabled && (
+              <button
+                type="button"
+                aria-pressed={showFlightsLayer}
+                className={`map-toggle-btn ${showFlightsLayer ? 'is-active' : ''}`}
+                onClick={toggleFlightsLayer}
+                title="Live flight positions (OpenSky ADS-B)"
+              >
+                <Plane size={12} />
+                Flights
+              </button>
+            )}
+            {trackingEnabled && (
+              <button
+                type="button"
+                aria-pressed={showVesselsLayer}
+                className={`map-toggle-btn ${showVesselsLayer ? 'is-active' : ''}`}
+                onClick={toggleVesselsLayer}
+                title="Live ship positions (AIS maritime tracking)"
+              >
+                <Ship size={12} />
+                Ships
+              </button>
+            )}
           </div>
         )}
 

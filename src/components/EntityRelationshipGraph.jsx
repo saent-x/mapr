@@ -27,11 +27,11 @@ const SELECTED_RING = 3;
 /* ── Simple force simulation ── */
 
 function initSimulation(nodes, edges, width, height) {
-  // Place nodes randomly in center area
+  // Place nodes spread across the full canvas area
   const simNodes = nodes.map((n, i) => ({
     ...n,
-    x: width / 2 + (Math.random() - 0.5) * width * 0.6,
-    y: height / 2 + (Math.random() - 0.5) * height * 0.6,
+    x: width / 2 + (Math.random() - 0.5) * width * 0.85,
+    y: height / 2 + (Math.random() - 0.5) * height * 0.85,
     vx: 0,
     vy: 0,
     radius: nodeRadius(n.mentionCount, nodes),
@@ -61,7 +61,7 @@ function nodeRadius(mentionCount, allNodes) {
 function tickSimulation(simNodes, simEdges, width, height, alpha) {
   const k = alpha;
 
-  // 1. Repulsion (all pairs, O(n²) — fine for < 500 nodes)
+  // 1. Repulsion (all pairs) — stronger force pushes nodes apart
   for (let i = 0; i < simNodes.length; i++) {
     for (let j = i + 1; j < simNodes.length; j++) {
       const a = simNodes[i];
@@ -69,7 +69,10 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
       let dx = b.x - a.x;
       let dy = b.y - a.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = (200 * k) / (dist * dist);
+      // Minimum separation based on node sizes
+      const minSep = a.radius + b.radius + 20;
+      const repulsion = dist < minSep ? 800 : 500;
+      const force = (repulsion * k) / (dist * dist);
       dx *= force / dist;
       dy *= force / dist;
       a.vx -= dx;
@@ -79,15 +82,15 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
     }
   }
 
-  // 2. Attraction along edges (spring)
+  // 2. Attraction along edges (spring) — longer ideal distance
   for (const edge of simEdges) {
     const a = edge.sourceNode;
     const b = edge.targetNode;
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const idealDist = 100;
-    const force = (dist - idealDist) * 0.005 * k * Math.min(edge.weight, 5);
+    const idealDist = 180;
+    const force = (dist - idealDist) * 0.004 * k * Math.min(edge.weight, 5);
     const fx = (dx / dist) * force;
     const fy = (dy / dist) * force;
     a.vx += fx;
@@ -96,22 +99,23 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
     b.vy -= fy;
   }
 
-  // 3. Center gravity
+  // 3. Gentle center gravity — just enough to keep graph on screen
   for (const node of simNodes) {
-    node.vx += (width / 2 - node.x) * 0.001 * k;
-    node.vy += (height / 2 - node.y) * 0.001 * k;
+    node.vx += (width / 2 - node.x) * 0.0004 * k;
+    node.vy += (height / 2 - node.y) * 0.0004 * k;
   }
 
   // 4. Apply velocities with damping
+  const padding = 30;
   for (const node of simNodes) {
-    node.vx *= 0.85;
-    node.vy *= 0.85;
+    node.vx *= 0.82;
+    node.vy *= 0.82;
     node.x += node.vx;
     node.y += node.vy;
-    // Keep within bounds
+    // Keep within bounds with padding
     const r = node.radius;
-    node.x = Math.max(r, Math.min(width - r, node.x));
-    node.y = Math.max(r, Math.min(height - r, node.y));
+    node.x = Math.max(r + padding, Math.min(width - r - padding, node.x));
+    node.y = Math.max(r + padding, Math.min(height - r - padding, node.y));
   }
 }
 
@@ -192,20 +196,60 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
 
 /* ── React component ── */
 
+const TYPE_LABELS = { person: 'Person', organization: 'Organization', location: 'Location' };
+
 export default function EntityRelationshipGraph({
   nodes,
   edges,
+  events = [],
   selectedEntity,
   onEntitySelect,
   width = 800,
   height = 600,
 }) {
   const canvasRef = useRef(null);
+  const wrapperRef = useRef(null);
   const simRef = useRef(null);
   const animRef = useRef(null);
   const alphaRef = useRef(1);
   const [hoveredEntity, setHoveredEntity] = useState(null);
+  const [tooltipPos, setTooltipPos] = useState(null);
   const hoveredRef = useRef(null);
+
+  // Build event lookup for tooltip
+  const eventById = useMemo(() => {
+    const map = new Map();
+    for (const e of events) map.set(e.id, e);
+    return map;
+  }, [events]);
+
+  // Tooltip content for hovered node
+  const tooltipData = useMemo(() => {
+    if (!hoveredEntity || !simRef.current) return null;
+    const node = simRef.current.simNodes.find((n) => n.id === hoveredEntity);
+    if (!node) return null;
+
+    // Count connections
+    const connectionCount = simRef.current.simEdges.filter(
+      (e) => e.source === node.id || e.target === node.id
+    ).length;
+
+    // Get top event titles (up to 3)
+    const eventTitles = (node.eventIds || [])
+      .slice(0, 3)
+      .map((eid) => eventById.get(eid)?.title)
+      .filter(Boolean);
+
+    return {
+      name: node.name,
+      type: TYPE_LABELS[node.type] || node.type,
+      color: TYPE_COLORS[node.type] || '#999',
+      mentions: node.mentionCount || 0,
+      connections: connectionCount,
+      eventCount: (node.eventIds || []).length,
+      eventTitles,
+    };
+  }, [hoveredEntity, eventById]);
 
   // Initialize simulation when nodes/edges change
   useEffect(() => {
@@ -290,22 +334,71 @@ export default function EntityRelationshipGraph({
     if (id !== hoveredRef.current) {
       setHoveredEntity(id);
     }
+    if (node && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setTooltipPos({
+        x: e.clientX - rect.left + 12,
+        y: e.clientY - rect.top - 8,
+      });
+    } else {
+      setTooltipPos(null);
+    }
     if (canvasRef.current) {
       canvasRef.current.style.cursor = node ? 'pointer' : 'default';
     }
   }, [findNodeAt]);
 
+  const handleMouseLeave = useCallback(() => {
+    setHoveredEntity(null);
+    setTooltipPos(null);
+  }, []);
+
   return (
-    <canvas
-      ref={canvasRef}
-      className="entity-graph-canvas"
-      width={width}
-      height={height}
-      onClick={handleClick}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setHoveredEntity(null)}
-      role="img"
-      aria-label="Entity relationship graph"
-    />
+    <div ref={wrapperRef} style={{ position: 'relative', width, height }}>
+      <canvas
+        ref={canvasRef}
+        className="entity-graph-canvas"
+        width={width}
+        height={height}
+        onClick={handleClick}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        role="img"
+        aria-label="Entity relationship graph"
+      />
+      {tooltipData && tooltipPos && (
+        <div
+          className="entity-tooltip"
+          style={{
+            left: tooltipPos.x,
+            top: tooltipPos.y,
+          }}
+        >
+          <div className="entity-tooltip-header">
+            <span className="entity-tooltip-badge" style={{ background: tooltipData.color }}>
+              {tooltipData.type}
+            </span>
+            <span className="entity-tooltip-name">{tooltipData.name}</span>
+          </div>
+          <div className="entity-tooltip-stats">
+            <span>{tooltipData.mentions} mention{tooltipData.mentions !== 1 ? 's' : ''}</span>
+            <span className="entity-tooltip-sep" />
+            <span>{tooltipData.connections} connection{tooltipData.connections !== 1 ? 's' : ''}</span>
+            <span className="entity-tooltip-sep" />
+            <span>{tooltipData.eventCount} event{tooltipData.eventCount !== 1 ? 's' : ''}</span>
+          </div>
+          {tooltipData.eventTitles.length > 0 && (
+            <ul className="entity-tooltip-events">
+              {tooltipData.eventTitles.map((title, i) => (
+                <li key={i}>{title}</li>
+              ))}
+              {tooltipData.eventCount > 3 && (
+                <li className="entity-tooltip-more">+{tooltipData.eventCount - 3} more</li>
+              )}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
