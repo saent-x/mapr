@@ -13,7 +13,7 @@
     "preview": "vite preview"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12.0"
   },
   "keywords": [],
   "author": "",
