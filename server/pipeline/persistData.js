@@ -7,6 +7,8 @@
 
 import {
   appendHistory,
+  enforceDbSizeLimit,
+  getDbSize,
   linkArticlesToEvent,
   pruneOrphanedArticles,
   pruneResolvedEvents,
@@ -38,7 +40,19 @@ export async function persistArticles(articles) {
 export async function pruneOldData({ resolvedDays = 30, orphanDays = 7 } = {}) {
   await pruneResolvedEvents(resolvedDays);
   await pruneOrphanedArticles(orphanDays);
+  // Enforce DB size cap (default 400 MB, hard ceiling 500 MB).
+  // Trims oldest articles when over the soft limit; no-op below.
+  try {
+    const result = await enforceDbSizeLimit();
+    if (result.deletedArticles > 0) {
+      console.log(`[ingest] DB size trim: ${result.startMb} → ${result.endMb} MB (deleted ${result.deletedArticles} articles)`);
+    }
+  } catch (err) {
+    console.warn('[ingest] enforceDbSizeLimit failed:', err.message);
+  }
 }
+
+export { getDbSize, enforceDbSizeLimit };
 
 /**
  * Write the final snapshot to storage.

@@ -38,7 +38,7 @@ function serveStaticFile(response, filePath) {
   createReadStream(filePath).pipe(response);
 }
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
-import { closeStorage } from './storage.js';
+import { closeStorage, enforceDbSizeLimit, getDbSize, getTableSizes } from './storage.js';
 import {
   getBriefing,
   getCoverageHistory,
@@ -292,7 +292,41 @@ const server = http.createServer(async (request, response) => {
     if (request.method === 'GET' && url.pathname === '/api/health') {
       const health = await withTimeout(() => getHealth());
       health.circuitBreaker = getCircuitSummary();
+      try {
+        const size = await getDbSize();
+        health.database = {
+          ...size,
+          limitMb: Number(process.env.MAPR_DB_SIZE_LIMIT_MB || 400),
+          hardMb: Number(process.env.MAPR_DB_SIZE_HARD_MB || 500)
+        };
+      } catch { /* ignore */ }
       sendJson(response, 200, health);
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/admin/db-size') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const [size, tables] = await Promise.all([getDbSize(), getTableSizes()]);
+      sendJson(response, 200, {
+        ...size,
+        limitMb: Number(process.env.MAPR_DB_SIZE_LIMIT_MB || 400),
+        targetMb: Number(process.env.MAPR_DB_SIZE_TARGET_MB || 0) || null,
+        hardMb: Number(process.env.MAPR_DB_SIZE_HARD_MB || 500),
+        tables
+      });
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/db-trim') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const result = await withTimeout(() => enforceDbSizeLimit(), 120_000);
+      sendJson(response, 200, result);
       return;
     }
 

@@ -465,6 +465,145 @@ export async function pruneOrphanedArticles(maxAgeDays = 30) {
   `);
 }
 
+// ── DB Size Management ───────────────────────────────────────
+//
+// Postgres free tiers (Neon) cap at 500 MB. Default soft limit 400 MB.
+// When DB exceeds limit, trim oldest articles in batches until under target.
+// CASCADE on event_articles FK auto-cleans junctions; orphaned events pruned after.
+//
+// Env vars:
+//   MAPR_DB_SIZE_LIMIT_MB  — soft ceiling (default 400). Trim triggered above this.
+//   MAPR_DB_SIZE_TARGET_MB — trim down to this (default = limit - 50).
+//   MAPR_DB_SIZE_HARD_MB   — hard ceiling (default 500). Aggressive trim above.
+//   MAPR_DB_TRIM_BATCH     — rows deleted per pass (default 1000).
+
+export async function getDbSize() {
+  const db = await ensureDatabase();
+  try {
+    const { rows } = await db.query(`SELECT pg_database_size(current_database()) AS bytes`);
+    const bytes = Number(rows[0]?.bytes || 0);
+    return {
+      bytes,
+      mb: +(bytes / (1024 * 1024)).toFixed(2)
+    };
+  } catch (err) {
+    console.warn('[storage] getDbSize failed:', err.message);
+    return { bytes: 0, mb: 0 };
+  }
+}
+
+export async function getTableSizes() {
+  const db = await ensureDatabase();
+  try {
+    const { rows } = await db.query(`
+      SELECT relname AS table, pg_total_relation_size(C.oid) AS bytes
+      FROM pg_class C
+      LEFT JOIN pg_namespace N ON N.oid = C.relnamespace
+      WHERE nspname = 'public' AND relkind = 'r'
+      ORDER BY bytes DESC
+    `);
+    return rows.map(r => ({ table: r.table, mb: +(Number(r.bytes) / (1024 * 1024)).toFixed(2) }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Trim oldest articles until DB size drops below target.
+ * Returns summary { startMb, endMb, deletedArticles, deletedEvents, passes }.
+ */
+export async function enforceDbSizeLimit({
+  limitMb = Number(process.env.MAPR_DB_SIZE_LIMIT_MB || 400),
+  targetMb = Number(process.env.MAPR_DB_SIZE_TARGET_MB || 0) || null,
+  hardMb = Number(process.env.MAPR_DB_SIZE_HARD_MB || 500),
+  batchSize = Number(process.env.MAPR_DB_TRIM_BATCH || 1000),
+  maxPasses = 40
+} = {}) {
+  const db = await ensureDatabase();
+  const target = targetMb ?? Math.max(50, limitMb - 50);
+  const start = await getDbSize();
+
+  if (start.mb < limitMb) {
+    return { startMb: start.mb, endMb: start.mb, deletedArticles: 0, deletedEvents: 0, passes: 0, limitMb, targetMb: target };
+  }
+
+  // Aggressive batch when over hard ceiling
+  const effectiveBatch = start.mb >= hardMb ? batchSize * 4 : batchSize;
+
+  console.log(`[storage] DB size ${start.mb} MB exceeds limit ${limitMb} MB. Trimming to ${target} MB...`);
+
+  let deletedArticles = 0;
+  let deletedEvents = 0;
+  let passes = 0;
+  let lastSize = start.mb;
+
+  for (let i = 0; i < maxPasses; i++) {
+    passes++;
+    // Delete oldest articles by publishedAt (fall back to createdAt). CASCADE clears event_articles.
+    const { rowCount: aDel } = await db.query(`
+      DELETE FROM articles
+      WHERE id IN (
+        SELECT id FROM articles
+        ORDER BY COALESCE("publishedAt", "createdAt") ASC NULLS FIRST
+        LIMIT $1
+      )
+    `, [effectiveBatch]);
+    deletedArticles += aDel || 0;
+
+    // Drop events that lost all their articles
+    const { rowCount: eDel } = await db.query(`
+      DELETE FROM events
+      WHERE id NOT IN (SELECT DISTINCT "eventId" FROM event_articles)
+    `);
+    deletedEvents += eDel || 0;
+
+    // VACUUM to reclaim space — without it pg_database_size won't drop
+    await db.query('VACUUM articles').catch(() => {});
+    await db.query('VACUUM events').catch(() => {});
+    await db.query('VACUUM event_articles').catch(() => {});
+
+    const cur = await getDbSize();
+    if (cur.mb <= target || aDel === 0) {
+      lastSize = cur.mb;
+      break;
+    }
+    // Stuck: size not dropping despite deletes
+    if (Math.abs(lastSize - cur.mb) < 0.1 && i > 2) {
+      console.warn(`[storage] DB size not shrinking (${cur.mb} MB). Stopping trim.`);
+      lastSize = cur.mb;
+      break;
+    }
+    lastSize = cur.mb;
+  }
+
+  // Trim oversized aux tables too
+  await db.query(`
+    DELETE FROM refresh_history WHERE id NOT IN (
+      SELECT id FROM refresh_history ORDER BY id DESC LIMIT 72
+    )
+  `).catch(() => {});
+  await db.query(`
+    DELETE FROM coverage_history WHERE id NOT IN (
+      SELECT id FROM coverage_history ORDER BY id DESC LIMIT 96
+    )
+  `).catch(() => {});
+  await db.query(`
+    DELETE FROM velocity_history WHERE "bucketAt" < $1
+  `, [new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()]).catch(() => {});
+
+  console.log(`[storage] Trim done: ${start.mb} MB → ${lastSize} MB (deleted ${deletedArticles} articles, ${deletedEvents} events in ${passes} passes)`);
+
+  return {
+    startMb: start.mb,
+    endMb: lastSize,
+    deletedArticles,
+    deletedEvents,
+    passes,
+    limitMb,
+    targetMb: target
+  };
+}
+
 // ── Source Credibility ───────────────────────────────────────
 
 export async function updateSourceCredibility(sourceKey, wasCorroborated) {
