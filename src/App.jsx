@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, AlertTriangle, Eye, X, Users, Building2, MapPin } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -38,7 +38,6 @@ const FlatMap = lazy(() => import('./components/FlatMap'));
 function App() {
   const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
 
   /* ── stores ── */
   const {
@@ -235,13 +234,7 @@ function App() {
     coverageHistory, dataSource, coverageDiagnostics,
   });
 
-  const selectRegion = useUIStore((s) => s.selectRegion);
-  const handleRegionSelect = useCallback((iso) => {
-    if (!iso) { selectRegion(null); return; }
-    // Always route to the region tab; region page reads :iso from the URL,
-    // so there's no need to also toggle the `selectedRegion` store slice here.
-    navigate(`/region/${String(iso).toUpperCase()}`);
-  }, [navigate, selectRegion]);
+  const handleRegionSelect = useUIStore((s) => s.selectRegion);
   const handleStorySelect = useUIStore((s) => s.selectStory);
   const handleArcSelect = useUIStore((s) => s.selectArc);
   const handleClosePanel = useUIStore((s) => s.closePanel);
@@ -470,6 +463,7 @@ function App() {
       <NewsPanel
         key={panelRegion || 'closed'}
         isOpen={panelOpen && !selectedArc}
+        regionIso={panelRegion}
         regionName={panelRegionName}
         regionStatus={panelRegionStatus}
         regionData={panelRegionData}

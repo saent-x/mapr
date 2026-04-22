@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink } from 'lucide-react';
@@ -10,6 +10,7 @@ import { canonicalizeArticles } from '../utils/newsPipeline';
 import { resolveDateFloor } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 import MapLoadingFallback from '../components/MapLoadingFallback';
+import { ArticleSheet } from '../components/NewsPanel';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
 
@@ -50,6 +51,8 @@ function lifecycleMeta(lifecycle) {
 export default function RegionDetailPage() {
   const { iso } = useParams();
   const { t } = useTranslation();
+
+  const [openStory, setOpenStory] = useState(null);
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const regionBackfills = useNewsStore((s) => s.regionBackfills);
@@ -154,7 +157,17 @@ export default function RegionDetailPage() {
           const conf = typeof story.confidence === 'number' ? story.confidence : null;
           const lMeta = lifecycleMeta(story.lifecycle);
           return (
-            <div key={story.id} className="news-item">
+            <div
+              key={story.id}
+              className="news-item"
+              role="button"
+              tabIndex={0}
+              aria-label={story.title}
+              onClick={() => setOpenStory(story)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenStory(story); }
+              }}
+            >
               <div className="news-meta">
                 <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
                 {story.category && <span className="tag">{story.category}</span>}
@@ -180,6 +193,7 @@ export default function RegionDetailPage() {
                     href={story.url}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     style={{ color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
                   >
                     <ExternalLink size={10} aria-hidden /> OPEN
@@ -215,6 +229,7 @@ export default function RegionDetailPage() {
           <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
         </div>
       </div>
+      <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { ExternalLink, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
 import useUIStore from '../stores/uiStore.js';
 import { getSourceHost } from '../utils/urlUtils';
@@ -75,7 +76,7 @@ function NewsThumb({ story }) {
   );
 }
 
-function ArticleSheet({ story, onClose }) {
+export function ArticleSheet({ story, onClose }) {
   const { t } = useTranslation();
   if (!story) return null;
   const tier = sevTier(story.severity);
@@ -277,6 +278,7 @@ function ArticleSheet({ story, onClose }) {
  */
 const NewsPanel = ({
   isOpen,
+  regionIso,
   regionName,
   regionData,
   news = [],
@@ -325,6 +327,18 @@ const NewsPanel = ({
           )}
         </div>
         <div className="panel-body" aria-hidden={collapsed || undefined}>
+          {regionIso && (
+            <Link
+              to={`/region/${String(regionIso).toUpperCase()}`}
+              className="feed-region-link"
+              aria-label={`Open region page for ${regionName || regionIso}`}
+            >
+              <Maximize2 size={11} aria-hidden />
+              <span className="feed-region-link-label">VIEW REGION PAGE</span>
+              <span className="feed-region-link-iso">{String(regionIso).toUpperCase()}</span>
+              <span className="feed-region-link-arrow">→</span>
+            </Link>
+          )}
           {items.length === 0 && (
             <div className="news-panel-empty">NO ITEMS</div>
           )}
