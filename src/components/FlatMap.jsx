@@ -72,16 +72,29 @@ const FlatMap = ({
   }, []);
 
   /* ── resize handling ── */
+  const compactBboxRef = useRef(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(() => {
-      try { map.resize(); } catch { /* ignore */ }
+      try {
+        map.resize();
+        const bbox = compactBboxRef.current;
+        if (compact && bbox) {
+          map.fitBounds(
+            [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+            { padding: 8, duration: 0, animate: false },
+          );
+          const fitZoom = map.getZoom();
+          map.setMinZoom(fitZoom);
+          map.setMaxZoom(fitZoom + 1.5);
+        }
+      } catch { /* ignore */ }
     });
     const container = map.getContainer?.();
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [compact]);
 
   /* ── fly-to logic ── */
   useEffect(() => {
@@ -156,7 +169,7 @@ const FlatMap = ({
     }
   }, [drillRegion]);
 
-  /* ── compact-mode: fit to country bbox (minimap on region page) ── */
+  /* ── compact-mode: fit + lock to country bbox (minimap on region page) ── */
   const bboxFittedRef = useRef(null);
   useEffect(() => {
     if (!compact || !selectedRegion) return undefined;
@@ -169,8 +182,21 @@ const FlatMap = ({
       try {
         map.fitBounds(
           [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
-          { padding: 24, duration: 0, maxZoom: 6 },
+          { padding: 8, duration: 0, animate: false },
         );
+        const fitZoom = map.getZoom();
+        map.setMaxBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]]);
+        map.setMinZoom(fitZoom);
+        map.setMaxZoom(fitZoom + 1.5);
+        map.dragPan?.disable?.();
+        map.scrollZoom?.disable?.();
+        map.doubleClickZoom?.disable?.();
+        map.touchZoomRotate?.disable?.();
+        map.keyboard?.disable?.();
+        map.boxZoom?.disable?.();
+        map.dragRotate?.disable?.();
+        map.touchPitch?.disable?.();
+        compactBboxRef.current = bbox;
         bboxFittedRef.current = selectedRegion;
       } catch { /* ignore */ }
     };
