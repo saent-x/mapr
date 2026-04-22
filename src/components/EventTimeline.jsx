@@ -1,285 +1,186 @@
-import React, { useMemo, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useNewsStore from '../stores/newsStore';
+import { ChevronLeft, ChevronRight, Play, Pause, FastForward } from 'lucide-react';
 import {
   buildBuckets,
-  pickTimelineEvents,
-  timestampToFraction,
   fractionToTimestamp,
-  getLifecycleColor,
   getPredominantColor,
-  generateDayTicks,
-  LIFECYCLE_COLORS,
   BUCKET_COUNT,
+  WINDOW_MS,
 } from '../utils/timelineHelpers.js';
 
-const MAX_VISIBLE_EVENTS = 20;
-
-/**
- * Try to find the matching activeNews story for a backend event.
- * Matches on title prefix overlap (first 40 chars) + same country.
- */
-function findMatchingStory(backendEvent, activeNews) {
-  if (!backendEvent || !activeNews) return null;
-  const titlePrefix = (backendEvent.title || '').toLowerCase().slice(0, 40);
-  const country = backendEvent.primaryCountry;
-
-  // Exact title match first
-  let match = activeNews.find(
-    (s) => (s.title || '').toLowerCase().slice(0, 40) === titlePrefix
-  );
-  if (match) return match;
-
-  // Country + partial title overlap
-  if (country) {
-    match = activeNews.find(
-      (s) => s.isoA2 === country && (s.title || '').toLowerCase().includes(titlePrefix.slice(0, 20))
-    );
-  }
-  return match || null;
+function formatHourMin(ts) {
+  const d = new Date(ts);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
 }
 
+/**
+ * Timeline strip — bottom band over the map surface. Renders a severity-binned
+ * histogram of events in the current window, a draggable cursor bound to
+ * `scrubTime`, and play/pause scrubbing.
+ */
 const EventTimeline = ({
   events = [],
-  snapshotHistory = [],
-  onScrub,
   scrubTime,
+  onScrub,
   onEventSelect,
   selectedStoryId,
 }) => {
   const { t } = useTranslation();
-  const containerRef = useRef(null);
-  const isDragging = useRef(false);
-  const [hoveredEvent, setHoveredEvent] = useState(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const trackRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
 
-  // Get backend events (with lifecycle data) from the store
-  const backendEvents = useNewsStore((s) => s.backendEvents);
+  const buckets = useMemo(() => buildBuckets(events, []), [events]);
+  const maxBin = useMemo(() => Math.max(1, ...buckets.map((b) => b.count)), [buckets]);
 
-  // Build histogram buckets
-  const buckets = useMemo(
-    () => buildBuckets(events, snapshotHistory),
-    [events, snapshotHistory]
-  );
+  const now = Date.now();
+  // Compute a cursor fraction in [0,1]. null scrubTime = live (1.0).
+  const cursorFrac = scrubTime == null
+    ? 1
+    : Math.max(0, Math.min(1, 1 - (now - scrubTime) / WINDOW_MS));
 
-  const maxCount = useMemo(
-    () => Math.max(1, ...buckets.map((b) => b.count)),
-    [buckets]
-  );
+  useEffect(() => {
+    if (!playing) return undefined;
+    const id = setInterval(() => {
+      const next = Math.min(1, (scrubTime == null ? 0 : cursorFrac) + 1 / BUCKET_COUNT);
+      if (next >= 1) {
+        onScrub?.(null);
+        setPlaying(false);
+      } else {
+        onScrub?.(fractionToTimestamp(next));
+      }
+    }, 600);
+    return () => clearInterval(id);
+  }, [playing, cursorFrac, scrubTime, onScrub]);
 
-  const hasAnyData = buckets.some((b) => b.count > 0);
+  const scrubFromEvent = (e) => {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = e.clientX - rect.left;
+    const frac = Math.max(0, Math.min(1, x / rect.width));
+    if (frac >= 0.995) onScrub?.(null);
+    else onScrub?.(fractionToTimestamp(frac));
+  };
 
-  // Pick top events for individual markers (using backendEvents for lifecycle)
-  const timelineEvents = useMemo(() => {
-    const picked = pickTimelineEvents(backendEvents, MAX_VISIBLE_EVENTS);
-    return picked.map((ev) => ({
-      ...ev,
-      fraction: timestampToFraction(new Date(ev.firstSeenAt).getTime()),
-    }));
-  }, [backendEvents]);
+  const cursorTs = scrubTime == null ? now : scrubTime;
 
-  // Generate day ticks
-  const dayTicks = useMemo(() => generateDayTicks(), []);
-
-  // Scrub handlers
-  const handlePointerEvent = useCallback((e) => {
-    if (!containerRef.current || !onScrub) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-    const fraction = x / rect.width;
-    const ts = fractionToTimestamp(fraction);
-    onScrub(ts);
-  }, [onScrub]);
-
-  const handlePointerDown = useCallback((e) => {
-    // Don't start scrubbing if clicking on an event dot
-    if (e.target.closest('.event-timeline-dot')) return;
-    isDragging.current = true;
-    containerRef.current?.setPointerCapture(e.pointerId);
-    handlePointerEvent(e);
-  }, [handlePointerEvent]);
-
-  const handlePointerMove = useCallback((e) => {
-    if (!isDragging.current) return;
-    handlePointerEvent(e);
-  }, [handlePointerEvent]);
-
-  const handlePointerUp = useCallback((e) => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
-    containerRef.current?.releasePointerCapture(e.pointerId);
-  }, []);
-
-  // Event click handler
-  const handleEventClick = useCallback((ev, e) => {
-    e.stopPropagation();
-    if (!onEventSelect) return;
-
-    // Try to find matching story in activeNews for proper selection
-    const matchingStory = findMatchingStory(ev, events);
-    if (matchingStory) {
-      onEventSelect(matchingStory);
-    } else {
-      // Fallback: construct minimal story-like object for selection
-      onEventSelect({
-        id: ev.id,
-        isoA2: ev.primaryCountry,
-        title: ev.title,
-        severity: ev.severity,
-        coordinates: ev.coordinates,
-      });
-    }
-  }, [onEventSelect, events]);
-
-  // Tooltip handlers
-  const handleEventMouseEnter = useCallback((ev, e) => {
-    const rect = e.target.getBoundingClientRect();
-    setHoveredEvent(ev);
-    setTooltipPos({ x: rect.left + rect.width / 2, y: rect.top });
-  }, []);
-
-  const handleEventMouseLeave = useCallback(() => {
-    setHoveredEvent(null);
-  }, []);
-
-  // Compute playhead position
-  const playheadFraction = useMemo(() => {
-    if (scrubTime == null) return 1; // "now" = right edge
-    return timestampToFraction(scrubTime);
-  }, [scrubTime]);
-
-  // Lifecycle legend data
-  const activeCycles = useMemo(() => {
-    const seen = new Set(backendEvents.map((e) => e.lifecycle).filter(Boolean));
-    return ['emerging', 'developing', 'escalating', 'stabilizing', 'resolved'].filter(
-      (lc) => seen.has(lc)
-    );
-  }, [backendEvents]);
+  const W = 800;
+  const H = 40;
+  const BIN_W = W / BUCKET_COUNT - 1;
 
   return (
-    <div className="event-timeline" role="region" aria-label={t('timeline.label', 'Event timeline')}>
-      <span className="event-timeline-label event-timeline-label--left">
-        {t('timeline.past', '7d ago')}
-      </span>
-
+    <div className="timeline" role="group" aria-label="Event timeline">
+      <div className="timeline-label">
+        <div className="t1">TIMELINE · 7D</div>
+        <div className="t2">{formatHourMin(cursorTs)}</div>
+      </div>
       <div
-        ref={containerRef}
-        className="event-timeline-track"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        ref={trackRef}
+        className="timeline-track"
+        onClick={scrubFromEvent}
+        role="slider"
+        aria-valuemin={0}
+        aria-valuemax={1}
+        aria-valuenow={Number(cursorFrac.toFixed(2))}
+        aria-label="Time cursor"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowLeft') onScrub?.(fractionToTimestamp(Math.max(0, cursorFrac - 1 / BUCKET_COUNT)));
+          if (e.key === 'ArrowRight') {
+            const next = Math.min(1, cursorFrac + 1 / BUCKET_COUNT);
+            if (next >= 0.995) onScrub?.(null);
+            else onScrub?.(fractionToTimestamp(next));
+          }
+        }}
       >
-        {/* Histogram bars */}
-        {hasAnyData ? (
-          <div className="event-timeline-bars">
-            {buckets.map((bucket, i) => {
-              const heightPct = bucket.count > 0 ? Math.max(0.08, bucket.count / maxCount) : 0;
-              const color = bucket.count > 0
-                ? getPredominantColor(bucket.lifecycleCounts)
-                : 'transparent';
-              return (
-                <div
-                  key={i}
-                  className="event-timeline-bar"
-                  style={{
-                    height: `${heightPct * 100}%`,
-                    background: color,
-                    opacity: bucket.count > 0 ? 0.45 : 0,
-                  }}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <div className="event-timeline-empty" />
-        )}
-
-        {/* Day tick marks */}
-        {dayTicks.map((tick, i) => (
-          <div
-            key={`tick-${i}`}
-            className="event-timeline-tick"
-            style={{ left: `${tick.fraction * 100}%` }}
-          >
-            <span className="event-timeline-tick-label">{tick.label}</span>
-          </div>
-        ))}
-
-        {/* Individual event dots */}
-        <div className="event-timeline-events">
-          {timelineEvents.map((ev) => {
-            const isSelected = selectedStoryId && findMatchingStory(ev, events)?.id === selectedStoryId;
+        <svg width="100%" height="50" viewBox={`0 0 ${W} 50`} preserveAspectRatio="none" aria-hidden>
+          {[0, 12, 25, 37, 49].map((i) => (
+            <line key={i} x1={(i / BUCKET_COUNT) * W} x2={(i / BUCKET_COUNT) * W} y1={8} y2={42} stroke="var(--line)" strokeWidth="0.5" />
+          ))}
+          {buckets.map((b, i) => {
+            if (b.count === 0) return null;
+            const x = (i / BUCKET_COUNT) * W;
+            const hh = (b.count / maxBin) * 34;
+            const y = 42 - hh;
+            const color = getPredominantColor(b.lifecycleCounts || {});
             return (
-              <button
-                key={ev.id}
-                type="button"
-                className={`event-timeline-dot${isSelected ? ' is-selected' : ''}`}
-                style={{
-                  left: `${ev.fraction * 100}%`,
-                  '--dot-color': getLifecycleColor(ev.lifecycle),
-                }}
-                onClick={(e) => handleEventClick(ev, e)}
-                onMouseEnter={(e) => handleEventMouseEnter(ev, e)}
-                onMouseLeave={handleEventMouseLeave}
-                aria-label={`${ev.title} - ${ev.lifecycle}`}
+              <rect
+                key={i}
+                x={x + 0.5}
+                y={y}
+                width={BIN_W}
+                height={hh}
+                fill={color}
+                opacity={i / BUCKET_COUNT <= cursorFrac ? 1 : 0.35}
               />
             );
           })}
-        </div>
-
-        {/* Playhead */}
+          <line
+            x1={cursorFrac * W}
+            x2={cursorFrac * W}
+            y1={4}
+            y2={46}
+            stroke="var(--amber)"
+            strokeWidth="1.2"
+          />
+          <polygon
+            points={`${cursorFrac * W - 4},2 ${cursorFrac * W + 4},2 ${cursorFrac * W},8`}
+            fill="var(--amber)"
+          />
+        </svg>
         <div
-          className="event-timeline-playhead"
-          style={{ left: `${playheadFraction * 100}%` }}
-        />
-      </div>
-
-      <span className="event-timeline-label event-timeline-label--right">
-        {t('timeline.now', 'now')}
-      </span>
-
-      {/* Lifecycle legend */}
-      {activeCycles.length > 0 && (
-        <div className="event-timeline-legend">
-          {activeCycles.map((lc) => (
-            <span key={lc} className="event-timeline-legend-item">
-              <span
-                className="event-timeline-legend-dot"
-                style={{ background: LIFECYCLE_COLORS[lc] }}
-              />
-              {t(`timeline.lifecycle.${lc}`, lc)}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Tooltip */}
-      {hoveredEvent && (
-        <div
-          className="event-timeline-tooltip"
           style={{
-            left: `${tooltipPos.x}px`,
-            top: `${tooltipPos.y}px`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontFamily: 'var(--ff-mono)',
+            fontSize: 9,
+            color: 'var(--ink-3)',
+            letterSpacing: '0.1em',
           }}
         >
-          <span
-            className="event-timeline-tooltip-lifecycle"
-            style={{ color: getLifecycleColor(hoveredEvent.lifecycle) }}
-          >
-            {hoveredEvent.lifecycle}
-          </span>
-          <span className="event-timeline-tooltip-title">
-            {(hoveredEvent.title || '').slice(0, 60)}
-            {(hoveredEvent.title || '').length > 60 ? '…' : ''}
-          </span>
-          <span className="event-timeline-tooltip-time">
-            {new Date(hoveredEvent.firstSeenAt).toLocaleString(undefined, {
-              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-            })}
-          </span>
+          <span>−7D</span><span>−5D</span><span>−3D</span><span>−1D</span><span>NOW</span>
         </div>
-      )}
+      </div>
+      <div className="timeline-ctrl">
+        <button
+          type="button"
+          className="tl-btn"
+          aria-label="Step back"
+          onClick={() => onScrub?.(fractionToTimestamp(Math.max(0, cursorFrac - 1 / BUCKET_COUNT)))}
+        >
+          <ChevronLeft size={12} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="tl-btn"
+          data-active={playing}
+          aria-pressed={playing}
+          aria-label={playing ? 'Pause' : 'Play'}
+          onClick={() => setPlaying((v) => !v)}
+        >
+          {playing ? <Pause size={10} aria-hidden /> : <Play size={10} aria-hidden />}
+        </button>
+        <button
+          type="button"
+          className="tl-btn"
+          aria-label="Step forward"
+          onClick={() => {
+            const next = Math.min(1, cursorFrac + 1 / BUCKET_COUNT);
+            if (next >= 0.995) onScrub?.(null);
+            else onScrub?.(fractionToTimestamp(next));
+          }}
+        >
+          <ChevronRight size={12} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="tl-btn"
+          aria-label="Jump to live"
+          onClick={() => { onScrub?.(null); setPlaying(false); }}
+        >
+          <FastForward size={10} aria-hidden />
+        </button>
+      </div>
     </div>
   );
 };

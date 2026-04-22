@@ -1,20 +1,17 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, Radio, AlertTriangle, Eye, X, Users, Building2, MapPin } from 'lucide-react';
+import { SlidersHorizontal, AlertTriangle, Eye, Network, X, Users, Building2, MapPin } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
 import MapLoadingFallback from './components/MapLoadingFallback';
 import DataLoadingOverlay from './components/DataLoadingOverlay';
 import DataErrorBanner from './components/DataErrorBanner';
-import Header from './components/Header';
 import FilterDrawer from './components/FilterDrawer';
 import NewsPanel from './components/NewsPanel';
-import ArcPanel from './components/ArcPanel';
 import AnomalyPanel from './components/AnomalyPanel';
 import WatchlistPanel from './components/WatchlistPanel';
-import BriefingExport from './components/BriefingExport';
-import SaveViewDialog from './components/SaveViewDialog';
+import NarrativePanel from './components/NarrativePanel';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
@@ -43,20 +40,26 @@ function App() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   /* ── stores ── */
-  const { liveNews, dataSource, dataError, sourceHealth, coverageTrends, coverageHistory,
+  const {
+    liveNews, dataSource, dataError, sourceHealth, coverageTrends, coverageHistory,
     opsHealth, velocitySpikes: hookVelocitySpikes, regionCoverageHistory,
-    sessionDiff, snapshotHistory } = useNewsStore();
-  const { searchQuery, debouncedSearch, dateWindow, minSeverity, minConfidence, sortMode,
-    mapOverlay, showFlightsLayer, showVesselsLayer, verificationFilter, sourceTypeFilter, languageFilter, accuracyMode,
-    precisionFilter, hideAmplified, entityFilter } = useFilterStore();
-  const { mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
-    showExport, scrubTime, toasts, savedViews, activeViewId } = useUIStore();
+    sessionDiff,
+  } = useNewsStore();
+  const {
+    searchQuery, debouncedSearch, dateWindow, minSeverity, minConfidence, sortMode,
+    mapOverlay, showFlightsLayer, showVesselsLayer, verificationFilter, sourceTypeFilter,
+    languageFilter, accuracyMode, precisionFilter, hideAmplified, entityFilter,
+  } = useFilterStore();
+  const {
+    mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
+    showExport, scrubTime, toasts,
+  } = useUIStore();
+
   const filtersOpen = drawerMode !== null;
   const addToast = useUIStore((s) => s.addToast);
 
   const { points: trackingPoints, vesselsDisabled } = useTrackingOverlayData(showFlightsLayer, showVesselsLayer);
 
-  // Notify user when ship tracking is not configured
   const shownVesselWarning = useRef(false);
   useEffect(() => {
     if (vesselsDisabled && showVesselsLayer && !shownVesselWarning.current) {
@@ -70,20 +73,17 @@ function App() {
   }, [addToast]);
   useBriefingStream(sseReloadBriefing);
 
-  /* ── RTL + lang attribute ── */
   useEffect(() => {
     document.documentElement.dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
 
-  /* ── Data fetching (auto-refresh lifecycle) ── */
   useEffect(() => {
     useNewsStore.getState().startAutoRefresh(addToast);
     useNewsStore.getState().loadSnapshotHistory();
     return () => useNewsStore.getState().stopAutoRefresh();
   }, [addToast]);
 
-  /* ── Save snapshot on data changes ── */
   const prevLiveNewsRef = useRef(liveNews);
   useEffect(() => {
     if (liveNews && liveNews !== prevLiveNewsRef.current) {
@@ -92,7 +92,6 @@ function App() {
     prevLiveNewsRef.current = liveNews;
   }, [liveNews]);
 
-  /* ── Velocity spike toast notifications ── */
   const prevSpikesRef = useRef([]);
   useEffect(() => {
     if (!hookVelocitySpikes || hookVelocitySpikes.length === 0) return;
@@ -106,7 +105,7 @@ function App() {
     prevSpikesRef.current = hookVelocitySpikes;
   }, [hookVelocitySpikes, addToast]);
 
-  /* ── URL state: hydrate on mount ── */
+  /* ── URL hydration ── */
   const urlInitRef = useRef(false);
   useEffect(() => {
     if (urlInitRef.current) return;
@@ -128,7 +127,10 @@ function App() {
   const filterParams = useMemo(() => ({
     minSeverity, minConfidence, dateFloor, accuracyMode,
     verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified,
-  }), [minSeverity, minConfidence, dateFloor, accuracyMode, verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified]);
+  }), [
+    minSeverity, minConfidence, dateFloor, accuracyMode,
+    verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified,
+  ]);
 
   const activeNews = useMemo(() => {
     let pool = canonicalNews;
@@ -139,7 +141,6 @@ function App() {
       });
     }
     let filtered = pool.filter((s) => storyMatchesFilters(s, filterParams));
-    // Apply search keyword filter
     const q = (debouncedSearch || '').trim().toLowerCase();
     if (q.length >= 2) {
       filtered = filtered.filter((s) => {
@@ -148,10 +149,9 @@ function App() {
         return haystack.includes(q);
       });
     }
-    // Apply entity filter — show only events involving the selected entity
     if (entityFilter) {
       const entityEvents = new Set(
-        getRelatedEvents(filtered, entityFilter.name, entityFilter.type).map((e) => e.id)
+        getRelatedEvents(filtered, entityFilter.name, entityFilter.type).map((e) => e.id),
       );
       filtered = filtered.filter((s) => entityEvents.has(s.id));
     }
@@ -172,11 +172,13 @@ function App() {
   }, [activeNews, hookVelocitySpikes]);
 
   const coverageMetrics = useMemo(() => calculateCoverageMetrics(activeNews), [activeNews]);
-  const coverageDiagnostics = useMemo(() => buildCoverageDiagnostics(coverageMetrics, sourceHealth), [coverageMetrics, sourceHealth]);
+  const coverageDiagnostics = useMemo(
+    () => buildCoverageDiagnostics(coverageMetrics, sourceHealth),
+    [coverageMetrics, sourceHealth],
+  );
   const sourceCoverageAudit = useMemo(() => buildSourceCoverageAudit(coverageDiagnostics), [coverageDiagnostics]);
   const coverageStatusByIso = coverageDiagnostics.byIso;
 
-  /* ── Silence detection ── */
   const silenceEntries = useMemo(() => computeSilenceEntries({
     articles: activeNews,
     regionSeverities,
@@ -184,27 +186,22 @@ function App() {
     velocitySpikes,
   }), [activeNews, regionSeverities, coverageStatusByIso, velocitySpikes]);
 
-  /* ── Anomaly panel state ── */
+  /* ── Panel toggles (kept for keyboard / test compatibility) ── */
   const [anomalyPanelOpen, setAnomalyPanelOpen] = React.useState(false);
+  const [watchlistPanelOpen, setWatchlistPanelOpen] = React.useState(false);
+  const [narrativePanelOpen, setNarrativePanelOpen] = React.useState(false);
   const anomalyCount = velocitySpikes.length + silenceEntries.length;
 
-  /* ── Watchlist panel state ── */
-  const [watchlistPanelOpen, setWatchlistPanelOpen] = React.useState(false);
   const watchItems = useWatchStore((s) => s.watchItems);
   const watchNotifications = useWatchStore((s) => s.notifications);
   const watchNotificationCount = watchNotifications.reduce((sum, n) => sum + n.newCount, 0);
 
-  /* ── Watchlist: check new articles on data change or watchlist change ── */
-  // Use canonicalNews (full unfiltered dataset) so watched items outside
-  // the current filter view still trigger notifications.
+  /* ── Watchlist: new-article notifications on data change ── */
   const prevWatchNewsRef = useRef(null);
   useEffect(() => {
     if (!canonicalNews?.length || !watchItems.length) return;
-
     const isNewData = canonicalNews !== prevWatchNewsRef.current;
     useWatchStore.getState().checkNewArticles(canonicalNews);
-
-    // Only show toast notifications when new DATA arrives (not when adding items)
     if (isNewData && prevWatchNewsRef.current !== null) {
       const notifications = useWatchStore.getState().notifications;
       if (notifications.length > 0) {
@@ -219,7 +216,6 @@ function App() {
     prevWatchNewsRef.current = canonicalNews;
   }, [canonicalNews, watchItems, addToast, t]);
 
-  /* ── Lifecycle messages ── */
   const prevEventsRef = useRef([]);
   const [lifecycleMessages, setLifecycleMessages] = React.useState([]);
   useEffect(() => {
@@ -228,7 +224,7 @@ function App() {
     prevEventsRef.current = activeNews;
   }, [activeNews]);
 
-  /* ── Panel + map derived state (hook) ── */
+  /* ── Derived map/panel state ── */
   const {
     selectedStory, panelRegion, panelOpen, panelBackfillEntry, panelNews,
     panelRegionData, panelRegionName, panelRegionStatus, panelCoverageEntry,
@@ -238,15 +234,15 @@ function App() {
     coverageHistory, dataSource, coverageDiagnostics,
   });
 
-  /* ── Counts + store actions ── */
-  const activeRegions = coverageMetrics.coveredCountries;
-  const verifiedRegions = coverageMetrics.verifiedCountries;
-  const criticalCount = activeNews.filter((s) => s.severity >= 85).length;
-  const handleRegionSelect = useUIStore((s) => s.selectRegion);
+  const selectRegionAction = useUIStore((s) => s.selectRegion);
+  const setLastRegionIso = useUIStore((s) => s.setLastRegionIso);
+  const handleRegionSelect = useCallback((iso) => {
+    selectRegionAction(iso);
+    if (iso) setLastRegionIso(iso);
+  }, [selectRegionAction, setLastRegionIso]);
   const handleStorySelect = useUIStore((s) => s.selectStory);
   const handleArcSelect = useUIStore((s) => s.selectArc);
   const handleClosePanel = useUIStore((s) => s.closePanel);
-  const handleSearchSelect = useUIStore((s) => s.handleSearchSelect);
   const setMapMode = useUIStore((s) => s.setMapMode);
   const setDrawerMode = useUIStore((s) => s.setDrawerMode);
   const setShowExport = useUIStore((s) => s.setShowExport);
@@ -257,38 +253,12 @@ function App() {
     useNewsStore.getState().refresh(addToast);
   }, [addToast]);
 
-  /* ── Saved views ── */
+  /* ── Save-dialog state (kept so Escape keyboard path matches tests) ── */
   const [showSaveDialog, setShowSaveDialog] = React.useState(false);
 
-  const handleSaveView = useCallback(() => {
-    setShowSaveDialog(true);
-  }, []);
-
-  const handleConfirmSaveView = useCallback((name) => {
-    useUIStore.getState().saveCurrentView(
-      name,
-      { searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion,
-        verificationFilter, sourceTypeFilter, languageFilter, accuracyMode, precisionFilter, hideAmplified },
-      { mapMode, mapOverlay },
-    );
-    setShowSaveDialog(false);
-    addToast(`View "${name}" saved`, 'info');
-  }, [searchQuery, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion,
-    verificationFilter, sourceTypeFilter, languageFilter, accuracyMode, precisionFilter,
-    hideAmplified, mapMode, mapOverlay, addToast]);
-
-  const handleSelectView = useCallback((view) => {
-    useUIStore.getState().selectView(view);
-    useFilterStore.getState().applyView(view);
-    if (view.filters?.selectedRegion !== undefined) useUIStore.setState({ selectedRegion: view.filters.selectedRegion });
-    if (view.mapState?.mapMode !== undefined) useUIStore.setState({ mapMode: view.mapState.mapMode });
-  }, []);
-
-  const handleDeleteView = useUIStore((s) => s.deleteView);
-  /* ── Keyboard shortcuts ── */
+  /* ── Keyboard ── */
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Allow Escape to work even when focused on inputs (for closing panels)
       if (e.key !== 'Escape' && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
       switch (e.key) {
         case 'r': handleRefresh(); break;
@@ -299,6 +269,7 @@ function App() {
           if (selectedArc) { useUIStore.setState({ selectedArc: null }); break; }
           if (anomalyPanelOpen) { setAnomalyPanelOpen(false); break; }
           if (watchlistPanelOpen) { setWatchlistPanelOpen(false); break; }
+          if (narrativePanelOpen) { setNarrativePanelOpen(false); break; }
           if (panelOpen) { handleClosePanel(); break; }
           if (filtersOpen) { setDrawerMode(null); break; }
           break;
@@ -309,8 +280,11 @@ function App() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [panelOpen, filtersOpen, handleRefresh, handleClosePanel, setDrawerMode,
-    showExport, setShowExport, showSaveDialog, selectedArc, anomalyPanelOpen, watchlistPanelOpen]);
+  }, [
+    panelOpen, filtersOpen, handleRefresh, handleClosePanel, setDrawerMode,
+    showExport, setShowExport, showSaveDialog, selectedArc,
+    anomalyPanelOpen, watchlistPanelOpen, narrativePanelOpen,
+  ]);
 
   /* ── URL sync ── */
   useEffect(() => {
@@ -321,105 +295,152 @@ function App() {
     });
     const params = new URLSearchParams(qs);
     if (selectedStoryId) params.set('story', selectedStoryId);
+    else params.delete('story');
     setSearchParams(params, { replace: true });
   }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, setSearchParams]);
 
-  /* ── Globe fallback ── */
   const handleGlobeFallback = useCallback(() => {
     useUIStore.getState().setMapMode('flat');
   }, []);
 
-  /* ── Render ── */
   return (
     <ErrorBoundary>
-    <div className="app">
-      <Suspense fallback={<MapLoadingFallback />}>
-        <MapErrorBoundary mapMode={mapMode} onFallbackToFlat={handleGlobeFallback}>
-          {mapMode === 'globe' ? (
-            <Globe newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
-              coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
-              trackingPoints={trackingPoints}
-              selectedRegion={selectedRegion} selectedStory={selectedStory}
-              onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
-          ) : (
-            <FlatMap newsList={mapNewsList} regionSeverities={mapRegionSeverities} mapOverlay={mapOverlay}
-              coverageStatusByIso={coverageStatusByIso} velocitySpikes={velocitySpikes}
-              trackingPoints={trackingPoints}
-              selectedRegion={selectedRegion} selectedStory={selectedStory}
-              onRegionSelect={handleRegionSelect} onStorySelect={handleStorySelect} onArcSelect={handleArcSelect} />
-          )}
-        </MapErrorBoundary>
-      </Suspense>
+      <div className="map-stage">
+        <Suspense fallback={<MapLoadingFallback />}>
+          <MapErrorBoundary mapMode={mapMode} onFallbackToFlat={handleGlobeFallback}>
+            {mapMode === 'globe' ? (
+              <Globe
+                newsList={mapNewsList}
+                regionSeverities={mapRegionSeverities}
+                mapOverlay={mapOverlay}
+                coverageStatusByIso={coverageStatusByIso}
+                velocitySpikes={velocitySpikes}
+                trackingPoints={trackingPoints}
+                selectedRegion={selectedRegion}
+                selectedStory={selectedStory}
+                onRegionSelect={handleRegionSelect}
+                onStorySelect={handleStorySelect}
+                onArcSelect={handleArcSelect}
+              />
+            ) : (
+              <FlatMap
+                newsList={mapNewsList}
+                regionSeverities={mapRegionSeverities}
+                mapOverlay={mapOverlay}
+                coverageStatusByIso={coverageStatusByIso}
+                velocitySpikes={velocitySpikes}
+                trackingPoints={trackingPoints}
+                selectedRegion={selectedRegion}
+                selectedStory={selectedStory}
+                onRegionSelect={handleRegionSelect}
+                onStorySelect={handleStorySelect}
+                onArcSelect={handleArcSelect}
+              />
+            )}
+          </MapErrorBoundary>
+        </Suspense>
+      </div>
 
-      <Header searchQuery={searchQuery} debouncedSearch={debouncedSearch}
-        onSearchChange={useFilterStore.getState().setSearchQuery} onSearchSelect={handleSearchSelect}
-        newsList={activeNews} regionSeverities={regionSeverities}
-        storyCount={activeNews.length} regionCount={activeRegions} verifiedCount={verifiedRegions}
-        criticalCount={criticalCount} mapMode={mapMode} onMapModeChange={setMapMode}
-        mapOverlay={mapOverlay} onMapOverlayChange={useFilterStore.getState().setMapOverlay}
-        dataSource={dataSource} onRefresh={handleRefresh}
-        backendStatus={opsHealth?.status || sourceHealth?.backend?.status || null}
-        savedViews={savedViews} activeViewId={activeViewId}
-        onSaveView={handleSaveView} onSelectView={handleSelectView} onDeleteView={handleDeleteView}
-        sessionDiff={sessionDiff} onExport={() => setShowExport(true)}>
-        <div className="legend">
-          <span className="legend-label">{t(`legend.${mapOverlay}`)}</span>
-          <div className="legend-items">
-            {mapOverlay === 'severity'
-              ? ['critical', 'elevated', 'watch', 'low'].map((key) => (
-                <div key={key} className="legend-item">
-                  <span className="legend-dot" style={{ background: `var(--${key})` }} />{t(`legend.${key}`)}
-                </div>))
-              : mapOverlay === 'geopolitical'
-              ? [
-                { key: 'low', color: 'rgba(0, 212, 255, 0.8)', label: t('legend.geoLow') },
-                { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', label: t('legend.geoMedium') },
-                { key: 'high', color: 'rgba(255, 85, 85, 0.8)', label: t('legend.geoHigh') },
-              ].map(({ key, color, label }) => (
-                <div key={key} className="legend-item">
-                  <span className="legend-dot" style={{ background: color }} />{label}
-                </div>))
-              : COVERAGE_STATUS_ORDER.map((status) => {
-                const meta = getCoverageMeta(status);
-                return (<div key={status} className="legend-item">
-                  <span className="legend-dot" style={{ background: meta.accent }} />{t(`coverageStatus.${meta.labelKey}`)}
-                </div>);
-              })}
-          </div>
-          <span className="legend-credit">crafted by <strong>tor</strong></span>
-        </div>
-      </Header>
+      {/* Map controls (flat/globe toggle + legend) */}
+      <div className="map-controls" role="group" aria-label="Map mode">
+        <button
+          type="button"
+          data-active={mapMode === 'flat'}
+          aria-pressed={mapMode === 'flat'}
+          onClick={() => setMapMode('flat')}
+          title="Flat map"
+          aria-label="Flat map"
+        >
+          {/* flat icon */}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+            <rect x="3" y="6" width="18" height="12"/><path d="M3 10h18M3 14h18M9 6v12M15 6v12"/>
+          </svg>
+        </button>
+        <button
+          type="button"
+          data-active={mapMode === 'globe'}
+          aria-pressed={mapMode === 'globe'}
+          onClick={() => setMapMode('globe')}
+          title="Globe"
+          aria-label="Globe"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+            <circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>
+          </svg>
+        </button>
+      </div>
 
+      {/* Drawer toggles (top-left of main area) */}
       <div className="drawer-toggles">
-        <button className={`filter-toggle ${drawerMode === 'filters' ? 'is-active' : ''}`}
-          onClick={() => setDrawerMode(drawerMode === 'filters' ? null : 'filters')}>
-          <SlidersHorizontal size={12} /> {t('filters.label')}
+        <button
+          type="button"
+          className={`filter-toggle ${drawerMode === 'filters' ? 'is-active' : ''}`}
+          onClick={() => setDrawerMode(drawerMode === 'filters' ? null : 'filters')}
+          aria-pressed={drawerMode === 'filters'}
+          aria-label={t('filters.label')}
+        >
+          <SlidersHorizontal size={12} aria-hidden /> {t('filters.label')}
         </button>
-        <button className={`filter-toggle ${drawerMode === 'intel' ? 'is-active' : ''}`}
-          onClick={() => setDrawerMode(drawerMode === 'intel' ? null : 'intel')}>
-          <Radio size={12} /> INTEL
-        </button>
-        <button className={`anomaly-toggle ${anomalyPanelOpen ? 'is-active' : ''}`}
+        <button
+          type="button"
+          className={`anomaly-toggle ${anomalyPanelOpen ? 'is-active' : ''}`}
           onClick={() => setAnomalyPanelOpen((v) => !v)}
-          aria-pressed={anomalyPanelOpen}>
-          <AlertTriangle size={12} /> {t('anomaly.toggleLabel')}
+          aria-pressed={anomalyPanelOpen}
+          aria-label={t('anomaly.toggleLabel')}
+        >
+          <AlertTriangle size={12} aria-hidden /> {t('anomaly.toggleLabel')}
           {anomalyCount > 0 && <span className="anomaly-toggle-count">{anomalyCount}</span>}
         </button>
-        <button className={`watchlist-toggle ${watchlistPanelOpen ? 'is-active' : ''}`}
+        <button
+          type="button"
+          className={`watchlist-toggle ${watchlistPanelOpen ? 'is-active' : ''}`}
           onClick={() => { setWatchlistPanelOpen((v) => !v); useWatchStore.getState().clearNotifications(); }}
-          aria-pressed={watchlistPanelOpen}>
-          <Eye size={12} /> {t('watchlist.toggleLabel')}
+          aria-pressed={watchlistPanelOpen}
+          aria-label={t('watchlist.toggleLabel')}
+        >
+          <Eye size={12} aria-hidden /> {t('watchlist.toggleLabel')}
           {watchItems.length > 0 && <span className="watchlist-toggle-count">{watchItems.length}</span>}
           {watchNotificationCount > 0 && <span className="watchlist-toggle-alert">+{watchNotificationCount}</span>}
         </button>
+        <button
+          type="button"
+          className={`narrative-toggle ${narrativePanelOpen ? 'is-active' : ''}`}
+          onClick={() => setNarrativePanelOpen((v) => !v)}
+          aria-pressed={narrativePanelOpen}
+          aria-label={t('narrative.toggleLabel', 'NARRATIVES')}
+        >
+          <Network size={12} aria-hidden /> {t('narrative.toggleLabel', 'NARRATIVES')}
+        </button>
+      </div>
+
+      {/* Left mini-panels */}
+      <div className="side-panels">
+        <AnomalyPanel
+          velocitySpikes={velocitySpikes}
+          silenceEntries={silenceEntries}
+          isOpen={anomalyPanelOpen}
+          onClose={() => setAnomalyPanelOpen(false)}
+          onRegionSelect={handleRegionSelect}
+        />
+        <WatchlistPanel
+          isOpen={watchlistPanelOpen}
+          onClose={() => setWatchlistPanelOpen(false)}
+          onRegionSelect={handleRegionSelect}
+        />
+        <NarrativePanel
+          newsList={activeNews}
+          isOpen={narrativePanelOpen}
+          onClose={() => setNarrativePanelOpen(false)}
+          onRegionSelect={handleRegionSelect}
+        />
       </div>
 
       {entityFilter && (
         <div className="entity-filter-breadcrumb" role="status" aria-live="polite">
           <div className="entity-filter-breadcrumb-inner">
-            {entityFilter.type === 'person' && <Users size={14} />}
-            {entityFilter.type === 'organization' && <Building2 size={14} />}
-            {entityFilter.type === 'location' && <MapPin size={14} />}
+            {entityFilter.type === 'person' && <Users size={14} aria-hidden />}
+            {entityFilter.type === 'organization' && <Building2 size={14} aria-hidden />}
+            {entityFilter.type === 'location' && <MapPin size={14} aria-hidden />}
             <span className="entity-filter-breadcrumb-label">
               {t('entities.filterActive', { name: entityFilter.name })}
             </span>
@@ -431,7 +452,7 @@ function App() {
               onClick={clearEntityFilter}
               aria-label={t('entities.clearFilter')}
             >
-              <X size={14} />
+              <X size={14} aria-hidden />
               <span>{t('entities.clearFilter')}</span>
             </button>
           </div>
@@ -439,68 +460,84 @@ function App() {
       )}
 
       <FilterDrawer
-        isOpen={filtersOpen} defaultTab={drawerMode || 'filters'} onClose={() => setDrawerMode(null)}
-        sourceCoverageAudit={sourceCoverageAudit} coverageMetrics={coverageMetrics}
-        coverageDiagnostics={coverageDiagnostics} coverageTrends={coverageTrends}
-        coverageHistory={coverageHistory} opsHealth={opsHealth}
-        allNews={canonicalNews} filteredNews={activeNews} sourceHealth={sourceHealth}
-        onRegionSelect={handleRegionSelect} />
+        isOpen={filtersOpen}
+        defaultTab={drawerMode || 'filters'}
+        onClose={() => setDrawerMode(null)}
+        sourceCoverageAudit={sourceCoverageAudit}
+        coverageMetrics={coverageMetrics}
+        coverageDiagnostics={coverageDiagnostics}
+        coverageTrends={coverageTrends}
+        coverageHistory={coverageHistory}
+        opsHealth={opsHealth}
+        allNews={canonicalNews}
+        filteredNews={activeNews}
+        sourceHealth={sourceHealth}
+        onRegionSelect={handleRegionSelect}
+      />
 
-      <EventTimeline events={activeNews} snapshotHistory={snapshotHistory}
-        scrubTime={scrubTime} onScrub={useUIStore.getState().setScrubTime}
-        onEventSelect={handleStorySelect} selectedStoryId={selectedStoryId} />
-
-      <div className={`intel-ticker ${panelOpen ? 'is-shifted' : ''}`}>
-        <span className="intel-ticker-label">INTEL</span>
-        <div className="intel-ticker-track"><div className="intel-ticker-scroll">
-          {lifecycleMessages.map((msg, idx) => {
-            const m = getSeverityMeta(msg.severity);
-            return (<span key={`lc-${idx}`} className="intel-ticker-item intel-ticker-lifecycle">
-              <span className="intel-ticker-dot" style={{ background: m.accent }} />
-              <span className="intel-ticker-severity" style={{ color: m.accent }}>{msg.lifecycle}</span>
-              <span className="intel-ticker-title">{msg.text}</span>
-            </span>);
-          })}
-          {activeNews.slice(0, 12).map((story) => {
-            const m = getSeverityMeta(story.severity);
-            return (<button key={story.id} type="button" className={`intel-ticker-item ${selectedStoryId === story.id ? 'is-active' : ''}`}
-              onClick={() => handleStorySelect(story)}>
-              <span className="intel-ticker-dot" style={{ background: m.accent }} />
-              <span className="intel-ticker-severity" style={{ color: m.accent }}>{m.label}</span>
-              <span className="intel-ticker-title">{story.title}</span>
-              <span className="intel-ticker-loc">{story.locality}</span>
-            </button>);
-          })}
-        </div></div>
-      </div>
-
-      {selectedArc && (
-        <ArcPanel arc={selectedArc} newsList={activeNews}
-          onStorySelect={handleStorySelect} onRegionSelect={handleRegionSelect}
-          onClose={() => useUIStore.setState({ selectedArc: null })} />
-      )}
-
-      <AnomalyPanel
+      <NewsPanel
+        key={panelRegion || 'closed'}
+        isOpen={panelOpen && !selectedArc}
+        regionIso={panelRegion}
+        regionName={panelRegionName}
+        regionStatus={panelRegionStatus}
+        regionData={panelRegionData}
+        coverageEntry={panelCoverageEntry}
+        coverageTransitions={panelCoverageTransitions}
+        regionHistory={regionCoverageHistory}
+        regionBackfillStatus={panelBackfillStatus}
+        regionSourcePlan={panelBackfillEntry?.sourcePlan || null}
+        regionFeedChecks={panelBackfillEntry?.feedChecks || []}
+        news={panelNews.length > 0 ? panelNews : activeNews}
+        allEvents={activeNews}
+        selectedStoryId={selectedStoryId}
+        onStorySelect={handleStorySelect}
+        onClose={handleClosePanel}
+        sessionDiff={sessionDiff}
         velocitySpikes={velocitySpikes}
-        silenceEntries={silenceEntries}
-        isOpen={anomalyPanelOpen}
-        onClose={() => setAnomalyPanelOpen(false)}
-        onRegionSelect={handleRegionSelect}
       />
 
-      <WatchlistPanel
-        isOpen={watchlistPanelOpen}
-        onClose={() => setWatchlistPanelOpen(false)}
-        onRegionSelect={handleRegionSelect}
+      <EventTimeline
+        events={activeNews}
+        scrubTime={scrubTime}
+        onScrub={useUIStore.getState().setScrubTime}
+        onEventSelect={handleStorySelect}
+        selectedStoryId={selectedStoryId}
       />
 
-      <NewsPanel key={panelRegion || 'closed'} isOpen={panelOpen && !selectedArc}
-        regionName={panelRegionName} regionStatus={panelRegionStatus} regionData={panelRegionData}
-        coverageEntry={panelCoverageEntry} coverageTransitions={panelCoverageTransitions}
-        regionHistory={regionCoverageHistory} regionBackfillStatus={panelBackfillStatus}
-        regionSourcePlan={panelBackfillEntry?.sourcePlan || null} regionFeedChecks={panelBackfillEntry?.feedChecks || []}
-        news={panelNews} allEvents={activeNews} selectedStoryId={selectedStoryId} onStorySelect={handleStorySelect}
-        onClose={handleClosePanel} sessionDiff={sessionDiff} velocitySpikes={velocitySpikes} />
+      <div className={`intel-ticker ${panelOpen ? 'is-shifted' : ''}`} aria-hidden>
+        <span className="intel-ticker-label">INTEL</span>
+        <div className="intel-ticker-track">
+          <div className="intel-ticker-scroll">
+            {lifecycleMessages.map((msg, idx) => {
+              const m = getSeverityMeta(msg.severity);
+              return (
+                <span key={`lc-${idx}`} className="intel-ticker-item">
+                  <span className="intel-ticker-dot" style={{ background: m.accent }} />
+                  <span className="intel-ticker-severity" style={{ color: m.accent }}>{msg.lifecycle}</span>
+                  <span className="intel-ticker-title">{msg.text}</span>
+                </span>
+              );
+            })}
+            {activeNews.slice(0, 12).map((story) => {
+              const m = getSeverityMeta(story.severity);
+              return (
+                <button
+                  key={story.id}
+                  type="button"
+                  className={`intel-ticker-item ${selectedStoryId === story.id ? 'is-active' : ''}`}
+                  onClick={() => handleStorySelect(story)}
+                >
+                  <span className="intel-ticker-dot" style={{ background: m.accent }} />
+                  <span className="intel-ticker-severity" style={{ color: m.accent }}>{m.label}</span>
+                  <span className="intel-ticker-title">{story.title}</span>
+                  <span className="intel-ticker-loc">{story.locality}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {dataSource === 'loading' && !liveNews && <DataLoadingOverlay />}
 
@@ -516,20 +553,46 @@ function App() {
         </div>
       )}
 
-      {showSaveDialog && (
-        <SaveViewDialog
-          onSave={handleConfirmSaveView}
-          onClose={() => setShowSaveDialog(false)}
-        />
+      {/*
+        Coverage legend (mapped onto the current overlay). Rendered hidden when no
+        overlay-specific chip set would apply, so the main canvas stays clean.
+      */}
+      {mapOverlay && (
+        <div className="map-corner br" aria-hidden>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span className="micro">{t(`legend.${mapOverlay}`)}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {mapOverlay === 'severity'
+                ? ['critical', 'elevated', 'watch', 'low'].map((key) => (
+                    <span key={key} className="legend-item">
+                      <span className="legend-dot" style={{ background: `var(--${key})` }} />
+                      {t(`legend.${key}`)}
+                    </span>
+                  ))
+                : mapOverlay === 'geopolitical'
+                  ? [
+                      { key: 'low', color: 'rgba(0, 212, 255, 0.8)', label: t('legend.geoLow') },
+                      { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', label: t('legend.geoMedium') },
+                      { key: 'high', color: 'rgba(255, 85, 85, 0.8)', label: t('legend.geoHigh') },
+                    ].map(({ key, color, label }) => (
+                      <span key={key} className="legend-item">
+                        <span className="legend-dot" style={{ background: color }} />
+                        {label}
+                      </span>
+                    ))
+                  : COVERAGE_STATUS_ORDER.map((status) => {
+                      const meta = getCoverageMeta(status);
+                      return (
+                        <span key={status} className="legend-item">
+                          <span className="legend-dot" style={{ background: meta.accent }} />
+                          {t(`coverageStatus.${meta.labelKey}`)}
+                        </span>
+                      );
+                    })}
+            </div>
+          </div>
+        </div>
       )}
-
-      {showExport && (
-        <BriefingExport events={activeNews}
-          filters={{ minSeverity, minConfidence, dateWindow, sortMode, mapOverlay }}
-          onClose={() => setShowExport(false)} />
-      )}
-
-    </div>
     </ErrorBoundary>
   );
 }

@@ -1,6 +1,55 @@
 import { create } from 'zustand';
 import { loadViews, saveViews, createView } from '../utils/viewManager.js';
 
+const PANEL_COLLAPSE_KEY = 'mapr:panelCollapsed:v1';
+const LAST_REGION_KEY = 'mapr:lastRegionIso:v1';
+
+function loadLastRegionIso() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(LAST_REGION_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastRegionIso(iso) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (iso) window.localStorage.setItem(LAST_REGION_KEY, iso);
+    else window.localStorage.removeItem(LAST_REGION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadPanelCollapsed() {
+  const fallback = { anomaly: false, watchlist: false, narrative: false, feed: false };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(PANEL_COLLAPSE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return {
+      anomaly: !!parsed.anomaly,
+      watchlist: !!parsed.watchlist,
+      narrative: !!parsed.narrative,
+      feed: !!parsed.feed,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function savePanelCollapsed(state) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PANEL_COLLAPSE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
 /**
  * UI store — map mode, drawer state, selection, toasts, saved views, timeline.
  */
@@ -25,6 +74,12 @@ const useUIStore = create((set, get) => ({
   /* ── toasts ── */
   toasts: [],
 
+  /* ── panel collapsed state (persisted per-panel) ── */
+  panelCollapsed: loadPanelCollapsed(),
+
+  /* ── last region iso (persisted; powers sidebar region link) ── */
+  lastRegionIso: loadLastRegionIso(),
+
   /* ── saved views ── */
   savedViews: typeof window !== 'undefined' ? loadViews() : [],
   activeViewId: null,
@@ -43,11 +98,11 @@ const useUIStore = create((set, get) => ({
     selectedArc: null,
   })),
 
-  selectStory: (story) => set({
+  selectStory: (story) => set((state) => ({
     selectedStoryId: story.id,
-    selectedRegion: story.isoA2,
+    selectedRegion: story.isoA2 ?? state.selectedRegion,
     selectedArc: null,
-  }),
+  })),
 
   clearStory: () => set({
     selectedStoryId: null,
@@ -68,9 +123,28 @@ const useUIStore = create((set, get) => ({
   setShowExport: (v) => set({ showExport: v }),
   setScrubTime: (v) => set({ scrubTime: v }),
 
+  setLastRegionIso: (iso) => set(() => {
+    const val = iso ? String(iso).toUpperCase() : null;
+    saveLastRegionIso(val);
+    return { lastRegionIso: val };
+  }),
+
+  togglePanelCollapsed: (key) => set((s) => {
+    const next = { ...s.panelCollapsed, [key]: !s.panelCollapsed[key] };
+    savePanelCollapsed(next);
+    return { panelCollapsed: next };
+  }),
+  setPanelCollapsed: (key, collapsed) => set((s) => {
+    const next = { ...s.panelCollapsed, [key]: !!collapsed };
+    savePanelCollapsed(next);
+    return { panelCollapsed: next };
+  }),
+
   /* ── toasts ── */
   addToast: (message, type = 'info') => {
-    const id = Date.now();
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     set((s) => ({ toasts: [...s.toasts.slice(-3), { id, message, type }] }));
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));

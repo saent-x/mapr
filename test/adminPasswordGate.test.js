@@ -6,15 +6,14 @@ import { resolve } from 'node:path';
 const ROOT = resolve(import.meta.dirname, '..');
 
 describe('admin password gate', () => {
-  describe('Layout sidebar has no Admin NavLink', () => {
+  describe('Layout sidebar exposes Admin NavLink', () => {
     const layout = readFileSync(resolve(ROOT, 'src/components/Layout.jsx'), 'utf8');
 
-    it('does not contain a NavLink to /admin', () => {
-      assert.ok(!layout.includes('to="/admin"'), 'Layout.jsx should not contain NavLink to /admin');
-    });
-
-    it('does not import Shield icon (admin icon removed)', () => {
-      assert.ok(!layout.includes('Shield'), 'Layout.jsx should not import Shield icon');
+    it('contains a NavLink to /admin', () => {
+      assert.ok(
+        layout.includes('to="/admin"') || layout.includes("to='/admin'"),
+        'Layout.jsx should contain NavLink to /admin',
+      );
     });
   });
 

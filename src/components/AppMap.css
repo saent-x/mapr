@@ -1,0 +1,10 @@
+/*
+ * mapcn's <Map> container uses Tailwind utilities (`h-full w-full`) that this
+ * project does not compile — Tailwind is not configured here. Give the
+ * container explicit dimensions so MapLibre can render onto a non-zero canvas.
+ */
+.appmap,
+.appmap.maplibregl-map {
+  width: 100%;
+  height: 100%;
+}

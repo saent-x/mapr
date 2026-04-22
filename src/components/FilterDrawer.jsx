@@ -1,432 +1,531 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
-import { DATE_WINDOWS, SORT_OPTIONS, getSeverityMeta } from '../utils/mockData';
+import { DATE_WINDOWS, SORT_OPTIONS } from '../utils/mockData';
 import useFilterStore from '../stores/filterStore';
+import useUIStore from '../stores/uiStore';
 
 const VERIFICATION_OPTIONS = ['all', 'official', 'verified', 'developing', 'single-source'];
-const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local', 'unknown'];
-const PRECISION_OPTIONS = ['all', 'locality', 'country', 'source-country', 'unknown'];
-const ACCURACY_MODE_OPTIONS = ['standard', 'strict'];
-const LANGUAGE_LABELS = {
-  en: 'EN',
-  es: 'ES',
-  fr: 'FR',
-  ar: 'AR',
-  zh: 'ZH',
-  unknown: '??'
-};
-
-function getCoverageLabelKey(status) {
-  if (status === 'low-confidence') return 'lowConfidence';
-  if (status === 'ingestion-risk') return 'ingestionRisk';
-  if (status === 'source-sparse') return 'sourceSparse';
-  return status || 'uncovered';
-}
+const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local'];
+const LANGUAGE_OPTIONS = ['all', 'en', 'es', 'fr', 'ar', 'zh'];
 
 const FilterDrawer = ({
   isOpen,
   defaultTab = 'filters',
   onClose,
+  filteredNews = [],
+  allNews = [],
   sourceCoverageAudit,
   coverageMetrics,
   coverageDiagnostics,
   coverageTrends,
   coverageHistory,
   opsHealth,
-  allNews = [],
-  filteredNews = [],
   sourceHealth,
   onRegionSelect,
 }) => {
   const { t } = useTranslation();
-  const [tab, setTab] = useState(defaultTab);
+  const [tab, setTab] = useState(defaultTab === 'intel' ? 'intel' : 'filters');
 
-  /* ── Filter state from Zustand store ── */
+  useEffect(() => {
+    if (isOpen) setTab(defaultTab === 'intel' ? 'intel' : 'filters');
+  }, [isOpen, defaultTab]);
+
   const dateWindow = useFilterStore((s) => s.dateWindow);
   const setDateWindow = useFilterStore((s) => s.setDateWindow);
-  const mapOverlay = useFilterStore((s) => s.mapOverlay);
-  const setMapOverlay = useFilterStore((s) => s.setMapOverlay);
-  const verificationFilter = useFilterStore((s) => s.verificationFilter);
-  const setVerificationFilter = useFilterStore((s) => s.setVerificationFilter);
-  const sourceTypeFilter = useFilterStore((s) => s.sourceTypeFilter);
-  const setSourceTypeFilter = useFilterStore((s) => s.setSourceTypeFilter);
-  const languageFilter = useFilterStore((s) => s.languageFilter);
-  const setLanguageFilter = useFilterStore((s) => s.setLanguageFilter);
-  const accuracyMode = useFilterStore((s) => s.accuracyMode);
-  const setAccuracyMode = useFilterStore((s) => s.setAccuracyMode);
-  const precisionFilter = useFilterStore((s) => s.precisionFilter);
-  const setPrecisionFilter = useFilterStore((s) => s.setPrecisionFilter);
   const minSeverity = useFilterStore((s) => s.minSeverity);
   const setMinSeverity = useFilterStore((s) => s.setMinSeverity);
   const minConfidence = useFilterStore((s) => s.minConfidence);
   const setMinConfidence = useFilterStore((s) => s.setMinConfidence);
   const sortMode = useFilterStore((s) => s.sortMode);
   const setSortMode = useFilterStore((s) => s.setSortMode);
+  const verificationFilter = useFilterStore((s) => s.verificationFilter);
+  const setVerificationFilter = useFilterStore((s) => s.setVerificationFilter);
+  const sourceTypeFilter = useFilterStore((s) => s.sourceTypeFilter);
+  const setSourceTypeFilter = useFilterStore((s) => s.setSourceTypeFilter);
+  const languageFilter = useFilterStore((s) => s.languageFilter);
+  const setLanguageFilter = useFilterStore((s) => s.setLanguageFilter);
   const hideAmplified = useFilterStore((s) => s.hideAmplified);
   const setHideAmplified = useFilterStore((s) => s.setHideAmplified);
+  const clearEntityFilter = useFilterStore((s) => s.clearEntityFilter);
 
-  // Sync tab when opened from a specific button
-  React.useEffect(() => {
-    if (isOpen) setTab(defaultTab);
-  }, [isOpen, defaultTab]);
-  const sevMeta = getSeverityMeta(minSeverity);
+  const selectRegion = useUIStore((s) => s.selectRegion);
 
-  const availableSourceTypes = useMemo(() => (
-    SOURCE_TYPE_OPTIONS.filter((type) => (
-      type === 'all' || allNews.some((story) => (story.sourceTypes || [story.sourceType]).includes(type))
-    ))
-  ), [allNews]);
+  const windowOptions = DATE_WINDOWS || [
+    { id: '24h', label: '24H' },
+    { id: '72h', label: '72H' },
+    { id: '168h', label: '7D' },
+    { id: '720h', label: '30D' },
+  ];
 
-  const availableLanguages = useMemo(() => {
-    const languages = new Set();
-    allNews.forEach((story) => {
-      (story.languages || [story.language]).filter(Boolean).forEach((language) => {
-        languages.add(language);
-      });
-    });
-    return ['all', ...[...languages].filter((language) => language !== 'unknown').sort()];
+  const sevCounts = useMemo(() => {
+    const all = allNews;
+    return {
+      black: all.filter((e) => (e.severity ?? 0) >= 85).length,
+      red: all.filter((e) => (e.severity ?? 0) >= 70 && (e.severity ?? 0) < 85).length,
+      amber: all.filter((e) => (e.severity ?? 0) >= 40 && (e.severity ?? 0) < 70).length,
+      green: all.filter((e) => (e.severity ?? 0) < 40).length,
+    };
   }, [allNews]);
 
-  const availablePrecisions = useMemo(() => (
-    PRECISION_OPTIONS.filter((precision) => (
-      precision === 'all' || allNews.some((story) => (story.geocodePrecision || 'unknown') === precision)
-    ))
-  ), [allNews]);
-
-  const sourceMix = useMemo(() => {
-    const summary = { official: 0, wire: 0, global: 0, regional: 0, local: 0, unknown: 0 };
-    const languages = new Set();
-    filteredNews.forEach((story) => {
-      const dominantType = story.sourceTypes?.includes('official')
-        ? 'official'
-        : story.sourceType || story.sourceTypes?.[0] || 'unknown';
-      summary[dominantType] = (summary[dominantType] || 0) + 1;
-      (story.languages || [story.language]).filter(Boolean).forEach((language) => {
-        if (language !== 'unknown') languages.add(language);
-      });
-    });
-    return { summary, languageCount: languages.size };
-  }, [filteredNews]);
-
-  const precisionMix = useMemo(() => {
-    const summary = { locality: 0, country: 0, 'source-country': 0, unknown: 0 };
-    filteredNews.forEach((story) => {
-      const precision = story.geocodePrecision || 'unknown';
-      summary[precision] = (summary[precision] || 0) + 1;
-    });
-    return summary;
-  }, [filteredNews]);
-
-  const lowConfidenceRegions = coverageDiagnostics?.lowConfidenceRegions || [];
-  const diagnosticCounts = coverageDiagnostics?.diagnosticCounts || {
-    lowConfidenceCountries: 0, ingestionRiskCountries: 0, sourceSparseCountries: 0
+  const reset = () => {
+    setMinSeverity(0);
+    setMinConfidence(0);
+    setDateWindow('168h');
+    setVerificationFilter('all');
+    setSourceTypeFilter('all');
+    setLanguageFilter('all');
+    setHideAmplified(false);
+    clearEntityFilter();
+    selectRegion(null);
   };
-  const risingRegions = coverageTrends?.risingRegions || [];
-  const newlyVerifiedRegions = coverageTrends?.newlyVerifiedRegions || [];
-  const atRiskTrendRegions = coverageTrends?.atRiskRegions || [];
-  const hasTrendData = risingRegions.length > 0 || newlyVerifiedRegions.length > 0 || atRiskTrendRegions.length > 0;
-  const coveragePercent = Math.round((coverageMetrics?.coverageRate || 0) * 100);
+
+  if (!isOpen) return null;
 
   return (
-    <div className={`filter-drawer ${isOpen ? 'is-open' : ''}`}>
-      {/* Header with tabs + close */}
-      <div className="filter-drawer-header">
-        <div className="filter-drawer-tabs">
+    <aside className="floating-panel filter-drawer" role="dialog" aria-label={t('filters.label')}>
+      <div className="panel-header">
+        <span className="dot" />
+        {t('filters.label')}
+        <span className="spacer" />
+        <span style={{ color: 'var(--ink-2)' }}>{filteredNews.length}/{allNews.length}</span>
+        <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}><X size={12} aria-hidden /></button>
+      </div>
+
+      <div className="filter-section" role="tablist" aria-label="Drawer tabs">
+        <div className="chip-row">
           <button
-            className={`filter-drawer-tab ${tab === 'filters' ? 'is-active' : ''}`}
+            type="button"
+            role="tab"
+            className="chip"
+            data-active={tab === 'filters'}
+            aria-selected={tab === 'filters'}
+            aria-controls="filter-drawer-filters"
             onClick={() => setTab('filters')}
           >
             FILTERS
           </button>
           <button
-            className={`filter-drawer-tab ${tab === 'intel' ? 'is-active' : ''}`}
+            type="button"
+            role="tab"
+            className="chip"
+            data-active={tab === 'intel'}
+            aria-selected={tab === 'intel'}
+            aria-controls="filter-drawer-intel"
             onClick={() => setTab('intel')}
           >
             INTEL
           </button>
         </div>
-        <button className="filter-drawer-close" onClick={onClose} aria-label="Close">
-          <X size={12} />
-        </button>
       </div>
 
-      {/* ── FILTERS TAB ── */}
       {tab === 'filters' && (
-        <div className="filter-drawer-body">
+        <div className="panel-body" id="filter-drawer-filters" role="tabpanel">
           <div className="filter-section">
-            <div className="filter-label">{t('filters.timeRange')}</div>
-            <div className="filter-chips">
-              {DATE_WINDOWS.map((opt) => (
-                <button key={opt.id} className={`chip ${dateWindow === opt.id ? 'is-active' : ''}`} onClick={() => setDateWindow(opt.id)}>
-                  {t(`filters.${opt.i18nKey}`)}
+            <span className="micro">Severity tier</span>
+            <div className="chip-row">
+              {[
+                { key: 'black', min: 85, label: 'BLACK', count: sevCounts.black },
+                { key: 'red', min: 70, label: 'RED', count: sevCounts.red },
+                { key: 'amber', min: 40, label: 'AMBER', count: sevCounts.amber },
+                { key: 'green', min: 0, label: 'GREEN', count: sevCounts.green },
+              ].map(({ key, min, label, count }) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="chip"
+                  data-active={minSeverity === min}
+                  aria-pressed={minSeverity === min}
+                  aria-label={`Minimum severity ${label}`}
+                  onClick={() => setMinSeverity(minSeverity === min ? 0 : min)}
+                >
+                  {label} <span className="ct">{count}</span>
                 </button>
               ))}
             </div>
           </div>
 
           <div className="filter-section">
-            <div className="filter-label">{t('filters.sortBy')}</div>
-            <div className="filter-chips">
-              {SORT_OPTIONS.map((opt) => (
-                <button key={opt.id} className={`chip ${sortMode === opt.id ? 'is-active' : ''}`} onClick={() => setSortMode(opt.id)}>
-                  {t(`filters.${opt.i18nKey}`)}
+            <span className="micro">Score ≥ <b className="mono" style={{ color: 'var(--ink-0)' }}>{minSeverity}</b></span>
+            <div className="slider">
+              <span style={{ color: 'var(--ink-2)' }}>0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={minSeverity}
+                aria-label="Minimum severity score"
+                onChange={(e) => setMinSeverity(Number(e.target.value))}
+              />
+              <span style={{ color: 'var(--ink-2)' }}>100</span>
+            </div>
+          </div>
+
+          <div className="filter-section">
+            <span className="micro">Confidence ≥ <b className="mono" style={{ color: 'var(--ink-0)' }}>{minConfidence}</b></span>
+            <div className="slider">
+              <span style={{ color: 'var(--ink-2)' }}>0</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={minConfidence}
+                aria-label="Minimum confidence score"
+                onChange={(e) => setMinConfidence(Number(e.target.value))}
+              />
+              <span style={{ color: 'var(--ink-2)' }}>100</span>
+            </div>
+          </div>
+
+          <div className="filter-section">
+            <span className="micro">Time window</span>
+            <div className="chip-row">
+              {windowOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className="chip"
+                  data-active={dateWindow === opt.id}
+                  aria-pressed={dateWindow === opt.id}
+                  aria-label={`Window ${opt.label}`}
+                  onClick={() => setDateWindow(opt.id)}
+                >
+                  {opt.label.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="filter-section">
-            <div className="filter-label">{t('filters.mapOverlay')}</div>
-            <div className="filter-chips">
-              {['severity', 'coverage'].map((mode) => (
-                <button key={mode} className={`chip ${mapOverlay === mode ? 'is-active' : ''}`} onClick={() => setMapOverlay(mode)}>
-                  {t(`legend.${mode}`)}
+            <span className="micro">Source tier</span>
+            <div className="chip-row">
+              {SOURCE_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  className="chip"
+                  data-active={sourceTypeFilter === opt}
+                  aria-pressed={sourceTypeFilter === opt}
+                  aria-label={`Source tier ${opt}`}
+                  onClick={() => setSourceTypeFilter(opt)}
+                >
+                  {opt.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="filter-section">
-            <div className="filter-label">{t('filters.verification')}</div>
-            <div className="filter-chips">
-              {VERIFICATION_OPTIONS.map((option) => (
-                <button key={option} className={`chip ${verificationFilter === option ? 'is-active' : ''}`} onClick={() => setVerificationFilter(option)}>
-                  {option === 'all' ? t('filters.all') : t(`article.verificationStatus.${option}`)}
+            <span className="micro">Verification</span>
+            <div className="chip-row">
+              {VERIFICATION_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  className="chip"
+                  data-active={verificationFilter === opt}
+                  aria-pressed={verificationFilter === opt}
+                  aria-label={`Verification ${opt}`}
+                  onClick={() => setVerificationFilter(opt)}
+                >
+                  {opt.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="filter-section">
-            <div className="filter-label">{t('filters.accuracyMode')}</div>
-            <div className="filter-chips">
-              {ACCURACY_MODE_OPTIONS.map((option) => (
-                <button key={option} className={`chip ${accuracyMode === option ? 'is-active' : ''}`} onClick={() => setAccuracyMode(option)}>
-                  {t(`filters.${option === 'strict' ? 'strictAccuracy' : 'standard'}`)}
+            <span className="micro">Language</span>
+            <div className="chip-row">
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  className="chip"
+                  data-active={languageFilter === opt}
+                  aria-pressed={languageFilter === opt}
+                  aria-label={`Language ${opt}`}
+                  onClick={() => setLanguageFilter(opt)}
+                >
+                  {opt.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="filter-section">
-            <div className="filter-label">{t('filters.sourceType')}</div>
-            <div className="filter-chips">
-              {availableSourceTypes.map((option) => (
-                <button key={option} className={`chip ${sourceTypeFilter === option ? 'is-active' : ''}`} onClick={() => setSourceTypeFilter(option)}>
-                  {option === 'all' ? t('filters.all') : t(`sourceType.${option}`)}
+            <span className="micro">Sort order</span>
+            <div className="chip-row">
+              {(SORT_OPTIONS || [{ id: 'severity', label: 'Severity' }]).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className="chip"
+                  data-active={sortMode === opt.id}
+                  aria-pressed={sortMode === opt.id}
+                  aria-label={`Sort by ${opt.label}`}
+                  onClick={() => setSortMode(opt.id)}
+                >
+                  {opt.label.toUpperCase()}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="filter-section">
-            <div className="filter-label">{t('filters.language')}</div>
-            <div className="filter-chips">
-              {availableLanguages.map((option) => (
-                <button key={option} className={`chip ${languageFilter === option ? 'is-active' : ''}`} onClick={() => setLanguageFilter(option)}>
-                  {option === 'all' ? t('filters.all') : (LANGUAGE_LABELS[option] || option.toUpperCase())}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-section">
-            <div className="filter-label">{t('filters.locationPrecision')}</div>
-            <div className="filter-chips">
-              {availablePrecisions.map((option) => (
-                <button key={option} className={`chip ${precisionFilter === option ? 'is-active' : ''}`} onClick={() => setPrecisionFilter(option)}>
-                  {option === 'all' ? t('filters.all') : t(`precision.${option}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-section">
-            <div className="filter-label">
-              {t('filters.minSeverity')}
-              <strong style={{ color: sevMeta.accent, marginLeft: 'auto' }}>{minSeverity}</strong>
-            </div>
-            <input type="range" className="severity-slider-track" min="0" max="100" value={minSeverity} onChange={(e) => setMinSeverity(Number(e.target.value))} />
-            <div className="severity-value">
-              <span style={{ color: sevMeta.accent }}>{t(`legend.${sevMeta.labelKey}`)}</span>
-            </div>
-          </div>
-
-          <div className="filter-section">
-            <div className="filter-label">
-              {t('filters.minConfidence')}
-              <strong style={{ marginLeft: 'auto' }}>{minConfidence}%</strong>
-            </div>
-            <input type="range" className="severity-slider-track" min="0" max="100" step="5" value={minConfidence} onChange={(e) => setMinConfidence(Number(e.target.value))} />
-          </div>
-
-          <div className="filter-section">
-            <div className="filter-label">Signal quality</div>
-            <label className="filter-toggle amplification-toggle">
+            <label
+              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+              aria-label="Hide amplified articles"
+            >
               <input
                 type="checkbox"
                 checked={hideAmplified}
                 onChange={(e) => setHideAmplified(e.target.checked)}
+                aria-label="Hide amplified articles"
               />
-              <span>Hide amplified events</span>
+              <span className="mono" style={{ fontSize: 'var(--fs-1)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--ink-1)' }}>
+                Hide amplified
+              </span>
             </label>
+          </div>
+
+          <div className="filter-section" style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="btn"
+              aria-label="Reset filters"
+              onClick={reset}
+            >
+              RESET
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              aria-label="Apply filters"
+              onClick={onClose}
+            >
+              APPLY
+            </button>
           </div>
         </div>
       )}
 
-      {/* ── INTEL TAB ── */}
-      {tab === 'intel' && (() => {
-        const gdeltHealthy = sourceHealth?.gdelt?.healthyProfiles || 0;
-        const gdeltTotal = sourceHealth?.gdelt?.totalProfiles || 0;
-        const rssHealthy = sourceHealth?.rss?.healthyFeeds || 0;
-        const rssTotal = sourceHealth?.rss?.totalFeeds || 0;
-        const rssFailed = sourceHealth?.rss?.failedFeeds || 0;
-        const totalIngested = (sourceHealth?.gdelt?.normalizedArticles || 0) + (sourceHealth?.rss?.articlesFound || 0);
-        const dataStatus = gdeltTotal === 0 && rssTotal === 0
-          ? 'offline'
-          : (gdeltHealthy === 0 && rssHealthy < rssTotal * 0.5) ? 'degraded' : 'operational';
-        const statusColor = dataStatus === 'operational' ? 'var(--low)' : dataStatus === 'degraded' ? 'var(--elevated)' : 'var(--critical)';
+      {tab === 'intel' && (
+        <div className="panel-body" id="filter-drawer-intel" role="tabpanel">
+          <IntelTab
+            sourceHealth={sourceHealth}
+            coverageMetrics={coverageMetrics}
+            coverageDiagnostics={coverageDiagnostics}
+            coverageTrends={coverageTrends}
+            coverageHistory={coverageHistory}
+            sourceCoverageAudit={sourceCoverageAudit}
+            opsHealth={opsHealth}
+            onRegionSelect={onRegionSelect}
+          />
+        </div>
+      )}
+    </aside>
+  );
+};
 
-        const feedHealthRatio = rssTotal > 0 ? rssHealthy / rssTotal : null;
-        const feedTrendIndicator = feedHealthRatio === null
-          ? null
-          : feedHealthRatio >= 0.8
-            ? { symbol: '↑', color: 'var(--low)', label: 'healthy' }
-            : feedHealthRatio >= 0.5
-              ? { symbol: '→', color: 'var(--watch)', label: 'partial' }
-              : { symbol: '↓', color: 'var(--critical)', label: 'degraded' };
+const IntelRow = ({ label, value, color }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, padding: '2px 0' }}>
+    <span className="micro" style={{ marginBottom: 0 }}>{label}</span>
+    <b className="mono" style={{ color: color || 'var(--ink-0)', fontSize: 'var(--fs-1)' }}>{value}</b>
+  </div>
+);
 
-        const sparseDiagnosticCount = (coverageDiagnostics?.diagnosticCounts?.sourceSparseCountries || 0)
-          + (coverageDiagnostics?.diagnosticCounts?.ingestionRiskCountries || 0);
-        const sparseRegions = (coverageDiagnostics?.lowConfidenceRegions || [])
-          .filter((r) => r.status === 'source-sparse' || r.status === 'ingestion-risk')
-          .slice(0, 3);
+const IntelGapButton = ({ entry, suffix, onSelect }) => (
+  <button
+    type="button"
+    className="chip"
+    style={{ justifyContent: 'space-between', width: '100%', marginBottom: 3 }}
+    onClick={() => onSelect?.(entry.iso)}
+    aria-label={`Select ${entry.region || entry.iso}`}
+  >
+    <span>{entry.region || entry.iso}</span>
+    <span className="ct">{suffix}</span>
+  </button>
+);
 
-        return (
-          <div className="filter-drawer-body">
-            <div className="filter-section">
-              <div className="filter-label">DATA PIPELINE</div>
-              <div className="coverage-grid">
-                <div className="coverage-stat">
-                  <span>Status</span>
-                  <strong style={{ color: statusColor, textTransform: 'uppercase' }}>{dataStatus}</strong>
-                </div>
-                <div className="coverage-stat">
-                  <span>Ingested</span>
-                  <strong>{totalIngested}</strong>
-                </div>
-                <div className="coverage-stat">
-                  <span>GDELT</span>
-                  <strong style={{ color: gdeltHealthy > 0 ? 'var(--low)' : 'var(--critical)' }}>{gdeltHealthy}/{gdeltTotal}</strong>
-                </div>
-                <div className="coverage-stat">
-                  <span>RSS Feeds</span>
-                  <strong style={{ color: rssHealthy > rssTotal * 0.5 ? 'var(--low)' : 'var(--elevated)' }}>{rssHealthy}/{rssTotal}</strong>
-                </div>
-              </div>
+const IntelTab = ({
+  sourceHealth,
+  coverageMetrics,
+  coverageDiagnostics,
+  coverageTrends,
+  coverageHistory,
+  sourceCoverageAudit,
+  opsHealth,
+  onRegionSelect,
+}) => {
+  const gdeltHealthy = sourceHealth?.gdelt?.healthyProfiles || 0;
+  const gdeltTotal = sourceHealth?.gdelt?.totalProfiles || 0;
+  const rssHealthy = sourceHealth?.rss?.healthyFeeds || 0;
+  const rssTotal = sourceHealth?.rss?.totalFeeds || 0;
+  const rssFailed = sourceHealth?.rss?.failedFeeds || 0;
+  const totalIngested = (sourceHealth?.gdelt?.normalizedArticles || 0) + (sourceHealth?.rss?.articlesFound || 0);
+  const dataStatus = gdeltTotal === 0 && rssTotal === 0
+    ? 'OFFLINE'
+    : (gdeltHealthy === 0 && rssHealthy < rssTotal * 0.5) ? 'DEGRADED' : 'OPERATIONAL';
+  const statusColor = dataStatus === 'OPERATIONAL'
+    ? 'var(--sev-green, #5ec269)'
+    : dataStatus === 'DEGRADED'
+      ? 'var(--amber, #d9a441)'
+      : 'var(--sev-red, #d25757)';
 
-              {rssTotal > 0 && (
-                <div className="feed-status-strip">
-                  <span className="feed-status-count">
-                    <strong style={{ color: feedTrendIndicator?.color }}>{rssHealthy}/{rssTotal}</strong>
-                    {' '}feeds healthy
-                  </span>
-                  {feedTrendIndicator && (
-                    <span className="feed-status-trend" style={{ color: feedTrendIndicator.color }}>
-                      {feedTrendIndicator.symbol} {feedTrendIndicator.label}
-                    </span>
-                  )}
-                  {rssFailed > 0 && (
-                    <span className="feed-status-failed">{rssFailed} failed</span>
-                  )}
-                </div>
-              )}
+  const coveragePercent = Math.round((coverageMetrics?.coverageRate || 0) * 100);
+  const diagnosticCounts = coverageDiagnostics?.diagnosticCounts || {
+    lowConfidenceCountries: 0, ingestionRiskCountries: 0, sourceSparseCountries: 0,
+  };
+  const lowConfidenceRegions = coverageDiagnostics?.lowConfidenceRegions || [];
+  const risingRegions = coverageTrends?.risingRegions || [];
+  const newlyVerifiedRegions = coverageTrends?.newlyVerifiedRegions || [];
+  const atRiskRegions = coverageTrends?.atRiskRegions || [];
+  const auditStats = sourceCoverageAudit?.stats || null;
+  const expansionTargets = (sourceCoverageAudit?.expansionTargets || []).slice(0, 5);
+
+  const opsStatus = opsHealth?.status ? String(opsHealth.status).toUpperCase() : null;
+  const opsStatusColor = opsStatus === 'OK'
+    ? 'var(--sev-green, #5ec269)'
+    : opsStatus === 'DEGRADED'
+      ? 'var(--amber, #d9a441)'
+      : opsStatus
+        ? 'var(--sev-red, #d25757)'
+        : 'var(--ink-2)';
+
+  const historyPoints = Array.isArray(coverageHistory) ? coverageHistory.slice(-6) : [];
+
+  return (
+    <>
+      <div className="filter-section">
+        <span className="micro">Data pipeline</span>
+        <IntelRow label="Status" value={dataStatus} color={statusColor} />
+        <IntelRow label="Ingested" value={totalIngested} />
+        <IntelRow label="GDELT" value={`${gdeltHealthy}/${gdeltTotal}`} color={gdeltHealthy > 0 ? 'var(--ink-0)' : 'var(--sev-red, #d25757)'} />
+        <IntelRow label="RSS feeds" value={`${rssHealthy}/${rssTotal}`} color={rssTotal > 0 && rssHealthy > rssTotal * 0.5 ? 'var(--ink-0)' : 'var(--amber, #d9a441)'} />
+        {rssFailed > 0 && <IntelRow label="Failed" value={rssFailed} color="var(--sev-red, #d25757)" />}
+      </div>
+
+      {opsHealth && (
+        <div className="filter-section">
+          <span className="micro">Ops health</span>
+          <IntelRow label="Backend" value={opsStatus || 'UNKNOWN'} color={opsStatusColor} />
+          {opsHealth.latencyMs != null && <IntelRow label="Latency" value={`${opsHealth.latencyMs}ms`} />}
+          {opsHealth.uptimeSeconds != null && <IntelRow label="Uptime" value={`${Math.round(opsHealth.uptimeSeconds / 60)}m`} />}
+          {opsHealth.lastError && (
+            <div className="micro" style={{ color: 'var(--sev-red, #d25757)', marginTop: 4 }}>
+              {String(opsHealth.lastError).slice(0, 80)}
             </div>
+          )}
+        </div>
+      )}
 
-            <div className="filter-section">
-              <div className="filter-label">{t('filters.coverage')}</div>
-              <div className="coverage-progress">
-                <div className="coverage-progress-bar"><span style={{ width: `${coveragePercent}%` }} /></div>
-                <strong>{coveragePercent}%</strong>
-              </div>
-              <div className="coverage-grid">
-                <div className="coverage-stat"><span>{t('filters.coveredCountries')}</span><strong>{coverageMetrics?.coveredCountries || 0}</strong></div>
-                <div className="coverage-stat"><span>{t('filters.verifiedCountries')}</span><strong>{coverageMetrics?.verifiedCountries || 0}</strong></div>
-                <div className="coverage-stat"><span>{t('filters.uncoveredCountries')}</span><strong>{coverageMetrics?.uncoveredCountries || 0}</strong></div>
-                <div className="coverage-stat"><span>{t('filters.lowConfidenceRegions')}</span><strong>{diagnosticCounts.lowConfidenceCountries}</strong></div>
-              </div>
+      <div className="filter-section">
+        <span className="micro">Coverage <b className="mono" style={{ color: 'var(--ink-0)' }}>{coveragePercent}%</b></span>
+        <div
+          aria-hidden
+          style={{ height: 3, background: 'var(--line)', borderRadius: 2, overflow: 'hidden', marginBottom: 8 }}
+        >
+          <div style={{ width: `${coveragePercent}%`, height: '100%', background: 'var(--amber, #d9a441)' }} />
+        </div>
+        <IntelRow label="Covered" value={coverageMetrics?.coveredCountries || 0} />
+        <IntelRow label="Verified" value={coverageMetrics?.verifiedCountries || 0} />
+        <IntelRow label="Uncovered" value={coverageMetrics?.uncoveredCountries || 0} />
+        <IntelRow label="Low confidence" value={diagnosticCounts.lowConfidenceCountries || 0} />
+        <IntelRow label="Ingest risk" value={diagnosticCounts.ingestionRiskCountries || 0} />
+        <IntelRow label="Source sparse" value={diagnosticCounts.sourceSparseCountries || 0} />
+      </div>
+
+      {auditStats && (
+        <div className="filter-section">
+          <span className="micro">Source audit</span>
+          <IntelRow label="With local feeds" value={auditStats.countriesWithLocalFeeds || 0} />
+          <IntelRow label="With regional feeds" value={auditStats.countriesWithRegionalFeeds || 0} />
+          <IntelRow label="Without local" value={auditStats.countriesWithoutLocalFeeds || 0} color="var(--amber, #d9a441)" />
+          <IntelRow label="Thin coverage" value={auditStats.thinCoverageCountries || 0} />
+          {expansionTargets.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <span className="micro" style={{ marginBottom: 4 }}>Expansion targets</span>
+              {expansionTargets.map((entry) => (
+                <IntelGapButton
+                  key={entry.iso}
+                  entry={entry}
+                  suffix={`${entry.targetedFeedCount}F`}
+                  onSelect={onRegionSelect}
+                />
+              ))}
             </div>
+          )}
+        </div>
+      )}
 
-            {sparseDiagnosticCount > 0 && (
-              <div className="filter-section">
-                <div className="filter-label">COVERAGE GAPS</div>
-                <div className="intel-sparse-note">
-                  <span className="intel-sparse-icon">⚠</span>
-                  <span>
-                    {sparseDiagnosticCount} region{sparseDiagnosticCount !== 1 ? 's' : ''} with sparse or silent coverage
-                  </span>
-                </div>
-                {sparseRegions.length > 0 && (
-                  <div className="coverage-gap-list" style={{ marginTop: '0.4rem' }}>
-                    {sparseRegions.map((entry) => (
-                      <button key={entry.iso} type="button" className="coverage-gap-item" onClick={() => onRegionSelect?.(entry.iso)}>
-                        <span>{entry.region || entry.iso}</span>
-                        <strong style={{ color: 'var(--elevated)', fontSize: '0.55rem', fontFamily: 'var(--font-mono)' }}>
-                          {entry.status === 'ingestion-risk' ? 'INGEST RISK' : 'SPARSE'}
-                        </strong>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+      {lowConfidenceRegions.length > 0 && (
+        <div className="filter-section">
+          <span className="micro">Low-confidence regions</span>
+          {lowConfidenceRegions.slice(0, 5).map((entry) => (
+            <IntelGapButton
+              key={entry.iso}
+              entry={entry}
+              suffix={`${entry.maxConfidence ?? 0}%`}
+              onSelect={onRegionSelect}
+            />
+          ))}
+        </div>
+      )}
 
-            <div className="filter-section">
-              <div className="filter-label">{t('filters.sourceMix')}</div>
-              <div className="coverage-mix">
-                {Object.entries(sourceMix.summary).filter(([, count]) => count > 0).map(([type, count]) => (
-                  <span key={type} className="coverage-chip">{count} {t(`sourceType.${type}`)}</span>
-                ))}
-              </div>
-              <div className="coverage-language-line">
-                <span>{t('filters.languages')}</span>
-                <strong>{sourceMix.languageCount}</strong>
-              </div>
-            </div>
+      {(risingRegions.length > 0 || newlyVerifiedRegions.length > 0 || atRiskRegions.length > 0) && (
+        <div className="filter-section">
+          <span className="micro">Trend watch</span>
+          {risingRegions.slice(0, 3).map((entry) => (
+            <IntelGapButton
+              key={`rise-${entry.iso}`}
+              entry={entry}
+              suffix={entry.eventDelta > 0 ? `+${entry.eventDelta}` : `+${entry.confidenceDelta || 0}%`}
+              onSelect={onRegionSelect}
+            />
+          ))}
+          {newlyVerifiedRegions.slice(0, 3).map((entry) => (
+            <IntelGapButton
+              key={`verify-${entry.iso}`}
+              entry={entry}
+              suffix="VERIFIED"
+              onSelect={onRegionSelect}
+            />
+          ))}
+          {atRiskRegions.slice(0, 3).map((entry) => (
+            <IntelGapButton
+              key={`risk-${entry.iso}`}
+              entry={entry}
+              suffix="AT RISK"
+              onSelect={onRegionSelect}
+            />
+          ))}
+        </div>
+      )}
 
-            {lowConfidenceRegions.length > 0 && (
-              <div className="filter-section">
-                <div className="filter-label">{t('filters.lowConfidenceRegions')}</div>
-                <div className="coverage-gap-list">
-                  {lowConfidenceRegions.slice(0, 5).map((entry) => (
-                    <button key={entry.iso} type="button" className="coverage-gap-item" onClick={() => onRegionSelect?.(entry.iso)}>
-                      <span>{entry.region || entry.iso}</span><strong>{entry.maxConfidence}%</strong>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {hasTrendData && (
-              <div className="filter-section">
-                <div className="filter-label">{t('filters.trendWatch')}</div>
-                {risingRegions.length > 0 && (
-                  <div className="coverage-gap-list">
-                    {risingRegions.map((entry) => (
-                      <button key={entry.iso} type="button" className="coverage-gap-item is-positive" onClick={() => onRegionSelect?.(entry.iso)}>
-                        <span>{entry.region || entry.iso}</span>
-                        <strong>{entry.eventDelta > 0 ? `+${entry.eventDelta}` : `+${entry.confidenceDelta}%`}</strong>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+      {historyPoints.length > 0 && (
+        <div className="filter-section">
+          <span className="micro">Coverage history</span>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 32 }}>
+            {historyPoints.map((point, i) => {
+              const rate = typeof point?.coverageRate === 'number'
+                ? point.coverageRate
+                : typeof point?.rate === 'number' ? point.rate : 0;
+              const pct = Math.max(2, Math.round(rate * 100));
+              return (
+                <div
+                  key={i}
+                  title={`${pct}%`}
+                  style={{ flex: 1, height: `${pct}%`, background: 'var(--amber, #d9a441)', opacity: 0.7 }}
+                />
+              );
+            })}
           </div>
-        );
-      })()}
-    </div>
+        </div>
+      )}
+    </>
   );
 };
 

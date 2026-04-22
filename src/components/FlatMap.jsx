@@ -1,79 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Map, { Source, Layer, Popup, useMap } from 'react-map-gl/maplibre';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, Globe2, Crosshair } from 'lucide-react';
-import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
-import { getSeverityMeta } from '../utils/mockData';
-import { getCoverageMeta } from '../utils/coverageMeta';
-import { isoToCountry, areCountriesAdjacent } from '../utils/geocoder';
-import { getStatesByIso, findStateInStory } from '../utils/statesData';
-import {
-  buildCountryCoOccurrences,
-  buildGeopoliticalArcData,
-  coOccurrenceToStroke,
-  coOccurrenceToColor,
-  buildCountryStoryMap,
-} from '../utils/geopoliticalArcs';
-
-const ARC_COLORS = {
-  'same-event': '#ffffff',
-  'shared-actor': '#00d4ff',
-  'causal-flow': '#ffaa00',
-};
-
-const CAUSAL_PAIRS = [
-  { source: 'disaster', target: 'humanitarian', label: 'displacement' },
-  { source: 'conflict', target: 'humanitarian', label: 'refugee flow' },
-  { source: 'conflict', target: 'political', label: 'diplomatic response' },
-  { source: 'economic', target: 'political', label: 'economic pressure' },
-  { source: 'political', target: 'conflict', label: 'escalation' },
-];
-
-const normalizeCausalCategory = (cat) => {
-  if (!cat) return null;
-  const c = cat.toLowerCase();
-  if (c.includes('seismic') || c.includes('weather') || c.includes('natural')) return 'disaster';
-  if (c.includes('civil') || c.includes('politic')) return 'political';
-  if (c.includes('conflict') || c.includes('war') || c.includes('military')) return 'conflict';
-  if (c.includes('humanit') || c.includes('refugee') || c.includes('aid')) return 'humanitarian';
-  if (c.includes('econom') || c.includes('trade') || c.includes('finance')) return 'economic';
-  return c;
-};
+import AppMap from './AppMap';
+import MapGLOverlay from './MapGLOverlay';
+import { useMap } from '@/components/ui/map';
+import { findStateInStory } from '../utils/statesData';
+import { isoToCountry } from '../utils/geocoder';
+import { getCountryBbox } from '../utils/countryBbox';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
-const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
-const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
-
-const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-const STORY_ZOOM = isMobile ? 5 : 8;
-const REGION_ZOOM = isMobile ? 4 : 6;
-const DEFAULT_ZOOM = isMobile ? 1.5 : 2;
+const MOBILE_QUERY = '(max-width: 767px)';
 const DEFAULT_CENTER = { lng: 10, lat: 20 };
 
-const getIso = (f) => {
-  const iso = f?.properties?.ISO_A2;
-  if (iso && iso !== '-99') return iso;
-  return f?.properties?.WB_A2 || f?.properties?.ADM0_A3_US || null;
-};
-
-/* severity thresholds → accent color for MapLibre match expressions */
-const SEVERITY_COLORS = [
-  [85, '#ff3b5c'],
-  [60, '#ff8a3d'],
-  [35, '#ffc93e'],
-  [0, '#3ee8b0'],
-];
-
-const severityToColor = (sev) => {
-  for (const [threshold, color] of SEVERITY_COLORS) {
-    if (sev >= threshold) return color;
+function getInitialIsMobile() {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia(MOBILE_QUERY).matches;
   }
-  return '#3ee8b0';
-};
+  return window.innerWidth < 768;
+}
 
-/* ──────────────────────────── macro regions ──────────────────────────── */
+const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
+const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
+const STYLE_DARK_LABELED = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+const STYLE_LIGHT_LABELED = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+
+/* ──────────────────────────── macro regions (flat-only drill) ──────────────────────────── */
 
 const MACRO_REGIONS = {
   africa: { label: 'Africa', bounds: [[-20, -35], [55, 38]], isos: new Set(['DZ','AO','BJ','BW','BF','BI','CM','CV','CF','TD','KM','CG','CD','CI','DJ','EG','GQ','ER','SZ','ET','GA','GM','GH','GN','GW','KE','LS','LR','LY','MG','MW','ML','MR','MU','MA','MZ','NA','NE','NG','RW','ST','SN','SC','SL','SO','ZA','SS','SD','TZ','TG','TN','UG','ZM','ZW']) },
@@ -84,6 +37,72 @@ const MACRO_REGIONS = {
   southAmerica: { label: 'S. America', bounds: [[-85, -60], [-30, 15]], isos: new Set(['AR','BO','BR','CL','CO','EC','GY','PY','PE','SR','UY','VE']) },
   oceania: { label: 'Oceania', bounds: [[100, -50], [180, 5]], isos: new Set(['AU','FJ','KI','MH','FM','NR','NZ','PW','PG','WS','SB','TO','TV','VU']) },
 };
+
+/* ──────────────────────────── compact lock (minimap) ──────────────────────────── */
+
+function CompactRegionLock({ iso }) {
+  const { map, isLoaded } = useMap();
+  const fittedRef = useRef(null);
+  const bboxRef = useRef(null);
+
+  useEffect(() => {
+    if (!map || !isLoaded || !iso) return undefined;
+    if (fittedRef.current === iso) return undefined;
+    let cancelled = false;
+    getCountryBbox(iso).then((bbox) => {
+      if (cancelled || !bbox) return;
+      try {
+        map.setMaxBounds(null);
+        map.setMinZoom(0);
+        map.setMaxZoom(22);
+        map.fitBounds(
+          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+          { padding: 12, duration: 0, animate: false },
+        );
+        const fitZoom = map.getZoom();
+        map.setMaxBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]]);
+        map.setMinZoom(fitZoom);
+        map.setMaxZoom(fitZoom + 2);
+        map.dragPan?.disable?.();
+        map.scrollZoom?.disable?.();
+        map.doubleClickZoom?.disable?.();
+        map.touchZoomRotate?.disable?.();
+        map.keyboard?.disable?.();
+        map.boxZoom?.disable?.();
+        map.dragRotate?.disable?.();
+        map.touchPitch?.disable?.();
+        bboxRef.current = bbox;
+        fittedRef.current = iso;
+      } catch { /* ignore */ }
+    });
+    return () => { cancelled = true; };
+  }, [map, isLoaded, iso]);
+
+  useEffect(() => {
+    if (!map || !isLoaded) return undefined;
+    const container = map.getContainer?.();
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      try {
+        map.resize();
+        const bbox = bboxRef.current;
+        if (!bbox) return;
+        map.setMinZoom(0);
+        map.fitBounds(
+          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+          { padding: 12, duration: 0, animate: false },
+        );
+        const z = map.getZoom();
+        map.setMinZoom(z);
+        map.setMaxZoom(z + 2);
+      } catch { /* ignore */ }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [map, isLoaded]);
+
+  return null;
+}
 
 /* ──────────────────────────── component ──────────────────────────── */
 
@@ -99,22 +118,32 @@ const FlatMap = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  compact = false,
 }) => {
   const { t } = useTranslation();
   const mapRef = useRef(null);
-  const hoveredIsoRef = useRef(null);
-  const [hoveredArcId, setHoveredArcId] = useState(null);
-  const [hoverInfo, setHoverInfo] = useState(null);
-
-  const [countries, setCountries] = useState(null);
-  const [theme, setTheme] = useState(() =>
-    document.documentElement.getAttribute('data-theme') || 'dark',
-  );
-  const [popupInfo, setPopupInfo] = useState(null);
+  const [mapReady, setMapReady] = useState(false);
   const [drillRegion, setDrillRegion] = useState(null);
+  const [theme, setTheme] = useState(() =>
+    (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
+  );
+  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
+
+  const handleMapRef = useCallback((instance) => {
+    mapRef.current = instance;
+    setMapReady(Boolean(instance));
+  }, []);
+
+  const { STORY_ZOOM, REGION_ZOOM, DEFAULT_ZOOM } = useMemo(() => ({
+    STORY_ZOOM: isMobile ? 5 : 8,
+    REGION_ZOOM: isMobile ? 4 : 6,
+    DEFAULT_ZOOM: isMobile ? 1.5 : 2,
+  }), [isMobile]);
 
   const isLight = theme === 'light';
-  const mapStyle = isLight ? STYLE_LIGHT : STYLE_DARK;
+  const styleUrl = compact
+    ? (isLight ? STYLE_LIGHT_LABELED : STYLE_DARK_LABELED)
+    : (isLight ? STYLE_LIGHT : STYLE_DARK);
 
   /* ── fly-to tracking refs ── */
   const prevStoryRef = useRef(null);
@@ -123,6 +152,7 @@ const FlatMap = ({
 
   /* ── theme observer ── */
   useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
     const observer = new MutationObserver(() => {
       setTheme(document.documentElement.getAttribute('data-theme') || 'dark');
     });
@@ -130,37 +160,32 @@ const FlatMap = ({
     return () => observer.disconnect();
   }, []);
 
-  /* ── fetch countries GeoJSON ── */
+  /* ── mobile breakpoint observer ── */
   useEffect(() => {
-    fetch(countriesUrl)
-      .then((r) => r.json())
-      .then((geojson) => {
-        // Preprocess: add _iso promoted id and _name for labels
-        const processed = {
-          ...geojson,
-          features: geojson.features.map((f) => ({
-            ...f,
-            properties: {
-              ...f.properties,
-              _iso: getIso(f) || '',
-              _name: f.properties.NAME || f.properties.ADMIN || '',
-            },
-          })),
-        };
-        setCountries(processed);
-      })
-      .catch(() => {});
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const handler = (e) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+    // Older Safari
+    mq.addListener(handler);
+    return () => mq.removeListener(handler);
   }, []);
 
   /* ── resize handling ── */
   useEffect(() => {
+    const map = mapRef.current;
+    if (!map || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(() => {
-      mapRef.current?.resize();
+      try { map.resize(); } catch { /* ignore */ }
     });
-    const container = mapRef.current?.getContainer();
+    const container = map.getContainer?.();
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [mapReady]);
 
   /* ── fly-to logic ── */
   useEffect(() => {
@@ -168,20 +193,17 @@ const FlatMap = ({
     if (!map) return;
 
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
-      // Try to match a state/province from the story text
       const stateMatch = selectedStory.isoA2
         ? findStateInStory(selectedStory.isoA2, selectedStory)
         : null;
 
       if (stateMatch) {
-        // Fly to the matched state centroid
         map.flyTo({
           center: [stateMatch.lng, stateMatch.lat],
           zoom: STORY_ZOOM,
           duration: 1200,
         });
       } else {
-        // No specific locality — stay at region zoom
         map.flyTo({
           center: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
           zoom: REGION_ZOOM,
@@ -194,19 +216,26 @@ const FlatMap = ({
     }
 
     if (selectedRegion && selectedRegion !== prevRegionRef.current) {
+      // In compact (minimap) mode, the country-bbox fit effect handles
+      // the camera — skip the story-focal flyTo so we don't over-zoom.
+      if (compact) {
+        prevRegionRef.current = selectedRegion;
+        return;
+      }
       const focal =
         regionSeverities[selectedRegion]?.peakStory ||
         newsList.find((s) => s.isoA2 === selectedRegion);
-      if (focal) {
+      if (focal?.coordinates) {
         map.flyTo({
           center: [focal.coordinates[1], focal.coordinates[0]],
           zoom: REGION_ZOOM,
           duration: 1200,
         });
+        prevRegionRef.current = selectedRegion;
+        hadSelectionRef.current = true;
+        return;
       }
-      prevRegionRef.current = selectedRegion;
-      hadSelectionRef.current = true;
-      return;
+      // No focal yet — wait for newsList to arrive rather than locking prev.
     }
 
     if (!selectedStory && !selectedRegion && hadSelectionRef.current) {
@@ -219,7 +248,7 @@ const FlatMap = ({
         duration: 1200,
       });
     }
-  }, [selectedStory, selectedRegion, regionSeverities, newsList]);
+  }, [selectedStory, selectedRegion, regionSeverities, newsList, compact, STORY_ZOOM, REGION_ZOOM, DEFAULT_ZOOM]);
 
   /* ── drill region fly ── */
   useEffect(() => {
@@ -227,13 +256,10 @@ const FlatMap = ({
     if (!map) return;
     if (drillRegion && MACRO_REGIONS[drillRegion]) {
       const region = MACRO_REGIONS[drillRegion];
-      map.fitBounds(region.bounds, { padding: 40, duration: 1200 });
-    } else if (drillRegion === null) {
-      // handled by fly-to logic above or default view
+      try { map.fitBounds(region.bounds, { padding: 40, duration: 1200 }); } catch { /* ignore */ }
     }
   }, [drillRegion]);
 
-  /* ── story counts per macro region ── */
   const regionStoryCounts = useMemo(() => {
     const counts = {};
     for (const key of Object.keys(MACRO_REGIONS)) counts[key] = 0;
@@ -250,573 +276,8 @@ const FlatMap = ({
     return counts;
   }, [newsList]);
 
-  /* ── country fill paint expression ── */
-  const countryFillPaint = useMemo(() => {
-    const drillIsos = drillRegion ? MACRO_REGIONS[drillRegion]?.isos : null;
+  const drillIsos = drillRegion ? MACRO_REGIONS[drillRegion]?.isos : null;
 
-    if (mapOverlay === 'coverage') {
-      // Coverage overlay: color by coverage status
-      const matchEntries = [];
-      for (const [iso, entry] of Object.entries(coverageStatusByIso)) {
-        const meta = getCoverageMeta(entry?.status || 'uncovered');
-        matchEntries.push(iso, meta.accent);
-      }
-      const colorExpr = matchEntries.length > 0
-        ? ['match', ['get', '_iso'], ...matchEntries, 'rgba(255,255,255,0.02)']
-        : 'rgba(255,255,255,0.02)';
-
-      return {
-        'fill-color': colorExpr,
-        'fill-opacity': [
-          'case',
-          // Dim outside drill region
-          ...(drillIsos ? [
-            ['!', ['in', ['get', '_iso'], ['literal', [...drillIsos]]]],
-            0.015,
-          ] : []),
-          ['boolean', ['feature-state', 'selected'], false],
-          0.42,
-          ['boolean', ['feature-state', 'hover'], false],
-          0.3,
-          0.15,
-        ],
-      };
-    }
-
-    // Severity overlay
-    const matchEntries = [];
-    for (const [iso, entry] of Object.entries(regionSeverities)) {
-      matchEntries.push(iso, severityToColor(entry.peakSeverity));
-    }
-    const colorExpr = matchEntries.length > 0
-      ? ['match', ['get', '_iso'], ...matchEntries, 'rgba(0, 200, 255, 0.03)']
-      : 'rgba(0, 200, 255, 0.03)';
-
-    return {
-      'fill-color': colorExpr,
-      'fill-opacity': [
-        'case',
-        ...(drillIsos ? [
-          ['!', ['in', ['get', '_iso'], ['literal', [...drillIsos]]]],
-          0.015,
-        ] : []),
-        ['boolean', ['feature-state', 'selected'], false],
-        0.45,
-        ['boolean', ['feature-state', 'hover'], false],
-        0.35,
-        // Has severity data → normal, otherwise faint
-        ...(Object.keys(regionSeverities).length > 0 ? [
-          ['in', ['get', '_iso'], ['literal', Object.keys(regionSeverities)]],
-          0.2,
-        ] : []),
-        0.03,
-      ],
-    };
-  }, [regionSeverities, mapOverlay, coverageStatusByIso, drillRegion]);
-
-  /* ── country border paint ── */
-  const countryLinePaint = useMemo(() => {
-    const selectedExpr = selectedRegion
-      ? ['==', ['get', '_iso'], selectedRegion]
-      : false;
-
-    return {
-      'line-color': [
-        'case',
-        ...(selectedExpr ? [selectedExpr, '#00d4ff'] : []),
-        ['boolean', ['feature-state', 'hover'], false],
-        'rgba(0, 240, 255, 0.5)',
-        'rgba(0, 200, 255, 0.06)',
-      ],
-      'line-width': [
-        'case',
-        ...(selectedExpr ? [selectedExpr, 2] : []),
-        ['boolean', ['feature-state', 'hover'], false],
-        1.5,
-        0.5,
-      ],
-    };
-  }, [selectedRegion]);
-
-  /* ── selected glow border (separate layer for wider glow) ── */
-  const selectedGlowPaint = useMemo(() => {
-    if (!selectedRegion) return null;
-    return {
-      'line-color': 'rgba(0, 212, 255, 0.25)',
-      'line-width': 5,
-      'line-blur': 4,
-    };
-  }, [selectedRegion]);
-
-  const selectedGlowFilter = useMemo(() => {
-    return selectedRegion ? ['==', ['get', '_iso'], String(selectedRegion)] : ['==', 1, 0];
-  }, [selectedRegion]);
-
-  /* ── velocity spike border highlight for countries ── */
-  const spikeIsos = useMemo(() => velocitySpikes.map((s) => s.iso), [velocitySpikes]);
-
-  const spikeBorderFilter = useMemo(() => {
-    if (spikeIsos.length === 0) return ['==', 1, 0]; // never match
-    return ['in', ['get', '_iso'], ['literal', spikeIsos]];
-  }, [spikeIsos]);
-
-  const spikeBorderPaint = useMemo(() => {
-    // Build a match expression for spike vs elevated colors
-    const matchEntries = [];
-    for (const spike of velocitySpikes) {
-      matchEntries.push(spike.iso, spike.level === 'spike' ? 'rgba(255, 85, 119, 0.6)' : 'rgba(255, 170, 51, 0.5)');
-    }
-    const colorExpr = matchEntries.length > 0
-      ? ['match', ['get', '_iso'], ...matchEntries, 'rgba(255, 170, 51, 0.3)']
-      : 'rgba(255, 170, 51, 0.3)';
-    return {
-      'line-color': colorExpr,
-      'line-width': 2,
-      'line-blur': 1.5,
-    };
-  }, [velocitySpikes]);
-
-  /* ── article markers GeoJSON ── */
-  const articlesGeoJson = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: newsList
-      .filter((s) => s.coordinates && s.coordinates.length >= 2
-        && !(s.coordinates[0] === 0 && s.coordinates[1] === 0))
-      .map((story) => ({
-        type: 'Feature',
-        properties: {
-          id: story.id,
-          title: story.title,
-          severity: story.severity,
-          articleCount: story.articleCount || 1,
-          color: severityToColor(story.severity),
-          locality: story.locality || '',
-          category: story.category || '',
-          isoA2: story.isoA2 || '',
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [story.coordinates[1], story.coordinates[0]], // swap lat/lng → lng/lat
-        },
-      })),
-  }), [newsList]);
-
-  const trackingGeoJson = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: (trackingPoints || [])
-      .filter((p) => p.lat != null && p.lng != null)
-      .map((p) => ({
-        type: 'Feature',
-        properties: {
-          id: p.id,
-          kind: p.kind,
-          label: p.label,
-          heading: p.heading ?? 0,
-          emergency: p.emergency || '',
-          icon: p.kind === 'air' ? 'plane-icon' : 'ship-icon',
-          color: p.emergency ? '#ff4444' : (p.kind === 'air' ? '#7ecbff' : '#44ddb0'),
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [p.lng, p.lat],
-        },
-      })),
-  }), [trackingPoints]);
-
-  /* ── locality labels GeoJSON (shown only when a region is selected) ── */
-  const localityLabelsGeoJson = useMemo(() => {
-    if (!selectedRegion) return { type: 'FeatureCollection', features: [] };
-    const states = getStatesByIso(selectedRegion);
-    const features = states.map((c) => ({
-      type: 'Feature',
-      properties: { name: c.name },
-      geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
-    }));
-    return { type: 'FeatureCollection', features };
-  }, [selectedRegion]);
-
-  /* ── velocity spike markers GeoJSON (shown in ALL overlay modes) ── */
-  const velocitySpikesGeoJson = useMemo(() => {
-    if (velocitySpikes.length === 0) {
-      return { type: 'FeatureCollection', features: [] };
-    }
-    // Build ISO → representative story lookup
-    const isoToStory = {};
-    for (const story of newsList) {
-      if (!story.isoA2 || !story.coordinates) continue;
-      if (!isoToStory[story.isoA2] || story.severity > isoToStory[story.isoA2].severity) {
-        isoToStory[story.isoA2] = story;
-      }
-    }
-    const features = [];
-    for (const spike of velocitySpikes.slice(0, 10)) {
-      const story = isoToStory[spike.iso];
-      if (!story) continue;
-      features.push({
-        type: 'Feature',
-        properties: {
-          iso: spike.iso,
-          level: spike.level,
-          zScore: spike.zScore === Infinity ? 99 : spike.zScore,
-          color: spike.level === 'spike' ? '#ff5577' : '#ffaa33',
-        },
-        geometry: {
-          type: 'Point',
-          coordinates: [story.coordinates[1], story.coordinates[0]],
-        },
-      });
-    }
-    return { type: 'FeatureCollection', features };
-  }, [velocitySpikes, newsList]);
-
-  /* ── selected story marker ── */
-  const selectedStoryGeoJson = useMemo(() => {
-    if (!selectedStory || !selectedStory.coordinates) return null;
-    return {
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        properties: { id: selectedStory.id },
-        geometry: {
-          type: 'Point',
-          coordinates: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
-        },
-      }],
-    };
-  }, [selectedStory]);
-
-  /* ── arcs: lines between countries from events' multi-country countries arrays ── */
-  const arcsGeoJson = useMemo(() => {
-    const features = [];
-    const seen = new Set();
-
-    // Build a lookup: ISO → best representative story (highest severity with coordinates)
-    const countryStoryMap = {};
-    for (const story of newsList) {
-      if (!story.coordinates || !story.isoA2) continue;
-      if (!countryStoryMap[story.isoA2] || story.severity > countryStoryMap[story.isoA2].severity) {
-        countryStoryMap[story.isoA2] = story;
-      }
-    }
-
-    const addArc = (isoA, isoB, severity, category, title, type = 'same-event', label = null) => {
-      if (isoA === isoB) return;
-      const pairKey = [isoA, isoB].sort().join('-');
-      if (seen.has(pairKey)) return;
-      const a = countryStoryMap[isoA];
-      const b = countryStoryMap[isoB];
-      if (!a || !b) return;
-      seen.add(pairKey);
-      const sev = severity ?? Math.round((a.severity + b.severity) / 2);
-      features.push({
-        type: 'Feature',
-        properties: {
-          severity: sev,
-          color: ARC_COLORS[type] || ARC_COLORS['same-event'],
-          arcType: type,
-          arcLabel: label || '',
-          category: category || a.category || b.category || 'related',
-          startIso: isoA,
-          endIso: isoB,
-          startRegion: a.region || a.locality || isoA,
-          endRegion: b.region || b.locality || isoB,
-          title: title || a.title,
-        },
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            [a.coordinates[1], a.coordinates[0]],
-            [b.coordinates[1], b.coordinates[0]],
-          ],
-        },
-      });
-    };
-
-    // 1. Same-event arcs: multi-country events
-    for (const story of newsList) {
-      const eventCountries = story.countries;
-      if (!Array.isArray(eventCountries) || eventCountries.length < 2) continue;
-      for (let i = 0; i < eventCountries.length; i++) {
-        for (let j = i + 1; j < eventCountries.length; j++) {
-          addArc(eventCountries[i], eventCountries[j], story.severity, story.category, story.title, 'same-event');
-        }
-      }
-    }
-
-    // 2. Shared-actor arcs: entity name appears in events in 2+ different countries
-    const entityCountryMap = {};
-    for (const story of newsList) {
-      if (!story.isoA2) continue;
-      for (const org of (story.entities?.organizations || [])) {
-        if (!org.name) continue;
-        if (!entityCountryMap[org.name]) entityCountryMap[org.name] = [];
-        entityCountryMap[org.name].push({ iso: story.isoA2, severity: story.severity, title: story.title });
-      }
-    }
-    for (const [entityName, occurrences] of Object.entries(entityCountryMap)) {
-      const uniqueCountries = [...new Set(occurrences.map((o) => o.iso))];
-      if (uniqueCountries.length >= 2) {
-        const maxSev = Math.max(...occurrences.map((o) => o.severity || 0));
-        addArc(uniqueCountries[0], uniqueCountries[1], maxSev, 'shared-actor', entityName, 'shared-actor', entityName);
-      }
-    }
-
-    // 3. Causal-flow arcs: category pairs between adjacent countries
-    const categoryCountryMap = {};
-    for (const story of newsList) {
-      if (!story.isoA2) continue;
-      const normalizedCat = normalizeCausalCategory(story.category);
-      if (!normalizedCat) continue;
-      if (!categoryCountryMap[normalizedCat]) categoryCountryMap[normalizedCat] = [];
-      categoryCountryMap[normalizedCat].push({ iso: story.isoA2, severity: story.severity, title: story.title });
-    }
-    for (const { source, target, label } of CAUSAL_PAIRS) {
-      const sourceEntries = categoryCountryMap[source] || [];
-      const targetEntries = categoryCountryMap[target] || [];
-      for (const src of sourceEntries) {
-        for (const tgt of targetEntries) {
-          if (src.iso === tgt.iso) continue;
-          if (!areCountriesAdjacent(src.iso, tgt.iso)) continue;
-          const avgSev = Math.round(((src.severity || 0) + (tgt.severity || 0)) / 2);
-          addArc(src.iso, tgt.iso, avgSev, label, `${src.title} → ${tgt.title}`, 'causal-flow', label);
-        }
-      }
-    }
-
-    features.sort((a, b) => b.properties.severity - a.properties.severity);
-    return { type: 'FeatureCollection', features: features.slice(0, 30) };
-  }, [newsList]);
-
-  /* ── geopolitical co-occurrence arcs ── */
-  const geoArcsGeoJson = useMemo(() => {
-    if (mapOverlay !== 'geopolitical') return { type: 'FeatureCollection', features: [] };
-
-    const coOccurrences = buildCountryCoOccurrences(newsList);
-    const storyMap = buildCountryStoryMap(newsList);
-    const arcData = buildGeopoliticalArcData(coOccurrences, storyMap);
-    const maxCount = arcData.length > 0 ? arcData[0].count : 1;
-
-    const features = arcData.map((arc) => ({
-      type: 'Feature',
-      properties: {
-        startIso: arc.startIso,
-        endIso: arc.endIso,
-        startRegion: arc.startRegion,
-        endRegion: arc.endRegion,
-        count: arc.count,
-        maxSeverity: arc.maxSeverity,
-        avgSeverity: arc.avgSeverity,
-        color: coOccurrenceToColor(arc.count, maxCount),
-        strokeWidth: coOccurrenceToStroke(arc.count, maxCount),
-        arcType: 'geopolitical',
-        arcLabel: '',
-        severity: arc.avgSeverity,
-        category: 'geopolitical',
-        title: `${isoToCountry(arc.startIso) || arc.startIso} ↔ ${isoToCountry(arc.endIso) || arc.endIso}: ${arc.count} shared stories`,
-      },
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [arc.startLng, arc.startLat],
-          [arc.endLng, arc.endLat],
-        ],
-      },
-    }));
-
-    return { type: 'FeatureCollection', features };
-  }, [newsList, mapOverlay]);
-
-  /* ── active arc source: switch between standard and geopolitical ── */
-  const activeArcsGeoJson = mapOverlay === 'geopolitical' ? geoArcsGeoJson : arcsGeoJson;
-
-  /* ── hover handling ── */
-  const onMouseMove = useCallback((e) => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    // Check arc hover first
-    const arcFeats = map.queryRenderedFeatures(e.point, { layers: ['arc-lines', 'arc-glow'] });
-    const arcId = arcFeats.length > 0
-      ? `${arcFeats[0].properties.startIso}-${arcFeats[0].properties.endIso}`
-      : null;
-    setHoveredArcId((prev) => prev !== arcId ? arcId : prev);
-
-    if (arcId) {
-      map.getCanvas().style.cursor = 'pointer';
-      setHoverInfo(null);
-      if (hoveredIsoRef.current) {
-        map.setFeatureState({ source: 'countries', id: hoveredIsoRef.current }, { hover: false });
-        hoveredIsoRef.current = null;
-      }
-      return;
-    }
-
-    // Country hover
-    const features = map.queryRenderedFeatures(e.point, { layers: ['country-fill'] });
-    const iso = features?.[0]?.properties?._iso || null;
-    const name = features?.[0]?.properties?.NAME || features?.[0]?.properties?.ADMIN || iso;
-
-    if (hoveredIsoRef.current && hoveredIsoRef.current !== iso) {
-      map.setFeatureState(
-        { source: 'countries', id: hoveredIsoRef.current },
-        { hover: false },
-      );
-    }
-    if (iso && iso !== hoveredIsoRef.current) {
-      map.setFeatureState(
-        { source: 'countries', id: iso },
-        { hover: true },
-      );
-    }
-    hoveredIsoRef.current = iso;
-    map.getCanvas().style.cursor = iso ? 'pointer' : '';
-
-    // Build hover popup info
-    if (iso) {
-      const rd = regionSeverities[iso];
-      const ce = coverageStatusByIso[iso];
-      setHoverInfo({ lng: e.lngLat.lng, lat: e.lngLat.lat, name, iso, regionData: rd || null, coverageEntry: ce || null });
-    } else {
-      setHoverInfo(null);
-    }
-  }, [regionSeverities, coverageStatusByIso]);
-
-  const onMouseLeave = useCallback(() => {
-    const map = mapRef.current;
-    if (map && hoveredIsoRef.current) {
-      map.setFeatureState(
-        { source: 'countries', id: hoveredIsoRef.current },
-        { hover: false },
-      );
-      hoveredIsoRef.current = null;
-    }
-    setHoveredArcId(null);
-    setHoverInfo(null);
-    if (map) map.getCanvas().style.cursor = '';
-  }, []);
-
-  /* ── selected country feature state ── */
-  const prevSelectedRef = useRef(null);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.getSource('countries')) return;
-    if (prevSelectedRef.current) {
-      map.setFeatureState(
-        { source: 'countries', id: prevSelectedRef.current },
-        { selected: false },
-      );
-    }
-    if (selectedRegion) {
-      map.setFeatureState(
-        { source: 'countries', id: selectedRegion },
-        { selected: true },
-      );
-    }
-    prevSelectedRef.current = selectedRegion;
-  }, [selectedRegion]);
-
-  /* ── click handlers ── */
-  const onMapClick = useCallback((e) => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    // Check tracking icons (flights/vessels) first
-    const trackFeatures = map.queryRenderedFeatures(e.point, { layers: ['tracking-icons'] });
-    if (trackFeatures.length > 0) {
-      const props = trackFeatures[0].properties;
-      const coords = trackFeatures[0].geometry.coordinates.slice();
-      const isAir = props.kind === 'air';
-      const point = trackingPoints.find((p) => p.id === props.id);
-      const details = [];
-      if (isAir && point) {
-        if (point.altitude != null) details.push(`${Math.round(point.altitude)}m alt`);
-        if (point.velocity != null) details.push(`${Math.round(point.velocity)}m/s`);
-        if (point.originCountry) details.push(point.originCountry);
-      } else if (point) {
-        if (point.speed != null) details.push(`${point.speed.toFixed(1)}kn`);
-      }
-      setPopupInfo({
-        lng: coords[0],
-        lat: coords[1],
-        title: props.label || props.id,
-        severity: isAir ? 'Aircraft' : 'Vessel',
-        severityAccent: isAir ? '#7ecbff' : '#44ddb0',
-        severityMuted: isAir ? 'rgba(126,203,255,0.15)' : 'rgba(68,221,176,0.15)',
-        locality: details.join(' · '),
-        category: props.emergency || '',
-      });
-      return;
-    }
-
-    // Check article markers first
-    const markerFeatures = map.queryRenderedFeatures(e.point, { layers: ['article-markers'] });
-    if (markerFeatures.length > 0) {
-      const props = markerFeatures[0].properties;
-      const story = newsList.find((s) => s.id === props.id);
-      if (story) {
-        onStorySelect(story);
-        const coords = markerFeatures[0].geometry.coordinates.slice();
-        const meta = getSeverityMeta(story.severity);
-        setPopupInfo({
-          lng: coords[0],
-          lat: coords[1],
-          title: story.title,
-          severity: meta.label,
-          severityAccent: meta.accent,
-          severityMuted: meta.muted,
-          locality: story.locality,
-          category: story.category,
-        });
-        return;
-      }
-    }
-
-    // Check cluster clicks
-    const clusterFeatures = map.queryRenderedFeatures(e.point, { layers: ['cluster-circles'] });
-    if (clusterFeatures.length > 0) {
-      const clusterId = clusterFeatures[0].properties.cluster_id;
-      const source = map.getSource('articles');
-      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
-        if (err) return;
-        map.flyTo({
-          center: clusterFeatures[0].geometry.coordinates,
-          zoom: zoom,
-          duration: 600,
-        });
-      });
-      return;
-    }
-
-    // Check arc lines
-    const arcFeatures = map.queryRenderedFeatures(e.point, { layers: ['arc-lines', 'arc-glow'] });
-    if (arcFeatures.length > 0 && onArcSelect) {
-      const props = arcFeatures[0].properties;
-      onArcSelect({
-        startIso: props.startIso,
-        endIso: props.endIso,
-        startRegion: props.startRegion,
-        endRegion: props.endRegion,
-        category: props.category,
-        severity: props.severity,
-        type: props.arcType || 'same-event',
-        label: props.arcLabel || null,
-      });
-      setPopupInfo(null);
-      return;
-    }
-
-    // Check country polygons
-    const countryFeatures = map.queryRenderedFeatures(e.point, { layers: ['country-fill'] });
-    if (countryFeatures.length > 0) {
-      const iso = countryFeatures[0].properties._iso;
-      if (iso) {
-        onRegionSelect(iso);
-        setPopupInfo(null);
-      }
-    }
-  }, [newsList, trackingPoints, onStorySelect, onRegionSelect, onArcSelect]);
-
-  /* ── drill navigation ── */
   const handleDrillSelect = useCallback((regionKey) => {
     setDrillRegion(regionKey);
   }, []);
@@ -825,15 +286,16 @@ const FlatMap = ({
     setDrillRegion(null);
     const map = mapRef.current;
     if (map) {
-      map.flyTo({
-        center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
-        zoom: DEFAULT_ZOOM,
-        duration: 1200,
-      });
+      try {
+        map.flyTo({
+          center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
+          zoom: DEFAULT_ZOOM,
+          duration: 1200,
+        });
+      } catch { /* ignore */ }
     }
-  }, []);
+  }, [DEFAULT_ZOOM]);
 
-  /* ── breadcrumb ── */
   const breadcrumb = useMemo(() => {
     const parts = [{ label: 'WORLD', onClick: handleDrillBack }];
     if (drillRegion && MACRO_REGIONS[drillRegion]) {
@@ -849,513 +311,38 @@ const FlatMap = ({
     return parts;
   }, [drillRegion, selectedRegion, handleDrillBack]);
 
-  /* ── on map load ── */
-  const onMapLoad = useCallback(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    // Register plane icon — compact arrow shape for dense airspace
-    const planeSize = 16;
-    const planeCanvas = document.createElement('canvas');
-    planeCanvas.width = planeSize;
-    planeCanvas.height = planeSize;
-    const pCtx = planeCanvas.getContext('2d');
-    pCtx.fillStyle = '#ffffff';
-    const cx = planeSize / 2;
-    pCtx.beginPath();
-    pCtx.moveTo(cx, 1);          // nose
-    pCtx.lineTo(cx + 6, 11);     // right wing tip
-    pCtx.lineTo(cx, 8);          // center notch
-    pCtx.lineTo(cx - 6, 11);     // left wing tip
-    pCtx.closePath();
-    pCtx.fill();
-    const planeImageData = pCtx.getImageData(0, 0, planeSize, planeSize);
-    if (!map.hasImage('plane-icon')) {
-      map.addImage('plane-icon', planeImageData, { sdf: true });
-    }
-
-    // Register ship icon — small diamond
-    const shipSize = 10;
-    const shipCanvas = document.createElement('canvas');
-    shipCanvas.width = shipSize;
-    shipCanvas.height = shipSize;
-    const sCtx = shipCanvas.getContext('2d');
-    sCtx.fillStyle = '#ffffff';
-    const scx = shipSize / 2;
-    sCtx.beginPath();
-    sCtx.moveTo(scx, 1);
-    sCtx.lineTo(shipSize - 1, scx);
-    sCtx.lineTo(scx, shipSize - 1);
-    sCtx.lineTo(1, scx);
-    sCtx.closePath();
-    sCtx.fill();
-    const shipImageData = sCtx.getImageData(0, 0, shipSize, shipSize);
-    if (!map.hasImage('ship-icon')) {
-      map.addImage('ship-icon', shipImageData, { sdf: true });
-    }
-  }, []);
-
-  /* ── animated pulses traveling along arc lines ── */
-  const [arcPulses, setArcPulses] = useState({ type: 'FeatureCollection', features: [] });
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    if (hoveredArcId) return;
-    const lines = arcsGeoJson.features;
-    if (lines.length === 0) return;
-
-    let frame;
-    let t = 0;
-    let lastUpdateTime = 0;
-
-    const animate = (now) => {
-      t = (t + 0.003) % 1;
-      const points = [];
-      for (let i = 0; i < lines.length; i++) {
-        const coords = lines[i].geometry.coordinates;
-        const props = lines[i].properties;
-        // Each arc gets a pulse at a staggered offset
-        const offset = (t + i * 0.13) % 1;
-        const lng = coords[0][0] + (coords[1][0] - coords[0][0]) * offset;
-        const lat = coords[0][1] + (coords[1][1] - coords[0][1]) * offset;
-        points.push({
-          type: 'Feature',
-          properties: { color: props.color, severity: props.severity },
-          geometry: { type: 'Point', coordinates: [lng, lat] },
-        });
-      }
-      // Throttle state updates to ~10fps to avoid 60fps re-renders
-      if (now - lastUpdateTime >= 100) {
-        setArcPulses({ type: 'FeatureCollection', features: points });
-        lastUpdateTime = now;
-      }
-      frame = requestAnimationFrame(animate);
-    };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [arcsGeoJson, hoveredArcId]);
-
   return (
-    <div className="flatmap-wrapper">
-      <Map
-        ref={mapRef}
-        initialViewState={{
-          longitude: DEFAULT_CENTER.lng,
-          latitude: DEFAULT_CENTER.lat,
+    <div className="flatmap-wrapper" style={{ position: 'absolute', inset: 0 }}>
+      <AppMap
+        ref={handleMapRef}
+        surface="flat"
+        theme={isLight ? 'light' : 'dark'}
+        styleUrl={styleUrl}
+        viewport={{
+          center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
           zoom: DEFAULT_ZOOM,
         }}
-        style={{ width: '100%', height: '100%' }}
-        mapStyle={mapStyle}
-        onMouseMove={onMouseMove}
-        onMouseLeave={onMouseLeave}
-        onClick={onMapClick}
-        onLoad={onMapLoad}
-        attributionControl={false}
-        reuseMaps
       >
-        {/* ── Country polygons ── */}
-        {countries && (
-          <Source
-            id="countries"
-            type="geojson"
-            data={countries}
-            promoteId="_iso"
-          >
-            <Layer
-              id="country-fill"
-              type="fill"
-              paint={countryFillPaint}
-            />
-            <Layer
-              id="country-border"
-              type="line"
-              paint={countryLinePaint}
-            />
-            {/* Glow on selected country */}
-            <Layer
-              id="country-selected-glow"
-              type="line"
-              filter={selectedGlowFilter}
-              paint={selectedGlowPaint || { 'line-color': 'transparent', 'line-width': 0 }}
-            />
-            {/* Velocity spike border highlight on anomalous regions */}
-            <Layer
-              id="country-spike-border"
-              type="line"
-              filter={spikeBorderFilter}
-              paint={spikeBorderPaint}
-            />
-          </Source>
-        )}
-
-        {/* ── Crisis / geopolitical connection arcs ── */}
-        <Source id="arcs" type="geojson" data={activeArcsGeoJson}>
-          {/* Soft glow underneath */}
-          <Layer
-            id="arc-glow"
-            type="line"
-            paint={mapOverlay === 'geopolitical' ? {
-              'line-color': ['get', 'color'],
-              'line-width': ['get', 'strokeWidth'],
-              'line-opacity': 0.12,
-              'line-blur': 6,
-            } : {
-              'line-color': ['get', 'color'],
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'severity'],
-                20, 2,
-                50, 3,
-                85, 5,
-              ],
-              'line-opacity': [
-                'interpolate', ['linear'], ['get', 'severity'],
-                20, 0.03,
-                50, 0.05,
-                85, 0.08,
-              ],
-              'line-blur': 4,
-            }}
-          />
-          {/* Solid line */}
-          <Layer
-            id="arc-lines"
-            type="line"
-            layout={{ 'line-cap': 'round' }}
-            paint={mapOverlay === 'geopolitical' ? {
-              'line-color': ['get', 'color'],
-              'line-width': ['coalesce', ['get', 'strokeWidth'], 1],
-              'line-opacity': 0.55,
-            } : {
-              'line-color': ['get', 'color'],
-              'line-width': [
-                'interpolate', ['linear'], ['get', 'severity'],
-                20, 0.4,
-                50, 0.5,
-                85, 0.8,
-              ],
-              'line-opacity': [
-                'interpolate', ['linear'], ['get', 'severity'],
-                20, 0.1,
-                50, 0.16,
-                85, 0.25,
-              ],
-            }}
-          />
-          {/* Hover highlight — solid bright line, no dash */}
-          {hoveredArcId && (
-            <Layer
-              id="arc-hover"
-              type="line"
-              filter={['all',
-                ['==', ['get', 'startIso'], hoveredArcId.split('-')[0]],
-                ['==', ['get', 'endIso'], hoveredArcId.split('-')[1]],
-              ]}
-              paint={{
-                'line-color': '#00d4ff',
-                'line-width': 2,
-                'line-opacity': 0.7,
-              }}
-            />
-          )}
-        </Source>
-
-        {/* ── Traveling pulse dots along arcs ── */}
-        <Source id="arc-pulses" type="geojson" data={arcPulses}>
-          <Layer
-            id="arc-pulse-glow"
-            type="circle"
-            paint={{
-              'circle-color': ['get', 'color'],
-              'circle-radius': 5,
-              'circle-opacity': 0.15,
-              'circle-blur': 1,
-            }}
-          />
-          <Layer
-            id="arc-pulse-dot"
-            type="circle"
-            paint={{
-              'circle-color': ['get', 'color'],
-              'circle-radius': 2,
-              'circle-opacity': 0.6,
-            }}
-          />
-        </Source>
-
-        {/* ── Article markers with clustering ── */}
-        <Source
-          id="articles"
-          type="geojson"
-          data={articlesGeoJson}
-          cluster={true}
-          clusterMaxZoom={12}
-          clusterRadius={60}
-        >
-          {/* Cluster dots — small, non-intrusive */}
-          <Layer
-            id="cluster-circles"
-            type="circle"
-            filter={['has', 'point_count']}
-            paint={{
-              'circle-color': 'rgba(0, 200, 255, 0.12)',
-              'circle-radius': [
-                'step', ['get', 'point_count'],
-                8, 10, 10, 50, 12,
-              ],
-              'circle-stroke-width': 0.5,
-              'circle-stroke-color': 'rgba(0, 200, 255, 0.25)',
-            }}
-          />
-          {/* Cluster count — small label */}
-          <Layer
-            id="cluster-count"
-            type="symbol"
-            filter={['has', 'point_count']}
-            layout={{
-              'text-field': '{point_count_abbreviated}',
-              'text-font': ['Open Sans Semibold'],
-              'text-size': 9,
-              'text-allow-overlap': true,
-            }}
-            paint={{
-              'text-color': 'rgba(0, 220, 255, 0.7)',
-            }}
-          />
-          {/* Individual article markers */}
-          <Layer
-            id="article-markers"
-            type="circle"
-            filter={['!', ['has', 'point_count']]}
-            paint={{
-              'circle-color': ['get', 'color'],
-              'circle-radius': [
-                'interpolate', ['linear'],
-                ['get', 'articleCount'],
-                1, 4,
-                5, 7,
-                10, 10,
-                20, 14,
-              ],
-              'circle-opacity': 0.85,
-              'circle-stroke-width': 0.8,
-              'circle-stroke-color': ['get', 'color'],
-              'circle-stroke-opacity': 0.6,
-            }}
-          />
-        </Source>
-
-        {/* ── Live flights / vessels (rotated icons, zoom-scaled) ── */}
-        {trackingGeoJson.features.length > 0 && (
-          <Source id="tracking-markers" type="geojson" data={trackingGeoJson}>
-            <Layer
-              id="tracking-icons"
-              type="symbol"
-              layout={{
-                'icon-image': ['get', 'icon'],
-                'icon-size': [
-                  'interpolate', ['linear'], ['zoom'],
-                  2, 0.3,   // zoomed out — tiny
-                  5, 0.55,
-                  8, 0.8,
-                  12, 1.2,  // zoomed in — full size
-                ],
-                'icon-rotate': ['get', 'heading'],
-                'icon-rotation-alignment': 'map',
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-              }}
-              paint={{
-                'icon-color': ['get', 'color'],
-                'icon-opacity': [
-                  'interpolate', ['linear'], ['zoom'],
-                  2, 0.5,
-                  6, 0.85,
-                ],
-              }}
-            />
-          </Source>
-        )}
-
-        {/* ── Locality labels (visible only when a region is selected) ── */}
-        {localityLabelsGeoJson.features.length > 0 && (
-          <Source id="locality-labels" type="geojson" data={localityLabelsGeoJson}>
-            <Layer
-              id="locality-label-text"
-              type="symbol"
-              layout={{
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Semibold'],
-                'text-size': 12,
-                'text-offset': [0, 1.4],
-                'text-anchor': 'top',
-                'text-allow-overlap': false,
-                'text-ignore-placement': false,
-                'text-max-width': 10,
-              }}
-              paint={{
-                'text-color': 'rgba(255, 255, 255, 0.85)',
-                'text-halo-color': 'rgba(0, 0, 0, 0.7)',
-                'text-halo-width': 1.5,
-              }}
-            />
-          </Source>
-        )}
-
-        {/* ── Selected story marker (on top) ── */}
-        {selectedStoryGeoJson && (
-          <Source id="selected-story" type="geojson" data={selectedStoryGeoJson}>
-            {/* Glow */}
-            <Layer
-              id="selected-story-glow"
-              type="circle"
-              paint={{
-                'circle-color': 'rgba(255, 255, 255, 0.15)',
-                'circle-radius': 18,
-                'circle-blur': 1,
-              }}
-            />
-            {/* Marker */}
-            <Layer
-              id="selected-story-marker"
-              type="circle"
-              paint={{
-                'circle-color': '#ffffff',
-                'circle-radius': 7,
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff',
-              }}
-            />
-          </Source>
-        )}
-
-        {/* ── Velocity spike rings (coverage overlay) ── */}
-        <Source id="velocity-spikes" type="geojson" data={velocitySpikesGeoJson}>
-          {/* Outer glow ring */}
-          <Layer
-            id="velocity-spike-glow"
-            type="circle"
-            paint={{
-              'circle-color': ['get', 'color'],
-              'circle-radius': ['interpolate', ['linear'], ['get', 'zScore'], 1.5, 14, 3, 20, 5, 28],
-              'circle-opacity': 0.08,
-              'circle-blur': 1.2,
-            }}
-          />
-          {/* Middle ring */}
-          <Layer
-            id="velocity-spike-ring"
-            type="circle"
-            paint={{
-              'circle-color': 'transparent',
-              'circle-radius': ['interpolate', ['linear'], ['get', 'zScore'], 1.5, 9, 3, 13, 5, 18],
-              'circle-opacity': 0,
-              'circle-stroke-width': 1.5,
-              'circle-stroke-color': ['get', 'color'],
-              'circle-stroke-opacity': 0.55,
-            }}
-          />
-          {/* Center dot */}
-          <Layer
-            id="velocity-spike-dot"
-            type="circle"
-            paint={{
-              'circle-color': ['get', 'color'],
-              'circle-radius': 3,
-              'circle-opacity': 0.9,
-              'circle-stroke-width': 1,
-              'circle-stroke-color': 'rgba(0,0,0,0.4)',
-            }}
-          />
-        </Source>
-
-        {/* ── Region hover tooltip ── */}
-        {hoverInfo && !popupInfo && (
-          <Popup
-            longitude={hoverInfo.lng}
-            latitude={hoverInfo.lat}
-            anchor="bottom"
-            closeButton={false}
-            closeOnClick={false}
-            className="flatmap-gl-hover"
-            maxWidth="200px"
-            offset={12}
-          >
-            <div style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: '10px', lineHeight: '1.5', color: isLight ? '#1a1a1a' : '#e0e0e0' }}>
-              <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '2px' }}>{hoverInfo.name}</div>
-              {hoverInfo.regionData ? (() => {
-                const hMeta = getSeverityMeta(hoverInfo.regionData.peakSeverity);
-                return (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                      <span style={{ opacity: 0.5 }}>Severity</span>
-                      <span style={{ color: hMeta.accent, fontWeight: 500 }}>{hMeta.label}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                      <span style={{ opacity: 0.5 }}>Reports</span>
-                      <span>{hoverInfo.regionData.count}</span>
-                    </div>
-                  </>
-                );
-              })() : hoverInfo.coverageEntry ? (() => {
-                const cMeta = getCoverageMeta(hoverInfo.coverageEntry.status);
-                return (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                    <span style={{ opacity: 0.5 }}>Status</span>
-                    <span style={{ color: cMeta.accent }}>{hoverInfo.coverageEntry.status}</span>
-                  </div>
-                );
-              })() : (
-                <div style={{ opacity: 0.4 }}>No data</div>
-              )}
-            </div>
-          </Popup>
-        )}
-
-        {/* ── Story click popup ── */}
-        {popupInfo && (
-          <Popup
-            longitude={popupInfo.lng}
-            latitude={popupInfo.lat}
-            anchor="bottom"
-            closeOnClick={true}
-            onClose={() => setPopupInfo(null)}
-            className="flatmap-gl-popup"
-            maxWidth="260px"
-          >
-            <div style={{
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: '11px',
-              lineHeight: '1.4',
-              color: isLight ? '#1a1a1a' : '#e0e0e0',
-            }}>
-              <div style={{
-                display: 'inline-block',
-                padding: '1px 6px',
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                background: popupInfo.severityMuted,
-                color: popupInfo.severityAccent,
-                marginBottom: '4px',
-              }}>
-                {popupInfo.severity}
-              </div>
-              <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '3px' }}>
-                {popupInfo.title}
-              </div>
-              <div style={{ opacity: 0.6, fontSize: '10px' }}>
-                {[popupInfo.locality, popupInfo.category].filter(Boolean).join(' \u00b7 ')}
-              </div>
-            </div>
-          </Popup>
-        )}
-      </Map>
+        <MapGLOverlay
+          surface="flat"
+          newsList={newsList}
+          regionSeverities={regionSeverities}
+          mapOverlay={mapOverlay}
+          coverageStatusByIso={coverageStatusByIso}
+          velocitySpikes={velocitySpikes}
+          trackingPoints={trackingPoints}
+          selectedRegion={selectedRegion}
+          selectedStory={selectedStory}
+          onRegionSelect={onRegionSelect}
+          onStorySelect={onStorySelect}
+          onArcSelect={onArcSelect}
+          drillIsos={drillIsos}
+        />
+        {compact && selectedRegion && <CompactRegionLock iso={selectedRegion} />}
+      </AppMap>
 
       {/* ── Breadcrumb ── */}
-      {(drillRegion || selectedRegion) && (
+      {!compact && (drillRegion || selectedRegion) && (
         <div style={{
           position: 'absolute',
           top: 10,
@@ -1410,90 +397,33 @@ const FlatMap = ({
       )}
 
       {/* ── Region selector (desktop only) ── */}
-      {!isMobile && (
-        <div style={{
-          position: 'absolute',
-          bottom: 40,
-          left: 10,
-          zIndex: 10,
-          fontFamily: 'var(--font-mono, monospace)',
-          fontSize: '10px',
-          letterSpacing: '0.06em',
-          background: isLight ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.65)',
-          backdropFilter: 'blur(8px)',
-          borderRadius: '4px',
-          border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,200,255,0.08)'}`,
-          overflow: 'hidden',
-          pointerEvents: 'auto',
-        }}>
-          {/* World / overview button */}
-          <div
+      {!compact && !isMobile && (
+        <div className="map-drill-menu" role="group" aria-label="Continent drill">
+          <button
+            type="button"
+            className={`map-drill-chip${!drillRegion ? ' is-active' : ''}`}
             onClick={handleDrillBack}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '5px 10px',
-              cursor: 'pointer',
-              borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(0,200,255,0.06)'}`,
-              color: !drillRegion
-                ? (isLight ? '#000' : '#00d4ff')
-                : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)'),
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = isLight ? '#000' : '#00d4ff';
-              e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,200,255,0.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = !drillRegion
-                ? (isLight ? '#000' : '#00d4ff')
-                : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)');
-              e.currentTarget.style.background = 'transparent';
-            }}
+            aria-pressed={!drillRegion}
           >
-            <Globe2 size={11} />
+            <Globe2 size={11} aria-hidden />
             <span>{t('map.world', 'WORLD')}</span>
-            <span style={{ marginLeft: 'auto', opacity: 0.4 }}>{newsList.length}</span>
-          </div>
-
-          {/* Region entries */}
+            <span className="map-drill-count">{newsList.length}</span>
+          </button>
           {Object.entries(MACRO_REGIONS).map(([key, region]) => {
             const isActive = drillRegion === key;
             const count = regionStoryCounts[key] || 0;
             return (
-              <div
+              <button
+                type="button"
                 key={key}
+                className={`map-drill-chip${isActive ? ' is-active' : ''}`}
                 onClick={() => handleDrillSelect(key)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '4px 10px',
-                  cursor: 'pointer',
-                  color: isActive
-                    ? (isLight ? '#000' : '#00d4ff')
-                    : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.35)'),
-                  borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.04)' : 'rgba(0,200,255,0.04)'}`,
-                  transition: 'color 0.15s, background 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = isLight ? '#000' : '#00d4ff';
-                  e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,200,255,0.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = isActive
-                    ? (isLight ? '#000' : '#00d4ff')
-                    : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.35)');
-                  e.currentTarget.style.background = 'transparent';
-                }}
+                aria-pressed={isActive}
               >
-                <Crosshair size={9} style={{ opacity: 0.5 }} />
+                <Crosshair size={9} aria-hidden />
                 <span>{region.label.toUpperCase()}</span>
-                <span style={{ marginLeft: 'auto', opacity: 0.35, fontSize: '9px' }}>
-                  {count > 0 ? count : '\u2014'}
-                </span>
-              </div>
+                <span className="map-drill-count">{count > 0 ? count : '—'}</span>
+              </button>
             );
           })}
         </div>

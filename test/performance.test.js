@@ -37,22 +37,32 @@ describe('performance optimization', () => {
     });
   });
 
-  describe('Three.js lazy loading', () => {
-    it('Globe.jsx imports react-globe.gl (Three.js dependency)', () => {
+  describe('Map architecture (unified AppMap + mapcn)', () => {
+    it('Globe.jsx imports AppMap', () => {
       const code = readFileSync(join(SRC, 'components/Globe.jsx'), 'utf-8');
-      assert.match(code, /import.*from\s+['"]react-globe\.gl['"]/);
+      assert.match(code, /import\s+AppMap\s+from\s+['"].*AppMap['"]/);
     });
 
-    it('Three.js is NOT imported in App.jsx (only loaded via Globe lazy import)', () => {
+    it('FlatMap.jsx imports AppMap', () => {
+      const code = readFileSync(join(SRC, 'components/FlatMap.jsx'), 'utf-8');
+      assert.match(code, /import\s+AppMap\s+from\s+['"].*AppMap['"]/);
+    });
+
+    it('Three.js is NOT imported in App.jsx', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
       assert.ok(!code.includes("from 'three'"), 'three should not be imported in App.jsx');
       assert.ok(!code.includes("from 'react-globe.gl'"), 'react-globe.gl should not be imported in App.jsx');
     });
 
-    it('Vite config has manual chunks for three/react-globe.gl', () => {
-      const code = readFileSync(join(ROOT, 'vite.config.js'), 'utf-8');
-      assert.match(code, /vendor-globe/, 'Should have a vendor-globe chunk');
-      assert.ok(code.includes('three') && code.includes('react-globe.gl'), 'three and react-globe.gl should be in manual chunks');
+    it('Globe.jsx does not import react-globe.gl after mapcn migration', () => {
+      const code = readFileSync(join(SRC, 'components/Globe.jsx'), 'utf-8');
+      assert.ok(!/from\s+['"]react-globe\.gl['"]/.test(code), 'Globe.jsx should no longer import react-globe.gl');
+      assert.ok(!/from\s+['"]three['"]/.test(code), 'Globe.jsx should no longer import three');
+    });
+
+    it('FlatMap.jsx does not import react-map-gl after mapcn migration', () => {
+      const code = readFileSync(join(SRC, 'components/FlatMap.jsx'), 'utf-8');
+      assert.ok(!/from\s+['"]react-map-gl/.test(code), 'FlatMap.jsx should no longer import react-map-gl');
     });
   });
 
@@ -128,20 +138,4 @@ describe('performance optimization', () => {
     });
   });
 
-  describe('Vite build configuration', () => {
-    it('vite.config.js has manual chunks for vendor-globe', () => {
-      const code = readFileSync(join(ROOT, 'vite.config.js'), 'utf-8');
-      assert.match(code, /vendor-globe/);
-    });
-
-    it('vite.config.js has manual chunks for vendor-map', () => {
-      const code = readFileSync(join(ROOT, 'vite.config.js'), 'utf-8');
-      assert.match(code, /vendor-map/);
-    });
-
-    it('vite.config.js has manual chunks for vendor-leaflet', () => {
-      const code = readFileSync(join(ROOT, 'vite.config.js'), 'utf-8');
-      assert.match(code, /vendor-leaflet/);
-    });
-  });
 });
