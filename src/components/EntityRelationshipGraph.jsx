@@ -31,19 +31,21 @@ const MIN_NODE_RADIUS = 7;
 const MAX_NODE_RADIUS = 26;
 const LABEL_FONT = '11px "IBM Plex Mono", ui-monospace, Menlo, monospace';
 
-const PREWARM_TICKS = 260;
-const WORLD_SCALE = 2.0;
-const ZOOM_MIN = 0.25;
+const PREWARM_TICKS = 320;
+const WORLD_SCALE = 2.6;          // much bigger world → real breathing room
+const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 3.0;
 const ZOOM_STEP = 1.15;
 const DRAG_THRESHOLD = 4;
 
-const ALPHA_FLOOR = 0.12;         // sim never fully cools
+const ALPHA_FLOOR = 0.14;
 const ALPHA_DECAY = 0.992;
-const REHEAT_ALPHA = 0.65;        // on select / drag node
+const REHEAT_ALPHA = 0.75;
 
-const COLLIDE_ITERATIONS = 3;
-const COLLIDE_PADDING = 6;        // extra px between node surfaces
+const COLLIDE_ITERATIONS = 4;
+const COLLIDE_PADDING_BASE = 26;  // minimum px between node surfaces
+const COLLIDE_PER_DEGREE  = 5;    // +px per connection (hubs get bigger bubbles)
+const COLLIDE_PADDING_MAX = 70;
 
 /* ── Type anchors in WORLD coords ── */
 function typeAnchors(worldW, worldH) {
@@ -64,11 +66,19 @@ function nodeRadius(mentionCount, maxMentions) {
 function initSimulation(nodes, edges, worldW, worldH) {
   const anchors = typeAnchors(worldW, worldH);
   const maxMentions = Math.max(1, ...nodes.map((n) => n.mentionCount || 1));
-  const zoneW = worldW * 0.42;
-  const zoneH = worldH * 0.42;
+  const zoneW = worldW * 0.50;
+  const zoneH = worldH * 0.50;
+
+  // Per-node degree (edge count) — used to size personal-space bubbles
+  const degree = new Map();
+  for (const e of edges) {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  }
 
   const simNodes = nodes.map((n) => {
     const a = anchors[n.type] || { x: worldW / 2, y: worldH / 2 };
+    const deg = degree.get(n.id) || 0;
     return {
       ...n,
       anchorX: a.x,
@@ -78,6 +88,9 @@ function initSimulation(nodes, edges, worldW, worldH) {
       vx: 0,
       vy: 0,
       radius: nodeRadius(n.mentionCount, maxMentions),
+      degree: deg,
+      // Bigger bubble for hubs; isolated nodes still get base padding
+      pad: Math.min(COLLIDE_PADDING_MAX, COLLIDE_PADDING_BASE + deg * COLLIDE_PER_DEGREE),
     };
   });
 
@@ -97,17 +110,19 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
   const k = alpha;
   const BOUND_PAD = 40;
   const hasSelection = !!selectedId;
+  const cx = worldW / 2;
+  const cy = worldH / 2;
 
-  // 1. Pairwise Coulomb repulsion
+  // 1. Pairwise Coulomb repulsion — strong, long-range floor
   for (let i = 0; i < simNodes.length; i++) {
     for (let j = i + 1; j < simNodes.length; j++) {
       const a = simNodes[i];
       const b = simNodes[j];
-      let dx = b.x - a.x;
-      let dy = b.y - a.y;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const minSep = a.radius + b.radius + 72;
-      const charge = dist < minSep ? 3200 : 1500;
+      const minSep = a.radius + b.radius + Math.max(a.pad, b.pad);
+      const charge = dist < minSep ? 5200 : 2000;
       const force = (charge * k) / (dist * dist);
       const ux = dx / dist;
       const uy = dy / dist;
@@ -118,7 +133,8 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     }
   }
 
-  // 2. Edge springs — connected-to-selected pull shorter (cluster in)
+  // 2. Edge springs — connected pairs are ALLOWED to be close. Selection
+  //    pulls edges shorter so the click response is obvious.
   for (const edge of simEdges) {
     const a = edge.sourceNode;
     const b = edge.targetNode;
@@ -126,9 +142,11 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     const dy = b.y - a.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const involvesSelected = hasSelection && (edge.source === selectedId || edge.target === selectedId);
-    const idealDist = involvesSelected ? 110 : 180;
-    const stiffness = involvesSelected ? 0.006 : 0.003;
-    const force = (dist - idealDist) * stiffness * k * Math.min(edge.weight || 1, 5);
+    // Weighted bond: stronger edges (more shared events) sit closer
+    const w = Math.min(edge.weight || 1, 5);
+    const idealDist = involvesSelected ? 90 : (220 - w * 15);
+    const stiffness = involvesSelected ? 0.0075 : 0.0042;
+    const force = (dist - idealDist) * stiffness * k * w;
     const fx = (dx / dist) * force;
     const fy = (dy / dist) * force;
     a.vx += fx;
@@ -137,13 +155,28 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     b.vy -= fy;
   }
 
-  // 3. Type-anchor spring
+  // 3. Type-anchor spring — VERY weak. Just enough bias that zones are
+  //    recognisable; otherwise physics dominates and nodes actually spread.
   for (const node of simNodes) {
-    node.vx += (node.anchorX - node.x) * 0.0045 * k;
-    node.vy += (node.anchorY - node.y) * 0.0045 * k;
+    node.vx += (node.anchorX - node.x) * 0.0012 * k;
+    node.vy += (node.anchorY - node.y) * 0.0012 * k;
   }
 
-  // 4. Selection: extra repulsion from selected for NON-connected nodes
+  // 4. Isolated nodes (no edges) drift outward from centre so they don't
+  //    crowd the connected clusters. Satellite behaviour.
+  for (const node of simNodes) {
+    if (node.degree === 0) {
+      const dx = node.x - cx;
+      const dy = node.y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const target = Math.min(worldW, worldH) * 0.42;
+      const push = (target - dist) * 0.0025 * k;
+      node.vx += (dx / dist) * push;
+      node.vy += (dy / dist) * push;
+    }
+  }
+
+  // 5. Selection: extra outward push on NON-connected nodes — spotlight
   if (hasSelection) {
     const sel = simNodes.find((n) => n.id === selectedId);
     if (sel) {
@@ -153,8 +186,8 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
         const dx = node.x - sel.x;
         const dy = node.y - sel.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (dist < 240) {
-          const push = (240 - dist) * 0.012 * k;
+        if (dist < 300) {
+          const push = (300 - dist) * 0.018 * k;
           node.vx += (dx / dist) * push;
           node.vy += (dy / dist) * push;
         }
@@ -162,13 +195,13 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     }
   }
 
-  // 5. Thermal jitter — prevents deadlock when alpha is low
+  // 6. Thermal jitter
   for (const node of simNodes) {
-    node.vx += (Math.random() - 0.5) * 0.4 * k;
-    node.vy += (Math.random() - 0.5) * 0.4 * k;
+    node.vx += (Math.random() - 0.5) * 0.5 * k;
+    node.vy += (Math.random() - 0.5) * 0.5 * k;
   }
 
-  // 6. Soft bounds
+  // 7. Soft bounds
   for (const node of simNodes) {
     const r = node.radius;
     const leftP  = (r + BOUND_PAD) - node.x;
@@ -181,7 +214,7 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     if (botP   > 0) node.vy -= botP   * 0.02;
   }
 
-  // 7. Integrate with damping
+  // 8. Integrate with damping
   for (const node of simNodes) {
     node.vx *= 0.88;
     node.vy *= 0.88;
@@ -189,7 +222,7 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     node.y += node.vy;
   }
 
-  // 8. Iterative collision resolution (position-level, not velocity)
+  // 9. Iterative position-level collision using per-node pad
   for (let it = 0; it < COLLIDE_ITERATIONS; it++) {
     for (let i = 0; i < simNodes.length; i++) {
       for (let j = i + 1; j < simNodes.length; j++) {
@@ -198,7 +231,7 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-        const minD = a.radius + b.radius + COLLIDE_PADDING;
+        const minD = a.radius + b.radius + Math.max(a.pad, b.pad) * 0.5;
         if (dist < minD) {
           const overlap = (minD - dist) * 0.5;
           const ux = dx / dist;
