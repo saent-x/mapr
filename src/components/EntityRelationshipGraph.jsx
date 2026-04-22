@@ -20,9 +20,18 @@ const TYPE_COLORS = {
   location: '#5ec7d4',
 };
 
-const MIN_NODE_RADIUS = 6;
-const MAX_NODE_RADIUS = 24;
-const LABEL_FONT = '11px -apple-system, BlinkMacSystemFont, sans-serif';
+/* Tactical ink tokens (mirror --ink-0/1/2/3 from index.css). */
+const INK_0 = '#e8e6df';
+const INK_2 = 'rgba(232, 230, 223, 0.55)';
+const INK_3 = 'rgba(232, 230, 223, 0.28)';
+const EDGE_BASE   = 'rgba(50, 56, 70, 0.55)';     /* --line-2 @ 55% */
+const EDGE_DIM    = 'rgba(38, 43, 53, 0.35)';     /* --line @ 35% */
+const EDGE_HIGH   = 'rgba(232, 163, 61, 0.55)';   /* --amber @ 55% */
+const SELECT_RING = '#e8a33d';                    /* --amber */
+
+const MIN_NODE_RADIUS = 7;
+const MAX_NODE_RADIUS = 26;
+const LABEL_FONT = '11px "IBM Plex Mono", ui-monospace, Menlo, monospace';
 const SELECTED_RING = 3;
 
 /* ── Simple force simulation ── */
@@ -70,9 +79,9 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
       let dx = b.x - a.x;
       let dy = b.y - a.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      // Minimum separation based on node sizes
-      const minSep = a.radius + b.radius + 20;
-      const repulsion = dist < minSep ? 800 : 500;
+      // Minimum separation based on node sizes — bigger buffer reduces overlap
+      const minSep = a.radius + b.radius + 48;
+      const repulsion = dist < minSep ? 1600 : 900;
       const force = (repulsion * k) / (dist * dist);
       dx *= force / dist;
       dy *= force / dist;
@@ -90,8 +99,8 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const idealDist = 180;
-    const force = (dist - idealDist) * 0.004 * k * Math.min(edge.weight, 5);
+    const idealDist = 260;
+    const force = (dist - idealDist) * 0.0035 * k * Math.min(edge.weight, 5);
     const fx = (dx / dist) * force;
     const fy = (dy / dist) * force;
     a.vx += fx;
@@ -102,12 +111,12 @@ function tickSimulation(simNodes, simEdges, width, height, alpha) {
 
   // 3. Gentle center gravity — just enough to keep graph on screen
   for (const node of simNodes) {
-    node.vx += (width / 2 - node.x) * 0.0004 * k;
-    node.vy += (height / 2 - node.y) * 0.0004 * k;
+    node.vx += (width / 2 - node.x) * 0.0003 * k;
+    node.vy += (height / 2 - node.y) * 0.0003 * k;
   }
 
   // 4. Apply velocities with damping
-  const padding = 30;
+  const padding = 40;
   for (const node of simNodes) {
     node.vx *= 0.82;
     node.vy *= 0.82;
@@ -147,10 +156,10 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.strokeStyle = isHighlighted
-      ? 'rgba(255,255,255,0.5)'
+      ? EDGE_HIGH
       : selectedEntity
-        ? 'rgba(255,255,255,0.06)'
-        : 'rgba(255,255,255,0.12)';
+        ? EDGE_DIM
+        : EDGE_BASE;
     ctx.lineWidth = isHighlighted ? Math.min(edge.weight, 4) : Math.min(edge.weight * 0.5, 2);
     ctx.stroke();
   }
@@ -171,7 +180,7 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
     if (isSelected) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius + SELECTED_RING, 0, Math.PI * 2);
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = SELECT_RING;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -179,7 +188,7 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
     if (isHovered && !isSelected) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius + 2, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.strokeStyle = INK_2;
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -189,7 +198,7 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width
       ctx.font = LABEL_FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillStyle = dimmed ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = dimmed ? INK_3 : INK_0;
       ctx.fillText(node.name, node.x, node.y + node.radius + 4);
     }
   }

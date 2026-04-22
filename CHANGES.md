@@ -1,3 +1,141 @@
+# Mapr Console — Redesign Follow-Up Fixes
+
+Follow-up pass on top of `d2235c8 feat(ui): redesign UI to tactical Mapr Console spec`.
+Restores functionality dropped in the revamp, fixes graph rendering issues, and
+makes the side panels collapsible with persisted state.
+
+Scope: `src/` only — no data-layer refactors. Globe 5× size + entry animation preserved.
+
+## Fix #1 — Region / feed news: image + full metadata restored
+
+News cards + detail sheet lost image, source, timestamp, category, summary preview,
+confidence %, lifecycle/verification badges, entity tags, and the supporting-article
+list in the revamp. Restored every field the `canonicalizeArticles` pipeline already
+produces on each story.
+
+- `src/components/NewsPanel.jsx` — feed card now renders thumbnail
+  (`socialimage` / `image` fallback), lifecycle pill, summary preview, host,
+  confidence %. `ArticleSheet` expanded with image, verification + lifecycle
+  badges, detail grid (source / published / first-seen / category / region /
+  confidence / source counts / precision), source-type + language chips,
+  confidence-reason chips, entities (orgs + people), external article link, and
+  a supporting-articles list with per-source links. Thumbnails fail-silent via
+  `onError`.
+- `src/index.css` — new tactical styles: `.news-card-image`,
+  `.news-summary-preview`, `.news-card-summary`, `.news-card-pill-row`,
+  `.news-card-chip-row`, `.news-card-mini-badge` (+ tone-positive/negative/
+  warning variants), `.news-card-detail-grid`, `.news-card-source-block`,
+  `.news-card-source-list`, `.news-card-entities`.
+
+## Fix #2 — Region tab + map-click navigation + minimap
+
+- `src/App.jsx` — `handleRegionSelect` now also calls `navigate('/region/:iso')`.
+  Map / anomaly / watchlist region clicks route to the region tab.
+- `src/pages/RegionDetailPage.jsx` — news list uses the new richer card markup
+  (thumbnail + summary preview + lifecycle chip + confidence % + host +
+  external-link icon) for style parity with the feed.
+- `src/components/FlatMap.jsx` — new `compact` prop suppresses drill-region menu
+  and breadcrumb (region minimap passes it). Also fixed the fly-to effect so it
+  waits for `newsList` to populate before locking `prevRegionRef` — without this,
+  a region page mounted before backfill would sit on the world view until the
+  user clicked something else.
+  Region outlining itself still comes from `MapGLOverlay`'s existing
+  `selectedRegion` cyan outline + glow layers.
+
+Route `/region/:iso` was already wired in `main.jsx`; the gap was the click flow
+and the minimap chrome.
+
+## Fix #3 — Admin tab restored
+
+- `src/components/Layout.jsx` — NavLink to `/admin` added with shield SVG.
+  i18n key `nav.admin` already exists.
+- `src/pages/AdminPage.jsx` — unchanged. It already exposes password gate,
+  aggregate stats, ingestion health, coverage gaps, and the source-health table
+  (filter / search / sort). The page was just unreachable from the shell nav.
+- `test/adminPasswordGate.test.js`, `test/routing.test.js` — existing assertions
+  banned a sidebar admin link (leftover from when hiding the link was the
+  feature). Updated to require the link; the password-gate assertions on the
+  AdminPage itself are untouched.
+
+## Fix #4 — Entity graph: white bleed + congestion
+
+- `src/components/EntityRelationshipGraph.jsx` —
+  - Replaced every hard-coded `#fff` / `rgba(255,255,255,*)` with tactical ink
+    tokens (`INK_0` / `INK_2` / `INK_3`) and amber for the selected-node ring.
+    Edges now use `--line-2` / `--line` / `--amber` tinted variants instead of
+    white alphas.
+  - Spacing: `minSep` 20→48 px; repulsion 500/800→900/1600; edge ideal distance
+    180→260; center gravity and spring constant softened to match.
+  - Font switched to IBM Plex Mono for shell consistency.
+- `src/index.css` — added the missing `.entity-tooltip*` styles (previously
+  unstyled, so the hover card rendered as a default browser white box — a
+  likely source of the reported "white bleed"). Tooltip now uses
+  `--bg-1` / `--line-2` / `--ink-0` like the rest of the surfaces. Added
+  `.entity-graph-canvas { background: var(--bg-0) }` for safety.
+
+## Fix #5 — Collapsible Anomaly / Watchlist / Narrative panels
+
+- `src/stores/uiStore.js` — new `panelCollapsed: { anomaly, watchlist, narrative }`
+  slice. Hydrated from + persisted to `localStorage` key
+  `mapr:panelCollapsed:v1`. Actions: `togglePanelCollapsed(key)`,
+  `setPanelCollapsed(key, collapsed)`.
+- `src/components/AnomalyPanel.jsx`, `WatchlistPanel.jsx`, `NarrativePanel.jsx` —
+  chevron collapse button in each header (`ChevronUp` / `ChevronDown` lucide
+  icons). Body gets `aria-hidden`; panel root gets `data-collapsed`. State is
+  independent per panel and survives reload.
+- `src/index.css` — smooth height transition on `.mini-panel .panel-body`
+  (`max-height` + `padding` + `opacity`), collapsed rule
+  `.mini-panel[data-collapsed] .panel-body { max-height:0; padding:0; opacity:0 }`.
+  `.panel-collapse-btn` matches existing `.panel-header button` styling.
+
+## Fix #6 — Flat map blank regression
+
+Root cause: `.flatmap-wrapper` had **no CSS dimensions**. Globe's wrapper uses
+inline `position:absolute; inset:0`, so it filled the stage; FlatMap didn't.
+With `<AppMap>` sized `width:100% height:100%` relative to its parent, the
+MapLibre canvas collapsed to 0×0.
+
+- `src/components/FlatMap.jsx` —
+  `<div className="flatmap-wrapper" style={{ position: 'absolute', inset: 0 }}>`,
+  mirroring Globe. Works inside both `.map-stage` (absolute main stage) and
+  `.region-minimap` (position:relative grid cell) because both provide a
+  containing block.
+
+## Verification
+
+- `npm run build` — clean.
+- `npm test` — 538 pass / 0 fail / 4 skipped (542 total). Two test files updated
+  to stop asserting the previous "admin link hidden" design decision.
+- `npm run dev:frontend` — `/`, `/region/US`, `/admin` all return 200.
+
+No interactive browser testing was possible in this environment; recommended
+manual smoke checks before release:
+- Click a region on the flat map → loads `/region/<iso>` with filtered news +
+  minimap focused on that region (once backfill populates).
+- Region news items render a thumbnail when `socialimage` is present, plus
+  summary preview + lifecycle/confidence chips.
+- Admin NavLink reachable from the sidebar; password gate still renders;
+  dashboard loads after auth.
+- Entity graph: no bright tooltip, no white selected-ring; node labels readable
+  at default zoom for typical (80-node) entity counts.
+- Each side panel (Anomaly / Watchlist / Narrative) collapses via its chevron
+  and survives a page reload.
+- Flat map renders MapLibre tiles at `/` and in the region minimap.
+- Globe still oversized with entry zoom-in animation on first mount.
+
+## Deferred
+
+- Region minimap tight-fit to the country polygon bbox. Currently focuses the
+  first region story at `REGION_ZOOM`; if a region has zero news at mount, the
+  minimap sits on the world default until backfill arrives. Proper
+  bbox-from-geojson fit would require either a precomputed ISO-centroid/bounds
+  lookup or loading the countries GeoJSON inside FlatMap — too invasive here.
+- Entity graph layout algorithm is still the in-house force sim. A
+  cytoscape / d3-force swap would likely beat it at >100 nodes but is out of
+  scope for this fix pass.
+
+---
+
 # Design revamp — Mapr Console
 
 Rebuilt the entire UI layer against the "Mapr Console" handoff bundle

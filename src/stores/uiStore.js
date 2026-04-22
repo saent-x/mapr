@@ -1,6 +1,33 @@
 import { create } from 'zustand';
 import { loadViews, saveViews, createView } from '../utils/viewManager.js';
 
+const PANEL_COLLAPSE_KEY = 'mapr:panelCollapsed:v1';
+
+function loadPanelCollapsed() {
+  if (typeof window === 'undefined') return { anomaly: false, watchlist: false, narrative: false };
+  try {
+    const raw = window.localStorage.getItem(PANEL_COLLAPSE_KEY);
+    if (!raw) return { anomaly: false, watchlist: false, narrative: false };
+    const parsed = JSON.parse(raw);
+    return {
+      anomaly: !!parsed.anomaly,
+      watchlist: !!parsed.watchlist,
+      narrative: !!parsed.narrative,
+    };
+  } catch {
+    return { anomaly: false, watchlist: false, narrative: false };
+  }
+}
+
+function savePanelCollapsed(state) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PANEL_COLLAPSE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
 /**
  * UI store — map mode, drawer state, selection, toasts, saved views, timeline.
  */
@@ -24,6 +51,9 @@ const useUIStore = create((set, get) => ({
 
   /* ── toasts ── */
   toasts: [],
+
+  /* ── panel collapsed state (persisted per-panel) ── */
+  panelCollapsed: loadPanelCollapsed(),
 
   /* ── saved views ── */
   savedViews: typeof window !== 'undefined' ? loadViews() : [],
@@ -67,6 +97,17 @@ const useUIStore = create((set, get) => ({
 
   setShowExport: (v) => set({ showExport: v }),
   setScrubTime: (v) => set({ scrubTime: v }),
+
+  togglePanelCollapsed: (key) => set((s) => {
+    const next = { ...s.panelCollapsed, [key]: !s.panelCollapsed[key] };
+    savePanelCollapsed(next);
+    return { panelCollapsed: next };
+  }),
+  setPanelCollapsed: (key, collapsed) => set((s) => {
+    const next = { ...s.panelCollapsed, [key]: !!collapsed };
+    savePanelCollapsed(next);
+    return { panelCollapsed: next };
+  }),
 
   /* ── toasts ── */
   addToast: (message, type = 'info') => {

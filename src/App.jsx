@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, AlertTriangle, Eye, X, Users, Building2, MapPin } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -38,6 +38,7 @@ const FlatMap = lazy(() => import('./components/FlatMap'));
 function App() {
   const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   /* ── stores ── */
   const {
@@ -234,7 +235,12 @@ function App() {
     coverageHistory, dataSource, coverageDiagnostics,
   });
 
-  const handleRegionSelect = useUIStore((s) => s.selectRegion);
+  const selectRegion = useUIStore((s) => s.selectRegion);
+  const handleRegionSelect = useCallback((iso) => {
+    if (!iso) { selectRegion(null); return; }
+    selectRegion(iso);
+    navigate(`/region/${iso}`);
+  }, [selectRegion, navigate]);
   const handleStorySelect = useUIStore((s) => s.selectStory);
   const handleArcSelect = useUIStore((s) => s.selectArc);
   const handleClosePanel = useUIStore((s) => s.closePanel);

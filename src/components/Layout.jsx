@@ -21,6 +21,12 @@ const Ico = {
       <path d="M3 17l5-5 4 4 9-9"/><path d="M14 7h7v7"/>
     </svg>
   ),
+  admin: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+      <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/>
+      <path d="M9 12l2 2 4-4"/>
+    </svg>
+  ),
 };
 
 function formatClock(d) {
@@ -114,6 +120,14 @@ export default function Layout() {
           >
             {Ico.trends}
             <span className="side-label">{t('nav.trends')}</span>
+          </NavLink>
+          <NavLink
+            to="/admin"
+            className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
+            title={t('nav.admin', 'Admin')}
+          >
+            {Ico.admin}
+            <span className="side-label">{t('nav.admin', 'Admin')}</span>
           </NavLink>
         </nav>
       </aside>

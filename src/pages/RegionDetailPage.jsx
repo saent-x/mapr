@@ -1,12 +1,14 @@
-import React, { lazy, Suspense, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { ExternalLink } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
 import { isoToCountry } from '../utils/geocoder';
 import { sortStories, storyMatchesFilters } from '../utils/storyFilters';
 import { canonicalizeArticles } from '../utils/newsPipeline';
 import { resolveDateFloor } from '../utils/mockData';
+import { getSourceHost } from '../utils/urlUtils';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
@@ -27,6 +29,33 @@ function sevTier(sev) {
   if (v >= 70) return 'red';
   if (v >= 40) return 'amber';
   return 'green';
+}
+
+function lifecycleMeta(lifecycle) {
+  if (!lifecycle) return null;
+  const map = {
+    emerging:    { label: 'EMERGING',    color: 'var(--cyan)' },
+    developing:  { label: 'DEVELOPING',  color: 'var(--amber)' },
+    escalating:  { label: 'ESCALATING',  color: 'var(--sev-red)' },
+    stabilizing: { label: 'STABILIZING', color: 'var(--sev-green)' },
+    resolved:    { label: 'RESOLVED',    color: 'var(--ink-2)' },
+  };
+  return map[lifecycle] || null;
+}
+
+function RegionNewsThumb({ story }) {
+  const [failed, setFailed] = useState(false);
+  const src = story.socialimage || story.image || null;
+  if (!src || failed) return null;
+  return (
+    <img
+      className="news-card-image"
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 /**
@@ -135,21 +164,41 @@ export default function RegionDetailPage() {
         {regionNews.map((story) => {
           const tier = sevTier(story.severity);
           const sev = ((story.severity ?? 0) / 10).toFixed(1);
+          const host = getSourceHost(story.url) || story.source || '';
+          const conf = typeof story.confidence === 'number' ? story.confidence : null;
+          const lMeta = lifecycleMeta(story.lifecycle);
           return (
             <div key={story.id} className="news-item">
+              <RegionNewsThumb story={story} />
               <div className="news-meta">
                 <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
                 {story.category && <span className="tag">{story.category}</span>}
+                {lMeta && (
+                  <span className="tag" style={{ color: lMeta.color, borderColor: lMeta.color }}>
+                    {lMeta.label}
+                  </span>
+                )}
                 <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
                 <span>·</span>
                 <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
               </div>
               <div className="news-title">{story.title}</div>
+              {story.summary && (
+                <div className="news-summary-preview">{story.summary}</div>
+              )}
               <div className="news-src">
                 <span className="mono">{story.id}</span>
-                {story.source && <> · {story.source}</>}
+                {host && <> · {host}</>}
+                {conf != null && <> · <span style={{ color: 'var(--ink-1)' }}>{conf}%</span></>}
                 {story.url && (
-                  <> · <a href={story.url} target="_blank" rel="noreferrer" style={{ color: 'var(--amber)' }}>OPEN</a></>
+                  <> · <a
+                    href={story.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: 'var(--amber)', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  >
+                    <ExternalLink size={10} aria-hidden /> OPEN
+                  </a></>
                 )}
               </div>
             </div>
@@ -174,6 +223,7 @@ export default function RegionDetailPage() {
             onRegionSelect={() => {}}
             onStorySelect={() => {}}
             onArcSelect={() => {}}
+            compact
           />
         </Suspense>
         <div className="region-minimap-actions">

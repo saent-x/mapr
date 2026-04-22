@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { isoToCountry } from '../utils/geocoder.js';
+import useUIStore from '../stores/uiStore.js';
 
 /**
  * Build cluster summaries from the current event pool — group by category,
@@ -35,18 +37,30 @@ const NarrativePanel = ({ newsList = [], isOpen, onClose, onRegionSelect }) => {
   const { t } = useTranslation();
   const clusters = useMemo(() => buildClusters(newsList, isOpen ? 12 : 5), [newsList, isOpen]);
 
+  const collapsed = useUIStore((s) => s.panelCollapsed.narrative);
+  const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
+
   return (
-    <div className="mini-panel" role="region" aria-label="Narratives">
+    <div className="mini-panel" data-collapsed={collapsed || undefined} role="region" aria-label="Narratives">
       <div className="panel-header">
         <span className="dot" style={{ background: 'var(--cyan)' }} />
         NARRATIVES
         <span className="spacer" />
         <span style={{ color: 'var(--ink-2)' }}>CLUSTERS</span>
+        <button
+          type="button"
+          className="panel-collapse-btn"
+          onClick={() => togglePanelCollapsed('narrative')}
+          aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
+        </button>
         {isOpen && (
           <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
         )}
       </div>
-      <div className="panel-body" style={isOpen ? { maxHeight: 'none' } : undefined}>
+      <div className="panel-body" style={isOpen ? { maxHeight: 'none' } : undefined} aria-hidden={collapsed || undefined}>
         {clusters.length === 0 && <div className="mini-panel-empty">NO CLUSTERS</div>}
         {clusters.map((n) => (
           <div

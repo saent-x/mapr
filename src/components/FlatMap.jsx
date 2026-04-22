@@ -43,6 +43,7 @@ const FlatMap = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  compact = false,
 }) => {
   const { t } = useTranslation();
   const mapRef = useRef(null);
@@ -113,16 +114,17 @@ const FlatMap = ({
       const focal =
         regionSeverities[selectedRegion]?.peakStory ||
         newsList.find((s) => s.isoA2 === selectedRegion);
-      if (focal) {
+      if (focal?.coordinates) {
         map.flyTo({
           center: [focal.coordinates[1], focal.coordinates[0]],
           zoom: REGION_ZOOM,
           duration: 1200,
         });
+        prevRegionRef.current = selectedRegion;
+        hadSelectionRef.current = true;
+        return;
       }
-      prevRegionRef.current = selectedRegion;
-      hadSelectionRef.current = true;
-      return;
+      // No focal yet — wait for newsList to arrive rather than locking prev.
     }
 
     if (!selectedStory && !selectedRegion && hadSelectionRef.current) {
@@ -199,7 +201,7 @@ const FlatMap = ({
   }, [drillRegion, selectedRegion, handleDrillBack]);
 
   return (
-    <div className="flatmap-wrapper">
+    <div className="flatmap-wrapper" style={{ position: 'absolute', inset: 0 }}>
       <AppMap
         ref={mapRef}
         surface="flat"
@@ -228,7 +230,7 @@ const FlatMap = ({
       </AppMap>
 
       {/* ── Breadcrumb ── */}
-      {(drillRegion || selectedRegion) && (
+      {!compact && (drillRegion || selectedRegion) && (
         <div style={{
           position: 'absolute',
           top: 10,
@@ -283,7 +285,7 @@ const FlatMap = ({
       )}
 
       {/* ── Region selector (desktop only) ── */}
-      {!isMobile && (
+      {!compact && !isMobile && (
         <div style={{
           position: 'absolute',
           bottom: 40,

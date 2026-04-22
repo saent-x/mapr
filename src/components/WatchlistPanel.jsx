@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import useWatchStore from '../stores/watchStore.js';
+import useUIStore from '../stores/uiStore.js';
 import { isoToCountry } from '../utils/geocoder.js';
 
 /**
@@ -28,18 +30,30 @@ const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
     if (item.type === 'region' && onRegionSelect) onRegionSelect(item.value);
   };
 
+  const collapsed = useUIStore((s) => s.panelCollapsed.watchlist);
+  const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
+
   return (
-    <div className="mini-panel" role="region" aria-label={t('watchlist.toggleLabel')}>
+    <div className="mini-panel" data-collapsed={collapsed || undefined} role="region" aria-label={t('watchlist.toggleLabel')}>
       <div className="panel-header">
         <span className="dot" style={{ background: 'var(--amber)' }} />
         {t('watchlist.toggleLabel')}
         <span className="spacer" />
         <span style={{ color: 'var(--ink-2)' }}>{watchItems.length}</span>
+        <button
+          type="button"
+          className="panel-collapse-btn"
+          onClick={() => togglePanelCollapsed('watchlist')}
+          aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
+        </button>
         {isOpen && (
           <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
         )}
       </div>
-      <div className="panel-body" style={isOpen ? { maxHeight: 'none' } : undefined}>
+      <div className="panel-body" style={isOpen ? { maxHeight: 'none' } : undefined} aria-hidden={collapsed || undefined}>
         {watchItems.length === 0 && (
           <div className="mini-panel-empty">WATCHLIST EMPTY</div>
         )}

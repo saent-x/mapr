@@ -1,8 +1,9 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { isoToCountry } from '../utils/geocoder.js';
 import { buildAnomalyList } from '../utils/anomalyUtils.js';
+import useUIStore from '../stores/uiStore.js';
 
 function Sparkline({ data, color = 'var(--sev-red)', w = 34, h = 18 }) {
   if (!data || data.length < 2) {
@@ -37,20 +38,32 @@ const AnomalyPanel = ({
     [velocitySpikes, silenceEntries],
   );
 
+  const collapsed = useUIStore((s) => s.panelCollapsed.anomaly);
+  const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
+
   const bodyStyle = isOpen ? { maxHeight: 'none' } : undefined;
 
   return (
-    <div className="mini-panel" role="region" aria-label={t('anomaly.title')}>
+    <div className="mini-panel" data-collapsed={collapsed || undefined} role="region" aria-label={t('anomaly.title')}>
       <div className="panel-header">
         <span className="dot" style={{ background: 'var(--sev-red)' }} />
         {t('anomaly.title')}
         <span className="spacer" />
         <span style={{ color: 'var(--ink-2)' }}>{anomalies.length}</span>
+        <button
+          type="button"
+          className="panel-collapse-btn"
+          onClick={() => togglePanelCollapsed('anomaly')}
+          aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
+        </button>
         {isOpen && (
           <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
         )}
       </div>
-      <div className="panel-body" style={bodyStyle}>
+      <div className="panel-body" style={bodyStyle} aria-hidden={collapsed || undefined}>
         {anomalies.length === 0 && (
           <div className="mini-panel-empty">NO ANOMALIES DETECTED</div>
         )}

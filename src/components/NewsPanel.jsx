@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ExternalLink } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
-import { getSeverityMeta } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 
 function ago(ts) {
@@ -23,12 +23,77 @@ function sevTier(sev) {
   return 'green';
 }
 
+function formatTs(ts) {
+  if (!ts) return '—';
+  const d = typeof ts === 'string' ? new Date(ts) : new Date(ts);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+}
+
+function verificationMeta(status) {
+  switch (status) {
+    case 'verified':
+      return { label: 'VERIFIED', color: 'var(--sev-green)' };
+    case 'official':
+      return { label: 'OFFICIAL', color: 'var(--cyan)' };
+    case 'corroborated':
+      return { label: 'CORROBORATED', color: 'var(--sev-green)' };
+    case 'single-source':
+      return { label: 'SINGLE SOURCE', color: 'var(--sev-amber)' };
+    case 'amplified':
+      return { label: 'AMPLIFIED', color: 'var(--sev-amber)' };
+    default:
+      return null;
+  }
+}
+
+function lifecycleMeta(lifecycle) {
+  if (!lifecycle) return null;
+  const map = {
+    emerging:    { label: 'EMERGING',    color: 'var(--cyan)' },
+    developing:  { label: 'DEVELOPING',  color: 'var(--amber)' },
+    escalating:  { label: 'ESCALATING',  color: 'var(--sev-red)' },
+    stabilizing: { label: 'STABILIZING', color: 'var(--sev-green)' },
+    resolved:    { label: 'RESOLVED',    color: 'var(--ink-2)' },
+  };
+  return map[lifecycle] || null;
+}
+
+function NewsThumb({ story }) {
+  const [failed, setFailed] = useState(false);
+  const src = story.socialimage || story.image || null;
+  if (!src || failed) return null;
+  return (
+    <img
+      className="news-card-image"
+      src={src}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function ArticleSheet({ story, onClose }) {
   const { t } = useTranslation();
   if (!story) return null;
   const tier = sevTier(story.severity);
   const sev = ((story.severity ?? 0) / 10).toFixed(1);
   const host = getSourceHost(story.url) || story.source || '';
+  const vMeta = verificationMeta(story.verificationStatus);
+  const lMeta = lifecycleMeta(story.lifecycle);
+  const langs = Array.isArray(story.languages)
+    ? story.languages
+    : (story.language ? [story.language] : []);
+  const srcTypes = Array.isArray(story.sourceTypes) ? story.sourceTypes : [];
+  const supporting = Array.isArray(story.supportingArticles)
+    ? story.supportingArticles.filter((a) => a && a.url && a.url !== story.url).slice(0, 6)
+    : [];
+  const orgs = story.entities?.organizations?.slice(0, 6) || [];
+  const people = story.entities?.people?.slice(0, 6) || [];
+  const confidence = typeof story.confidence === 'number' ? story.confidence : null;
+  const reasons = Array.isArray(story.confidenceReasons) ? story.confidenceReasons : [];
+
   return (
     <>
       <div className="article-sheet-backdrop" onClick={onClose} aria-hidden />
@@ -41,9 +106,22 @@ function ArticleSheet({ story, onClose }) {
           <button type="button" onClick={onClose} aria-label={t('panel.closePanel')} style={{ marginLeft: 12, color: 'var(--ink-2)' }}>×</button>
         </div>
         <div className="article-sheet-body">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <NewsThumb story={story} />
+          <div className="news-card-pill-row">
             <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · SEV {sev}</span>
-            {story.category && <span className="tag mono" style={{ color: 'var(--ink-2)', border: '1px solid var(--line-2)', padding: '1px 6px', textTransform: 'uppercase' }}>{story.category}</span>}
+            {vMeta && (
+              <span className="news-card-mini-badge" style={{ color: vMeta.color, borderColor: vMeta.color }}>
+                {vMeta.label}
+              </span>
+            )}
+            {lMeta && (
+              <span className="news-card-mini-badge" style={{ color: lMeta.color, borderColor: lMeta.color }}>
+                {lMeta.label}
+              </span>
+            )}
+            {story.category && (
+              <span className="tag mono news-card-mini-badge">{String(story.category).toUpperCase()}</span>
+            )}
             {story.isoA2 && <span className="mono" style={{ color: 'var(--ink-2)' }}>{story.isoA2}</span>}
             {story.coordinates && (
               <span className="mono" style={{ color: 'var(--ink-2)', marginLeft: 'auto' }}>
@@ -52,16 +130,140 @@ function ArticleSheet({ story, onClose }) {
             )}
           </div>
           <h2>{story.title}</h2>
-          <p>{story.summary || '—'}</p>
-          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+          <p className="news-card-summary">{story.summary || '—'}</p>
+
+          <dl className="news-card-detail-grid">
+            <div className="news-card-detail-row">
+              <dt>SOURCE</dt>
+              <dd>{story.source || host || '—'}</dd>
+            </div>
+            <div className="news-card-detail-row">
+              <dt>PUBLISHED</dt>
+              <dd>{formatTs(story.publishedAt)}</dd>
+            </div>
+            {story.firstSeenAt && (
+              <div className="news-card-detail-row">
+                <dt>FIRST SEEN</dt>
+                <dd>{formatTs(story.firstSeenAt)}</dd>
+              </div>
+            )}
+            {story.category && (
+              <div className="news-card-detail-row">
+                <dt>CATEGORY</dt>
+                <dd>{String(story.category).toUpperCase()}</dd>
+              </div>
+            )}
+            {story.region && (
+              <div className="news-card-detail-row">
+                <dt>REGION</dt>
+                <dd>{story.region}{story.locality ? ` · ${story.locality}` : ''}</dd>
+              </div>
+            )}
+            {confidence != null && (
+              <div className="news-card-detail-row">
+                <dt>CONFIDENCE</dt>
+                <dd>{confidence}%</dd>
+              </div>
+            )}
+            {typeof story.sourceCount === 'number' && (
+              <div className="news-card-detail-row">
+                <dt>SOURCES</dt>
+                <dd>
+                  {story.sourceCount}
+                  {typeof story.independentSourceCount === 'number'
+                    ? ` · ${story.independentSourceCount} independent`
+                    : ''}
+                </dd>
+              </div>
+            )}
+            {story.geocodePrecision && (
+              <div className="news-card-detail-row">
+                <dt>PRECISION</dt>
+                <dd>{String(story.geocodePrecision).toUpperCase()}</dd>
+              </div>
+            )}
+          </dl>
+
+          {(srcTypes.length > 0 || langs.length > 0) && (
+            <div className="news-card-chip-row">
+              {srcTypes.map((s) => (
+                <span key={`st-${s}`} className="news-card-mini-badge">{String(s).toUpperCase()}</span>
+              ))}
+              {langs.map((l) => (
+                <span key={`lg-${l}`} className="news-card-mini-badge">{String(l).toUpperCase()}</span>
+              ))}
+            </div>
+          )}
+
+          {reasons.length > 0 && (
+            <div className="news-card-chip-row">
+              {reasons.map((r, i) => (
+                <span
+                  key={`r-${i}`}
+                  className={`news-card-mini-badge tone-${r.tone || 'neutral'}`}
+                >
+                  {(r.label || r.type || '').toString().replace(/-/g, ' ').toUpperCase()}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {(orgs.length > 0 || people.length > 0) && (
+            <div className="news-card-entities">
+              <div className="micro" style={{ marginBottom: 6 }}>ENTITIES</div>
+              <div className="news-card-chip-row">
+                {orgs.map((o, i) => (
+                  <span key={`o-${i}`} className="news-card-mini-badge">{(o.name || o).toString().toUpperCase()}</span>
+                ))}
+                {people.map((p, i) => (
+                  <span key={`p-${i}`} className="news-card-mini-badge">{(p.name || p).toString().toUpperCase()}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="news-card-source-block">
             <div className="micro" style={{ marginBottom: 10 }}>SOURCE</div>
             <div style={{ fontFamily: 'var(--ff-mono)', fontSize: 11, color: 'var(--ink-1)' }}>
-              {host}
+              {host || '—'}
               {story.url && (
-                <> · <a href={story.url} target="_blank" rel="noreferrer" style={{ color: 'var(--amber)' }}>OPEN</a></>
+                <>
+                  {' · '}
+                  <a
+                    className="news-card-read-more"
+                    href={story.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: 'var(--amber)' }}
+                  >
+                    <ExternalLink size={11} aria-hidden /> OPEN ARTICLE
+                  </a>
+                </>
               )}
             </div>
           </div>
+
+          {supporting.length > 0 && (
+            <div className="news-card-source-block">
+              <div className="micro" style={{ marginBottom: 10 }}>
+                SUPPORTING ({supporting.length})
+              </div>
+              <ul className="news-card-source-list">
+                {supporting.map((a, i) => (
+                  <li key={`sa-${i}`}>
+                    <a
+                      className="news-card-source-item"
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {a.source || getSourceHost(a.url) || a.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </aside>
     </>
@@ -112,6 +314,9 @@ const NewsPanel = ({
             const tier = sevTier(story.severity);
             const sev = ((story.severity ?? 0) / 10).toFixed(1);
             const active = selectedStoryId === story.id;
+            const host = getSourceHost(story.url) || story.source || '';
+            const conf = typeof story.confidence === 'number' ? story.confidence : null;
+            const lMeta = lifecycleMeta(story.lifecycle);
             return (
               <div
                 key={story.id}
@@ -125,18 +330,28 @@ const NewsPanel = ({
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStorySelect?.(story); setOpenStory(story); }
                 }}
               >
+                <NewsThumb story={story} />
                 <div className="news-meta">
                   <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
                   {story.category && <span className="tag">{story.category}</span>}
+                  {lMeta && (
+                    <span className="tag" style={{ color: lMeta.color, borderColor: lMeta.color }}>
+                      {lMeta.label}
+                    </span>
+                  )}
                   <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
                   <span>·</span>
                   <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
                 </div>
                 <div className="news-title">{story.title}</div>
+                {story.summary && (
+                  <div className="news-summary-preview">{story.summary}</div>
+                )}
                 <div className="news-src">
                   <span className="mono">{story.id}</span>
-                  {story.source && <> · {story.source}</>}
+                  {host && <> · {host}</>}
                   {story.isoA2 && <> · {story.isoA2}</>}
+                  {conf != null && <> · <span style={{ color: 'var(--ink-1)' }}>{conf}%</span></>}
                 </div>
               </div>
             );
