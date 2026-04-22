@@ -5,6 +5,25 @@ import { isoToCountry } from '../utils/geocoder.js';
 import { buildAnomalyList } from '../utils/anomalyUtils.js';
 import useUIStore from '../stores/uiStore.js';
 
+// Deterministic PRNG seeded by iso code so sparkline stays stable across
+// parent re-renders. Previously used Math.random() inline which re-jittered
+// every render, reading as animated UI noise to the user.
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function seededRng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function Sparkline({ data, color = 'var(--sev-red)', w = 34, h = 18 }) {
   if (!data || data.length < 2) {
     return <svg className="anomaly-sparkline" width={w} height={h} aria-hidden />;
@@ -75,7 +94,8 @@ const AnomalyPanel = ({
           const delta = isSpike
             ? (a.zScore === Infinity ? '∞' : `${a.zScore.toFixed(1)}σ`)
             : (a.type === 'anomalous-silence' ? 'QUIET' : a.type === 'blind-spot' ? 'GAP' : 'LIMITED');
-          const fakeSpark = Array.from({ length: 8 }, (_, j) => (isSpike ? 2 + j + Math.random() * 3 : 4 - Math.abs(4 - j)));
+          const rng = seededRng(hashStr(a.iso + ':' + a.category));
+          const fakeSpark = Array.from({ length: 8 }, (_, j) => (isSpike ? 2 + j + rng() * 3 : 4 - Math.abs(4 - j)));
           return (
             <div
               key={`${a.iso}-${i}`}

@@ -167,8 +167,10 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     node.vy += (dy / dist) * push;
   }
 
-  // 5. Selection: non-connected nodes pushed out of a 320px halo
-  if (hasSelection) {
+  // 5. Selection: non-connected nodes pushed out of a 320px halo.
+  // Skip once sim has cooled below 0.2 — positions are stable, O(n) loop is
+  // pure waste. Also no-op when there's no selection (hasSelection gate).
+  if (hasSelection && k >= 0.2) {
     const sel = simNodes.find((n) => n.id === selectedId);
     if (sel) {
       for (const node of simNodes) {
@@ -515,18 +517,66 @@ export default function EntityRelationshipGraph({
       return undefined;
     }
 
-    const sim = initSimulation(nodes, edges, worldW, worldH);
-    simRef.current = sim;
-    alphaRef.current = 1;
+    // Identity signature of node set — reinit only when set actually changes.
+    // Upstream useMemo churn produces new {nodes,edges} refs on every refresh;
+    // without this check the sim re-scatters + prewarms 360 ticks each time.
+    const newIdSig = nodes.map((n) => n.id).sort().join('|');
+    const existing = simRef.current;
+    const sameStructure = existing
+      && existing.idSig === newIdSig
+      && existing.worldW === worldW
+      && existing.worldH === worldH;
 
-    for (let i = 0; i < PREWARM_TICKS; i++) {
-      tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
-      alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
+    let sim;
+    if (sameStructure) {
+      // In-place update: preserve x/y/vx/vy/fixed per node, rebuild edges,
+      // refresh radius/degree/pad from incoming data. No prewarm, no fitView.
+      const existingById = new Map(existing.simNodes.map((n) => [n.id, n]));
+      const maxMentions = Math.max(1, ...nodes.map((n) => n.mentionCount || 1));
+      const degree = new Map();
+      for (const e of edges) {
+        degree.set(e.source, (degree.get(e.source) || 0) + 1);
+        degree.set(e.target, (degree.get(e.target) || 0) + 1);
+      }
+      const simNodes = nodes.map((n) => {
+        const prev = existingById.get(n.id);
+        const deg = degree.get(n.id) || 0;
+        return {
+          ...n,
+          x: prev.x,
+          y: prev.y,
+          vx: prev.vx,
+          vy: prev.vy,
+          fixed: prev.fixed,
+          radius: nodeRadius(n.mentionCount, maxMentions),
+          degree: deg,
+          pad: Math.min(COLLIDE_PADDING_MAX, COLLIDE_PADDING_BASE + deg * COLLIDE_PER_DEGREE),
+        };
+      });
+      const nodeIndex = new Map(simNodes.map((n) => [n.id, n]));
+      const simEdges = edges
+        .map((e) => ({ ...e, sourceNode: nodeIndex.get(e.source), targetNode: nodeIndex.get(e.target) }))
+        .filter((e) => e.sourceNode && e.targetNode);
+      sim = { simNodes, simEdges, nodeIndex, idSig: newIdSig, worldW, worldH };
+      simRef.current = sim;
+      // Mild reheat so new/removed edges can relax without a full re-scatter.
+      alphaRef.current = Math.max(alphaRef.current, 0.35);
+    } else {
+      sim = initSimulation(nodes, edges, worldW, worldH);
+      sim.idSig = newIdSig;
+      sim.worldW = worldW;
+      sim.worldH = worldH;
+      simRef.current = sim;
+      alphaRef.current = 1;
+
+      for (let i = 0; i < PREWARM_TICKS; i++) {
+        tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
+        alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
+      }
+
+      viewRef.current = fitViewToNodes(sim.simNodes, { width, height });
+      setZoomDisplay(viewRef.current.scale);
     }
-
-    // Fit to where nodes actually settled — not the whole empty world.
-    viewRef.current = fitViewToNodes(sim.simNodes, { width, height });
-    setZoomDisplay(viewRef.current.scale);
 
     let running = true;
     const animate = () => {
@@ -574,8 +624,11 @@ export default function EntityRelationshipGraph({
     return null;
   }, [screenToWorld]);
 
-  const handleMouseDown = useCallback((e) => {
+  const handlePointerDown = useCallback((e) => {
     if (e.button !== 0) return;
+    // Pointer capture: all subsequent pointermove/up route to canvas even
+    // when cursor leaves it. Fixes "drop outside canvas pins node forever".
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     const node = findNodeAt(e.clientX, e.clientY);
     if (node) {
       node.fixed = true;
@@ -584,6 +637,7 @@ export default function EntityRelationshipGraph({
       dragRef.current = {
         kind: 'node',
         node,
+        pointerId: e.pointerId,
         startX: e.clientX,
         startY: e.clientY,
         moved: false,
@@ -592,6 +646,7 @@ export default function EntityRelationshipGraph({
     } else {
       dragRef.current = {
         kind: 'pan',
+        pointerId: e.pointerId,
         startX: e.clientX,
         startY: e.clientY,
         moved: false,
@@ -600,7 +655,7 @@ export default function EntityRelationshipGraph({
     }
   }, [findNodeAt]);
 
-  const handleMouseMove = useCallback((e) => {
+  const handlePointerMove = useCallback((e) => {
     const d = dragRef.current;
     if (d) {
       const dx = e.clientX - d.startX;
@@ -650,10 +705,11 @@ export default function EntityRelationshipGraph({
     }
   }, [findNodeAt, width, height, worldW, worldH]);
 
-  const handleMouseUp = useCallback((e) => {
+  const handlePointerUp = useCallback((e) => {
     const d = dragRef.current;
     dragRef.current = null;
     if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+    try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch {}
     if (!d) return;
     if (d.kind === 'node') {
       // Release node back to sim (unpin) unless user wants sticky —
@@ -668,14 +724,25 @@ export default function EntityRelationshipGraph({
     }
   }, [onEntitySelect, selectedEntity]);
 
-  const handleMouseLeave = useCallback(() => {
-    const d = dragRef.current;
-    if (d && d.kind === 'node' && d.node) d.node.fixed = false;
-    dragRef.current = null;
+  const handlePointerLeave = useCallback(() => {
+    // With pointer capture the drag keeps routing events here even when
+    // cursor leaves canvas — don't tear down drag state on leave. Just
+    // clear hover UI.
+    if (dragRef.current) return;
     hoveredRef.current = null;
     setHoveredEntity(null);
     setTooltipPos(null);
     if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+  }, []);
+
+  const handlePointerCancel = useCallback((e) => {
+    // Browser/OS cancelled the pointer (e.g. gesture hijack). Unpin and
+    // clear drag so the node doesn't stay stuck.
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (canvasRef.current) canvasRef.current.style.cursor = 'default';
+    try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch {}
+    if (d && d.kind === 'node' && d.node) d.node.fixed = false;
   }, []);
 
   const handleWheel = useCallback((e) => {
@@ -730,10 +797,12 @@ export default function EntityRelationshipGraph({
         className="entity-graph-canvas"
         width={width}
         height={height}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
+        onPointerCancel={handlePointerCancel}
+        style={{ touchAction: 'none' }}
         role="img"
         aria-label="Entity relationship graph"
       />

@@ -47,9 +47,9 @@ export default function EntityExplorerPage() {
     const el = canvasRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        setSize({ w: Math.max(480, e.contentRect.width), h: Math.max(320, e.contentRect.height) });
-      }
+      const e = entries[0];
+      if (!e) return;
+      setSize({ w: Math.max(480, e.contentRect.width), h: Math.max(320, e.contentRect.height) });
     });
     ro.observe(el);
     return () => ro.disconnect();
