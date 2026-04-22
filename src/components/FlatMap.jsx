@@ -286,87 +286,32 @@ const FlatMap = ({
 
       {/* ── Region selector (desktop only) ── */}
       {!compact && !isMobile && (
-        <div style={{
-          position: 'absolute',
-          bottom: 40,
-          left: 10,
-          zIndex: 10,
-          fontFamily: 'var(--font-mono, monospace)',
-          fontSize: '10px',
-          letterSpacing: '0.06em',
-          background: isLight ? 'rgba(255,255,255,0.88)' : 'rgba(0,0,0,0.65)',
-          backdropFilter: 'blur(8px)',
-          borderRadius: '4px',
-          border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,200,255,0.08)'}`,
-          overflow: 'hidden',
-          pointerEvents: 'auto',
-        }}>
-          <div
+        <div className="map-drill-menu" role="group" aria-label="Continent drill">
+          <button
+            type="button"
+            className={`map-drill-chip${!drillRegion ? ' is-active' : ''}`}
             onClick={handleDrillBack}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '5px 10px',
-              cursor: 'pointer',
-              borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(0,200,255,0.06)'}`,
-              color: !drillRegion
-                ? (isLight ? '#000' : '#00d4ff')
-                : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)'),
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = isLight ? '#000' : '#00d4ff';
-              e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,200,255,0.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = !drillRegion
-                ? (isLight ? '#000' : '#00d4ff')
-                : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.4)');
-              e.currentTarget.style.background = 'transparent';
-            }}
+            aria-pressed={!drillRegion}
           >
-            <Globe2 size={11} />
+            <Globe2 size={11} aria-hidden />
             <span>{t('map.world', 'WORLD')}</span>
-            <span style={{ marginLeft: 'auto', opacity: 0.4 }}>{newsList.length}</span>
-          </div>
-
+            <span className="map-drill-count">{newsList.length}</span>
+          </button>
           {Object.entries(MACRO_REGIONS).map(([key, region]) => {
             const isActive = drillRegion === key;
             const count = regionStoryCounts[key] || 0;
             return (
-              <div
+              <button
+                type="button"
                 key={key}
+                className={`map-drill-chip${isActive ? ' is-active' : ''}`}
                 onClick={() => handleDrillSelect(key)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '4px 10px',
-                  cursor: 'pointer',
-                  color: isActive
-                    ? (isLight ? '#000' : '#00d4ff')
-                    : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.35)'),
-                  borderBottom: `1px solid ${isLight ? 'rgba(0,0,0,0.04)' : 'rgba(0,200,255,0.04)'}`,
-                  transition: 'color 0.15s, background 0.15s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = isLight ? '#000' : '#00d4ff';
-                  e.currentTarget.style.background = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(0,200,255,0.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = isActive
-                    ? (isLight ? '#000' : '#00d4ff')
-                    : (isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.35)');
-                  e.currentTarget.style.background = 'transparent';
-                }}
+                aria-pressed={isActive}
               >
-                <Crosshair size={9} style={{ opacity: 0.5 }} />
+                <Crosshair size={9} aria-hidden />
                 <span>{region.label.toUpperCase()}</span>
-                <span style={{ marginLeft: 'auto', opacity: 0.35, fontSize: '9px' }}>
-                  {count > 0 ? count : '—'}
-                </span>
-              </div>
+                <span className="map-drill-count">{count > 0 ? count : '—'}</span>
+              </button>
             );
           })}
         </div>

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ExternalLink } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
+import useUIStore from '../stores/uiStore';
 import { isoToCountry } from '../utils/geocoder';
 import { sortStories, storyMatchesFilters } from '../utils/storyFilters';
 import { canonicalizeArticles } from '../utils/newsPipeline';
@@ -74,6 +75,7 @@ export default function RegionDetailPage() {
   useEffect(() => {
     if (!iso) return;
     const upper = iso.toUpperCase();
+    useUIStore.getState().setLastRegionIso(upper);
     useNewsStore.getState().fetchRegionCoverage(upper);
     const regionName = isoToCountry(upper) || upper;
     useNewsStore.getState().fetchRegionBackfill(upper, regionName, { sortMode });

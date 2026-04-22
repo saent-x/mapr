@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Header from './Header';
 import useNewsStore from '../stores/newsStore';
+import useUIStore from '../stores/uiStore';
 
 const Ico = {
   map: (
@@ -25,6 +26,12 @@ const Ico = {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
       <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/>
       <path d="M9 12l2 2 4-4"/>
+    </svg>
+  ),
+  region: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+      <path d="M12 2C8 2 5 5 5 9c0 5.5 7 13 7 13s7-7.5 7-13c0-4-3-7-7-7z"/>
+      <circle cx="12" cy="9" r="2.5"/>
     </svg>
   ),
 };
@@ -89,6 +96,9 @@ function StatusBar() {
 export default function Layout() {
   const { t } = useTranslation();
   const location = useLocation();
+  const lastRegionIso = useUIStore((s) => s.lastRegionIso);
+  const regionTarget = lastRegionIso ? `/region/${lastRegionIso}` : '/region';
+  const regionDisabled = !lastRegionIso;
 
   return (
     <div className="layout">
@@ -112,6 +122,26 @@ export default function Layout() {
           >
             {Ico.entities}
             <span className="side-label">{t('nav.entities')}</span>
+          </NavLink>
+          <NavLink
+            to={regionTarget}
+            end={false}
+            className={({ isActive }) =>
+              `layout-nav-link${isActive ? ' active' : ''}${regionDisabled ? ' is-disabled' : ''}`
+            }
+            title={
+              regionDisabled
+                ? t('nav.regionDisabled', 'Select a region on the map first')
+                : t('nav.region', 'Region') + (lastRegionIso ? ` · ${lastRegionIso}` : '')
+            }
+            aria-disabled={regionDisabled || undefined}
+            onClick={(e) => { if (regionDisabled) e.preventDefault(); }}
+          >
+            {Ico.region}
+            <span className="side-label">
+              {t('nav.region', 'Region')}
+              {lastRegionIso && <span className="side-label-sub"> · {lastRegionIso}</span>}
+            </span>
           </NavLink>
           <NavLink
             to="/trends"

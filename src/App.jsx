@@ -234,7 +234,12 @@ function App() {
     coverageHistory, dataSource, coverageDiagnostics,
   });
 
-  const handleRegionSelect = useUIStore((s) => s.selectRegion);
+  const selectRegionAction = useUIStore((s) => s.selectRegion);
+  const setLastRegionIso = useUIStore((s) => s.setLastRegionIso);
+  const handleRegionSelect = useCallback((iso) => {
+    selectRegionAction(iso);
+    if (iso) setLastRegionIso(iso);
+  }, [selectRegionAction, setLastRegionIso]);
   const handleStorySelect = useUIStore((s) => s.selectStory);
   const handleArcSelect = useUIStore((s) => s.selectArc);
   const handleClosePanel = useUIStore((s) => s.closePanel);

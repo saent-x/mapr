@@ -2,6 +2,26 @@ import { create } from 'zustand';
 import { loadViews, saveViews, createView } from '../utils/viewManager.js';
 
 const PANEL_COLLAPSE_KEY = 'mapr:panelCollapsed:v1';
+const LAST_REGION_KEY = 'mapr:lastRegionIso:v1';
+
+function loadLastRegionIso() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(LAST_REGION_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLastRegionIso(iso) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (iso) window.localStorage.setItem(LAST_REGION_KEY, iso);
+    else window.localStorage.removeItem(LAST_REGION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 function loadPanelCollapsed() {
   const fallback = { anomaly: false, watchlist: false, narrative: false, feed: false };
@@ -57,6 +77,9 @@ const useUIStore = create((set, get) => ({
   /* ── panel collapsed state (persisted per-panel) ── */
   panelCollapsed: loadPanelCollapsed(),
 
+  /* ── last region iso (persisted; powers sidebar region link) ── */
+  lastRegionIso: loadLastRegionIso(),
+
   /* ── saved views ── */
   savedViews: typeof window !== 'undefined' ? loadViews() : [],
   activeViewId: null,
@@ -99,6 +122,12 @@ const useUIStore = create((set, get) => ({
 
   setShowExport: (v) => set({ showExport: v }),
   setScrubTime: (v) => set({ scrubTime: v }),
+
+  setLastRegionIso: (iso) => set(() => {
+    const val = iso ? String(iso).toUpperCase() : null;
+    saveLastRegionIso(val);
+    return { lastRegionIso: val };
+  }),
 
   togglePanelCollapsed: (key) => set((s) => {
     const next = { ...s.panelCollapsed, [key]: !s.panelCollapsed[key] };
