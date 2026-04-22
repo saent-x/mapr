@@ -41,7 +41,8 @@ export default function Header() {
 
   const opsHealth = useNewsStore((s) => s.opsHealth);
   const backendStatus = useNewsStore((s) => s.sourceHealth?.backend?.status);
-  const opsOk = (opsHealth?.status ?? backendStatus ?? 'ok') === 'ok';
+  const status = opsHealth?.status ?? backendStatus ?? 'healthy';
+  const opsOk = status === 'healthy' || status === 'ok';
 
   const isMap = location.pathname === '/';
 
