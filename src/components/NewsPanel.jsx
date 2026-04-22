@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
+import useUIStore from '../stores/uiStore.js';
 import { getSourceHost } from '../utils/urlUtils';
 
 function ago(ts) {
@@ -288,6 +289,9 @@ const NewsPanel = ({
   const [openStory, setOpenStory] = useState(null);
   const items = (news && news.length > 0) ? news : allEvents;
 
+  const collapsed = useUIStore((s) => s.panelCollapsed.feed);
+  const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
+
   const { visibleItems: visibleNews, hasMore, sentinelRef } = useProgressiveList(items, {
     initialCount: 30,
     batchSize: 20,
@@ -296,17 +300,31 @@ const NewsPanel = ({
 
   return (
     <>
-      <div className="floating-panel news-panel" role="region" aria-label="Live news feed">
+      <div
+        className="floating-panel news-panel"
+        data-collapsed={collapsed || undefined}
+        role="region"
+        aria-label="Live news feed"
+      >
         <div className="panel-header">
           <span className="dot" />
           <span>FEED · LIVE</span>
           <span className="spacer" />
           <span style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+          <button
+            type="button"
+            className="panel-collapse-btn"
+            onClick={() => togglePanelCollapsed('feed')}
+            aria-label={collapsed ? 'Expand feed' : 'Collapse feed'}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
+          </button>
           {isOpen && regionName && (
             <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
           )}
         </div>
-        <div className="panel-body">
+        <div className="panel-body" aria-hidden={collapsed || undefined}>
           {items.length === 0 && (
             <div className="news-panel-empty">NO ITEMS</div>
           )}
@@ -330,7 +348,6 @@ const NewsPanel = ({
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStorySelect?.(story); setOpenStory(story); }
                 }}
               >
-                <NewsThumb story={story} />
                 <div className="news-meta">
                   <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
                   {story.category && <span className="tag">{story.category}</span>}

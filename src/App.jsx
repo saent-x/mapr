@@ -238,9 +238,10 @@ function App() {
   const selectRegion = useUIStore((s) => s.selectRegion);
   const handleRegionSelect = useCallback((iso) => {
     if (!iso) { selectRegion(null); return; }
-    selectRegion(iso);
-    navigate(`/region/${iso}`);
-  }, [selectRegion, navigate]);
+    // Always route to the region tab; region page reads :iso from the URL,
+    // so there's no need to also toggle the `selectedRegion` store slice here.
+    navigate(`/region/${String(iso).toUpperCase()}`);
+  }, [navigate, selectRegion]);
   const handleStorySelect = useUIStore((s) => s.selectStory);
   const handleArcSelect = useUIStore((s) => s.selectArc);
   const handleClosePanel = useUIStore((s) => s.closePanel);

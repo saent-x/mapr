@@ -4,18 +4,20 @@ import { loadViews, saveViews, createView } from '../utils/viewManager.js';
 const PANEL_COLLAPSE_KEY = 'mapr:panelCollapsed:v1';
 
 function loadPanelCollapsed() {
-  if (typeof window === 'undefined') return { anomaly: false, watchlist: false, narrative: false };
+  const fallback = { anomaly: false, watchlist: false, narrative: false, feed: false };
+  if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(PANEL_COLLAPSE_KEY);
-    if (!raw) return { anomaly: false, watchlist: false, narrative: false };
+    if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     return {
       anomaly: !!parsed.anomaly,
       watchlist: !!parsed.watchlist,
       narrative: !!parsed.narrative,
+      feed: !!parsed.feed,
     };
   } catch {
-    return { anomaly: false, watchlist: false, narrative: false };
+    return fallback;
   }
 }
 

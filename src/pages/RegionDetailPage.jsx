@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink } from 'lucide-react';
@@ -43,20 +43,6 @@ function lifecycleMeta(lifecycle) {
   return map[lifecycle] || null;
 }
 
-function RegionNewsThumb({ story }) {
-  const [failed, setFailed] = useState(false);
-  const src = story.socialimage || story.image || null;
-  if (!src || failed) return null;
-  return (
-    <img
-      className="news-card-image"
-      src={src}
-      alt=""
-      loading="lazy"
-      onError={() => setFailed(true)}
-    />
-  );
-}
 
 /**
  * /region/:iso — tactical region brief.
@@ -169,7 +155,6 @@ export default function RegionDetailPage() {
           const lMeta = lifecycleMeta(story.lifecycle);
           return (
             <div key={story.id} className="news-item">
-              <RegionNewsThumb story={story} />
               <div className="news-meta">
                 <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
                 {story.category && <span className="tag">{story.category}</span>}

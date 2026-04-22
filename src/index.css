@@ -626,6 +626,16 @@ a { color: inherit; text-decoration: none; }
   border: none;
   opacity: 0;
 }
+.news-panel .panel-body {
+  transition: max-height 0.22s var(--ease), padding 0.22s var(--ease), opacity 0.18s var(--ease);
+}
+.news-panel[data-collapsed] .panel-body {
+  max-height: 0 !important;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+.news-panel[data-collapsed] { max-height: 28px; }
 .panel-collapse-btn {
   display: inline-flex;
   align-items: center;
