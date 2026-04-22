@@ -1,13 +1,12 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
- * Radial (chord-like) entity relationship graph rendered in SVG.
+ * Force-directed entity relationship graph on HTML5 Canvas.
  *
- * Replaces the previous canvas force-sim, which became unreadable with
- * more than a handful of nodes. Nodes are laid out on a circle, grouped
- * by type (person / organization / location), sized by mention count.
- * Edges are drawn as cubic Bézier chords through the centre, so even
- * dense graphs stay legible.
+ * Nodes cluster by type (organizations top-left, locations top-right, persons
+ * bottom-centre) via per-type anchor springs — gives three visible groupings
+ * while staying physics-based. No global centre gravity, so the graph spreads
+ * across the canvas instead of collapsing into a ball.
  *
  * Props:
  *  - nodes: Array<{ id, name, type, mentionCount, eventIds }>
@@ -24,69 +23,211 @@ const TYPE_COLORS = {
   location: '#5ec7d4',      // --cyan
 };
 const TYPE_LABELS = { person: 'Person', organization: 'Organization', location: 'Location' };
-const TYPE_ORDER = ['organization', 'location', 'person'];
 
-const EDGE_BASE = 'rgba(50, 56, 70, 0.55)';
-const EDGE_DIM  = 'rgba(38, 43, 53, 0.25)';
-const EDGE_HIGH = 'rgba(232, 163, 61, 0.7)';
 const INK_0 = '#e8e6df';
 const INK_2 = 'rgba(232, 230, 223, 0.55)';
 const INK_3 = 'rgba(232, 230, 223, 0.28)';
+const EDGE_BASE = 'rgba(50, 56, 70, 0.55)';
+const EDGE_DIM  = 'rgba(38, 43, 53, 0.35)';
+const EDGE_HIGH = 'rgba(232, 163, 61, 0.7)';
+const SELECT_RING = '#e8a33d';
 
-const MIN_R = 3.5;
-const MAX_R = 9;
-const LABEL_GAP = 10;
-const MAX_NODES = 60;
+const MIN_NODE_RADIUS = 7;
+const MAX_NODE_RADIUS = 26;
+const LABEL_FONT = '11px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+const SELECTED_RING = 3;
+
+const PREWARM_TICKS = 200;
+
+/* ── Type anchors: three zones spread across canvas ── */
+function typeAnchors(width, height) {
+  const cx = width / 2;
+  const cy = height / 2;
+  return {
+    organization: { x: cx - width * 0.28, y: cy - height * 0.22 },
+    location:     { x: cx + width * 0.28, y: cy - height * 0.22 },
+    person:       { x: cx,                y: cy + height * 0.24 },
+  };
+}
 
 function nodeRadius(mentionCount, maxMentions) {
   const ratio = (mentionCount || 1) / (maxMentions || 1);
-  return MIN_R + ratio * (MAX_R - MIN_R);
+  return MIN_NODE_RADIUS + ratio * (MAX_NODE_RADIUS - MIN_NODE_RADIUS);
 }
 
-function polar(cx, cy, r, theta) {
-  return { x: cx + r * Math.cos(theta), y: cy + r * Math.sin(theta) };
-}
+function initSimulation(nodes, edges, width, height) {
+  const anchors = typeAnchors(width, height);
+  const maxMentions = Math.max(1, ...nodes.map((n) => n.mentionCount || 1));
+  const zoneW = width * 0.32;
+  const zoneH = height * 0.32;
 
-function buildLayout(nodes, width, height) {
-  const sorted = [...nodes]
-    .sort((a, b) => {
-      const ta = TYPE_ORDER.indexOf(a.type);
-      const tb = TYPE_ORDER.indexOf(b.type);
-      if (ta !== tb) return ta - tb;
-      return (b.mentionCount || 0) - (a.mentionCount || 0);
-    })
-    .slice(0, MAX_NODES);
-
-  const maxMentions = Math.max(1, ...sorted.map((n) => n.mentionCount || 1));
-  const n = Math.max(sorted.length, 1);
-  const cx = width / 2;
-  const cy = height / 2;
-  const radius = Math.max(60, Math.min(width, height) / 2 - 100);
-
-  const positioned = sorted.map((node, i) => {
-    // Distribute around a full circle; start at top.
-    const theta = (i / n) * Math.PI * 2 - Math.PI / 2;
-    const { x, y } = polar(cx, cy, radius, theta);
+  const simNodes = nodes.map((n) => {
+    const a = anchors[n.type] || { x: width / 2, y: height / 2 };
     return {
-      ...node,
-      x,
-      y,
-      theta,
-      radius: nodeRadius(node.mentionCount, maxMentions),
+      ...n,
+      anchorX: a.x,
+      anchorY: a.y,
+      x: a.x + (Math.random() - 0.5) * zoneW,
+      y: a.y + (Math.random() - 0.5) * zoneH,
+      vx: 0,
+      vy: 0,
+      radius: nodeRadius(n.mentionCount, maxMentions),
     };
   });
 
-  return { positioned, cx, cy, radius };
+  const nodeIndex = new Map(simNodes.map((n) => [n.id, n]));
+
+  const simEdges = edges
+    .map((e) => ({
+      ...e,
+      sourceNode: nodeIndex.get(e.source),
+      targetNode: nodeIndex.get(e.target),
+    }))
+    .filter((e) => e.sourceNode && e.targetNode);
+
+  return { simNodes, simEdges, nodeIndex };
 }
 
-function chordPath(a, b, cx, cy) {
-  // Cubic Bézier with control points pulled toward centre — produces a
-  // clean arc that hugs the inside of the node circle.
-  const cp1x = cx + (a.x - cx) * 0.15;
-  const cp1y = cy + (a.y - cy) * 0.15;
-  const cp2x = cx + (b.x - cx) * 0.15;
-  const cp2y = cy + (b.y - cy) * 0.15;
-  return `M ${a.x} ${a.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${b.x} ${b.y}`;
+function tickSimulation(simNodes, simEdges, width, height, alpha) {
+  const k = alpha;
+  const BOUND_PAD = 24;
+
+  // 1. Pairwise repulsion — stronger short-range, sustained long-range floor
+  for (let i = 0; i < simNodes.length; i++) {
+    for (let j = i + 1; j < simNodes.length; j++) {
+      const a = simNodes[i];
+      const b = simNodes[j];
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const minSep = a.radius + b.radius + 56;
+      const charge = dist < minSep ? 2200 : 1100;
+      const force = (charge * k) / (dist * dist);
+      const ux = dx / dist;
+      const uy = dy / dist;
+      a.vx -= ux * force;
+      a.vy -= uy * force;
+      b.vx += ux * force;
+      b.vy += uy * force;
+    }
+  }
+
+  // 2. Edge springs — shorter ideal distance since zones handle separation
+  for (const edge of simEdges) {
+    const a = edge.sourceNode;
+    const b = edge.targetNode;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const idealDist = 140;
+    const force = (dist - idealDist) * 0.0028 * k * Math.min(edge.weight || 1, 5);
+    const fx = (dx / dist) * force;
+    const fy = (dy / dist) * force;
+    a.vx += fx;
+    a.vy += fy;
+    b.vx -= fx;
+    b.vy -= fy;
+  }
+
+  // 3. Type anchor spring — each node pulled toward its type's zone
+  for (const node of simNodes) {
+    node.vx += (node.anchorX - node.x) * 0.004 * k;
+    node.vy += (node.anchorY - node.y) * 0.004 * k;
+  }
+
+  // 4. Soft bounds — restoring force when near canvas edge (no hard clamp)
+  for (const node of simNodes) {
+    const r = node.radius;
+    const leftP  = (r + BOUND_PAD) - node.x;
+    const rightP = node.x - (width - r - BOUND_PAD);
+    const topP   = (r + BOUND_PAD) - node.y;
+    const botP   = node.y - (height - r - BOUND_PAD);
+    if (leftP  > 0) node.vx += leftP  * 0.02;
+    if (rightP > 0) node.vx -= rightP * 0.02;
+    if (topP   > 0) node.vy += topP   * 0.02;
+    if (botP   > 0) node.vy -= botP   * 0.02;
+  }
+
+  // 5. Integrate with damping
+  for (const node of simNodes) {
+    node.vx *= 0.86;
+    node.vy *= 0.86;
+    node.x += node.vx;
+    node.y += node.vy;
+  }
+}
+
+function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width, height) {
+  ctx.clearRect(0, 0, width, height);
+
+  const connectedIds = new Set();
+  if (selectedEntity) {
+    connectedIds.add(selectedEntity);
+    for (const edge of simEdges) {
+      if (edge.source === selectedEntity) connectedIds.add(edge.target);
+      if (edge.target === selectedEntity) connectedIds.add(edge.source);
+    }
+  }
+
+  // Edges
+  for (const edge of simEdges) {
+    const a = edge.sourceNode;
+    const b = edge.targetNode;
+    const isHighlighted = selectedEntity
+      ? connectedIds.has(edge.source) && connectedIds.has(edge.target)
+      : false;
+
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = isHighlighted
+      ? EDGE_HIGH
+      : selectedEntity
+        ? EDGE_DIM
+        : EDGE_BASE;
+    ctx.lineWidth = isHighlighted
+      ? Math.min(edge.weight || 1, 4)
+      : Math.min((edge.weight || 1) * 0.5, 2);
+    ctx.stroke();
+  }
+
+  // Nodes
+  for (const node of simNodes) {
+    const isSelected = node.id === selectedEntity;
+    const isHovered  = node.id === hoveredEntity;
+    const isConnected = connectedIds.has(node.id);
+    const dimmed = selectedEntity && !isConnected;
+    const color = TYPE_COLORS[node.type] || '#999';
+
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+    ctx.fillStyle = dimmed ? `${color}33` : color;
+    ctx.fill();
+
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, node.radius + SELECTED_RING, 0, Math.PI * 2);
+      ctx.strokeStyle = SELECT_RING;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    if (isHovered && !isSelected) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, node.radius + 2, 0, Math.PI * 2);
+      ctx.strokeStyle = INK_2;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    if (node.radius > 10 || isSelected || isHovered || (isConnected && selectedEntity)) {
+      ctx.font = LABEL_FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = dimmed ? INK_3 : INK_0;
+      ctx.fillText(node.name, node.x, node.y + node.radius + 4);
+    }
+  }
 }
 
 export default function EntityRelationshipGraph({
@@ -98,263 +239,162 @@ export default function EntityRelationshipGraph({
   width = 800,
   height = 600,
 }) {
+  const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
-  const [hoveredId, setHoveredId] = useState(null);
+  const simRef = useRef(null);
+  const animRef = useRef(null);
+  const alphaRef = useRef(1);
+  const hoveredRef = useRef(null);
+  const [hoveredEntity, setHoveredEntity] = useState(null);
   const [tooltipPos, setTooltipPos] = useState(null);
 
-  const { positioned, cx, cy, radius } = useMemo(
-    () => buildLayout(nodes, width, height),
-    [nodes, width, height],
-  );
-
-  const nodeIndex = useMemo(() => {
-    const m = new Map();
-    for (const n of positioned) m.set(n.id, n);
-    return m;
-  }, [positioned]);
-
-  // Only keep edges whose endpoints survived the top-N slice.
-  const visibleEdges = useMemo(
-    () => edges.filter((e) => nodeIndex.has(e.source) && nodeIndex.has(e.target)),
-    [edges, nodeIndex],
-  );
-
-  const connectedIds = useMemo(() => {
-    if (!selectedEntity) return new Set();
-    const s = new Set([selectedEntity]);
-    for (const e of visibleEdges) {
-      if (e.source === selectedEntity) s.add(e.target);
-      if (e.target === selectedEntity) s.add(e.source);
-    }
-    return s;
-  }, [visibleEdges, selectedEntity]);
-
   const eventById = useMemo(() => {
-    const m = new Map();
-    for (const e of events) m.set(e.id, e);
-    return m;
+    const map = new Map();
+    for (const e of events) map.set(e.id, e);
+    return map;
   }, [events]);
 
-  const hoveredNode = hoveredId ? nodeIndex.get(hoveredId) : null;
   const tooltipData = useMemo(() => {
-    if (!hoveredNode) return null;
-    const connectionCount = visibleEdges.filter(
-      (e) => e.source === hoveredNode.id || e.target === hoveredNode.id,
+    if (!hoveredEntity || !simRef.current) return null;
+    const node = simRef.current.simNodes.find((n) => n.id === hoveredEntity);
+    if (!node) return null;
+    const connectionCount = simRef.current.simEdges.filter(
+      (e) => e.source === node.id || e.target === node.id,
     ).length;
-    const eventTitles = (hoveredNode.eventIds || [])
+    const eventTitles = (node.eventIds || [])
       .slice(0, 3)
       .map((eid) => eventById.get(eid)?.title)
       .filter(Boolean);
     return {
-      name: hoveredNode.name,
-      type: TYPE_LABELS[hoveredNode.type] || hoveredNode.type,
-      color: TYPE_COLORS[hoveredNode.type] || '#999',
-      mentions: hoveredNode.mentionCount || 0,
+      name: node.name,
+      type: TYPE_LABELS[node.type] || node.type,
+      color: TYPE_COLORS[node.type] || '#999',
+      mentions: node.mentionCount || 0,
       connections: connectionCount,
-      eventCount: (hoveredNode.eventIds || []).length,
+      eventCount: (node.eventIds || []).length,
       eventTitles,
     };
-  }, [hoveredNode, visibleEdges, eventById]);
+  }, [hoveredEntity, eventById]);
 
-  const handleNodeClick = (id) => {
-    onEntitySelect?.(id === selectedEntity ? null : id);
-  };
-
-  const handleNodeEnter = (node, ev) => {
-    setHoveredId(node.id);
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (rect) {
-      setTooltipPos({
-        x: ev.clientX - rect.left + 12,
-        y: ev.clientY - rect.top - 8,
-      });
+  // Build + run simulation when data / size changes
+  useEffect(() => {
+    if (!nodes || nodes.length === 0) {
+      simRef.current = null;
+      const canvas = canvasRef.current;
+      if (canvas) canvas.getContext('2d').clearRect(0, 0, width, height);
+      return undefined;
     }
-  };
 
-  const handleNodeMove = (ev) => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setTooltipPos({
-      x: ev.clientX - rect.left + 12,
-      y: ev.clientY - rect.top - 8,
-    });
-  };
+    const sim = initSimulation(nodes, edges, width, height);
+    simRef.current = sim;
+    alphaRef.current = 1;
 
-  const handleNodeLeave = () => {
-    setHoveredId(null);
+    // Pre-warm: iterate synchronously so first paint is already spread out
+    for (let i = 0; i < PREWARM_TICKS; i++) {
+      tickSimulation(sim.simNodes, sim.simEdges, width, height, alphaRef.current);
+      alphaRef.current *= 0.985;
+    }
+
+    let running = true;
+    const animate = () => {
+      if (!running || !simRef.current) return;
+      const { simNodes, simEdges } = simRef.current;
+
+      if (alphaRef.current > 0.02) {
+        tickSimulation(simNodes, simEdges, width, height, alphaRef.current);
+        alphaRef.current *= 0.985;
+      }
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredRef.current, width, height);
+      }
+      animRef.current = requestAnimationFrame(animate);
+    };
+    animate();
+
+    return () => {
+      running = false;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+    // selectedEntity intentionally omitted — it's consumed in the second effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, width, height]);
+
+  // Redraw on selection / hover changes without restarting sim
+  useEffect(() => {
+    hoveredRef.current = hoveredEntity;
+    if (simRef.current && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      const { simNodes, simEdges } = simRef.current;
+      drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, width, height);
+    }
+  }, [selectedEntity, hoveredEntity, width, height]);
+
+  const findNodeAt = useCallback((clientX, clientY) => {
+    if (!canvasRef.current || !simRef.current) return null;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const { simNodes } = simRef.current;
+    for (let i = simNodes.length - 1; i >= 0; i--) {
+      const node = simNodes[i];
+      const dx = node.x - x;
+      const dy = node.y - y;
+      const hit = node.radius + 4;
+      if (dx * dx + dy * dy <= hit * hit) return node;
+    }
+    return null;
+  }, []);
+
+  const handleClick = useCallback((e) => {
+    const node = findNodeAt(e.clientX, e.clientY);
+    if (node) {
+      onEntitySelect?.(node.id === selectedEntity ? null : node.id);
+    } else {
+      onEntitySelect?.(null);
+    }
+  }, [findNodeAt, onEntitySelect, selectedEntity]);
+
+  const handleMouseMove = useCallback((e) => {
+    const node = findNodeAt(e.clientX, e.clientY);
+    const id = node ? node.id : null;
+    if (id !== hoveredRef.current) {
+      setHoveredEntity(id);
+    }
+    if (node && wrapperRef.current) {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      setTooltipPos({
+        x: e.clientX - rect.left + 12,
+        y: e.clientY - rect.top - 8,
+      });
+    } else {
+      setTooltipPos(null);
+    }
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = node ? 'pointer' : 'default';
+    }
+  }, [findNodeAt]);
+
+  const handleMouseLeave = useCallback(() => {
+    setHoveredEntity(null);
     setTooltipPos(null);
-  };
-
-  const handleBackgroundClick = () => {
-    if (selectedEntity) onEntitySelect?.(null);
-  };
-
-  const typeLegend = useMemo(() => {
-    const counts = { person: 0, organization: 0, location: 0 };
-    for (const n of positioned) counts[n.type] = (counts[n.type] || 0) + 1;
-    return counts;
-  }, [positioned]);
+  }, []);
 
   return (
-    <div
-      ref={wrapperRef}
-      className="entity-graph-wrapper"
-      style={{ position: 'relative', width, height }}
-    >
-      <svg
-        className="entity-graph-svg"
+    <div ref={wrapperRef} style={{ position: 'relative', width, height }}>
+      <canvas
+        ref={canvasRef}
+        className="entity-graph-canvas"
         width={width}
         height={height}
-        onClick={handleBackgroundClick}
+        onClick={handleClick}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
         role="img"
         aria-label="Entity relationship graph"
-      >
-        {/* Guide ring — subtle inner outline */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={radius}
-          fill="none"
-          stroke="rgba(50, 56, 70, 0.35)"
-          strokeDasharray="2 6"
-          strokeWidth={1}
-        />
-
-        {/* Edges */}
-        <g>
-          {visibleEdges.map((e) => {
-            const a = nodeIndex.get(e.source);
-            const b = nodeIndex.get(e.target);
-            if (!a || !b) return null;
-            const highlighted = selectedEntity
-              ? connectedIds.has(e.source) && connectedIds.has(e.target)
-              : false;
-            const dimmed = selectedEntity && !highlighted;
-            const weight = Math.max(1, Math.min(e.weight || 1, 5));
-            const strokeWidth = highlighted ? weight : weight * 0.5;
-            return (
-              <path
-                key={`${e.source}—${e.target}`}
-                d={chordPath(a, b, cx, cy)}
-                fill="none"
-                stroke={highlighted ? EDGE_HIGH : dimmed ? EDGE_DIM : EDGE_BASE}
-                strokeWidth={Math.max(0.6, strokeWidth)}
-                pointerEvents="none"
-              />
-            );
-          })}
-        </g>
-
-        {/* Nodes + labels */}
-        <g>
-          {positioned.map((node) => {
-            const isSelected = node.id === selectedEntity;
-            const isHovered = node.id === hoveredId;
-            const isConnected = connectedIds.has(node.id);
-            const dimmed = selectedEntity && !isConnected;
-            const color = TYPE_COLORS[node.type] || '#999';
-            const r = node.radius + (isSelected ? 2 : 0);
-
-            // Label position just outside the ring.
-            const labelDist = radius + LABEL_GAP;
-            const lx = cx + labelDist * Math.cos(node.theta);
-            const ly = cy + labelDist * Math.sin(node.theta);
-            const angleDeg = (node.theta * 180) / Math.PI;
-            const flip = angleDeg > 90 || angleDeg < -90;
-            const textAnchor = flip ? 'end' : 'start';
-            const rotate = flip ? angleDeg + 180 : angleDeg;
-            const showLabel = isSelected || isHovered || (isConnected && selectedEntity) || node.radius >= 6;
-
-            return (
-              <g
-                key={node.id}
-                className="entity-graph-node"
-                onClick={(ev) => { ev.stopPropagation(); handleNodeClick(node.id); }}
-                onMouseEnter={(ev) => handleNodeEnter(node, ev)}
-                onMouseMove={handleNodeMove}
-                onMouseLeave={handleNodeLeave}
-                style={{ cursor: 'pointer' }}
-              >
-                {isSelected && (
-                  <circle cx={node.x} cy={node.y} r={r + 3} fill="none" stroke="#e8a33d" strokeWidth={1.5} />
-                )}
-                {isHovered && !isSelected && (
-                  <circle cx={node.x} cy={node.y} r={r + 2} fill="none" stroke={INK_2} strokeWidth={1} />
-                )}
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={r}
-                  fill={color}
-                  fillOpacity={dimmed ? 0.22 : 1}
-                />
-                {showLabel && (
-                  <text
-                    x={lx}
-                    y={ly}
-                    fontFamily='"IBM Plex Mono", ui-monospace, Menlo, monospace'
-                    fontSize={10}
-                    fill={dimmed ? INK_3 : INK_0}
-                    textAnchor={textAnchor}
-                    dominantBaseline="central"
-                    transform={`rotate(${rotate} ${lx} ${ly})`}
-                    pointerEvents="none"
-                  >
-                    {node.name}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </g>
-
-        {/* Centre caption */}
-        <g pointerEvents="none">
-          <text
-            x={cx}
-            y={cy - 6}
-            textAnchor="middle"
-            fontFamily='"IBM Plex Mono", ui-monospace, Menlo, monospace'
-            fontSize={10}
-            letterSpacing="0.16em"
-            fill={INK_2}
-          >
-            {positioned.length} / {nodes.length} NODES
-          </text>
-          <text
-            x={cx}
-            y={cy + 8}
-            textAnchor="middle"
-            fontFamily='"IBM Plex Mono", ui-monospace, Menlo, monospace'
-            fontSize={10}
-            letterSpacing="0.16em"
-            fill={INK_3}
-          >
-            {visibleEdges.length} EDGES
-          </text>
-        </g>
-
-        {/* Legend (bottom-left of svg) */}
-        <g transform={`translate(12, ${height - 20})`}>
-          {TYPE_ORDER.map((type, i) => (
-            <g key={type} transform={`translate(${i * 110}, 0)`}>
-              <circle cx={0} cy={0} r={4} fill={TYPE_COLORS[type]} />
-              <text
-                x={8}
-                y={0}
-                dominantBaseline="central"
-                fontFamily='"IBM Plex Mono", ui-monospace, Menlo, monospace'
-                fontSize={10}
-                letterSpacing="0.12em"
-                fill={INK_2}
-              >
-                {TYPE_LABELS[type].toUpperCase()} · {typeLegend[type] || 0}
-              </text>
-            </g>
-          ))}
-        </g>
-      </svg>
-
+      />
       {tooltipData && tooltipPos && (
         <div
           className="entity-tooltip"
