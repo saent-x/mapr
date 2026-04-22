@@ -23,26 +23,29 @@ const useWatchStore = create((set, get) => ({
   /* ────────── actions ────────── */
 
   /**
-   * Add a new watch item.
+   * Add a new watch item. Store mints the id — callers must not pass one.
    * @param {'region'|'topic'|'entity'} type
    * @param {string} value - ISO code, keyword, or entity name
-   * @param {string} label - Human-readable label
+   * @param {string} [label] - Human-readable label (defaults to value)
    */
   addWatch: (type, value, label) => {
     if (!type || !value?.trim()) return;
     const normalizedValue = value.trim();
     const existing = get().watchItems;
 
-    // Prevent duplicates
     if (existing.some((item) => item.type === type && item.value.toLowerCase() === normalizedValue.toLowerCase())) {
       return;
     }
 
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `w-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
     const newItem = {
-      id: `${type}-${normalizedValue}-${Date.now()}`,
+      id,
       type,
       value: normalizedValue,
-      label: label || normalizedValue,
+      label: label?.trim() || normalizedValue,
       addedAt: new Date().toISOString(),
     };
 

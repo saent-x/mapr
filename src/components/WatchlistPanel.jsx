@@ -22,7 +22,7 @@ const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
   const handleAdd = useCallback((e) => {
     e?.preventDefault?.();
     if (!addValue.trim()) return;
-    addWatch(addType, addValue.trim(), addValue.trim());
+    addWatch(addType, addValue.trim());
     setAddValue('');
   }, [addType, addValue, addWatch]);
 

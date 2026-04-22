@@ -98,11 +98,11 @@ const useUIStore = create((set, get) => ({
     selectedArc: null,
   })),
 
-  selectStory: (story) => set({
+  selectStory: (story) => set((state) => ({
     selectedStoryId: story.id,
-    selectedRegion: story.isoA2,
+    selectedRegion: story.isoA2 ?? state.selectedRegion,
     selectedArc: null,
-  }),
+  })),
 
   clearStory: () => set({
     selectedStoryId: null,
@@ -142,7 +142,9 @@ const useUIStore = create((set, get) => ({
 
   /* ── toasts ── */
   addToast: (message, type = 'info') => {
-    const id = Date.now();
+    const id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     set((s) => ({ toasts: [...s.toasts.slice(-3), { id, message, type }] }));
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
