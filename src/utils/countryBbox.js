@@ -3,11 +3,9 @@ import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 let bboxPromise = null;
 
 function computeBbox(feature) {
-  if (feature.bbox && feature.bbox.length >= 4) {
-    const [w, s, e, n] = feature.bbox;
-    return [w, s, e, n];
-  }
   let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+  let eW = Infinity, eS = Infinity, eE = -Infinity, eN = -Infinity, eCount = 0;
+  let wW = Infinity, wS = Infinity, wE = -Infinity, wN = -Infinity, wCount = 0;
   const walk = (coords) => {
     if (!Array.isArray(coords)) return;
     if (typeof coords[0] === 'number') {
@@ -16,11 +14,28 @@ function computeBbox(feature) {
       if (lng > e) e = lng;
       if (lat < s) s = lat;
       if (lat > n) n = lat;
+      if (lng >= 0) {
+        if (lng < eW) eW = lng;
+        if (lng > eE) eE = lng;
+        if (lat < eS) eS = lat;
+        if (lat > eN) eN = lat;
+        eCount++;
+      } else {
+        if (lng < wW) wW = lng;
+        if (lng > wE) wE = lng;
+        if (lat < wS) wS = lat;
+        if (lat > wN) wN = lat;
+        wCount++;
+      }
       return;
     }
     for (const c of coords) walk(c);
   };
   walk(feature.geometry?.coordinates);
+  if (e - w >= 350 && (eCount > 0 || wCount > 0)) {
+    if (eCount >= wCount) return [eW, eS, eE, eN];
+    return [wW, wS, wE, wN];
+  }
   return [w, s, e, n];
 }
 

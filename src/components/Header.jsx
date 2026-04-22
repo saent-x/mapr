@@ -95,7 +95,7 @@ export default function Header() {
               className="toggle-chip"
               data-active={mapOverlay === key}
               aria-pressed={mapOverlay === key}
-              onClick={() => setMapOverlay(key)}
+              onClick={() => setMapOverlay(mapOverlay === key ? null : key)}
               title={label}
             >
               {label}

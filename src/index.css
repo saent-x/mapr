@@ -127,6 +127,7 @@ textarea:focus-visible {
 .filter-toggle:focus-visible,
 .anomaly-toggle:focus-visible,
 .watchlist-toggle:focus-visible,
+.narrative-toggle:focus-visible,
 .toggle-chip:focus-visible,
 .side-btn:focus-visible,
 .chip:focus-visible,
@@ -923,7 +924,8 @@ a { color: inherit; text-decoration: none; }
 }
 .filter-toggle,
 .anomaly-toggle,
-.watchlist-toggle {
+.watchlist-toggle,
+.narrative-toggle {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -942,13 +944,15 @@ a { color: inherit; text-decoration: none; }
 }
 .filter-toggle:hover,
 .anomaly-toggle:hover,
-.watchlist-toggle:hover {
+.watchlist-toggle:hover,
+.narrative-toggle:hover {
   background: var(--bg-3);
   color: var(--ink-0);
 }
 .filter-toggle.is-active,
 .anomaly-toggle.is-active,
-.watchlist-toggle.is-active {
+.watchlist-toggle.is-active,
+.narrative-toggle.is-active {
   background: var(--amber);
   color: var(--bg-0);
   border-color: var(--amber);

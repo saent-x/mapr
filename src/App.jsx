@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, AlertTriangle, Eye, X, Users, Building2, MapPin } from 'lucide-react';
+import { SlidersHorizontal, AlertTriangle, Eye, Network, X, Users, Building2, MapPin } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
 import MapLoadingFallback from './components/MapLoadingFallback';
@@ -295,6 +295,7 @@ function App() {
     });
     const params = new URLSearchParams(qs);
     if (selectedStoryId) params.set('story', selectedStoryId);
+    else params.delete('story');
     setSearchParams(params, { replace: true });
   }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, setSearchParams]);
 
@@ -400,6 +401,15 @@ function App() {
           <Eye size={12} aria-hidden /> {t('watchlist.toggleLabel')}
           {watchItems.length > 0 && <span className="watchlist-toggle-count">{watchItems.length}</span>}
           {watchNotificationCount > 0 && <span className="watchlist-toggle-alert">+{watchNotificationCount}</span>}
+        </button>
+        <button
+          type="button"
+          className={`narrative-toggle ${narrativePanelOpen ? 'is-active' : ''}`}
+          onClick={() => setNarrativePanelOpen((v) => !v)}
+          aria-pressed={narrativePanelOpen}
+          aria-label={t('narrative.toggleLabel', 'NARRATIVES')}
+        >
+          <Network size={12} aria-hidden /> {t('narrative.toggleLabel', 'NARRATIVES')}
         </button>
       </div>
 

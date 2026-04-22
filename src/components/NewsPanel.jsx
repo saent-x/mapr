@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
@@ -78,6 +78,12 @@ function NewsThumb({ story }) {
 
 export function ArticleSheet({ story, onClose }) {
   const { t } = useTranslation();
+  useEffect(() => {
+    if (!story) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [story, onClose]);
   if (!story) return null;
   const tier = sevTier(story.severity);
   const sev = ((story.severity ?? 0) / 10).toFixed(1);
@@ -125,9 +131,9 @@ export function ArticleSheet({ story, onClose }) {
               <span className="tag mono news-card-mini-badge">{String(story.category).toUpperCase()}</span>
             )}
             {story.isoA2 && <span className="mono" style={{ color: 'var(--ink-2)' }}>{story.isoA2}</span>}
-            {story.coordinates && (
+            {Array.isArray(story.coordinates) && story.coordinates.length >= 2 && (
               <span className="mono" style={{ color: 'var(--ink-2)', marginLeft: 'auto' }}>
-                {Number(story.coordinates.lng || 0).toFixed(2)}, {Number(story.coordinates.lat || 0).toFixed(2)}
+                {Number(story.coordinates[1]).toFixed(2)}, {Number(story.coordinates[0]).toFixed(2)}
               </span>
             )}
           </div>

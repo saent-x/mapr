@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, Search, MapPin } from 'lucide-react';
+import { ExternalLink, Search, MapPin, Loader } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
@@ -153,9 +153,16 @@ function RegionBrief({ iso }) {
           </span>
         </div>
         {regionNews.length === 0 && (
-          <div className="mini-panel-empty" style={{ padding: 24 }}>
-            NO ARTICLES IN WINDOW
-          </div>
+          regionBackfills?.[iso?.toUpperCase()]?.status === 'loading' ? (
+            <div className="mini-panel-empty" style={{ padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <Loader size={14} className="admin-spinner" aria-hidden />
+              {t('regionDetail.loading')}
+            </div>
+          ) : (
+            <div className="mini-panel-empty" style={{ padding: 24 }}>
+              NO ARTICLES IN WINDOW
+            </div>
+          )
         )}
         {regionNews.map((story) => {
           const tier = sevTier(story.severity);
