@@ -31,7 +31,7 @@ export function entityKey(type, name) {
  * @param {{ maxNodes?: number }} options - Optional limits for performance
  * @returns {{ nodes: Array, edges: Array }}
  */
-export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
+export function extractEntityGraph(events, { maxNodes = 0, maxEdgesPerNode = 0, minEdgeWeight = 1 } = {}) {
   if (!events || !Array.isArray(events)) {
     return { nodes: [], edges: [] };
   }
@@ -146,6 +146,31 @@ export function extractEntityGraph(events, { maxNodes = 0 } = {}) {
     nodes = nodes.slice(0, maxNodes);
     const kept = new Set(nodes.map((n) => n.id));
     edges = edges.filter((e) => kept.has(e.source) && kept.has(e.target));
+  }
+
+  // Drop weak co-occurrences (weight=1 edges are noise — one shared event)
+  if (minEdgeWeight > 1) {
+    edges = edges.filter((e) => (e.weight || 1) >= minEdgeWeight);
+  }
+
+  // Sparsify: keep each node's top-K strongest edges. Heavy edges tend to
+  // be kept anyway because they appear in the top-K of both endpoints.
+  if (maxEdgesPerNode > 0 && edges.length > 0) {
+    const byNode = new Map();
+    for (const e of edges) {
+      if (!byNode.has(e.source)) byNode.set(e.source, []);
+      if (!byNode.has(e.target)) byNode.set(e.target, []);
+      byNode.get(e.source).push(e);
+      byNode.get(e.target).push(e);
+    }
+    const keep = new Set();
+    for (const list of byNode.values()) {
+      list.sort((a, b) => (b.weight || 0) - (a.weight || 0));
+      for (let i = 0; i < Math.min(maxEdgesPerNode, list.length); i++) {
+        keep.add(list[i]);
+      }
+    }
+    edges = edges.filter((e) => keep.has(e));
   }
 
   return { nodes, edges };

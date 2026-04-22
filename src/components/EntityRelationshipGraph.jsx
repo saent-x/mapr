@@ -416,6 +416,28 @@ function fitView(viewport, worldW, worldH) {
   return { scale, tx, ty };
 }
 
+/* Fit view to the actual node cluster plus padding — much better than
+   fitting the empty world, which produces tiny nodes in the centre. */
+function fitViewToNodes(simNodes, viewport, margin = 80) {
+  if (!simNodes || simNodes.length === 0) return { scale: 1, tx: 0, ty: 0 };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of simNodes) {
+    const r = (n.radius || 0) + 16; // include label space
+    if (n.x - r < minX) minX = n.x - r;
+    if (n.y - r < minY) minY = n.y - r;
+    if (n.x + r > maxX) maxX = n.x + r;
+    if (n.y + r > maxY) maxY = n.y + r;
+  }
+  const w = Math.max(1, maxX - minX);
+  const h = Math.max(1, maxY - minY);
+  const sx = (viewport.width  - margin * 2) / w;
+  const sy = (viewport.height - margin * 2) / h;
+  const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(sx, sy)));
+  const tx = (viewport.width  - (minX + maxX) * scale) / 2;
+  const ty = (viewport.height - (minY + maxY) * scale) / 2;
+  return { scale, tx, ty };
+}
+
 export default function EntityRelationshipGraph({
   nodes = [],
   edges = [],
@@ -496,13 +518,15 @@ export default function EntityRelationshipGraph({
     const sim = initSimulation(nodes, edges, worldW, worldH);
     simRef.current = sim;
     alphaRef.current = 1;
-    viewRef.current = fitView({ width, height }, worldW, worldH);
-    setZoomDisplay(viewRef.current.scale);
 
     for (let i = 0; i < PREWARM_TICKS; i++) {
       tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
       alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
     }
+
+    // Fit to where nodes actually settled — not the whole empty world.
+    viewRef.current = fitViewToNodes(sim.simNodes, { width, height });
+    setZoomDisplay(viewRef.current.scale);
 
     let running = true;
     const animate = () => {
@@ -690,7 +714,11 @@ export default function EntityRelationshipGraph({
   }, [width, height, worldW, worldH]);
 
   const resetView = useCallback(() => {
-    viewRef.current = fitView({ width, height }, worldW, worldH);
+    if (simRef.current) {
+      viewRef.current = fitViewToNodes(simRef.current.simNodes, { width, height });
+    } else {
+      viewRef.current = fitView({ width, height }, worldW, worldH);
+    }
     alphaRef.current = Math.max(alphaRef.current, REHEAT_ALPHA);
     setZoomDisplay(viewRef.current.scale);
   }, [width, height, worldW, worldH]);

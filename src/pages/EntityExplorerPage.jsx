@@ -38,7 +38,10 @@ export default function EntityExplorerPage() {
     return liveNews || [];
   }, [backendEvents, liveNews]);
 
-  const { nodes, edges } = useMemo(() => extractEntityGraph(events, { maxNodes: 50 }), [events]);
+  const { nodes, edges } = useMemo(
+    () => extractEntityGraph(events, { maxNodes: 50, maxEdgesPerNode: 4, minEdgeWeight: 2 }),
+    [events],
+  );
 
   useEffect(() => {
     const el = canvasRef.current;
