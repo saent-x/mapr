@@ -297,7 +297,7 @@ const NewsPanel = ({
   const [openStory, setOpenStory] = useState(null);
   const items = (news && news.length > 0) ? news : allEvents;
 
-  const collapsed = useUIStore((s) => s.panelCollapsed.feed);
+  const collapsed = useUIStore((s) => s.panelCollapsed.liveFeed);
   const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
 
   const { visibleItems: visibleNews, hasMore, sentinelRef } = useProgressiveList(items, {
@@ -322,7 +322,7 @@ const NewsPanel = ({
           <button
             type="button"
             className="panel-collapse-btn"
-            onClick={() => togglePanelCollapsed('feed')}
+            onClick={() => togglePanelCollapsed('liveFeed')}
             aria-label={collapsed ? 'Expand feed' : 'Collapse feed'}
             aria-expanded={!collapsed}
           >

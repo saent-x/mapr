@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { loadViews, saveViews, createView } from '../utils/viewManager.js';
 
-const PANEL_COLLAPSE_KEY = 'mapr:panelCollapsed:v1';
+const PANEL_COLLAPSE_KEY = 'mapr:rightRailCollapsed:v1';
 const LAST_REGION_KEY = 'mapr:lastRegionIso:v1';
 
 function loadLastRegionIso() {
@@ -23,8 +23,10 @@ function saveLastRegionIso(iso) {
   }
 }
 
+const PANEL_KEYS = ['anomaly', 'watchlist', 'narrative', 'liveFeed'];
+
 function loadPanelCollapsed() {
-  const fallback = { anomaly: false, watchlist: false, narrative: false, feed: false };
+  const fallback = { anomaly: false, watchlist: false, narrative: false, liveFeed: false };
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(PANEL_COLLAPSE_KEY);
@@ -34,7 +36,7 @@ function loadPanelCollapsed() {
       anomaly: !!parsed.anomaly,
       watchlist: !!parsed.watchlist,
       narrative: !!parsed.narrative,
-      feed: !!parsed.feed,
+      liveFeed: !!parsed.liveFeed,
     };
   } catch {
     return fallback;
@@ -136,6 +138,13 @@ const useUIStore = create((set, get) => ({
   }),
   setPanelCollapsed: (key, collapsed) => set((s) => {
     const next = { ...s.panelCollapsed, [key]: !!collapsed };
+    savePanelCollapsed(next);
+    return { panelCollapsed: next };
+  }),
+  toggleAllPanelsCollapsed: () => set((s) => {
+    const collapsedCount = PANEL_KEYS.reduce((n, k) => n + (s.panelCollapsed[k] ? 1 : 0), 0);
+    const target = collapsedCount > PANEL_KEYS.length / 2 ? false : true;
+    const next = PANEL_KEYS.reduce((acc, k) => { acc[k] = target; return acc; }, {});
     savePanelCollapsed(next);
     return { panelCollapsed: next };
   }),

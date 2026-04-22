@@ -489,5 +489,9 @@
     "stageFirst": "First Report",
     "stageDeveloping": "Developing",
     "stageContinued": "Continued Coverage"
+  },
+  "panels": {
+    "collapseAll": "Collapse panels",
+    "expandAll": "Expand panels"
   }
 }

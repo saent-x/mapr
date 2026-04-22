@@ -35,8 +35,7 @@ describe('accessibility and UX polish', () => {
     it('focus-visible styles apply to filter toggles', () => {
       const css = readFileSync(join(SRC, 'index.css'), 'utf-8');
       assert.match(css, /\.filter-toggle:focus-visible/, 'Should style filter toggle focus');
-      assert.match(css, /\.anomaly-toggle:focus-visible/, 'Should style anomaly toggle focus');
-      assert.match(css, /\.watchlist-toggle:focus-visible/, 'Should style watchlist toggle focus');
+      assert.match(css, /\.collapse-all-toggle:focus-visible/, 'Should style collapse-all toggle focus');
     });
 
     it('text inputs get border-color change on focus-visible', () => {
@@ -64,10 +63,10 @@ describe('accessibility and UX polish', () => {
       assert.match(code, /showSaveDialog.*setShowSaveDialog\(false\)/, 'Escape should close save dialog');
     });
 
-    it('Escape closes anomaly and watchlist panels', () => {
+    it('collapse-all panel toggle is wired in App.jsx', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      assert.match(code, /anomalyPanelOpen.*setAnomalyPanelOpen\(false\)/, 'Escape should close anomaly panel');
-      assert.match(code, /watchlistPanelOpen.*setWatchlistPanelOpen\(false\)/, 'Escape should close watchlist panel');
+      assert.match(code, /toggleAllPanelsCollapsed/, 'Should wire collapse-all action');
+      assert.match(code, /collapse-all-toggle/, 'Should render collapse-all-toggle button');
     });
 
     it('Escape works even when focused on input fields', () => {

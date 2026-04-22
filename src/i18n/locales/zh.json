@@ -269,5 +269,9 @@
     "regional": "区域",
     "local": "本地",
     "unknown": "未知"
+  },
+  "panels": {
+    "collapseAll": "折叠面板",
+    "expandAll": "展开面板"
   }
 }
