@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight, Globe2, Crosshair } from 'lucide-react';
 import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
+import { useMap } from '@/components/ui/map';
 import { findStateInStory } from '../utils/statesData';
 import { isoToCountry } from '../utils/geocoder';
 import { getCountryBbox } from '../utils/countryBbox';
@@ -31,6 +32,72 @@ const MACRO_REGIONS = {
   southAmerica: { label: 'S. America', bounds: [[-85, -60], [-30, 15]], isos: new Set(['AR','BO','BR','CL','CO','EC','GY','PY','PE','SR','UY','VE']) },
   oceania: { label: 'Oceania', bounds: [[100, -50], [180, 5]], isos: new Set(['AU','FJ','KI','MH','FM','NR','NZ','PW','PG','WS','SB','TO','TV','VU']) },
 };
+
+/* ──────────────────────────── compact lock (minimap) ──────────────────────────── */
+
+function CompactRegionLock({ iso }) {
+  const { map, isLoaded } = useMap();
+  const fittedRef = useRef(null);
+  const bboxRef = useRef(null);
+
+  useEffect(() => {
+    if (!map || !isLoaded || !iso) return undefined;
+    if (fittedRef.current === iso) return undefined;
+    let cancelled = false;
+    getCountryBbox(iso).then((bbox) => {
+      if (cancelled || !bbox) return;
+      try {
+        map.setMaxBounds(null);
+        map.setMinZoom(0);
+        map.setMaxZoom(22);
+        map.fitBounds(
+          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+          { padding: 12, duration: 0, animate: false },
+        );
+        const fitZoom = map.getZoom();
+        map.setMaxBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]]);
+        map.setMinZoom(fitZoom);
+        map.setMaxZoom(fitZoom + 2);
+        map.dragPan?.disable?.();
+        map.scrollZoom?.disable?.();
+        map.doubleClickZoom?.disable?.();
+        map.touchZoomRotate?.disable?.();
+        map.keyboard?.disable?.();
+        map.boxZoom?.disable?.();
+        map.dragRotate?.disable?.();
+        map.touchPitch?.disable?.();
+        bboxRef.current = bbox;
+        fittedRef.current = iso;
+      } catch { /* ignore */ }
+    });
+    return () => { cancelled = true; };
+  }, [map, isLoaded, iso]);
+
+  useEffect(() => {
+    if (!map || !isLoaded) return undefined;
+    const container = map.getContainer?.();
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => {
+      try {
+        map.resize();
+        const bbox = bboxRef.current;
+        if (!bbox) return;
+        map.setMinZoom(0);
+        map.fitBounds(
+          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+          { padding: 12, duration: 0, animate: false },
+        );
+        const z = map.getZoom();
+        map.setMinZoom(z);
+        map.setMaxZoom(z + 2);
+      } catch { /* ignore */ }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [map, isLoaded]);
+
+  return null;
+}
 
 /* ──────────────────────────── component ──────────────────────────── */
 
@@ -76,29 +143,16 @@ const FlatMap = ({
   }, []);
 
   /* ── resize handling ── */
-  const compactBboxRef = useRef(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(() => {
-      try {
-        map.resize();
-        const bbox = compactBboxRef.current;
-        if (compact && bbox) {
-          map.fitBounds(
-            [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
-            { padding: 8, duration: 0, animate: false },
-          );
-          const fitZoom = map.getZoom();
-          map.setMinZoom(fitZoom);
-          map.setMaxZoom(fitZoom + 1.5);
-        }
-      } catch { /* ignore */ }
+      try { map.resize(); } catch { /* ignore */ }
     });
     const container = map.getContainer?.();
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, [compact]);
+  }, []);
 
   /* ── fly-to logic ── */
   useEffect(() => {
@@ -172,48 +226,6 @@ const FlatMap = ({
       try { map.fitBounds(region.bounds, { padding: 40, duration: 1200 }); } catch { /* ignore */ }
     }
   }, [drillRegion]);
-
-  /* ── compact-mode: fit + lock to country bbox (minimap on region page) ── */
-  const bboxFittedRef = useRef(null);
-  useEffect(() => {
-    if (!compact || !selectedRegion) return undefined;
-    if (bboxFittedRef.current === selectedRegion) return undefined;
-    const map = mapRef.current;
-    if (!map) return undefined;
-    let cancelled = false;
-    const fit = (bbox) => {
-      if (cancelled || !bbox) return;
-      try {
-        map.fitBounds(
-          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
-          { padding: 8, duration: 0, animate: false },
-        );
-        const fitZoom = map.getZoom();
-        map.setMaxBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]]);
-        map.setMinZoom(fitZoom);
-        map.setMaxZoom(fitZoom + 1.5);
-        map.dragPan?.disable?.();
-        map.scrollZoom?.disable?.();
-        map.doubleClickZoom?.disable?.();
-        map.touchZoomRotate?.disable?.();
-        map.keyboard?.disable?.();
-        map.boxZoom?.disable?.();
-        map.dragRotate?.disable?.();
-        map.touchPitch?.disable?.();
-        compactBboxRef.current = bbox;
-        bboxFittedRef.current = selectedRegion;
-      } catch { /* ignore */ }
-    };
-    const run = () => {
-      getCountryBbox(selectedRegion).then((bbox) => fit(bbox));
-    };
-    if (typeof map.isStyleLoaded === 'function' && map.isStyleLoaded()) {
-      run();
-    } else {
-      map.once?.('load', run);
-    }
-    return () => { cancelled = true; };
-  }, [compact, selectedRegion]);
 
   const regionStoryCounts = useMemo(() => {
     const counts = {};
@@ -293,6 +305,7 @@ const FlatMap = ({
           onArcSelect={onArcSelect}
           drillIsos={drillIsos}
         />
+        {compact && selectedRegion && <CompactRegionLock iso={selectedRegion} />}
       </AppMap>
 
       {/* ── Breadcrumb ── */}
