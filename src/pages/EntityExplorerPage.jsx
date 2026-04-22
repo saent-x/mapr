@@ -38,7 +38,7 @@ export default function EntityExplorerPage() {
     return liveNews || [];
   }, [backendEvents, liveNews]);
 
-  const { nodes, edges } = useMemo(() => extractEntityGraph(events, { maxNodes: 45 }), [events]);
+  const { nodes, edges } = useMemo(() => extractEntityGraph(events, { maxNodes: 80 }), [events]);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -112,7 +112,7 @@ export default function EntityExplorerPage() {
             </div>
           </div>
           <div className="map-corner bl">
-            <div>DRAG CANVAS · SELECT NODES</div>
+            <div>DRAG · WHEEL ZOOM · CLICK SELECT</div>
           </div>
         </div>
       </div>

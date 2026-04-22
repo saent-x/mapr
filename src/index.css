@@ -1471,7 +1471,40 @@ a { color: inherit; text-decoration: none; }
 .entity-graph-canvas {
   display: block;
   background: var(--bg-0);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
+.entity-graph-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2;
+}
+.entity-graph-zoom button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 20, 26, 0.85);
+  color: var(--ink-0);
+  border: 1px solid var(--line-2);
+  font-family: var(--ff-mono);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.entity-graph-zoom button:hover {
+  background: rgba(232, 163, 61, 0.12);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.entity-graph-zoom button:active { transform: translateY(1px); }
 
 /* ——— Trends page ——— */
 .trends-page {
