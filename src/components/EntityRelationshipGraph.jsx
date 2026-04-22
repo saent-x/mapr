@@ -41,7 +41,7 @@ const PREWARM_TICKS = 360;
 const WORLD_SCALE = 2.8;
 const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 3.0;
-const ZOOM_STEP = 1.15;
+const ZOOM_STEP = 1.06;
 const DRAG_THRESHOLD = 4;
 
 const ALPHA_FLOOR = 0.14;
