@@ -1,6 +1,7 @@
 import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 
 let bboxPromise = null;
+let featurePromise = null;
 
 function computeBbox(feature) {
   if (feature.bbox && feature.bbox.length >= 4) {
@@ -53,5 +54,28 @@ function loadCountryBboxes() {
 export async function getCountryBbox(iso) {
   if (!iso) return null;
   const map = await loadCountryBboxes();
+  return map.get(String(iso).toUpperCase()) || null;
+}
+
+function loadCountryFeatures() {
+  if (featurePromise) return featurePromise;
+  featurePromise = fetch(countriesUrl)
+    .then((r) => r.json())
+    .then((gj) => {
+      const map = new Map();
+      for (const f of gj.features || []) {
+        const iso = resolveIso(f);
+        if (!iso) continue;
+        map.set(iso, f);
+      }
+      return map;
+    })
+    .catch(() => new Map());
+  return featurePromise;
+}
+
+export async function getCountryFeature(iso) {
+  if (!iso) return null;
+  const map = await loadCountryFeatures();
   return map.get(String(iso).toUpperCase()) || null;
 }

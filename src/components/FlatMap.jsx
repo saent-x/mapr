@@ -5,7 +5,7 @@ import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
 import { findStateInStory } from '../utils/statesData';
 import { isoToCountry } from '../utils/geocoder';
-import { getCountryBbox } from '../utils/countryBbox';
+import { getCountryBbox, getCountryFeature } from '../utils/countryBbox';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
@@ -17,6 +17,39 @@ const DEFAULT_CENTER = { lng: 10, lat: 20 };
 
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
 const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
+
+const COMPACT_COLORS = {
+  dark: { bg: '#0a0a0a', fill: 'rgba(0, 200, 255, 0.12)', stroke: '#00c8ff' },
+  light: { bg: '#f4f4f4', fill: 'rgba(10, 80, 200, 0.1)', stroke: '#0a50c8' },
+};
+
+const buildCompactStyle = (feature, isLight) => {
+  const c = isLight ? COMPACT_COLORS.light : COMPACT_COLORS.dark;
+  return {
+    version: 8,
+    sources: {
+      country: {
+        type: 'geojson',
+        data: feature,
+      },
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': c.bg } },
+      {
+        id: 'country-fill',
+        type: 'fill',
+        source: 'country',
+        paint: { 'fill-color': c.fill },
+      },
+      {
+        id: 'country-line',
+        type: 'line',
+        source: 'country',
+        paint: { 'line-color': c.stroke, 'line-width': 1.2 },
+      },
+    ],
+  };
+};
 
 /* ──────────────────────────── macro regions (flat-only drill) ──────────────────────────── */
 
@@ -54,7 +87,26 @@ const FlatMap = ({
   );
 
   const isLight = theme === 'light';
-  const styleUrl = isLight ? STYLE_LIGHT : STYLE_DARK;
+  const [compactFeature, setCompactFeature] = useState(null);
+
+  useEffect(() => {
+    if (!compact || !selectedRegion) { setCompactFeature(null); return undefined; }
+    let cancelled = false;
+    getCountryFeature(selectedRegion).then((f) => {
+      if (!cancelled) setCompactFeature(f || null);
+    });
+    return () => { cancelled = true; };
+  }, [compact, selectedRegion]);
+
+  const compactStyle = useMemo(() => {
+    if (!compact) return null;
+    const feature = compactFeature ?? { type: 'FeatureCollection', features: [] };
+    return buildCompactStyle(feature, isLight);
+  }, [compact, compactFeature, isLight]);
+
+  const styleUrl = compact
+    ? compactStyle
+    : (isLight ? STYLE_LIGHT : STYLE_DARK);
 
   /* ── fly-to tracking refs ── */
   const prevStoryRef = useRef(null);
@@ -274,21 +326,23 @@ const FlatMap = ({
           zoom: DEFAULT_ZOOM,
         }}
       >
-        <MapGLOverlay
-          surface="flat"
-          newsList={newsList}
-          regionSeverities={regionSeverities}
-          mapOverlay={mapOverlay}
-          coverageStatusByIso={coverageStatusByIso}
-          velocitySpikes={velocitySpikes}
-          trackingPoints={trackingPoints}
-          selectedRegion={selectedRegion}
-          selectedStory={selectedStory}
-          onRegionSelect={onRegionSelect}
-          onStorySelect={onStorySelect}
-          onArcSelect={onArcSelect}
-          drillIsos={drillIsos}
-        />
+        {!compact && (
+          <MapGLOverlay
+            surface="flat"
+            newsList={newsList}
+            regionSeverities={regionSeverities}
+            mapOverlay={mapOverlay}
+            coverageStatusByIso={coverageStatusByIso}
+            velocitySpikes={velocitySpikes}
+            trackingPoints={trackingPoints}
+            selectedRegion={selectedRegion}
+            selectedStory={selectedStory}
+            onRegionSelect={onRegionSelect}
+            onStorySelect={onStorySelect}
+            onArcSelect={onArcSelect}
+            drillIsos={drillIsos}
+          />
+        )}
       </AppMap>
 
       {/* ── Breadcrumb ── */}

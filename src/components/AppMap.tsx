@@ -1,10 +1,13 @@
 import { forwardRef, type ReactNode } from 'react';
+import type { StyleSpecification } from 'maplibre-gl';
 import {
   Map,
   type MapRef,
   type MapViewport,
 } from '@/components/ui/map';
 import './AppMap.css';
+
+type StyleOption = string | StyleSpecification;
 
 // Default tile/style URLs: CARTO basemap-gl tiles (same source as legacy FlatMap
 // and mapcn's built-in defaults). Free, no API key, light/dark variants match
@@ -20,7 +23,7 @@ export type AppMapProps = {
   surface: AppMapSurface;
   viewport?: Partial<MapViewport>;
   onViewportChange?: (viewport: MapViewport) => void;
-  styleUrl?: string;
+  styleUrl?: StyleOption;
   theme?: 'light' | 'dark';
   className?: string;
   children?: ReactNode;
