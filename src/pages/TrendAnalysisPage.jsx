@@ -176,12 +176,15 @@ export default function TrendAnalysisPage() {
 
   const topEntities = useMemo(() => {
     const counter = new Map();
+    const KIND_LABEL = { people: 'PER', organizations: 'ORG', locations: 'LOC' };
     for (const s of news) {
       const ents = s.entities;
       if (!ents) continue;
       for (const kind of ['organizations', 'locations', 'people']) {
-        for (const e of ents[kind] || []) {
-          const key = `${kind === 'people' ? 'PER' : kind === 'organizations' ? 'ORG' : 'LOC'}|${e}`;
+        for (const item of ents[kind] || []) {
+          const name = typeof item === 'string' ? item : (item?.name || '');
+          if (!name) continue;
+          const key = `${KIND_LABEL[kind]}|${name}`;
           counter.set(key, (counter.get(key) || 0) + 1);
         }
       }

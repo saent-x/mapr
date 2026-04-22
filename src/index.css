@@ -1468,10 +1468,15 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.entity-graph-canvas {
+.entity-graph-wrapper {
+  background: var(--bg-0);
+}
+.entity-graph-svg {
   display: block;
   background: var(--bg-0);
 }
+.entity-graph-node circle { transition: fill-opacity 0.15s var(--ease); }
+.entity-graph-node:hover circle { fill-opacity: 1; }
 
 /* ——— Trends page ——— */
 .trends-page {
