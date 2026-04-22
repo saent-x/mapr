@@ -38,7 +38,7 @@ export default function EntityExplorerPage() {
     return liveNews || [];
   }, [backendEvents, liveNews]);
 
-  const { nodes, edges } = useMemo(() => extractEntityGraph(events, { maxNodes: 80 }), [events]);
+  const { nodes, edges } = useMemo(() => extractEntityGraph(events, { maxNodes: 50 }), [events]);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -110,9 +110,6 @@ export default function EntityExplorerPage() {
               <span><span style={{ color: 'var(--cyan)' }}>{TYPE_STYLES.location.glyph}</span> LOC · {locCount}</span>
               <span><span style={{ color: 'var(--sev-green)' }}>{TYPE_STYLES.person.glyph}</span> PERSON · {perCount}</span>
             </div>
-          </div>
-          <div className="map-corner bl">
-            <div>DRAG · WHEEL ZOOM · CLICK SELECT</div>
           </div>
         </div>
       </div>

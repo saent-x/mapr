@@ -1,15 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
- * Force-directed entity relationship graph on HTML5 Canvas with pan/zoom.
+ * Force-directed entity relationship graph on HTML5 Canvas.
  *
- * - World 2.0x viewport so type zones have real room.
- * - Simulation never freezes: alpha floors at 0.1 so nodes always breathe;
- *   selection and drag reheat the sim.
- * - Collision pass iteratively resolves node overlap each tick — fixes the
- *   "sponge" clumping that Coulomb repulsion alone can't.
- * - On select, connected nodes pull in closer and the selected node pulses.
- * - Pan is always free (soft slack) — no need to zoom in before dragging.
+ * Visual language (matches Mapr Console tactical spec):
+ * - Nodes are outlined rings with an inner type glyph: ■ org / ◆ loc / P
+ *   person. Selected + connected nodes render as solid filled discs.
+ * - Edges are thin, very low-opacity lines; highlighted edges use amber.
+ * - Faint dot-grid background (screen-space) for a tactical map feel.
+ *
+ * Interaction:
+ * - Drag a node to reposition it (sticky while held).
+ * - Drag empty canvas to pan.
+ * - Wheel to zoom (cursor-anchored).
+ * - Click node to select / deselect. Selection re-clusters connected
+ *   neighbours around the selected node; non-connected nodes drift away.
  */
 
 const TYPE_COLORS = {
@@ -22,17 +27,18 @@ const TYPE_LABELS = { person: 'Person', organization: 'Organization', location: 
 const INK_0 = '#e8e6df';
 const INK_2 = 'rgba(232, 230, 223, 0.55)';
 const INK_3 = 'rgba(232, 230, 223, 0.28)';
-const EDGE_BASE = 'rgba(50, 56, 70, 0.55)';
-const EDGE_DIM  = 'rgba(38, 43, 53, 0.35)';
-const EDGE_HIGH = 'rgba(232, 163, 61, 0.8)';
-const SELECT_RING = '#e8a33d';
+const GRID_DOT = 'rgba(232, 230, 223, 0.055)';
+const EDGE_BASE = 'rgba(140, 146, 160, 0.18)';
+const EDGE_DIM  = 'rgba(140, 146, 160, 0.08)';
+const EDGE_HIGH = 'rgba(232, 163, 61, 0.85)';
 
-const MIN_NODE_RADIUS = 7;
-const MAX_NODE_RADIUS = 26;
+const MIN_NODE_RADIUS = 9;
+const MAX_NODE_RADIUS = 18;
 const LABEL_FONT = '11px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+const GLYPH_FONT_WEIGHT = '500';
 
-const PREWARM_TICKS = 320;
-const WORLD_SCALE = 2.6;          // much bigger world → real breathing room
+const PREWARM_TICKS = 360;
+const WORLD_SCALE = 2.8;
 const ZOOM_MIN = 0.2;
 const ZOOM_MAX = 3.0;
 const ZOOM_STEP = 1.15;
@@ -43,20 +49,12 @@ const ALPHA_DECAY = 0.992;
 const REHEAT_ALPHA = 0.75;
 
 const COLLIDE_ITERATIONS = 4;
-const COLLIDE_PADDING_BASE = 26;  // minimum px between node surfaces
-const COLLIDE_PER_DEGREE  = 5;    // +px per connection (hubs get bigger bubbles)
-const COLLIDE_PADDING_MAX = 70;
+const COLLIDE_PADDING_BASE = 34;
+const COLLIDE_PER_DEGREE  = 6;
+const COLLIDE_PADDING_MAX = 80;
 
-/* ── Type anchors in WORLD coords ── */
-function typeAnchors(worldW, worldH) {
-  const cx = worldW / 2;
-  const cy = worldH / 2;
-  return {
-    organization: { x: cx - worldW * 0.32, y: cy - worldH * 0.26 },
-    location:     { x: cx + worldW * 0.32, y: cy - worldH * 0.26 },
-    person:       { x: cx,                 y: cy + worldH * 0.30 },
-  };
-}
+const GRID_SPACING = 22;
+const GRID_DOT_RADIUS = 1;
 
 function nodeRadius(mentionCount, maxMentions) {
   const ratio = (mentionCount || 1) / (maxMentions || 1);
@@ -64,33 +62,33 @@ function nodeRadius(mentionCount, maxMentions) {
 }
 
 function initSimulation(nodes, edges, worldW, worldH) {
-  const anchors = typeAnchors(worldW, worldH);
   const maxMentions = Math.max(1, ...nodes.map((n) => n.mentionCount || 1));
-  const zoneW = worldW * 0.50;
-  const zoneH = worldH * 0.50;
+  const cx = worldW / 2;
+  const cy = worldH / 2;
+  const spreadR = Math.min(worldW, worldH) * 0.42;
 
-  // Per-node degree (edge count) — used to size personal-space bubbles
   const degree = new Map();
   for (const e of edges) {
     degree.set(e.source, (degree.get(e.source) || 0) + 1);
     degree.set(e.target, (degree.get(e.target) || 0) + 1);
   }
 
+  // Scatter start: random positions across a disc around world centre.
+  // No type zones — physics alone determines final layout.
   const simNodes = nodes.map((n) => {
-    const a = anchors[n.type] || { x: worldW / 2, y: worldH / 2 };
+    const angle = Math.random() * Math.PI * 2;
+    const radius = Math.sqrt(Math.random()) * spreadR;
     const deg = degree.get(n.id) || 0;
     return {
       ...n,
-      anchorX: a.x,
-      anchorY: a.y,
-      x: a.x + (Math.random() - 0.5) * zoneW,
-      y: a.y + (Math.random() - 0.5) * zoneH,
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius,
       vx: 0,
       vy: 0,
       radius: nodeRadius(n.mentionCount, maxMentions),
       degree: deg,
-      // Bigger bubble for hubs; isolated nodes still get base padding
       pad: Math.min(COLLIDE_PADDING_MAX, COLLIDE_PADDING_BASE + deg * COLLIDE_PER_DEGREE),
+      fixed: false,
     };
   });
 
@@ -113,7 +111,7 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
   const cx = worldW / 2;
   const cy = worldH / 2;
 
-  // 1. Pairwise Coulomb repulsion — strong, long-range floor
+  // 1. Pairwise Coulomb repulsion
   for (let i = 0; i < simNodes.length; i++) {
     for (let j = i + 1; j < simNodes.length; j++) {
       const a = simNodes[i];
@@ -122,19 +120,17 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
       const dy = b.y - a.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const minSep = a.radius + b.radius + Math.max(a.pad, b.pad);
-      const charge = dist < minSep ? 5200 : 2000;
+      const charge = dist < minSep ? 5800 : 2400;
       const force = (charge * k) / (dist * dist);
       const ux = dx / dist;
       const uy = dy / dist;
-      a.vx -= ux * force;
-      a.vy -= uy * force;
-      b.vx += ux * force;
-      b.vy += uy * force;
+      if (!a.fixed) { a.vx -= ux * force; a.vy -= uy * force; }
+      if (!b.fixed) { b.vx += ux * force; b.vy += uy * force; }
     }
   }
 
-  // 2. Edge springs — connected pairs are ALLOWED to be close. Selection
-  //    pulls edges shorter so the click response is obvious.
+  // 2. Edge springs — weighted. Heavier bonds sit closer; weak co-occurrence
+  //    stays loose. Gives variable spacing between connected pairs.
   for (const edge of simEdges) {
     const a = edge.sourceNode;
     const b = edge.targetNode;
@@ -142,52 +138,46 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     const dy = b.y - a.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const involvesSelected = hasSelection && (edge.source === selectedId || edge.target === selectedId);
-    // Weighted bond: stronger edges (more shared events) sit closer
     const w = Math.min(edge.weight || 1, 5);
-    const idealDist = involvesSelected ? 90 : (220 - w * 15);
-    const stiffness = involvesSelected ? 0.0075 : 0.0042;
+    const idealDist = involvesSelected ? 110 : (260 - w * 18);
+    const stiffness = involvesSelected ? 0.0065 : 0.0038;
     const force = (dist - idealDist) * stiffness * k * w;
     const fx = (dx / dist) * force;
     const fy = (dy / dist) * force;
-    a.vx += fx;
-    a.vy += fy;
-    b.vx -= fx;
-    b.vy -= fy;
+    if (!a.fixed) { a.vx += fx; a.vy += fy; }
+    if (!b.fixed) { b.vx -= fx; b.vy -= fy; }
   }
 
-  // 3. Type-anchor spring — VERY weak. Just enough bias that zones are
-  //    recognisable; otherwise physics dominates and nodes actually spread.
+  // 3. Very weak centre gravity — keeps the cloud bounded without clumping
   for (const node of simNodes) {
-    node.vx += (node.anchorX - node.x) * 0.0012 * k;
-    node.vy += (node.anchorY - node.y) * 0.0012 * k;
+    if (node.fixed) continue;
+    node.vx += (cx - node.x) * 0.00035 * k;
+    node.vy += (cy - node.y) * 0.00035 * k;
   }
 
-  // 4. Isolated nodes (no edges) drift outward from centre so they don't
-  //    crowd the connected clusters. Satellite behaviour.
+  // 4. Isolated nodes (degree 0) drift toward an outer orbit
   for (const node of simNodes) {
-    if (node.degree === 0) {
-      const dx = node.x - cx;
-      const dy = node.y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const target = Math.min(worldW, worldH) * 0.42;
-      const push = (target - dist) * 0.0025 * k;
-      node.vx += (dx / dist) * push;
-      node.vy += (dy / dist) * push;
-    }
+    if (node.fixed || node.degree !== 0) continue;
+    const dx = node.x - cx;
+    const dy = node.y - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const target = Math.min(worldW, worldH) * 0.42;
+    const push = (target - dist) * 0.003 * k;
+    node.vx += (dx / dist) * push;
+    node.vy += (dy / dist) * push;
   }
 
-  // 5. Selection: extra outward push on NON-connected nodes — spotlight
+  // 5. Selection: non-connected nodes pushed out of a 320px halo
   if (hasSelection) {
     const sel = simNodes.find((n) => n.id === selectedId);
     if (sel) {
       for (const node of simNodes) {
-        if (node.id === selectedId) continue;
-        if (connectedSet.has(node.id)) continue;
+        if (node.id === selectedId || connectedSet.has(node.id) || node.fixed) continue;
         const dx = node.x - sel.x;
         const dy = node.y - sel.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        if (dist < 300) {
-          const push = (300 - dist) * 0.018 * k;
+        if (dist < 320) {
+          const push = (320 - dist) * 0.02 * k;
           node.vx += (dx / dist) * push;
           node.vy += (dy / dist) * push;
         }
@@ -197,12 +187,14 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
 
   // 6. Thermal jitter
   for (const node of simNodes) {
-    node.vx += (Math.random() - 0.5) * 0.5 * k;
-    node.vy += (Math.random() - 0.5) * 0.5 * k;
+    if (node.fixed) continue;
+    node.vx += (Math.random() - 0.5) * 0.4 * k;
+    node.vy += (Math.random() - 0.5) * 0.4 * k;
   }
 
   // 7. Soft bounds
   for (const node of simNodes) {
+    if (node.fixed) continue;
     const r = node.radius;
     const leftP  = (r + BOUND_PAD) - node.x;
     const rightP = node.x - (worldW - r - BOUND_PAD);
@@ -214,15 +206,16 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
     if (botP   > 0) node.vy -= botP   * 0.02;
   }
 
-  // 8. Integrate with damping
+  // 8. Integrate with damping (fixed nodes don't move)
   for (const node of simNodes) {
+    if (node.fixed) { node.vx = 0; node.vy = 0; continue; }
     node.vx *= 0.88;
     node.vy *= 0.88;
     node.x += node.vx;
     node.y += node.vy;
   }
 
-  // 9. Iterative position-level collision using per-node pad
+  // 9. Iterative collision resolution
   for (let it = 0; it < COLLIDE_ITERATIONS; it++) {
     for (let i = 0; i < simNodes.length; i++) {
       for (let j = i + 1; j < simNodes.length; j++) {
@@ -231,35 +224,84 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-        const minD = a.radius + b.radius + Math.max(a.pad, b.pad) * 0.5;
+        const minD = a.radius + b.radius + Math.max(a.pad, b.pad) * 0.55;
         if (dist < minD) {
-          const overlap = (minD - dist) * 0.5;
+          const overlap = (minD - dist);
           const ux = dx / dist;
           const uy = dy / dist;
-          a.x -= ux * overlap;
-          a.y -= uy * overlap;
-          b.x += ux * overlap;
-          b.y += uy * overlap;
+          // Fixed nodes don't get pushed
+          if (a.fixed && b.fixed) continue;
+          if (a.fixed) {
+            b.x += ux * overlap;
+            b.y += uy * overlap;
+          } else if (b.fixed) {
+            a.x -= ux * overlap;
+            a.y -= uy * overlap;
+          } else {
+            a.x -= ux * overlap * 0.5;
+            a.y -= uy * overlap * 0.5;
+            b.x += ux * overlap * 0.5;
+            b.y += uy * overlap * 0.5;
+          }
         }
       }
     }
   }
 }
 
-function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewport, view, worldW, worldH, pulse) {
+function drawDotGrid(ctx, width, height) {
+  ctx.fillStyle = GRID_DOT;
+  for (let y = GRID_SPACING / 2; y < height; y += GRID_SPACING) {
+    for (let x = GRID_SPACING / 2; x < width; x += GRID_SPACING) {
+      ctx.beginPath();
+      ctx.arc(x, y, GRID_DOT_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawNodeGlyph(ctx, node, color, isActive, view) {
+  const r = node.radius;
+  const g = r * 0.52;
+  if (node.type === 'organization') {
+    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillRect(node.x - g / 2, node.y - g / 2, g, g);
+  } else if (node.type === 'location') {
+    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.beginPath();
+    ctx.moveTo(node.x, node.y - g * 0.8);
+    ctx.lineTo(node.x + g * 0.8, node.y);
+    ctx.lineTo(node.x, node.y + g * 0.8);
+    ctx.lineTo(node.x - g * 0.8, node.y);
+    ctx.closePath();
+    ctx.fill();
+  } else if (node.type === 'person') {
+    // Render P in screen space for crisp glyph at any zoom
+    const sx = node.x * view.scale + view.tx;
+    const sy = node.y * view.scale + view.ty;
+    const fontPx = Math.max(9, Math.round(r * view.scale * 0.95));
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.font = `${GLYPH_FONT_WEIGHT} ${fontPx}px "IBM Plex Mono", ui-monospace, Menlo, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillText('P', sx, sy);
+    ctx.restore();
+  }
+}
+
+function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewport, view, worldW, worldH) {
   const { width, height } = viewport;
   ctx.clearRect(0, 0, width, height);
 
+  // 1. Dot grid in screen space
+  drawDotGrid(ctx, width, height);
+
+  // 2. World transform for graph content
   ctx.save();
   ctx.translate(view.tx, view.ty);
   ctx.scale(view.scale, view.scale);
-
-  // World frame
-  ctx.strokeStyle = 'rgba(50, 56, 70, 0.35)';
-  ctx.setLineDash([4, 10]);
-  ctx.lineWidth = 1 / view.scale;
-  ctx.strokeRect(0, 0, worldW, worldH);
-  ctx.setLineDash([]);
 
   const connectedIds = new Set();
   if (selectedEntity) {
@@ -270,7 +312,7 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
     }
   }
 
-  // Edges
+  // 3. Edges
   for (const edge of simEdges) {
     const a = edge.sourceNode;
     const b = edge.targetNode;
@@ -280,80 +322,80 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = isHighlighted
-      ? EDGE_HIGH
-      : selectedEntity ? EDGE_DIM : EDGE_BASE;
-    const w = isHighlighted
-      ? Math.min((edge.weight || 1) + 0.5, 4)
-      : Math.min((edge.weight || 1) * 0.5, 2);
-    ctx.lineWidth = w / view.scale;
+    if (isHighlighted) {
+      ctx.strokeStyle = EDGE_HIGH;
+      ctx.lineWidth = 1.4 / view.scale;
+    } else {
+      ctx.strokeStyle = selectedEntity ? EDGE_DIM : EDGE_BASE;
+      ctx.lineWidth = 0.8 / view.scale;
+    }
     ctx.stroke();
   }
 
-  // Nodes
+  // 4. Nodes — outlined rings with inner glyph, solid disc when active
   for (const node of simNodes) {
     const isSelected = node.id === selectedEntity;
     const isHovered  = node.id === hoveredEntity;
     const isConnected = connectedIds.has(node.id);
-    const dimmed = selectedEntity && !isConnected;
+    const isActive = isSelected || isConnected;
+    const dimmed = selectedEntity && !isActive;
     const color = TYPE_COLORS[node.type] || '#999';
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-    ctx.fillStyle = dimmed ? `${color}33` : color;
-    ctx.fill();
-
-    if (isSelected) {
-      // Pulsing outer ring
-      const pulseR = node.radius + 6 + Math.sin(pulse) * 3;
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, pulseR, 0, Math.PI * 2);
-      ctx.strokeStyle = SELECT_RING;
-      ctx.globalAlpha = 0.55 + Math.cos(pulse) * 0.25;
-      ctx.lineWidth = 2 / view.scale;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      // Solid inner ring
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius + 2.5, 0, Math.PI * 2);
-      ctx.strokeStyle = SELECT_RING;
-      ctx.lineWidth = 2 / view.scale;
+    if (isActive) {
+      ctx.fillStyle = color;
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#0f1115';
+      ctx.fill();
+      ctx.strokeStyle = dimmed ? `${color}55` : color;
+      ctx.lineWidth = 1.3 / view.scale;
       ctx.stroke();
     }
-    if (isHovered && !isSelected) {
+
+    drawNodeGlyph(ctx, node, color, isActive, view);
+
+    if (isSelected) {
+      // Outer halo ring
       ctx.beginPath();
-      ctx.arc(node.x, node.y, node.radius + 2, 0, Math.PI * 2);
+      ctx.arc(node.x, node.y, node.radius + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(232, 163, 61, 0.35)';
+      ctx.lineWidth = 1 / view.scale;
+      ctx.stroke();
+    } else if (isHovered) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
       ctx.strokeStyle = INK_2;
       ctx.lineWidth = 1 / view.scale;
       ctx.stroke();
     }
-
-    if (node.radius > 10 || isSelected || isHovered || (isConnected && selectedEntity)) {
-      const sx = node.x * view.scale + view.tx;
-      const sy = (node.y + node.radius + 4) * view.scale + view.ty;
-      ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.font = LABEL_FONT;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = dimmed ? INK_3 : INK_0;
-      ctx.fillText(node.name, sx, sy);
-      ctx.restore();
-    }
   }
 
   ctx.restore();
+
+  // 5. Labels in screen space (crisp at any zoom)
+  for (const node of simNodes) {
+    const isSelected = node.id === selectedEntity;
+    const isHovered  = node.id === hoveredEntity;
+    const isConnected = connectedIds.has(node.id);
+    const dimmed = selectedEntity && !(isSelected || isConnected);
+    const sx = node.x * view.scale + view.tx;
+    const sy = (node.y + node.radius) * view.scale + view.ty + 6;
+    ctx.font = LABEL_FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = dimmed ? INK_3 : (isSelected || isHovered ? INK_0 : 'rgba(232, 230, 223, 0.7)');
+    ctx.fillText(node.name, sx, sy);
+  }
 }
 
-// Soft clamp: always allow some pan, even when world fits viewport
 function clampView(view, viewport, worldW, worldH) {
   const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, view.scale));
   const { width, height } = viewport;
-  const slackPad = 160; // extra px of pan slack beyond world edges
+  const slackPad = 180;
   const worldPxW = worldW * scale;
   const worldPxH = worldH * scale;
-  // tx range: world's right edge can pan at least to slackPad from left edge of viewport,
-  // and world's left edge can pan up to slackPad past right edge of viewport (never fully off-screen).
   const txMin = Math.min(0, width  - worldPxW) - slackPad;
   const txMax = Math.max(0, width  - worldPxW) + slackPad;
   const tyMin = Math.min(0, height - worldPxH) - slackPad;
@@ -368,7 +410,7 @@ function clampView(view, viewport, worldW, worldH) {
 function fitView(viewport, worldW, worldH) {
   const sx = viewport.width  / worldW;
   const sy = viewport.height / worldH;
-  const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(sx, sy)));
+  const scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(sx, sy) * 1.05));
   const tx = (viewport.width  - worldW * scale) / 2;
   const ty = (viewport.height - worldH * scale) / 2;
   return { scale, tx, ty };
@@ -392,12 +434,11 @@ export default function EntityRelationshipGraph({
   const selectedRef = useRef(null);
   const connectedRef = useRef(new Set());
   const viewRef = useRef({ scale: 1, tx: 0, ty: 0 });
-  const dragRef = useRef(null);
-  const pulseRef = useRef(0);
+  const dragRef = useRef(null); // { kind: 'pan' | 'node', ... }
 
   const [hoveredEntity, setHoveredEntity] = useState(null);
   const [tooltipPos, setTooltipPos] = useState(null);
-  const [, forceTick] = useState(0);
+  const [zoomDisplay, setZoomDisplay] = useState(1);
 
   const worldW = Math.max(400, width * WORLD_SCALE);
   const worldH = Math.max(320, height * WORLD_SCALE);
@@ -430,7 +471,6 @@ export default function EntityRelationshipGraph({
     };
   }, [hoveredEntity, eventById]);
 
-  // Track selection + connected set for the sim
   useEffect(() => {
     selectedRef.current = selectedEntity || null;
     const set = new Set();
@@ -442,11 +482,9 @@ export default function EntityRelationshipGraph({
       }
     }
     connectedRef.current = set;
-    // Reheat so the graph reorganises around the selected node
     alphaRef.current = Math.max(alphaRef.current, REHEAT_ALPHA);
   }, [selectedEntity]);
 
-  // Build sim when data/size changes
   useEffect(() => {
     if (!nodes || nodes.length === 0) {
       simRef.current = null;
@@ -459,8 +497,8 @@ export default function EntityRelationshipGraph({
     simRef.current = sim;
     alphaRef.current = 1;
     viewRef.current = fitView({ width, height }, worldW, worldH);
+    setZoomDisplay(viewRef.current.scale);
 
-    // Pre-warm with no selection
     for (let i = 0; i < PREWARM_TICKS; i++) {
       tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
       alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
@@ -472,17 +510,12 @@ export default function EntityRelationshipGraph({
       const { simNodes, simEdges } = simRef.current;
       tickSimulation(simNodes, simEdges, worldW, worldH, alphaRef.current, selectedRef.current, connectedRef.current);
       alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
-      pulseRef.current += 0.12;
 
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext('2d');
-        drawGraph(
-          ctx, simNodes, simEdges,
-          selectedRef.current, hoveredRef.current,
-          { width, height }, viewRef.current, worldW, worldH,
-          pulseRef.current,
-        );
+        drawGraph(ctx, simNodes, simEdges, selectedRef.current, hoveredRef.current,
+          { width, height }, viewRef.current, worldW, worldH);
       }
       animRef.current = requestAnimationFrame(animate);
     };
@@ -494,8 +527,6 @@ export default function EntityRelationshipGraph({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges, width, height, worldW, worldH]);
-
-  // Hover drives a state update for tooltip, but sim loop already redraws each frame
 
   const screenToWorld = useCallback((sx, sy) => {
     const v = viewRef.current;
@@ -513,7 +544,7 @@ export default function EntityRelationshipGraph({
       const node = simNodes[i];
       const dx = node.x - wx;
       const dy = node.y - wy;
-      const hit = node.radius + 4;
+      const hit = node.radius + 5;
       if (dx * dx + dy * dy <= hit * hit) return node;
     }
     return null;
@@ -521,13 +552,29 @@ export default function EntityRelationshipGraph({
 
   const handleMouseDown = useCallback((e) => {
     if (e.button !== 0) return;
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      moved: false,
-      startView: { ...viewRef.current },
-    };
-  }, []);
+    const node = findNodeAt(e.clientX, e.clientY);
+    if (node) {
+      node.fixed = true;
+      node.vx = 0;
+      node.vy = 0;
+      dragRef.current = {
+        kind: 'node',
+        node,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+      };
+      alphaRef.current = Math.max(alphaRef.current, 0.5);
+    } else {
+      dragRef.current = {
+        kind: 'pan',
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        startView: { ...viewRef.current },
+      };
+    }
+  }, [findNodeAt]);
 
   const handleMouseMove = useCallback((e) => {
     const d = dragRef.current;
@@ -536,15 +583,26 @@ export default function EntityRelationshipGraph({
       const dy = e.clientY - d.startY;
       if (!d.moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
         d.moved = true;
-        if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
         setTooltipPos(null);
         setHoveredEntity(null);
+        hoveredRef.current = null;
+        if (canvasRef.current) {
+          canvasRef.current.style.cursor = d.kind === 'node' ? 'grabbing' : 'grabbing';
+        }
       }
       if (d.moved) {
-        viewRef.current = clampView(
-          { scale: d.startView.scale, tx: d.startView.tx + dx, ty: d.startView.ty + dy },
-          { width, height }, worldW, worldH,
-        );
+        if (d.kind === 'node') {
+          const scale = viewRef.current.scale;
+          d.node.x += (e.clientX - (d.lastX ?? d.startX)) / scale;
+          d.node.y += (e.clientY - (d.lastY ?? d.startY)) / scale;
+          d.lastX = e.clientX;
+          d.lastY = e.clientY;
+        } else {
+          viewRef.current = clampView(
+            { scale: d.startView.scale, tx: d.startView.tx + dx, ty: d.startView.ty + dy },
+            { width, height }, worldW, worldH,
+          );
+        }
         return;
       }
     }
@@ -564,32 +622,36 @@ export default function EntityRelationshipGraph({
       setTooltipPos(null);
     }
     if (canvasRef.current) {
-      canvasRef.current.style.cursor = node ? 'pointer' : 'grab';
+      canvasRef.current.style.cursor = node ? 'grab' : 'default';
     }
   }, [findNodeAt, width, height, worldW, worldH]);
 
   const handleMouseUp = useCallback((e) => {
     const d = dragRef.current;
     dragRef.current = null;
-    if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+    if (canvasRef.current) canvasRef.current.style.cursor = 'default';
     if (!d) return;
-    if (!d.moved) {
-      const node = findNodeAt(e.clientX, e.clientY);
-      if (node) {
-        onEntitySelect?.(node.id === selectedEntity ? null : node.id);
+    if (d.kind === 'node') {
+      // Release node back to sim (unpin) unless user wants sticky —
+      // unpin is the expected "nudge it then let physics take over" feel.
+      d.node.fixed = false;
+      if (!d.moved) {
+        onEntitySelect?.(d.node.id === selectedEntity ? null : d.node.id);
         alphaRef.current = REHEAT_ALPHA;
-      } else {
-        onEntitySelect?.(null);
       }
+    } else if (d.kind === 'pan' && !d.moved) {
+      onEntitySelect?.(null);
     }
-  }, [findNodeAt, onEntitySelect, selectedEntity]);
+  }, [onEntitySelect, selectedEntity]);
 
   const handleMouseLeave = useCallback(() => {
-    if (dragRef.current) dragRef.current = null;
+    const d = dragRef.current;
+    if (d && d.kind === 'node' && d.node) d.node.fixed = false;
+    dragRef.current = null;
     hoveredRef.current = null;
     setHoveredEntity(null);
     setTooltipPos(null);
-    if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+    if (canvasRef.current) canvasRef.current.style.cursor = 'default';
   }, []);
 
   const handleWheel = useCallback((e) => {
@@ -605,6 +667,7 @@ export default function EntityRelationshipGraph({
     const tx = sx - (sx - v.tx) * ratio;
     const ty = sy - (sy - v.ty) * ratio;
     viewRef.current = clampView({ scale: newScale, tx, ty }, { width, height }, worldW, worldH);
+    setZoomDisplay(newScale);
   }, [width, height, worldW, worldH]);
 
   useEffect(() => {
@@ -623,13 +686,13 @@ export default function EntityRelationshipGraph({
     const tx = cx - (cx - v.tx) * ratio;
     const ty = cy - (cy - v.ty) * ratio;
     viewRef.current = clampView({ scale: newScale, tx, ty }, { width, height }, worldW, worldH);
-    forceTick((t) => t + 1);
+    setZoomDisplay(newScale);
   }, [width, height, worldW, worldH]);
 
   const resetView = useCallback(() => {
     viewRef.current = fitView({ width, height }, worldW, worldH);
     alphaRef.current = Math.max(alphaRef.current, REHEAT_ALPHA);
-    forceTick((t) => t + 1);
+    setZoomDisplay(viewRef.current.scale);
   }, [width, height, worldW, worldH]);
 
   return (
@@ -646,6 +709,9 @@ export default function EntityRelationshipGraph({
         role="img"
         aria-label="Entity relationship graph"
       />
+      <div className="entity-graph-status">
+        ZOOM · {zoomDisplay.toFixed(2)}× · DRAG NODES
+      </div>
       <div className="entity-graph-zoom">
         <button type="button" aria-label="Zoom in"  onClick={() => zoomBy(ZOOM_STEP * ZOOM_STEP)}>+</button>
         <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1 / (ZOOM_STEP * ZOOM_STEP))}>−</button>
