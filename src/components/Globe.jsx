@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
 
@@ -19,9 +19,15 @@ const ENTRY_DURATION_MS = 2000;
 
 const DEFAULT_VIEW = { lng: 10, lat: 20, zoom: DEFAULT_ZOOM };
 
-const isMobile = typeof screen !== 'undefined' && screen.width < 768;
-const STORY_ZOOM = isMobile ? 4 : 5.5;
-const REGION_ZOOM = isMobile ? 3 : 4;
+const MOBILE_QUERY = '(max-width: 767px)';
+
+function getInitialIsMobile() {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia(MOBILE_QUERY).matches;
+  }
+  return window.innerWidth < 768;
+}
 
 /** easeInOutCubic — smooth entry. */
 function easeInOutCubic(t) {
@@ -45,6 +51,7 @@ const Globe = ({
 }) => {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
   const [userDragged, setUserDragged] = useState(false);
   const autoRotateRef = useRef(null);
   const entryPlayedRef = useRef(false);
@@ -52,7 +59,27 @@ const Globe = ({
   const [theme, setTheme] = useState(() =>
     (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
   );
+  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
   const isLight = theme === 'light';
+
+  const { STORY_ZOOM, REGION_ZOOM } = useMemo(() => ({
+    STORY_ZOOM: isMobile ? 4 : 5.5,
+    REGION_ZOOM: isMobile ? 3 : 4,
+  }), [isMobile]);
+
+  /* ── mobile breakpoint observer ── */
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const handler = (e) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+    mq.addListener(handler);
+    return () => mq.removeListener(handler);
+  }, []);
 
   /* ── theme observer ── */
   useEffect(() => {
@@ -67,6 +94,7 @@ const Globe = ({
   /* ── entry animation (plays once per mount, zoomed-out → new default) ── */
   const handleMapRef = useCallback((instance) => {
     mapRef.current = instance;
+    setMapReady(Boolean(instance));
     if (!instance || entryPlayedRef.current) return;
 
     const playEntry = () => {
@@ -160,7 +188,7 @@ const Globe = ({
         });
       } catch { /* ignore */ }
     }
-  }, [selectedStory, selectedRegion, regionSeverities, newsList]);
+  }, [selectedStory, selectedRegion, regionSeverities, newsList, STORY_ZOOM, REGION_ZOOM]);
 
   /* ── user drag / wheel detection (pauses auto-rotate) ── */
   useEffect(() => {
@@ -204,39 +232,40 @@ const Globe = ({
 
   /* ── auto-rotate loop (paused during entry, selection, or user input) ── */
   useEffect(() => {
+    if (!mapReady) return undefined;
     const map = mapRef.current;
     if (!map) return undefined;
 
     const shouldRotate = !selectedStory && !selectedRegion && !userDragged;
-    if (!shouldRotate) {
-      if (autoRotateRef.current) {
-        clearInterval(autoRotateRef.current);
-        autoRotateRef.current = null;
-      }
-      return undefined;
-    }
+    if (!shouldRotate) return undefined;
 
-    autoRotateRef.current = setInterval(() => {
-      if (entryInProgressRef.current) return;
-      const m = mapRef.current;
-      if (!m) return;
-      try {
-        const center = m.getCenter();
-        m.easeTo({
-          center: [center.lng + 0.12, center.lat],
-          duration: 100,
-          easing: (x) => x,
-        });
-      } catch { /* ignore */ }
-    }, 100);
+    // Preserve legacy visual rate (~1.2°/sec = old 0.12°/100ms).
+    const DEG_PER_SEC = 1.2;
+    let raf = null;
+    let last = performance.now();
+
+    const step = (now) => {
+      const dt = Math.min(64, now - last) / 1000; // clamp long frames
+      last = now;
+      if (!entryInProgressRef.current) {
+        const m = mapRef.current;
+        if (m) {
+          try {
+            const c = m.getCenter();
+            m.setCenter([c.lng + DEG_PER_SEC * dt, c.lat]);
+          } catch { /* ignore */ }
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    autoRotateRef.current = raf;
 
     return () => {
-      if (autoRotateRef.current) {
-        clearInterval(autoRotateRef.current);
-        autoRotateRef.current = null;
-      }
+      if (raf != null) cancelAnimationFrame(raf);
+      autoRotateRef.current = null;
     };
-  }, [selectedStory, selectedRegion, userDragged]);
+  }, [mapReady, selectedStory, selectedRegion, userDragged]);
 
   /* ── resize handling ── */
   useEffect(() => {
@@ -248,7 +277,7 @@ const Globe = ({
     const container = map.getContainer?.();
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [mapReady]);
 
   return (
     <div ref={containerRef} className="globe-wrapper" style={{ position: 'absolute', inset: 0 }}>

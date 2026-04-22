@@ -16,7 +16,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
+import { X, Minus, Plus, Locate, Maximize, Loader2, AlertTriangle, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -156,6 +156,33 @@ function DefaultLoader() {
   );
 }
 
+function MapErrorOverlay({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="bg-background/80 text-foreground absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 px-4 text-center backdrop-blur-sm"
+    >
+      <AlertTriangle className="size-5 text-amber-500" aria-hidden />
+      <div className="text-sm font-medium">Map failed to load</div>
+      <div className="text-muted-foreground max-w-xs text-xs">{message}</div>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="border-border hover:bg-accent focus-visible:ring-ring mt-1 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2"
+      >
+        <RefreshCw className="size-3.5" aria-hidden />
+        Retry
+      </button>
+    </div>
+  );
+}
+
 function getViewport(map: MapLibreGL.Map): MapViewport {
   const center = map.getCenter();
   return {
@@ -184,6 +211,8 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const [mapInstance, setMapInstance] = useState<MapLibreGL.Map | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleLoaded, setIsStyleLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadedRef = useRef(false);
   const currentStyleRef = useRef<MapStyleOption | null>(null);
   const styleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const internalUpdateRef = useRef(false);
@@ -243,7 +272,22 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
         }
       }, 100);
     };
-    const loadHandler = () => setIsLoaded(true);
+    const loadHandler = () => {
+      loadedRef.current = true;
+      setIsLoaded(true);
+      setLoadError(null);
+    };
+
+    // MapLibre emits runtime errors for tile 404s etc.; only treat
+    // pre-load errors as fatal so we can surface a blocked style/CDN.
+    const errorHandler = (event: { error?: Error } & Record<string, unknown>) => {
+      if (loadedRef.current) return;
+      const err = event?.error;
+      const message =
+        err?.message ||
+        "Style or tiles failed to load. Check network and try again.";
+      setLoadError(message);
+    };
 
     // Viewport change handler - skip if triggered by internal update
     const handleMove = () => {
@@ -253,6 +297,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
 
     map.on("load", loadHandler);
     map.on("styledata", styleDataHandler);
+    map.on("error", errorHandler);
     map.on("move", handleMove);
     setMapInstance(map);
 
@@ -260,10 +305,13 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       clearStyleTimeout();
       map.off("load", loadHandler);
       map.off("styledata", styleDataHandler);
+      map.off("error", errorHandler);
       map.off("move", handleMove);
       map.remove();
+      loadedRef.current = false;
       setIsLoaded(false);
       setIsStyleLoaded(false);
+      setLoadError(null);
       setMapInstance(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -321,13 +369,36 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     [mapInstance, isLoaded, isStyleLoaded],
   );
 
+  const handleRetry = useCallback(() => {
+    if (!mapInstance) return;
+    setLoadError(null);
+    loadedRef.current = false;
+    setIsLoaded(false);
+    setIsStyleLoaded(false);
+    clearStyleTimeout();
+    try {
+      const style = currentStyleRef.current;
+      if (style) {
+        mapInstance.setStyle(style as MapStyleOption, { diff: false });
+      }
+    } catch {
+      // ignore — error handler will re-fire if retry also fails
+    }
+  }, [mapInstance, clearStyleTimeout]);
+
+  const showLoader =
+    !loadError && (!(isLoaded && isStyleLoaded) || loading);
+
   return (
     <MapContext.Provider value={contextValue}>
       <div
         ref={containerRef}
         className={cn("relative h-full w-full", className)}
       >
-        {(!isLoaded || loading) && <DefaultLoader />}
+        {showLoader && <DefaultLoader />}
+        {loadError && (
+          <MapErrorOverlay message={loadError} onRetry={handleRetry} />
+        )}
         {/* SSR-safe: children render only when map is loaded on client */}
         {mapInstance && children}
       </div>

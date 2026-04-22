@@ -10,11 +10,16 @@ import { getCountryBbox } from '../utils/countryBbox';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
-const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-const STORY_ZOOM = isMobile ? 5 : 8;
-const REGION_ZOOM = isMobile ? 4 : 6;
-const DEFAULT_ZOOM = isMobile ? 1.5 : 2;
+const MOBILE_QUERY = '(max-width: 767px)';
 const DEFAULT_CENTER = { lng: 10, lat: 20 };
+
+function getInitialIsMobile() {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia(MOBILE_QUERY).matches;
+  }
+  return window.innerWidth < 768;
+}
 
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
 const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
@@ -117,10 +122,23 @@ const FlatMap = ({
 }) => {
   const { t } = useTranslation();
   const mapRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
   const [drillRegion, setDrillRegion] = useState(null);
   const [theme, setTheme] = useState(() =>
     (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
   );
+  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
+
+  const handleMapRef = useCallback((instance) => {
+    mapRef.current = instance;
+    setMapReady(Boolean(instance));
+  }, []);
+
+  const { STORY_ZOOM, REGION_ZOOM, DEFAULT_ZOOM } = useMemo(() => ({
+    STORY_ZOOM: isMobile ? 5 : 8,
+    REGION_ZOOM: isMobile ? 4 : 6,
+    DEFAULT_ZOOM: isMobile ? 1.5 : 2,
+  }), [isMobile]);
 
   const isLight = theme === 'light';
   const styleUrl = compact
@@ -142,6 +160,21 @@ const FlatMap = ({
     return () => observer.disconnect();
   }, []);
 
+  /* ── mobile breakpoint observer ── */
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const handler = (e) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+    // Older Safari
+    mq.addListener(handler);
+    return () => mq.removeListener(handler);
+  }, []);
+
   /* ── resize handling ── */
   useEffect(() => {
     const map = mapRef.current;
@@ -152,7 +185,7 @@ const FlatMap = ({
     const container = map.getContainer?.();
     if (container) observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [mapReady]);
 
   /* ── fly-to logic ── */
   useEffect(() => {
@@ -215,7 +248,7 @@ const FlatMap = ({
         duration: 1200,
       });
     }
-  }, [selectedStory, selectedRegion, regionSeverities, newsList, compact]);
+  }, [selectedStory, selectedRegion, regionSeverities, newsList, compact, STORY_ZOOM, REGION_ZOOM, DEFAULT_ZOOM]);
 
   /* ── drill region fly ── */
   useEffect(() => {
@@ -261,7 +294,7 @@ const FlatMap = ({
         });
       } catch { /* ignore */ }
     }
-  }, []);
+  }, [DEFAULT_ZOOM]);
 
   const breadcrumb = useMemo(() => {
     const parts = [{ label: 'WORLD', onClick: handleDrillBack }];
@@ -281,7 +314,7 @@ const FlatMap = ({
   return (
     <div className="flatmap-wrapper" style={{ position: 'absolute', inset: 0 }}>
       <AppMap
-        ref={mapRef}
+        ref={handleMapRef}
         surface="flat"
         theme={isLight ? 'light' : 'dark'}
         styleUrl={styleUrl}

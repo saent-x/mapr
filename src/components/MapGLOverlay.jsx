@@ -530,19 +530,16 @@ const MapGLOverlay = ({
     return undefined;
   }, [isLoaded, map]);
 
-  /* ── countries source + layers ── */
+  /* ── countries: source + layers mounted once (preserves feature-state) ── */
   useEffect(() => {
-    if (!isLoaded || !map || !countries) return undefined;
+    if (!isLoaded || !map) return undefined;
 
     if (!map.getSource('countries')) {
       map.addSource('countries', {
         type: 'geojson',
-        data: countries,
+        data: EMPTY_FC,
         promoteId: '_iso',
       });
-    } else {
-      const src = map.getSource('countries');
-      if (src) src.setData(countries);
     }
 
     if (!map.getLayer('country-fill')) {
@@ -580,6 +577,15 @@ const MapGLOverlay = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, map]);
+
+  /* ── countries: push data when geojson loads/changes ── */
+  useEffect(() => {
+    if (!isLoaded || !map || !countries) return;
+    const src = map.getSource('countries');
+    if (src) {
+      try { src.setData(countries); } catch { /* ignore */ }
+    }
   }, [isLoaded, map, countries]);
 
   /* ── update country paint/filter when deps change ── */
@@ -845,11 +851,18 @@ const MapGLOverlay = ({
     const lines = arcsGeoJson.features;
     if (lines.length === 0) return undefined;
 
-    let frame;
+    let frame = null;
     let t = 0;
     let lastUpdateTime = 0;
 
+    const isVisible = () =>
+      typeof document === 'undefined' || document.visibilityState === 'visible';
+
     const animate = (now) => {
+      if (!isVisible()) {
+        frame = null;
+        return;
+      }
       t = (t + 0.003) % 1;
       const points = [];
       for (let i = 0; i < lines.length; i++) {
@@ -870,8 +883,35 @@ const MapGLOverlay = ({
       }
       frame = requestAnimationFrame(animate);
     };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
+
+    const start = () => {
+      if (frame == null && isVisible()) {
+        lastUpdateTime = 0;
+        frame = requestAnimationFrame(animate);
+      }
+    };
+    const stop = () => {
+      if (frame != null) {
+        cancelAnimationFrame(frame);
+        frame = null;
+      }
+    };
+    const onVisibility = () => {
+      if (isVisible()) start();
+      else stop();
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+    start();
+
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+      stop();
+    };
   }, [isLoaded, map, arcsGeoJson, hoveredArcId]);
 
   /* ── articles clustered source + layers ── */
