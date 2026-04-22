@@ -4,6 +4,7 @@ import {
   type MapRef,
   type MapViewport,
 } from '@/components/ui/map';
+import './AppMap.css';
 
 // Default tile/style URLs: CARTO basemap-gl tiles (same source as legacy FlatMap
 // and mapcn's built-in defaults). Free, no API key, light/dark variants match
@@ -35,10 +36,12 @@ const AppMap = forwardRef<MapRef, AppMapProps>(function AppMap(
 
   const projection = surface === 'globe' ? { type: 'globe' as const } : undefined;
 
+  const mergedClassName = className ? `appmap ${className}` : 'appmap';
+
   return (
     <Map
       ref={ref}
-      className={className}
+      className={mergedClassName}
       theme={theme}
       styles={styles}
       projection={projection}
