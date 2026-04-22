@@ -1,263 +1,200 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Network, Users, Building2, MapPin, X, ExternalLink, ArrowLeft, Map } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import useNewsStore from '../stores/newsStore.js';
 import useFilterStore from '../stores/filterStore.js';
-import { extractEntityGraph, filterGraphByType, getRelatedEvents } from '../utils/entityGraph.js';
-import { getSeverityMeta } from '../utils/mockData.js';
+import { extractEntityGraph, getRelatedEvents } from '../utils/entityGraph.js';
+import PageLoadingFallback from '../components/PageLoadingFallback.jsx';
 
 const EntityRelationshipGraph = lazy(() => import('../components/EntityRelationshipGraph.jsx'));
 
+const TYPE_STYLES = {
+  organization: { color: 'var(--amber)', glyph: '■' },
+  location: { color: 'var(--cyan)', glyph: '◆' },
+  person: { color: 'var(--sev-green)', glyph: 'P' },
+};
+
 /**
- * Entity explorer page — interactive graph visualization of entities
- * extracted from news events with type filtering and event detail panel.
+ * /entities — tactical entity graph explorer.
  */
 export default function EntityExplorerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { liveNews, backendEvents, dataSource } = useNewsStore();
 
-  /* ── Fetch data on mount — ensure data loads even when navigating directly ── */
+  const liveNews = useNewsStore((s) => s.liveNews);
+  const backendEvents = useNewsStore((s) => s.backendEvents);
+  const setEntityFilter = useFilterStore((s) => s.setEntityFilter);
+
+  const [selected, setSelected] = useState(null);
+  const [size, setSize] = useState({ w: 900, h: 560 });
+  const canvasRef = useRef(null);
+
   useEffect(() => {
-    if (!liveNews) {
-      useNewsStore.getState().loadLiveData();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!liveNews) useNewsStore.getState().loadLiveData();
+  }, [liveNews]);
 
-  /* ── Use backend events which have rich entity data from NER pipeline ── */
   const events = useMemo(() => {
     if (backendEvents && backendEvents.length > 0) return backendEvents;
-    return [];
-  }, [backendEvents]);
+    return liveNews || [];
+  }, [backendEvents, liveNews]);
 
-  /* ── Type filter state ── */
-  const [typeFilter, setTypeFilter] = useState({
-    people: true,
-    organizations: true,
-    locations: true,
-  });
-
-  /* ── Selected entity ── */
-  const [selectedEntity, setSelectedEntity] = useState(null);
-
-  /* ── Container size ── */
-  const containerRef = useRef(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const { nodes, edges } = useMemo(() => extractEntityGraph(events, { maxNodes: 80 }), [events]);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      setDimensions({
-        width: Math.max(400, Math.floor(rect.width)),
-        height: Math.max(300, Math.floor(rect.height)),
-      });
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    const el = canvasRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        setSize({ w: Math.max(480, e.contentRect.width), h: Math.max(320, e.contentRect.height) });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
-  /* ── Graph computation (cap at 150 nodes for canvas performance) ── */
-  const fullGraph = useMemo(() => extractEntityGraph(events, { maxNodes: 150 }), [events]);
-  const filteredGraph = useMemo(
-    () => filterGraphByType(fullGraph, typeFilter),
-    [fullGraph, typeFilter]
+  const selNode = useMemo(() => nodes.find((n) => n.id === selected) || null, [nodes, selected]);
+
+  const connectedIds = useMemo(() => {
+    if (!selected) return new Set();
+    const s = new Set();
+    for (const e of edges) {
+      if (e.source === selected) s.add(e.target);
+      if (e.target === selected) s.add(e.source);
+    }
+    return s;
+  }, [edges, selected]);
+
+  const connectedNodes = useMemo(
+    () => [...connectedIds].map((id) => nodes.find((n) => n.id === id)).filter(Boolean),
+    [connectedIds, nodes],
   );
 
-  /* ── Selected entity node info (selectedEntity is now a typed id) ── */
-  const selectedNode = useMemo(() => {
-    if (!selectedEntity) return null;
-    return fullGraph.nodes.find((n) => n.id === selectedEntity);
-  }, [fullGraph, selectedEntity]);
-
-  /* ── Related events for selected entity (using typed identity) ── */
   const relatedEvents = useMemo(() => {
-    if (!selectedNode) return [];
-    return getRelatedEvents(events, selectedNode.name, selectedNode.type);
-  }, [events, selectedNode]);
+    if (!selNode) return [];
+    return getRelatedEvents(events, selNode.name, selNode.type).slice(0, 8);
+  }, [events, selNode]);
 
-  /* ── Toggle filter ── */
-  const toggleType = useCallback((type) => {
-    setTypeFilter((prev) => ({ ...prev, [type]: !prev[type] }));
-  }, []);
-
-  /* ── Show entity on map ── */
-  const handleShowOnMap = useCallback((node) => {
-    if (!node) return;
-    useFilterStore.getState().setEntityFilter({
-      id: node.id,
-      name: node.name,
-      type: node.type,
-    });
+  const showOnMap = () => {
+    if (!selNode) return;
+    setEntityFilter({ id: selNode.id, name: selNode.name, type: selNode.type });
     navigate('/');
-  }, [navigate]);
+  };
 
-  /* ── Stats ── */
-  const stats = useMemo(() => ({
-    totalEntities: fullGraph.nodes.length,
-    people: fullGraph.nodes.filter((n) => n.type === 'person').length,
-    organizations: fullGraph.nodes.filter((n) => n.type === 'organization').length,
-    locations: fullGraph.nodes.filter((n) => n.type === 'location').length,
-    connections: fullGraph.edges.length,
-  }), [fullGraph]);
-
-  const isLoading = !liveNews || dataSource === 'loading';
+  const orgCount = nodes.filter((n) => n.type === 'organization').length;
+  const locCount = nodes.filter((n) => n.type === 'location').length;
+  const perCount = nodes.filter((n) => n.type === 'person').length;
 
   return (
-    <div className="entity-explorer">
-      {/* Header */}
-      <div className="entity-explorer-header">
-        <div className="entity-explorer-title-group">
-          <div className="entity-explorer-title-row">
-            <Network size={20} />
-            <h1 className="entity-explorer-title">{t('entities.title')}</h1>
-            {!isLoading && (
-              <span className="entity-explorer-stats">
-                {stats.totalEntities} {t('entities.entitiesLabel')} · {stats.connections} {t('entities.connectionsLabel')}
-              </span>
-            )}
+    <div className="entities-page">
+      <div className="entity-canvas" ref={canvasRef}>
+        <Suspense fallback={<PageLoadingFallback />}>
+          <EntityRelationshipGraph
+            nodes={nodes}
+            edges={edges}
+            selectedEntity={selected}
+            onEntitySelect={(id) => setSelected(id)}
+            width={size.w}
+            height={size.h}
+          />
+        </Suspense>
+        <div className="map-chrome">
+          <div className="map-corner tl">
+            <div>ENTITY GRAPH · 2B HORIZON</div>
+            <div style={{ color: 'var(--ink-0)', marginTop: 4 }}>
+              {nodes.length} NODES · {edges.length} EDGES
+            </div>
           </div>
-          <p className="entity-explorer-subtitle">{t('entities.subtitle')}</p>
-        </div>
-
-        {/* Type filter toggles */}
-        <div className="entity-type-filters">
-          <button
-            className={`entity-type-btn entity-type-btn--person ${typeFilter.people ? 'is-active' : ''}`}
-            onClick={() => toggleType('people')}
-            aria-pressed={typeFilter.people}
-          >
-            <Users size={14} />
-            <span>{t('entities.people')}</span>
-            <span className="entity-type-count">{stats.people}</span>
-          </button>
-          <button
-            className={`entity-type-btn entity-type-btn--org ${typeFilter.organizations ? 'is-active' : ''}`}
-            onClick={() => toggleType('organizations')}
-            aria-pressed={typeFilter.organizations}
-          >
-            <Building2 size={14} />
-            <span>{t('entities.organizations')}</span>
-            <span className="entity-type-count">{stats.organizations}</span>
-          </button>
-          <button
-            className={`entity-type-btn entity-type-btn--location ${typeFilter.locations ? 'is-active' : ''}`}
-            onClick={() => toggleType('locations')}
-            aria-pressed={typeFilter.locations}
-          >
-            <MapPin size={14} />
-            <span>{t('entities.locations')}</span>
-            <span className="entity-type-count">{stats.locations}</span>
-          </button>
+          <div className="map-corner tr">
+            <div style={{ display: 'flex', gap: 12 }}>
+              <span><span style={{ color: 'var(--amber)' }}>{TYPE_STYLES.organization.glyph}</span> ORG · {orgCount}</span>
+              <span><span style={{ color: 'var(--cyan)' }}>{TYPE_STYLES.location.glyph}</span> LOC · {locCount}</span>
+              <span><span style={{ color: 'var(--sev-green)' }}>{TYPE_STYLES.person.glyph}</span> PERSON · {perCount}</span>
+            </div>
+          </div>
+          <div className="map-corner bl">
+            <div>DRAG CANVAS · SELECT NODES</div>
+          </div>
         </div>
       </div>
 
-      {/* Main content: graph + optional detail panel */}
-      <div className="entity-explorer-body">
-        <div
-          className={`entity-graph-container ${selectedEntity ? 'has-detail' : ''}`}
-          ref={containerRef}
-        >
-          {isLoading ? (
-            <div className="entity-graph-loading">
-              <Network size={32} className="entity-graph-loading-icon" />
-              <span>{t('entities.loading')}</span>
+      <aside className="entity-panel" aria-label="Selected entity">
+        {!selNode ? (
+          <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+            <div className="micro" style={{ marginBottom: 8 }}>NO ENTITY SELECTED</div>
+            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-2)' }}>
+              Tap a node on the graph to inspect it and jump back to the map filtered by that entity.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="panel-header" style={{ height: 32 }}>
+              <span className="dot" style={{ background: TYPE_STYLES[selNode.type]?.color || 'var(--amber)' }} />
+              ENTITY · <span className="mono" style={{ color: 'var(--ink-0)', marginLeft: 4 }}>{selNode.id.slice(0, 18)}</span>
             </div>
-          ) : filteredGraph.nodes.length === 0 ? (
-            <div className="entity-graph-empty">
-              <Network size={32} />
-              <span>{t('entities.noEntities')}</span>
-            </div>
-          ) : (
-            <Suspense fallback={
-              <div className="entity-graph-loading">
-                <Network size={32} className="entity-graph-loading-icon" />
-                <span>{t('entities.loading')}</span>
+            <div style={{ padding: '20px 20px 14px' }}>
+              <div className="micro" style={{ marginBottom: 6 }}>{selNode.type.toUpperCase()}</div>
+              <h2 style={{ fontFamily: 'var(--ff-serif)', fontWeight: 400, margin: '0 0 6px', fontSize: 24, color: 'var(--ink-0)' }}>
+                {selNode.name}
+              </h2>
+              <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                DEG {connectedIds.size} · MENTIONS {selNode.mentionCount || 0}
               </div>
-            }>
-              <EntityRelationshipGraph
-                nodes={filteredGraph.nodes}
-                edges={filteredGraph.edges}
-                events={events}
-                selectedEntity={selectedEntity}
-                onEntitySelect={setSelectedEntity}
-                width={dimensions.width}
-                height={dimensions.height}
-              />
-            </Suspense>
-          )}
-        </div>
+            </div>
 
-        {/* Detail panel for selected entity */}
-        {selectedEntity && selectedNode && (
-          <div className="entity-detail-panel">
-            <div className="entity-detail-header">
-              <button
-                className="entity-detail-close"
-                onClick={() => setSelectedEntity(null)}
-                aria-label={t('panel.closePanel')}
-              >
-                <X size={16} />
-              </button>
-              <div className={`entity-detail-type-badge entity-detail-type-badge--${selectedNode.type}`}>
-                {selectedNode.type === 'person' && <Users size={12} />}
-                {selectedNode.type === 'organization' && <Building2 size={12} />}
-                {selectedNode.type === 'location' && <MapPin size={12} />}
-                <span>{t(`entities.${selectedNode.type}`)}</span>
-              </div>
-              <h2 className="entity-detail-name">{selectedNode.name}</h2>
-              <div className="entity-detail-meta">
-                <span>{selectedNode.mentionCount} {t('entities.mentions')}</span>
-                <span>·</span>
-                <span>{relatedEvents.length} {t('entities.relatedEvents')}</span>
-              </div>
-              {relatedEvents.length > 0 && (
-                <button
-                  className="entity-show-on-map-btn"
-                  onClick={() => handleShowOnMap(selectedNode)}
+            <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
+              <div className="micro" style={{ marginBottom: 8 }}>CONNECTED · {connectedIds.size}</div>
+              {connectedNodes.slice(0, 12).map((n) => (
+                <div
+                  key={n.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelected(n.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n.id); }
+                  }}
+                  style={{ padding: '5px 0', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, fontSize: 12, cursor: 'pointer' }}
                 >
-                  <Map size={14} />
-                  <span>{t('entities.showOnMap')}</span>
-                </button>
+                  <span style={{ width: 14, color: TYPE_STYLES[n.type]?.color, fontFamily: 'var(--ff-mono)' }}>
+                    {TYPE_STYLES[n.type]?.glyph}
+                  </span>
+                  <span style={{ flex: 1, color: 'var(--ink-0)' }}>{n.name}</span>
+                  <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{n.mentionCount}</span>
+                </div>
+              ))}
+              {connectedNodes.length === 0 && (
+                <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
+                  NO EDGES
+                </div>
               )}
             </div>
 
-            <div className="entity-detail-events">
-              <h3 className="entity-detail-events-title">{t('entities.relatedEventsTitle')}</h3>
-              {relatedEvents.length === 0 ? (
-                <p className="entity-detail-no-events">{t('entities.noRelatedEvents')}</p>
-              ) : (
-                <ul className="entity-detail-event-list">
-                  {relatedEvents.slice(0, 20).map((event) => {
-                    const meta = getSeverityMeta(event.severity);
-                    return (
-                      <li key={event.id} className="entity-detail-event-item">
-                        <span
-                          className="entity-detail-event-dot"
-                          style={{ background: meta.accent }}
-                        />
-                        <div className="entity-detail-event-info">
-                          <span className="entity-detail-event-title">{event.title}</span>
-                          <span className="entity-detail-event-meta">
-                            <span style={{ color: meta.accent }}>{meta.label}</span>
-                            {event.region && <span> · {event.region}</span>}
-                          </span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+            <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
+              <div className="micro" style={{ marginBottom: 8 }}>RELATED EVENTS · {relatedEvents.length}</div>
+              {relatedEvents.map((ev) => (
+                <div
+                  key={ev.id}
+                  style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 11, color: 'var(--ink-1)' }}
+                >
+                  <div style={{ color: 'var(--ink-0)' }}>{ev.title}</div>
+                  <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.08em' }}>
+                    {ev.isoA2 || '—'} · SEV {((ev.severity ?? 0) / 10).toFixed(1)}
+                  </div>
+                </div>
+              ))}
+              {relatedEvents.length === 0 && (
+                <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
+                  NO EVENTS
+                </div>
               )}
             </div>
-          </div>
+
+            <div style={{ padding: '14px 20px', display: 'flex', gap: 8, marginTop: 'auto' }}>
+              <button type="button" className="btn primary" onClick={showOnMap}>SHOW ON MAP</button>
+              <button type="button" className="btn" onClick={() => setSelected(null)}>CLEAR</button>
+            </div>
+          </>
         )}
-      </div>
+      </aside>
     </div>
   );
 }

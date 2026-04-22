@@ -1,321 +1,80 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TrendingUp, BarChart3, Check, Loader } from 'lucide-react';
 import useNewsStore from '../stores/newsStore.js';
-import { fetchBackendCoverageHistoryWithRegions } from '../services/backendService.js';
-import { format } from 'date-fns';
+import { canonicalizeArticles } from '../utils/newsPipeline.js';
+import { isoToCountry } from '../utils/geocoder.js';
 
-/* ── Region colors (10 distinct, high-contrast on dark bg) ── */
-const REGION_COLORS = [
-  '#00d4ff', '#ff5577', '#00e5a0', '#ffaa33', '#a78bfa',
-  '#f472b6', '#38bdf8', '#fb923c', '#4ade80', '#e879f9',
-];
+const SERIES_COLORS = ['var(--amber)', 'var(--cyan)', 'var(--sev-red)', 'var(--sev-green)', 'var(--sev-amber)'];
 
-function getRegionColor(index) {
-  return REGION_COLORS[index % REGION_COLORS.length];
-}
-
-/* ── Tiny sparkline (inline SVG) ── */
-function Sparkline({ counts, color, width = 80, height = 24 }) {
-  if (!counts || counts.length < 2) return null;
-  const max = Math.max(...counts, 1);
-  const step = width / (counts.length - 1);
-  const points = counts.map((v, i) => `${i * step},${height - (v / max) * height}`).join(' ');
+function TrendLineChart({ series, w = 640, h = 240, area = false }) {
+  if (!series.length) return null;
+  const len = Math.max(...series.map((s) => s.data.length));
+  const max = Math.max(1, ...series.flatMap((s) => s.data));
+  const pad = { l: 44, r: 12, t: 16, b: 24 };
+  const iw = w - pad.l - pad.r;
+  const ih = h - pad.t - pad.b;
+  const xAt = (i) => pad.l + (i / Math.max(1, len - 1)) * iw;
+  const yAt = (v) => pad.t + ih - (v / max) * ih;
+  const gridY = 5;
   return (
-    <svg width={width} height={height} className="trend-sparkline" aria-hidden="true">
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/* ── Main SVG area chart ── */
-function TrendChart({ timestamps, regions, selectedRegions, width = 700, height = 340 }) {
-  const { t } = useTranslation();
-  const padding = { top: 20, right: 24, bottom: 36, left: 52 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-
-  const selected = useMemo(() => {
-    return Object.entries(regions)
-      .filter(([iso]) => selectedRegions.has(iso))
-      .map(([iso, data], idx) => ({ iso, ...data, color: getRegionColor([...selectedRegions].indexOf(iso)) }));
-  }, [regions, selectedRegions]);
-
-  // Compute y-axis max across all selected regions
-  const yMax = useMemo(() => {
-    let max = 1;
-    for (const r of selected) {
-      for (const c of r.counts) { if (c > max) max = c; }
-    }
-    return Math.ceil(max * 1.1);
-  }, [selected]);
-
-  // x-scale: evenly spaced timestamps
-  const xScale = useCallback((i) => padding.left + (timestamps.length > 1 ? (i / (timestamps.length - 1)) * chartW : chartW / 2), [timestamps, chartW, padding.left]);
-  const yScale = useCallback((v) => padding.top + chartH - (v / yMax) * chartH, [yMax, chartH, padding.top]);
-
-  // y-axis ticks (5 ticks)
-  const yTicks = useMemo(() => {
-    const ticks = [];
-    const step = Math.max(1, Math.ceil(yMax / 5));
-    for (let v = 0; v <= yMax; v += step) ticks.push(v);
-    return ticks;
-  }, [yMax]);
-
-  // x-axis tick labels (max 8 labels)
-  const xTickIndices = useMemo(() => {
-    if (timestamps.length <= 8) return timestamps.map((_, i) => i);
-    const step = Math.max(1, Math.floor((timestamps.length - 1) / 7));
-    const indices = [];
-    for (let i = 0; i < timestamps.length; i += step) indices.push(i);
-    if (indices[indices.length - 1] !== timestamps.length - 1) indices.push(timestamps.length - 1);
-    return indices;
-  }, [timestamps]);
-
-  // Hover state
-  const [hoverIdx, setHoverIdx] = useState(null);
-
-  if (timestamps.length === 0 || selected.length === 0) {
-    return (
-      <div className="trend-chart-empty">
-        <BarChart3 size={32} />
-        <span>{t('trends.noData')}</span>
-      </div>
-    );
-  }
-
-  return (
-    <svg
-      width={width}
-      height={height}
-      className="trend-chart-svg"
-      role="img"
-      aria-label={t('trends.chartAriaLabel')}
-    >
-      {/* Y-axis label */}
-      <text
-        x={14}
-        y={padding.top + chartH / 2}
-        textAnchor="middle"
-        className="trend-chart-axis-label"
-        transform={`rotate(-90, 14, ${padding.top + chartH / 2})`}
-      >
-        {t('trends.chartYLabel')}
-      </text>
-
-      {/* Grid lines */}
-      {yTicks.map((v) => (
-        <line
-          key={`grid-${v}`}
-          x1={padding.left}
-          y1={yScale(v)}
-          x2={width - padding.right}
-          y2={yScale(v)}
-          stroke="rgba(226,232,240,0.06)"
-          strokeDasharray="3,3"
-        />
-      ))}
-
-      {/* Y-axis labels */}
-      {yTicks.map((v) => (
-        <text
-          key={`y-${v}`}
-          x={padding.left - 8}
-          y={yScale(v) + 3}
-          textAnchor="end"
-          className="trend-chart-tick"
-        >
-          {v}
-        </text>
-      ))}
-
-      {/* X-axis labels */}
-      {xTickIndices.map((i) => (
-        <text
-          key={`x-${i}`}
-          x={xScale(i)}
-          y={height - 6}
-          textAnchor="middle"
-          className="trend-chart-tick"
-        >
-          {formatTimestamp(timestamps[i])}
-        </text>
-      ))}
-
-      {/* Area fills (translucent) */}
-      {selected.map((r) => {
-        const d = `M${r.counts.map((v, i) => `${xScale(i)},${yScale(v)}`).join(' L')} L${xScale(r.counts.length - 1)},${yScale(0)} L${xScale(0)},${yScale(0)} Z`;
-        return (
-          <path
-            key={`area-${r.iso}`}
-            d={d}
-            fill={r.color}
-            fillOpacity={0.08}
+    <svg width={w} height={h} style={{ display: 'block', width: '100%' }} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Trend chart">
+      {Array.from({ length: gridY + 1 }).map((_, i) => (
+        <g key={i}>
+          <line
+            x1={pad.l} x2={w - pad.r}
+            y1={pad.t + (i * ih) / gridY} y2={pad.t + (i * ih) / gridY}
+            stroke="var(--line)" strokeWidth="0.5"
           />
-        );
-      })}
-
-      {/* Line paths */}
-      {selected.map((r) => {
-        const d = `M${r.counts.map((v, i) => `${xScale(i)},${yScale(v)}`).join(' L')}`;
-        return (
-          <path
-            key={`line-${r.iso}`}
-            d={d}
-            fill="none"
-            stroke={r.color}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        );
-      })}
-
-      {/* Data points */}
-      {selected.map((r) =>
-        r.counts.map((v, i) => (
-          <circle
-            key={`pt-${r.iso}-${i}`}
-            cx={xScale(i)}
-            cy={yScale(v)}
-            r={hoverIdx === i ? 4 : 2.5}
-            fill={r.color}
-            stroke="var(--bg)"
-            strokeWidth={1}
-          />
-        ))
-      )}
-
-      {/* Hover overlay rectangles */}
-      {timestamps.map((_, i) => {
-        const sliceW = timestamps.length > 1 ? chartW / (timestamps.length - 1) : chartW;
-        return (
-          <rect
-            key={`hover-${i}`}
-            x={xScale(i) - sliceW / 2}
-            y={padding.top}
-            width={sliceW}
-            height={chartH}
-            fill="transparent"
-            onMouseEnter={() => setHoverIdx(i)}
-            onMouseLeave={() => setHoverIdx(null)}
-          />
-        );
-      })}
-
-      {/* Hover line */}
-      {hoverIdx !== null && (
-        <line
-          x1={xScale(hoverIdx)}
-          y1={padding.top}
-          x2={xScale(hoverIdx)}
-          y2={padding.top + chartH}
-          stroke="rgba(226,232,240,0.2)"
-          strokeDasharray="4,3"
-          pointerEvents="none"
-        />
-      )}
-
-      {/* Hover tooltip */}
-      {hoverIdx !== null && (
-        <g pointerEvents="none">
-          {selected.map((r, idx) => {
-            const value = r.counts[hoverIdx] ?? 0;
-            return (
-              <text
-                key={`tip-${r.iso}`}
-                x={xScale(hoverIdx) + 8}
-                y={yScale(value) + idx * 14 - (selected.length * 7) + 7}
-                className="trend-chart-tooltip"
-                fill={r.color}
-              >
-                {r.name}: {value}
-              </text>
-            );
-          })}
+          <text
+            x={pad.l - 6} y={pad.t + (i * ih) / gridY + 3}
+            fontSize="9" fill="var(--ink-2)" textAnchor="end"
+            fontFamily="var(--ff-mono)"
+          >
+            {Math.round(max - (i * max) / gridY)}
+          </text>
         </g>
-      )}
+      ))}
+      {series.map((s, si) => {
+        const color = s.color || SERIES_COLORS[si % SERIES_COLORS.length];
+        const pts = s.data.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
+        if (area) {
+          const areaD = `M${xAt(0)},${yAt(0)} L${s.data.map((v, i) => `${xAt(i)},${yAt(v)}`).join(' L')} L${xAt(s.data.length - 1)},${yAt(0)} Z`;
+          return (
+            <g key={si}>
+              <path d={areaD} fill={color} opacity="0.15" />
+              <polyline points={pts} fill="none" stroke={color} strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+            </g>
+          );
+        }
+        return <polyline key={si} points={pts} fill="none" stroke={color} strokeWidth="1.3" vectorEffect="non-scaling-stroke" />;
+      })}
     </svg>
   );
 }
 
-/* ── Severity Distribution bar chart ── */
-const SEVERITY_BANDS = [
-  { label: 'Critical', min: 80, max: 100, color: '#ff3355' },
-  { label: 'High', min: 60, max: 79, color: '#ff8833' },
-  { label: 'Medium', min: 40, max: 59, color: '#ffcc00' },
-  { label: 'Low', min: 20, max: 39, color: '#44ddb0' },
-  { label: 'Minimal', min: 0, max: 19, color: '#4fc3f7' },
-];
-
-function SeverityDistribution({ events, width = 400, height = 220 }) {
-  const { t } = useTranslation();
-  const padding = { top: 16, right: 24, bottom: 24, left: 72 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-
-  const bands = useMemo(() => {
-    return SEVERITY_BANDS.map((b) => {
-      const count = (events || []).filter((e) => {
-        const s = e.severity ?? 0;
-        return s >= b.min && s <= b.max;
-      }).length;
-      return { ...b, count };
-    });
-  }, [events]);
-
-  const maxCount = Math.max(1, ...bands.map((b) => b.count));
-  const barH = Math.min(28, (chartH - (bands.length - 1) * 4) / bands.length);
-  const totalH = bands.length * barH + (bands.length - 1) * 4;
-  const startY = padding.top + (chartH - totalH) / 2;
-
-  // x-axis ticks
-  const xTicks = useMemo(() => {
-    const step = Math.max(1, Math.ceil(maxCount / 5));
-    const ticks = [];
-    for (let v = 0; v <= maxCount; v += step) ticks.push(v);
-    return ticks;
-  }, [maxCount]);
-
+function HorizonChart({ series, w = 640, h = 200 }) {
+  if (!series.length) return null;
+  const row = (h - 20) / series.length;
+  const pad = 100;
+  const iw = w - pad;
+  const max = Math.max(1, ...series.flatMap((s) => s.data));
   return (
-    <svg width={width} height={height} className="trend-chart-svg" role="img" aria-label={t('trends.severityChartAriaLabel')}>
-      {/* Grid lines */}
-      {xTicks.map((v) => {
-        const x = padding.left + (v / maxCount) * chartW;
+    <svg width={w} height={h} style={{ display: 'block', width: '100%' }} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Horizon chart">
+      {series.map((s, si) => {
+        const y0 = 10 + si * row + row;
+        const color = s.color || SERIES_COLORS[si % SERIES_COLORS.length];
         return (
-          <line key={`sg-${v}`} x1={x} y1={padding.top} x2={x} y2={padding.top + chartH}
-            stroke="rgba(226,232,240,0.06)" strokeDasharray="3,3" />
-        );
-      })}
-      {/* X-axis labels */}
-      {xTicks.map((v) => {
-        const x = padding.left + (v / maxCount) * chartW;
-        return (
-          <text key={`sx-${v}`} x={x} y={height - 6} textAnchor="middle" className="trend-chart-tick">{v}</text>
-        );
-      })}
-      {/* Bars */}
-      {bands.map((b, i) => {
-        const y = startY + i * (barH + 4);
-        const w = b.count > 0 ? Math.max(2, (b.count / maxCount) * chartW) : 0;
-        return (
-          <g key={b.label}>
-            <text x={padding.left - 8} y={y + barH / 2 + 4} textAnchor="end" className="trend-chart-tick">
-              {b.label}
+          <g key={s.label}>
+            <text x={pad - 10} y={y0 - row / 2 + 3} fontSize="10" fill="var(--ink-0)" textAnchor="end" fontFamily="var(--ff-mono)">
+              {s.label}
             </text>
-            <rect x={padding.left} y={y} width={w} height={barH} rx={3} fill={b.color} fillOpacity={0.75} />
-            {b.count > 0 && (
-              <text x={padding.left + w + 6} y={y + barH / 2 + 4} className="trend-chart-tick" fill={b.color}>
-                {b.count}
-              </text>
-            )}
+            <line x1={pad} x2={w} y1={y0} y2={y0} stroke="var(--line)" strokeWidth="0.4" />
+            {s.data.map((v, i) => {
+              const x = pad + (i / Math.max(1, s.data.length - 1)) * iw;
+              const bw = iw / s.data.length;
+              const hh = (v / max) * (row - 4);
+              return <rect key={i} x={x} y={y0 - hh} width={bw - 1} height={hh} fill={color} opacity="0.9" />;
+            })}
           </g>
         );
       })}
@@ -323,360 +82,207 @@ function SeverityDistribution({ events, width = 400, height = 220 }) {
   );
 }
 
-/* ── Category breakdown bar chart ── */
-const CATEGORY_COLORS = {
-  conflict: '#ff3355', political: '#ff8833', humanitarian: '#ffcc00',
-  economic: '#4fc3f7', health: '#44ddb0', environment: '#66bb6a',
-  technology: '#a78bfa', disaster: '#f472b6',
-};
-
-function CategoryBreakdown({ events, width = 400, height = 220 }) {
-  const { t } = useTranslation();
-  const padding = { top: 16, right: 24, bottom: 24, left: 90 };
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-
-  const categories = useMemo(() => {
-    const counts = {};
-    for (const e of events || []) {
-      const cat = (e.category || 'uncategorized').toLowerCase();
-      counts[cat] = (counts[cat] || 0) + 1;
-    }
-    return Object.entries(counts)
-      .map(([name, count]) => ({ name, count, color: CATEGORY_COLORS[name] || '#8899aa' }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [events]);
-
-  if (categories.length === 0) return null;
-
-  const maxCount = Math.max(1, ...categories.map((c) => c.count));
-  const barH = Math.min(24, (chartH - (categories.length - 1) * 4) / categories.length);
-  const totalH = categories.length * barH + (categories.length - 1) * 4;
-  const startY = padding.top + (chartH - totalH) / 2;
-
-  const xTicks = useMemo(() => {
-    const step = Math.max(1, Math.ceil(maxCount / 5));
-    const ticks = [];
-    for (let v = 0; v <= maxCount; v += step) ticks.push(v);
-    return ticks;
-  }, [maxCount]);
-
-  return (
-    <svg width={width} height={height} className="trend-chart-svg" role="img" aria-label={t('trends.categoryChartAriaLabel')}>
-      {xTicks.map((v) => {
-        const x = padding.left + (v / maxCount) * chartW;
-        return (
-          <line key={`cg-${v}`} x1={x} y1={padding.top} x2={x} y2={padding.top + chartH}
-            stroke="rgba(226,232,240,0.06)" strokeDasharray="3,3" />
-        );
-      })}
-      {xTicks.map((v) => {
-        const x = padding.left + (v / maxCount) * chartW;
-        return (
-          <text key={`cx-${v}`} x={x} y={height - 6} textAnchor="middle" className="trend-chart-tick">{v}</text>
-        );
-      })}
-      {categories.map((c, i) => {
-        const y = startY + i * (barH + 4);
-        const w = Math.max(2, (c.count / maxCount) * chartW);
-        const label = c.name.charAt(0).toUpperCase() + c.name.slice(1);
-        return (
-          <g key={c.name}>
-            <text x={padding.left - 8} y={y + barH / 2 + 4} textAnchor="end" className="trend-chart-tick">
-              {label}
-            </text>
-            <rect x={padding.left} y={y} width={w} height={barH} rx={3} fill={c.color} fillOpacity={0.7} />
-            <text x={padding.left + w + 6} y={y + barH / 2 + 4} className="trend-chart-tick" fill={c.color}>
-              {c.count}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function formatTimestamp(ts) {
-  try {
-    return format(new Date(ts), 'HH:mm');
-  } catch {
-    return ts?.slice(11, 16) || '';
+function buildRegionalSeries(news, topN = 5) {
+  const byIso = new Map();
+  for (const s of news) {
+    if (!s.isoA2) continue;
+    if (!byIso.has(s.isoA2)) byIso.set(s.isoA2, []);
+    byIso.get(s.isoA2).push(s);
   }
+  const rankedIsos = [...byIso.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .slice(0, topN)
+    .map(([iso]) => iso);
+
+  const BUCKETS = 30;
+  const HOUR_MS = 3600 * 1000;
+  const WINDOW = BUCKETS * 24 * HOUR_MS;
+  const now = Date.now();
+
+  return rankedIsos.map((iso, idx) => {
+    const list = byIso.get(iso) || [];
+    const bins = new Array(BUCKETS).fill(0);
+    for (const art of list) {
+      const ts = art.firstSeenAt ? new Date(art.firstSeenAt).getTime() : null;
+      if (!ts) continue;
+      const offset = now - ts;
+      if (offset < 0 || offset > WINDOW) continue;
+      const bucket = BUCKETS - 1 - Math.floor(offset / (24 * HOUR_MS));
+      if (bucket >= 0 && bucket < BUCKETS) bins[bucket] += 1;
+    }
+    return {
+      label: isoToCountry(iso) || iso,
+      iso,
+      data: bins,
+      color: SERIES_COLORS[idx % SERIES_COLORS.length],
+    };
+  });
+}
+
+function buildByCategory(news, topN = 6) {
+  const byCat = new Map();
+  for (const s of news) {
+    const cat = (s.category || 'other').toLowerCase();
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(s);
+  }
+  const cats = [...byCat.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, topN);
+  const BUCKETS = 14;
+  const now = Date.now();
+  const DAY = 24 * 3600 * 1000;
+  return cats.map(([cat, list], idx) => {
+    const bins = new Array(BUCKETS).fill(0);
+    for (const art of list) {
+      const ts = art.firstSeenAt ? new Date(art.firstSeenAt).getTime() : null;
+      if (!ts) continue;
+      const offset = now - ts;
+      if (offset < 0 || offset > BUCKETS * DAY) continue;
+      const bucket = BUCKETS - 1 - Math.floor(offset / DAY);
+      if (bucket >= 0 && bucket < BUCKETS) bins[bucket] += 1;
+    }
+    return { label: cat.toUpperCase(), data: bins, color: SERIES_COLORS[idx % SERIES_COLORS.length] };
+  });
+}
+
+function buildLangMix(news) {
+  const byLang = {};
+  for (const s of news) {
+    const l = (s.language || 'en').toLowerCase();
+    byLang[l] = (byLang[l] || 0) + 1;
+  }
+  const total = Object.values(byLang).reduce((a, b) => a + b, 0) || 1;
+  return Object.entries(byLang)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([l, c]) => ({ l: l.toUpperCase(), pct: Math.round((c / total) * 100) }));
 }
 
 /**
- * Trend Analysis Dashboard — shows regional activity trends over time
- * with SVG line/area charts and region comparison controls.
+ * /trends — tactical trend dashboard built from the current news pool.
  */
 export default function TrendAnalysisPage() {
   const { t } = useTranslation();
-  const { liveNews, backendEvents, velocitySpikes } = useNewsStore();
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [trendData, setTrendData] = useState(null);
-  const [selectedRegions, setSelectedRegions] = useState(new Set());
-
-  /* ── Container dimensions ── */
-  const [chartWidth, setChartWidth] = useState(700);
-  const [chartHeight, setChartHeight] = useState(400);
-  const [bottomChartWidth, setBottomChartWidth] = useState(400);
-  const chartRef = React.useRef(null);
-  const bottomChartRef = React.useRef(null);
+  const liveNews = useNewsStore((s) => s.liveNews);
 
   useEffect(() => {
-    const el = chartRef.current;
-    if (!el) return;
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      setChartWidth(Math.max(300, Math.floor(rect.width)));
-      setChartHeight(Math.max(280, Math.floor(rect.height) - 48)); // subtract header
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    if (!liveNews) useNewsStore.getState().loadLiveData();
+  }, [liveNews]);
 
-  useEffect(() => {
-    const el = bottomChartRef.current;
-    if (!el) return;
-    const measure = () => {
-      const rect = el.getBoundingClientRect();
-      setBottomChartWidth(Math.max(200, Math.floor(rect.width)));
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  const news = useMemo(() => canonicalizeArticles(liveNews || []), [liveNews]);
 
-  /* ── Fetch data on mount ── */
-  useEffect(() => {
-    if (!liveNews) {
-      useNewsStore.getState().loadLiveData();
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const regional = useMemo(() => buildRegionalSeries(news, 5), [news]);
+  const byCat = useMemo(() => buildByCategory(news, 6), [news]);
+  const langMix = useMemo(() => buildLangMix(news), [news]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetchBackendCoverageHistoryWithRegions({ limit: 48, topN: 20 })
-      .then((data) => {
-        if (cancelled) return;
-        setTrendData(data);
-
-        // Auto-select top 5 regions
-        if (data?.regionSeries?.regions) {
-          const top5 = Object.keys(data.regionSeries.regions).slice(0, 5);
-          setSelectedRegions(new Set(top5));
+  const topEntities = useMemo(() => {
+    const counter = new Map();
+    for (const s of news) {
+      const ents = s.entities;
+      if (!ents) continue;
+      for (const kind of ['organizations', 'locations', 'people']) {
+        for (const e of ents[kind] || []) {
+          const key = `${kind === 'people' ? 'PER' : kind === 'organizations' ? 'ORG' : 'LOC'}|${e}`;
+          counter.set(key, (counter.get(key) || 0) + 1);
         }
-        setLoading(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err.message);
-        setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, []);
-
-  /* ── Derive current regional stats from backend events ── */
-  const regionStats = useMemo(() => {
-    if (!backendEvents || backendEvents.length === 0) return [];
-    const counts = {};
-    for (const event of backendEvents) {
-      const iso = event.isoA2 || event.primaryCountry;
-      if (!iso) continue;
-      if (!counts[iso]) {
-        counts[iso] = { iso, region: event.region || iso, eventCount: 0, totalArticles: 0 };
       }
-      counts[iso].eventCount += 1;
-      counts[iso].totalArticles += event.articleCount || event.articleIds?.length || 1;
     }
-    return Object.values(counts).sort((a, b) => b.eventCount - a.eventCount);
-  }, [backendEvents]);
-
-  /* ── Chart data ── */
-  const regionSeries = trendData?.regionSeries || { timestamps: [], regions: {} };
-  const sortedRegionIsos = useMemo(() => {
-    return Object.entries(regionSeries.regions)
-      .sort((a, b) => b[1].latestCount - a[1].latestCount)
-      .map(([iso]) => iso);
-  }, [regionSeries.regions]);
-
-  /* ── Toggle region selection ── */
-  const toggleRegion = useCallback((iso) => {
-    setSelectedRegions((prev) => {
-      const next = new Set(prev);
-      if (next.has(iso)) {
-        next.delete(iso);
-      } else if (next.size < 10) {
-        next.add(iso);
-      }
-      return next;
-    });
-  }, []);
-
-  const selectAll = useCallback(() => {
-    setSelectedRegions(new Set(sortedRegionIsos.slice(0, 10)));
-  }, [sortedRegionIsos]);
-
-  const deselectAll = useCallback(() => {
-    setSelectedRegions(new Set());
-  }, []);
-
-  /* ── Velocity spikes summary ── */
-  const spikeCount = velocitySpikes?.length || 0;
+    return [...counter.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([key, n]) => {
+        const [kind, name] = key.split('|');
+        return { kind, name, count: n };
+      });
+  }, [news]);
 
   return (
-    <div className="trend-analysis">
-      {/* Header */}
-      <div className="trend-analysis-header">
-        <div className="trend-analysis-title-row">
-          <TrendingUp size={20} />
-          <h1 className="trend-analysis-title">{t('trends.title')}</h1>
-          {!loading && regionStats.length > 0 && (
-            <span className="trend-analysis-stats">
-              {regionStats.length} {t('trends.activeRegions')}
-              {spikeCount > 0 && ` · ${spikeCount} ${t('trends.spikes')}`}
-            </span>
+    <div className="trends-page">
+      <div className="trend-card span-2">
+        <div className="head">
+          <h3>{t('nav.trends')} · volume by region · 30d</h3>
+          <div className="mono">Δ window: <b style={{ color: 'var(--amber)' }}>30D / 24H BUCKETS</b></div>
+        </div>
+        <div className="body" style={{ position: 'relative' }}>
+          {regional.length === 0 ? (
+            <div className="mini-panel-empty" style={{ padding: 40 }}>NO DATA IN WINDOW</div>
+          ) : (
+            <>
+              <TrendLineChart series={regional} h={260} />
+              <div
+                style={{
+                  position: 'absolute', top: 20, right: 24,
+                  display: 'flex', gap: 14, flexWrap: 'wrap',
+                  fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em',
+                }}
+              >
+                {regional.map((s) => (
+                  <span key={s.iso}>
+                    <span style={{ display: 'inline-block', width: 10, height: 2, background: s.color, verticalAlign: 'middle', marginRight: 4 }} />
+                    {s.label.toUpperCase()}
+                  </span>
+                ))}
+              </div>
+            </>
           )}
         </div>
-        <p className="trend-analysis-subtitle">{t('trends.subtitle')}</p>
       </div>
 
-      {/* Content */}
-      <div className="trend-analysis-body">
-        {loading ? (
-          <div className="trend-chart-empty">
-            <Loader size={24} className="trend-spinner" />
-            <span>{t('trends.loading')}</span>
-          </div>
-        ) : error ? (
-          <div className="trend-chart-empty">
-            <BarChart3 size={32} />
-            <span>{error}</span>
-          </div>
-        ) : (
-          <>
-            {/* Summary cards */}
-            <div className="trend-summary-cards">
-              <div className="trend-summary-card">
-                <span className="trend-summary-label">{t('trends.totalEvents')}</span>
-                <span className="trend-summary-value">{backendEvents?.length || 0}</span>
-                <span className="trend-summary-hint">{t('trends.totalEventsHint')}</span>
+      <div className="trend-card span-2">
+        <div className="head">
+          <h3>Severity distribution · by category · 14d</h3>
+          <div className="mono">HORIZON</div>
+        </div>
+        <div className="body">
+          {byCat.length === 0 ? (
+            <div className="mini-panel-empty" style={{ padding: 40 }}>NO CATEGORY DATA</div>
+          ) : (
+            <HorizonChart series={byCat} h={200} />
+          )}
+        </div>
+      </div>
+
+      <div className="trend-card">
+        <div className="head">
+          <h3>Language mix · news feed</h3>
+          <div className="mono">CURRENT</div>
+        </div>
+        <div className="body">
+          {langMix.map(({ l, pct }) => (
+            <div key={l} style={{ display: 'grid', gridTemplateColumns: '40px 1fr 32px', alignItems: 'center', gap: 8, margin: '6px 0' }}>
+              <span className="mono" style={{ color: 'var(--ink-1)', fontSize: 11 }}>{l}</span>
+              <div style={{ height: 10, background: 'var(--bg-2)' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: 'var(--amber)', transition: 'width 0.3s var(--ease)' }} />
               </div>
-              <div className="trend-summary-card">
-                <span className="trend-summary-label">{t('trends.activeRegions')}</span>
-                <span className="trend-summary-value">{regionStats.length}</span>
-                <span className="trend-summary-hint">{t('trends.activeRegionsHint')}</span>
-              </div>
-              <div className="trend-summary-card">
-                <span className="trend-summary-label">{t('trends.velocitySpikes')}</span>
-                <span className="trend-summary-value trend-summary-value--spike">{spikeCount}</span>
-                <span className="trend-summary-hint">{t('trends.velocitySpikesHint')}</span>
-              </div>
-              <div className="trend-summary-card">
-                <span className="trend-summary-label">{t('trends.dataPoints')}</span>
-                <span className="trend-summary-value">{regionSeries.timestamps.length}</span>
-                <span className="trend-summary-hint">{t('trends.dataPointsHint')}</span>
-              </div>
+              <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, textAlign: 'right' }}>{pct}%</span>
             </div>
+          ))}
+          {langMix.length === 0 && <div className="mini-panel-empty">NO LANGUAGE DATA</div>}
+        </div>
+      </div>
 
-            {/* Chart + region selector */}
-            <div className="trend-chart-section">
-              <div className="trend-chart-main" ref={chartRef}>
-                <div className="trend-chart-header">
-                  <h2 className="trend-section-title">{t('trends.chartTitle')}</h2>
-                  <div className="trend-chart-actions">
-                    <button className="trend-select-btn" onClick={selectAll}>{t('trends.selectTop10')}</button>
-                    <button className="trend-select-btn" onClick={deselectAll}>{t('trends.deselectAll')}</button>
-                  </div>
-                </div>
-                <TrendChart
-                  timestamps={regionSeries.timestamps}
-                  regions={regionSeries.regions}
-                  selectedRegions={selectedRegions}
-                  width={chartWidth}
-                  height={chartHeight}
-                />
-              </div>
-
-              {/* Region selector sidebar */}
-              <div className="trend-region-list">
-                <h3 className="trend-section-title">{t('trends.regions')}</h3>
-                <ul className="trend-region-items">
-                  {sortedRegionIsos.map((iso, idx) => {
-                    const r = regionSeries.regions[iso];
-                    const isSelected = selectedRegions.has(iso);
-                    const color = isSelected ? getRegionColor([...selectedRegions].indexOf(iso)) : 'var(--text-tertiary)';
-                    return (
-                      <li key={iso} className="trend-region-item">
-                        <button
-                          className={`trend-region-btn ${isSelected ? 'is-active' : ''}`}
-                          onClick={() => toggleRegion(iso)}
-                          aria-pressed={isSelected}
-                          style={isSelected ? { borderColor: color } : undefined}
-                        >
-                          <span className="trend-region-check" style={isSelected ? { background: color, borderColor: color } : undefined}>
-                            {isSelected && <Check size={10} />}
-                          </span>
-                          <span className="trend-region-name">{r?.name || iso}</span>
-                          <Sparkline counts={r?.counts} color={color} />
-                          <span className="trend-region-count" style={isSelected ? { color } : undefined}>
-                            {r?.latestCount || 0}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
+      <div className="trend-card">
+        <div className="head">
+          <h3>Top trending entities</h3>
+          <div className="mono">CURRENT</div>
+        </div>
+        <div className="body">
+          {topEntities.length === 0 && <div className="mini-panel-empty">NO ENTITIES EXTRACTED</div>}
+          {topEntities.map((row) => (
+            <div
+              key={`${row.kind}-${row.name}`}
+              style={{
+                display: 'grid', gridTemplateColumns: '36px 1fr 60px',
+                alignItems: 'center', padding: '6px 0',
+                borderBottom: '1px solid var(--line)',
+                fontFamily: 'var(--ff-mono)', fontSize: 11,
+              }}
+            >
+              <span style={{ color: 'var(--ink-2)', fontSize: 10 }}>{row.kind}</span>
+              <span style={{ color: 'var(--ink-0)', fontFamily: 'var(--ff-sans)', fontSize: 12 }}>{row.name}</span>
+              <span style={{ color: 'var(--amber)', textAlign: 'right' }}>×{row.count}</span>
             </div>
-
-            {/* Severity + Category breakdown charts */}
-            {backendEvents && backendEvents.length > 0 && (
-              <div className="trend-breakdown-section">
-                <div className="trend-breakdown-card" ref={bottomChartRef}>
-                  <h2 className="trend-section-title">{t('trends.severityTitle')}</h2>
-                  <p className="trend-breakdown-hint">{t('trends.severityHint')}</p>
-                  <SeverityDistribution events={backendEvents} width={bottomChartWidth} height={220} />
-                </div>
-                <div className="trend-breakdown-card">
-                  <h2 className="trend-section-title">{t('trends.categoryTitle')}</h2>
-                  <p className="trend-breakdown-hint">{t('trends.categoryHint')}</p>
-                  <CategoryBreakdown events={backendEvents} width={bottomChartWidth} height={220} />
-                </div>
-              </div>
-            )}
-
-            {/* Velocity spikes section */}
-            {velocitySpikes && velocitySpikes.length > 0 && (
-              <div className="trend-spikes-section">
-                <h2 className="trend-section-title">{t('trends.velocitySpikesTitle')}</h2>
-                <div className="trend-spikes-grid">
-                  {velocitySpikes.map((spike) => (
-                    <div
-                      key={spike.iso}
-                      className={`trend-spike-card trend-spike-card--${spike.level}`}
-                    >
-                      <span className="trend-spike-iso">{spike.iso}</span>
-                      <span className="trend-spike-score">z={spike.zScore.toFixed(1)}</span>
-                      <span className={`trend-spike-level trend-spike-level--${spike.level}`}>
-                        {spike.level}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );

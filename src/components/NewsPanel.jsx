@@ -1,524 +1,156 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, ExternalLink, ChevronUp, ShieldCheck, ShieldAlert, AlertTriangle, Eye, EyeOff } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
-import { enUS, es, fr, ar, zhCN } from 'date-fns/locale';
-import { getSeverityMeta } from '../utils/mockData';
-import { getCoverageMeta } from '../utils/coverageMeta';
-import { getSourceHost } from '../utils/urlUtils';
-import { getConfidenceReasonLabel } from '../utils/confidenceReasons';
-import { normalizeArticleText } from '../utils/articleText';
-import ExpandableText from './ExpandableText';
-import ChangesBanner from './ChangesBanner';
-import NarrativePanel from './NarrativePanel.jsx';
-import useWatchStore from '../stores/watchStore.js';
-import useUIStore from '../stores/uiStore.js';
 import useProgressiveList from '../hooks/useProgressiveList.js';
+import { getSeverityMeta } from '../utils/mockData';
+import { getSourceHost } from '../utils/urlUtils';
 
-const DATE_LOCALES = { en: enUS, es, fr, ar, zh: zhCN };
+function ago(ts) {
+  if (!ts) return '—';
+  const dt = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  if (Number.isNaN(dt)) return '—';
+  const m = Math.floor((Date.now() - dt) / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  if (m < 1440) return `${Math.floor(m / 60)}h`;
+  return `${Math.floor(m / 1440)}d`;
+}
 
-const LIFECYCLE_COLORS = {
-  emerging: '#00d4ff',
-  developing: '#00e5a0',
-  escalating: '#ff5555',
-  stabilizing: '#ffaa00',
-  resolved: '#666'
-};
+function sevTier(sev) {
+  const v = sev ?? 0;
+  if (v >= 85) return 'black';
+  if (v >= 70) return 'red';
+  if (v >= 40) return 'amber';
+  return 'green';
+}
 
-function LifecycleBadge({ lifecycle }) {
-  if (!lifecycle) return null;
+function ArticleSheet({ story, onClose }) {
+  const { t } = useTranslation();
+  if (!story) return null;
+  const tier = sevTier(story.severity);
+  const sev = ((story.severity ?? 0) / 10).toFixed(1);
+  const host = getSourceHost(story.url) || story.source || '';
   return (
-    <span
-      className="lifecycle-badge"
-      style={{ color: LIFECYCLE_COLORS[lifecycle] || '#666', borderColor: LIFECYCLE_COLORS[lifecycle] || '#666' }}
-    >
-      {lifecycle}
-    </span>
+    <>
+      <div className="article-sheet-backdrop" onClick={onClose} aria-hidden />
+      <aside className="article-sheet" role="dialog" aria-label={story.title} aria-modal="true">
+        <div className="article-sheet-head">
+          <span className="dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--amber)' }} />
+          EVENT · <span className="mono" style={{ color: 'var(--ink-0)' }}>{story.id}</span>
+          <span className="spacer" style={{ flex: 1 }} />
+          <span style={{ color: 'var(--ink-2)' }}>{ago(story.firstSeenAt || story.publishedAt)}</span>
+          <button type="button" onClick={onClose} aria-label={t('panel.closePanel')} style={{ marginLeft: 12, color: 'var(--ink-2)' }}>×</button>
+        </div>
+        <div className="article-sheet-body">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · SEV {sev}</span>
+            {story.category && <span className="tag mono" style={{ color: 'var(--ink-2)', border: '1px solid var(--line-2)', padding: '1px 6px', textTransform: 'uppercase' }}>{story.category}</span>}
+            {story.isoA2 && <span className="mono" style={{ color: 'var(--ink-2)' }}>{story.isoA2}</span>}
+            {story.coordinates && (
+              <span className="mono" style={{ color: 'var(--ink-2)', marginLeft: 'auto' }}>
+                {Number(story.coordinates.lng || 0).toFixed(2)}, {Number(story.coordinates.lat || 0).toFixed(2)}
+              </span>
+            )}
+          </div>
+          <h2>{story.title}</h2>
+          <p>{story.summary || '—'}</p>
+          <div style={{ borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+            <div className="micro" style={{ marginBottom: 10 }}>SOURCE</div>
+            <div style={{ fontFamily: 'var(--ff-mono)', fontSize: 11, color: 'var(--ink-1)' }}>
+              {host}
+              {story.url && (
+                <> · <a href={story.url} target="_blank" rel="noreferrer" style={{ color: 'var(--amber)' }}>OPEN</a></>
+              )}
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
   );
 }
 
-const CREDIBILITY_CONFIG = {
-  corroborated: { icon: ShieldCheck, accent: '#00e5a0', labelKey: 'credibility.corroborated' },
-  'single-source': { icon: ShieldAlert, accent: '#ffaa00', labelKey: 'credibility.singleSource' },
-  amplified: { icon: AlertTriangle, accent: '#ff5555', labelKey: 'credibility.amplified' }
-};
-
-function getCredibilityLevel(story) {
-  if (story.amplification?.isAmplified) return 'amplified';
-  if ((story.independentSourceCount || 0) >= 2) return 'corroborated';
-  return 'single-source';
-}
-
-function CredibilityBadge({ story, t }) {
-  const level = getCredibilityLevel(story);
-  const config = CREDIBILITY_CONFIG[level];
-  const Icon = config.icon;
-  const articleCount = story.articleCount || 1;
-  const sourceLabel = articleCount > 1
-    ? t('credibility.sourceCount', { count: articleCount })
-    : '';
-
-  return (
-    <span
-      className={`credibility-badge credibility-${level}`}
-      style={{ color: config.accent, borderColor: config.accent }}
-      title={sourceLabel || t(config.labelKey)}
-    >
-      <Icon size={10} />
-      <span className="credibility-label">{t(config.labelKey)}</span>
-      {articleCount > 1 && (
-        <span className="credibility-count">{articleCount}</span>
-      )}
-    </span>
-  );
-}
-
-/** Parse a date string safely — returns a valid Date or null. */
-function safeDate(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/** formatDistanceToNow but returns '—' for invalid dates. */
-function safeTimeAgo(value, opts) {
-  const d = safeDate(value);
-  return d ? formatDistanceToNow(d, opts) : '—';
-}
-
-/** format() but returns '—' for invalid dates. */
-function safeFormat(value, fmt, opts) {
-  const d = safeDate(value);
-  return d ? format(d, fmt, opts) : '—';
-}
-const LANGUAGE_LABELS = {
-  en: 'EN',
-  es: 'ES',
-  fr: 'FR',
-  ar: 'AR',
-  zh: 'ZH'
-};
-const COVERAGE_LABEL_KEYS = {
-  verified: 'verified',
-  developing: 'developing',
-  'low-confidence': 'lowConfidence',
-  'ingestion-risk': 'ingestionRisk',
-  'source-sparse': 'sourceSparse',
-  uncovered: 'uncovered'
-};
-const LOCATION_SIGNAL_KEYS = {
-  'title-city': 'titleCity',
-  'title-country': 'titleCountry',
-  'title-country-conflict': 'titleCountryConflict',
-  'summary-city': 'summaryCity',
-  'summary-city-confirmed': 'summaryCityConfirmed',
-  'summary-country': 'summaryCountry',
-  'summary-country-conflict': 'summaryCountryConflict',
-  'source-country': 'sourceCountry'
-};
-
+/**
+ * NewsPanel — floating feed panel (top-right on the `/` surface).
+ * Uses useProgressiveList for batched rendering of large article lists.
+ */
 const NewsPanel = ({
   isOpen,
   regionName,
-  regionStatus,
   regionData,
-  coverageEntry,
-  coverageTransitions = [],
-  regionHistory,
-  regionBackfillStatus = 'idle',
-  regionSourcePlan = null,
-  regionFeedChecks = [],
-  news,
+  news = [],
   allEvents = [],
   selectedStoryId,
   onStorySelect,
   onClose,
-  sessionDiff = null,
-  velocitySpikes = []
 }) => {
-  const { t, i18n } = useTranslation();
-  const [expandedId, setExpandedId] = useState(null);
-  const [changesDismissed, setChangesDismissed] = useState(false);
-  const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
-  const [mobileExpanded, setMobileExpanded] = useState(false);
-  const expandedRef = useRef(null);
-  const sheetRef = useRef(null);
-  const dragStartY = useRef(null);
+  const { t } = useTranslation();
+  const [openStory, setOpenStory] = useState(null);
+  const items = (news && news.length > 0) ? news : allEvents;
 
-  // Watchlist integration
-  const { watchItems, addWatch, removeWatch } = useWatchStore();
-  const selectedRegionIso = useUIStore((s) => s.selectedRegion);
-  const regionIso = selectedRegionIso || regionData?.iso || regionData?.isoA2 || null;
-  const isRegionWatched = regionIso && watchItems.some(
-    (item) => item.type === 'region' && item.value.toUpperCase() === regionIso.toUpperCase()
-  );
-
-  // Progressive rendering — only render visible articles, load more on scroll
-  const { visibleItems: visibleNews, hasMore, sentinelRef } = useProgressiveList(news, {
+  const { visibleItems: visibleNews, hasMore, sentinelRef } = useProgressiveList(items, {
     initialCount: 30,
     batchSize: 20,
-    resetKey: regionName || '',
+    resetKey: regionName || 'all',
   });
 
-  // Reset mobile sheet state when panel closes or region changes
-  useEffect(() => {
-    setMobileExpanded(false);
-  }, [regionName, isOpen]);
-
-  // Touch drag handlers for the mobile bottom sheet handle
-  const handleDragStart = useCallback((e) => {
-    dragStartY.current = e.touches[0].clientY;
-  }, []);
-
-  const handleDragEnd = useCallback((e) => {
-    if (dragStartY.current === null) return;
-    const delta = dragStartY.current - e.changedTouches[0].clientY;
-    dragStartY.current = null;
-    // Swipe up → expand, swipe down → collapse or close
-    if (delta > 40) {
-      setMobileExpanded(true);
-    } else if (delta < -40) {
-      if (mobileExpanded) {
-        setMobileExpanded(false);
-      } else {
-        onClose();
-      }
-    }
-  }, [mobileExpanded, onClose]);
-
-  const resolvedRegionName = regionName || regionData?.region || t('panel.closePanel');
-
-  const handleWatchToggle = useCallback(() => {
-    if (!regionIso) return;
-    if (isRegionWatched) {
-      const item = watchItems.find(
-        (w) => w.type === 'region' && w.value.toUpperCase() === regionIso.toUpperCase()
-      );
-      if (item) removeWatch(item.id);
-    } else {
-      addWatch('region', regionIso, resolvedRegionName || regionIso);
-    }
-  }, [regionIso, isRegionWatched, watchItems, addWatch, removeWatch, resolvedRegionName]);
-
-  const sevMeta = getSeverityMeta(regionData?.averageSeverity || 0);
-  const coverageMeta = getCoverageMeta(regionStatus || coverageEntry?.status || 'uncovered');
-  const locale = DATE_LOCALES[i18n.language] || enUS;
-  const getVerificationLabel = (status) => t(`article.verificationStatus.${status || 'single-source'}`);
-  const regionTimeline = regionHistory?.snapshots || [];
-  const transitionHistory = regionHistory?.transitions?.length ? regionHistory.transitions : coverageTransitions;
-  const feedSummary = coverageEntry?.feedCount
-    ? `${coverageEntry.healthyFeeds + coverageEntry.emptyFeeds}/${coverageEntry.feedCount}`
-    : t('map.noLocalFeeds');
-  const checkedFeedCount = regionFeedChecks.length;
-  const checkedHealthyCount = regionFeedChecks.filter((feed) => feed.status === 'ok').length;
-  const checkedFailedCount = regionFeedChecks.filter((feed) => feed.status === 'failed').length;
-
-  useEffect(() => {
-    if (expandedRef.current) {
-      expandedRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [expandedId]);
-
-  // Auto-expand + scroll when a story is selected externally (e.g. map click, search)
-  useEffect(() => {
-    if (internalToggleRef.current) {
-      internalToggleRef.current = false;
-      return;
-    }
-    if (selectedStoryId && news.some((story) => story.id === selectedStoryId)) {
-      setExpandedId(selectedStoryId);
-    }
-  }, [selectedStoryId, news]);
-
-  useEffect(() => {
-    setExpandedId(null);
-  }, [regionName]);
-
-  useEffect(() => {
-    if (!expandedId) {
-      return;
-    }
-
-    if (!news.some((story) => story.id === expandedId)) {
-      setExpandedId(null);
-    }
-  }, [expandedId, news]);
-
-  const internalToggleRef = useRef(false);
-  const handleCardClick = (story) => {
-    const isCollapsing = expandedId === story.id;
-    internalToggleRef.current = true;
-    if (isCollapsing) {
-      setExpandedId(null);
-      useUIStore.getState().clearStory();
-    } else {
-      setExpandedId(story.id);
-      onStorySelect(story);
-    }
-  };
-
-  const getSupportingEvidence = (story) => {
-    const evidence = [];
-    const seen = new Set();
-
-    (story.supportingArticles || []).forEach((article) => {
-      const key = article.url || `${article.source}-${article.title}`;
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      evidence.push(article);
-    });
-
-    return evidence.slice(0, 5);
-  };
-
-  const getLanguageChips = (story) => (
-    (story.languages || [story.language])
-      .filter((language) => language && language !== 'unknown')
-      .map((language) => LANGUAGE_LABELS[language] || language.toUpperCase())
-  );
-
-  const getSourceTypeChips = (story) => (
-    (story.sourceTypes || [story.sourceType])
-      .filter(Boolean)
-      .map((type) => t(`sourceType.${type}`))
-  );
-
-  const getConfidenceChips = (story) => (
-    (story.confidenceReasons || [])
-      .map((reason) => ({
-        key: `${story.id}-${reason.type}`,
-        tone: reason.tone || 'positive',
-        label: getConfidenceReasonLabel(t, reason)
-      }))
-      .filter((reason) => reason.label)
-  );
-
-  /** Render full story detail — same as ArcPanel */
-  const renderStoryDetail = (story) => {
-    const sMeta = getSeverityMeta(story.severity);
-    const nTitle = normalizeArticleText(story.title);
-    const nSummary = normalizeArticleText(story.summary);
-    const hasSummary = nSummary && nSummary !== nTitle;
-    const reasons = getConfidenceChips(story);
-    const langs = getLanguageChips(story);
-    const sTypes = getSourceTypeChips(story);
-    const ev = getSupportingEvidence(story);
-
-    return (
-      <div className="news-card-expanded" onClick={(e) => e.stopPropagation()}>
-        {story.socialimage && (
-          <img className="news-card-image" src={story.socialimage} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
-        )}
-        {hasSummary && (
-          <ExpandableText text={story.summary} collapsedLength={200} className="news-card-summary" textClassName="news-card-summary-copy" buttonClassName="news-card-summary-toggle" />
-        )}
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.source')}</span><span>{story.source || '—'}</span></div>
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.published')}</span><span>{safeFormat(story.publishedAt, 'PPp', { locale })}</span></div>
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.category')}</span><span>{story.category}</span></div>
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.verification')}</span><span>{getVerificationLabel(story.verificationStatus)}</span></div>
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.locationPrecision')}</span><span>{t(`precision.${story.geocodePrecision || 'unknown'}`)}</span></div>
-        {story.geocodeMatchedOn && (
-          <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.locationSignal')}</span><span>{t(`article.locationSignalType.${LOCATION_SIGNAL_KEYS[story.geocodeMatchedOn] || 'sourceCountry'}`)}</span></div>
-        )}
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.confidence')}</span><span>{story.confidence ?? 0}%</span></div>
-        {reasons.length > 0 && (
-          <div className="news-card-evidence-block">
-            <div className="news-card-detail-label">{t('article.confidenceSignals')}</div>
-            <div className="news-card-chip-row">{reasons.map((r) => <span key={r.key} className={`news-card-mini-badge ${r.tone === 'warning' ? 'is-warning' : 'is-positive'}`}>{r.label}</span>)}</div>
-          </div>
-        )}
-        <div className="news-card-detail-row"><span className="news-card-detail-label">{t('article.severity')}</span><span style={{ color: sMeta.accent }}>{story.severity}</span></div>
-        {(sTypes.length > 0 || langs.length > 0) && (
-          <div className="news-card-evidence-block">
-            {sTypes.length > 0 && (<><div className="news-card-detail-label">{t('article.sourceTypes')}</div><div className="news-card-chip-row">{sTypes.map((st) => <span key={st} className="news-card-mini-badge">{st}</span>)}</div></>)}
-            {langs.length > 0 && (<><div className="news-card-detail-label">{t('article.languages')}</div><div className="news-card-chip-row">{langs.map((l) => <span key={l} className="news-card-mini-badge">{l}</span>)}</div></>)}
-          </div>
-        )}
-        {ev.length > 0 && (
-          <div className="news-card-evidence-block">
-            <div className="news-card-detail-label">{t('article.evidence')}</div>
-            <div className="news-card-source-list">
-              {ev.map((item) => item.url ? (
-                <a key={item.url} className="news-card-source-item" href={item.url} target="_blank" rel="noopener noreferrer"><span>{item.source || t('article.source')}</span><strong>{safeTimeAgo(item.publishedAt, { locale, addSuffix: true })}</strong></a>
-              ) : (
-                <div key={`${item.source}-${item.title}`} className="news-card-source-item is-static"><span>{item.source || t('article.source')}</span></div>
-              ))}
-            </div>
-          </div>
-        )}
-        {story.url && (
-          <a className="news-card-read-more" href={story.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={13} />{t('article.readFull')}</a>
-        )}
-      </div>
-    );
-  };
-
   return (
-    <div
-      ref={sheetRef}
-      className={`news-panel ${isOpen ? 'is-open' : ''} ${mobileExpanded ? 'is-mobile-expanded' : ''}`}
-    >
-      {/* Mobile drag handle */}
-      <div
-        className="news-panel-drag-handle"
-        onTouchStart={handleDragStart}
-        onTouchEnd={handleDragEnd}
-        onClick={() => setMobileExpanded((prev) => !prev)}
-      >
-        <div className="news-panel-drag-bar" />
-      </div>
-
-      {/* Compact header — region name + badges + close */}
-      <div className="news-panel-header">
-        <div className="news-panel-title">
-          <h2>{resolvedRegionName}</h2>
-          <div className="news-panel-title-actions">
-            {regionData && (
-              <>
-                <span className="meta-badge" style={{ background: sevMeta.muted, color: sevMeta.accent }}>
-                  {t(`legend.${sevMeta.labelKey}`)}
-                </span>
-                <span className="meta-badge" style={{ background: 'rgba(255,255,255,0.04)', color: 'var(--text-secondary)' }}>
-                  {regionData.count} {t('panel.reports')}
-                </span>
-              </>
-            )}
-            <button
-              className="news-panel-expand-mobile"
-              onClick={() => setMobileExpanded((prev) => !prev)}
-              aria-label={mobileExpanded ? 'Collapse' : 'Expand'}
-            >
-              <ChevronUp size={14} className={mobileExpanded ? 'is-flipped' : ''} />
-            </button>
-            {regionIso && (
-              <button
-                className={`news-panel-watch-btn ${isRegionWatched ? 'is-watched' : ''}`}
-                onClick={handleWatchToggle}
-                aria-label={t('watchlist.watchRegion')}
-                title={t('watchlist.watchRegion')}
-              >
-                {isRegionWatched ? <EyeOff size={10} /> : <Eye size={10} />}
-                {isRegionWatched ? '✓' : t('watchlist.watchRegion')}
-              </button>
-            )}
-            <button className="news-panel-close" onClick={onClose} aria-label={t('panel.closePanel')}>
-              <X size={14} />
-            </button>
-          </div>
+    <>
+      <div className="floating-panel news-panel" role="region" aria-label="Live news feed">
+        <div className="panel-header">
+          <span className="dot" />
+          <span>FEED · LIVE</span>
+          <span className="spacer" />
+          <span style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+          {isOpen && regionName && (
+            <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
+          )}
         </div>
-      </div>
-
-      {/* Collapsible diagnostics strip */}
-      {coverageEntry && (
-        <div className="news-panel-diag-strip">
-          <span className="news-panel-diag-item" style={{ color: coverageMeta.accent }}>
-            {t(`coverageStatus.${COVERAGE_LABEL_KEYS[coverageEntry.status] || 'uncovered'}`)}
-          </span>
-          <span className="news-panel-diag-item">
-            {coverageEntry.maxConfidence ? `${coverageEntry.maxConfidence}%` : '—'}
-          </span>
-          <span className="news-panel-diag-item">
-            {feedSummary}
-          </span>
-        </div>
-      )}
-
-      {/* Session changes banner */}
-      {!changesDismissed && sessionDiff && (
-        <ChangesBanner diff={sessionDiff} onDismiss={() => setChangesDismissed(true)} />
-      )}
-
-      {/* Story list — arc-panel style */}
-      <div className="news-panel-list">
-        {news.length === 0 && regionBackfillStatus === 'loading' && (
-          <div className="news-panel-skeleton">
-            <div className="skeleton skeleton-header" />
-            {[1, 2, 3].map((i) => <div key={i} className="skeleton skeleton-card" />)}
-          </div>
-        )}
-        {news.length === 0 && regionBackfillStatus !== 'loading' && (
-          <div className="news-panel-empty">
-            <strong>{t('panel.noRegionNews')}</strong>
-            <span>{t('panel.noRegionNewsHint')}</span>
-          </div>
-        )}
-        {visibleNews.map((story) => {
-          const meta = getSeverityMeta(story.severity);
-          const isExpanded = expandedId === story.id;
-
-          return (
-            <div
-              key={story.id}
-              ref={isExpanded ? expandedRef : null}
-              className={`arc-panel-story-wrap ${isExpanded ? 'is-expanded' : ''} ${selectedStoryId === story.id ? 'is-selected' : ''}`}
-            >
-              <button
-                className="arc-panel-story"
-                onClick={() => handleCardClick(story)}
+        <div className="panel-body">
+          {items.length === 0 && (
+            <div className="news-panel-empty">NO ITEMS</div>
+          )}
+          {visibleNews.map((story) => {
+            const tier = sevTier(story.severity);
+            const sev = ((story.severity ?? 0) / 10).toFixed(1);
+            const active = selectedStoryId === story.id;
+            return (
+              <div
+                key={story.id}
+                className="news-item"
+                data-active={active || undefined}
+                role="button"
+                tabIndex={0}
+                aria-label={story.title}
+                onClick={() => { onStorySelect?.(story); setOpenStory(story); }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStorySelect?.(story); setOpenStory(story); }
+                }}
               >
-                <span className="arc-panel-story-dot" style={{ background: meta.accent }} />
-                <div className="arc-panel-story-text">
-                  <span className="arc-panel-story-title">{story.title}</span>
-                  <span className="arc-panel-story-meta">
-                    {story.locality || story.region} · {safeTimeAgo(story.publishedAt, { locale, addSuffix: true })}
-                    {story.articleCount > 1 && (
-                      <span className="event-source-count"> · {story.articleCount} sources</span>
-                    )}
-                  </span>
-                  <span className="arc-panel-story-badges">
-                    <CredibilityBadge story={story} t={t} />
-                    <LifecycleBadge lifecycle={story.lifecycle} />
-                    {velocitySpikes?.some((s) => s.iso === story.isoA2) && (
-                      <span className="velocity-badge">SPIKE</span>
-                    )}
-                  </span>
-                  {story.entities && (
-                    <div className="entity-tags">
-                      {(story.entities.organizations || []).slice(0, 3).map(org => (
-                        <span key={org.name} className="entity-tag entity-tag-org">{org.name}</span>
-                      ))}
-                      {(story.entities.people || []).slice(0, 2).map(p => (
-                        <span key={p.name} className="entity-tag entity-tag-person">{p.name}</span>
-                      ))}
-                    </div>
-                  )}
+                <div className="news-meta">
+                  <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
+                  {story.category && <span className="tag">{story.category}</span>}
+                  <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
+                  <span>·</span>
+                  <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
                 </div>
-                <ChevronUp size={10} className={`arc-panel-chevron ${isExpanded ? 'is-open' : ''}`} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-              </button>
-              {isExpanded && (
-                <div className="arc-panel-detail">
-                  {renderStoryDetail(story)}
-                  {story.supportingArticles?.length > 1 && (
-                    <div className="event-evidence">
-                      <div className="event-evidence-header">{story.supportingArticles.length} sources reporting</div>
-                      {story.supportingArticles.map((article, i) => (
-                        <div key={article.id || i} className="event-evidence-item">
-                          <span className="event-evidence-source">{article.source}</span>
-                          <a href={article.url} target="_blank" rel="noopener noreferrer" className="event-evidence-title">
-                            {article.title}
-                          </a>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {story.supportingArticles?.length >= 1 && (
-                    <NarrativePanel story={story} allEvents={allEvents} />
-                  )}
+                <div className="news-title">{story.title}</div>
+                <div className="news-src">
+                  <span className="mono">{story.id}</span>
+                  {story.source && <> · {story.source}</>}
+                  {story.isoA2 && <> · {story.isoA2}</>}
                 </div>
-              )}
+              </div>
+            );
+          })}
+          <div ref={sentinelRef} className="news-panel-load-more-sentinel" aria-hidden />
+          {hasMore && (
+            <div className="news-panel-load-more">
+              {t('panel.loadingMore', { shown: visibleNews.length, total: items.length })}
             </div>
-          );
-        })}
-        {/* Sentinel element for progressive loading — triggers loading more items when scrolled into view */}
-        {hasMore && (
-          <div ref={sentinelRef} className="news-panel-load-more-sentinel" aria-hidden="true">
-            <span className="news-panel-load-more-text">
-              {t('panel.loadingMore', { shown: visibleNews.length, total: news.length })}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
+    </>
   );
 };
 

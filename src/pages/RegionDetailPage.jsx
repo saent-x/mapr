@@ -1,42 +1,64 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, MapPin, BarChart3, Newspaper, ExternalLink } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
 import { isoToCountry } from '../utils/geocoder';
 import { sortStories, storyMatchesFilters } from '../utils/storyFilters';
 import { canonicalizeArticles } from '../utils/newsPipeline';
-import { getSeverityMeta, resolveDateFloor } from '../utils/mockData';
+import { resolveDateFloor } from '../utils/mockData';
+import MapLoadingFallback from '../components/MapLoadingFallback';
+
+const FlatMap = lazy(() => import('../components/FlatMap'));
+
+function ago(ts) {
+  if (!ts) return '—';
+  const dt = typeof ts === 'string' ? new Date(ts).getTime() : ts;
+  const m = Math.floor((Date.now() - dt) / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  if (m < 1440) return `${Math.floor(m / 60)}h`;
+  return `${Math.floor(m / 1440)}d`;
+}
+
+function sevTier(sev) {
+  const v = sev ?? 0;
+  if (v >= 85) return 'black';
+  if (v >= 70) return 'red';
+  if (v >= 40) return 'amber';
+  return 'green';
+}
 
 /**
- * Region detail view — shows a dedicated news panel for a specific country.
- * Accessible at /region/:iso (e.g. /region/US, /region/UA).
+ * /region/:iso — tactical region brief.
  */
 export default function RegionDetailPage() {
   const { iso } = useParams();
   const { t } = useTranslation();
 
-  const { liveNews, regionBackfills } = useNewsStore();
-  const { minSeverity, minConfidence, dateWindow, sortMode, accuracyMode,
-    verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified } = useFilterStore();
-  const addToast = (msg, type) => { /* stub – page doesn't need toasts */ };
+  const liveNews = useNewsStore((s) => s.liveNews);
+  const regionBackfills = useNewsStore((s) => s.regionBackfills);
 
-  /* Fetch data on mount */
+  const {
+    minSeverity, minConfidence, dateWindow, sortMode, accuracyMode,
+    verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified,
+  } = useFilterStore();
+
   useEffect(() => {
     const store = useNewsStore.getState();
     if (!liveNews || liveNews.length === 0) {
-      store.startAutoRefresh(addToast);
+      store.startAutoRefresh(() => {});
       return () => store.stopAutoRefresh();
     }
+    return undefined;
   }, [liveNews]);
 
   useEffect(() => {
-    if (iso) {
-      useNewsStore.getState().fetchRegionCoverage(iso);
-      const regionName = isoToCountry(iso) || iso;
-      useNewsStore.getState().fetchRegionBackfill(iso, regionName, { sortMode });
-    }
+    if (!iso) return;
+    const upper = iso.toUpperCase();
+    useNewsStore.getState().fetchRegionCoverage(upper);
+    const regionName = isoToCountry(upper) || upper;
+    useNewsStore.getState().fetchRegionBackfill(upper, regionName, { sortMode });
   }, [iso, sortMode]);
 
   const countryName = isoToCountry(iso?.toUpperCase()) || iso?.toUpperCase() || '?';
@@ -45,85 +67,118 @@ export default function RegionDetailPage() {
   const filterParams = useMemo(() => ({
     minSeverity, minConfidence, dateFloor, accuracyMode,
     verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified,
-  }), [minSeverity, minConfidence, dateFloor, accuracyMode, verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified]);
+  }), [
+    minSeverity, minConfidence, dateFloor, accuracyMode,
+    verificationFilter, sourceTypeFilter, languageFilter, precisionFilter, hideAmplified,
+  ]);
 
   const canonicalNews = useMemo(() => canonicalizeArticles(liveNews || []), [liveNews]);
 
   const regionNews = useMemo(() => {
     const upper = iso?.toUpperCase();
     const liveForRegion = canonicalNews.filter((s) => s.isoA2 === upper);
-    const backfillEvents = regionBackfills[upper]?.events || [];
+    const backfillEvents = regionBackfills?.[upper]?.events || [];
     const combined = liveForRegion.length > 0 ? liveForRegion : backfillEvents;
     return sortStories(combined.filter((s) => storyMatchesFilters(s, filterParams)), sortMode);
   }, [canonicalNews, regionBackfills, iso, filterParams, sortMode]);
 
-  const backfillStatus = regionBackfills[iso?.toUpperCase()]?.status || 'idle';
+  const avgSev = regionNews.length > 0
+    ? (regionNews.reduce((s, a) => s + (a.severity || 0), 0) / regionNews.length / 10)
+    : 0;
+  const sevSub = sevTier(avgSev * 10);
+  const sources = new Set(regionNews.map((a) => a.source).filter(Boolean));
 
   return (
-    <div className="region-detail-page">
-      <div className="region-detail-header">
-        <Link to="/" className="region-detail-back" aria-label={t('nav.backToMap')}>
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="region-detail-title">
-          <MapPin size={20} />
-          <h1>{countryName}</h1>
-          <span className="region-detail-iso">{iso?.toUpperCase()}</span>
+    <div className="region-page">
+      <div className="region-header">
+        <div>
+          <div className="region-crumb">
+            <Link to="/" aria-label={t('nav.backToMap')}>/ MAP</Link>
+            &nbsp;›&nbsp;REGION&nbsp;›&nbsp;<b style={{ color: 'var(--ink-0)' }}>{iso?.toUpperCase()}</b>
+          </div>
+          <div className="region-name">{countryName}</div>
+          <div className="region-iso">ISO-3166 · {iso?.toUpperCase()}</div>
+        </div>
+        <div className="region-stats">
+          <div className="stat">
+            <span className="label">AVG SEVERITY</span>
+            <span className={`val ${sevSub === 'red' || sevSub === 'black' ? 'sev-red' : sevSub === 'amber' ? 'sev-amber' : ''}`}>
+              {avgSev.toFixed(2)}
+            </span>
+            <span className="sub">n={regionNews.length}</span>
+          </div>
+          <div className="stat">
+            <span className="label">EVENTS</span>
+            <span className="val">{regionNews.length}</span>
+            <span className="sub">window: {dateWindow}</span>
+          </div>
+          <div className="stat">
+            <span className="label">SOURCES</span>
+            <span className="val">{sources.size}</span>
+            <span className="sub">distinct</span>
+          </div>
         </div>
       </div>
 
-      <div className="region-detail-stats">
-        <div className="region-detail-stat">
-          <Newspaper size={16} />
-          <span className="region-detail-stat-value">{regionNews.length}</span>
-          <span className="region-detail-stat-label">{t('regionDetail.articles')}</span>
-        </div>
-        <div className="region-detail-stat">
-          <BarChart3 size={16} />
-          <span className="region-detail-stat-value">
-            {regionNews.length > 0 ? Math.round(regionNews.reduce((s, a) => s + (a.severity || 0), 0) / regionNews.length) : 0}
+      <div className="region-articles">
+        <div className="region-articles-head">
+          <div className="micro">ARTICLES · FILTERED BY REGION</div>
+          <span style={{ marginLeft: 'auto', fontFamily: 'var(--ff-mono)', fontSize: 10, color: 'var(--ink-2)' }}>
+            {regionNews.length}
           </span>
-          <span className="region-detail-stat-label">{t('regionDetail.avgSeverity')}</span>
         </div>
-      </div>
-
-      {backfillStatus === 'loading' && (
-        <div className="region-detail-loading">{t('regionDetail.loading')}</div>
-      )}
-
-      <div className="region-detail-articles">
-        {regionNews.length === 0 && backfillStatus !== 'loading' && (
-          <div className="region-detail-empty">{t('regionDetail.noArticles')}</div>
+        {regionNews.length === 0 && (
+          <div className="mini-panel-empty" style={{ padding: 24 }}>
+            NO ARTICLES IN WINDOW
+          </div>
         )}
         {regionNews.map((story) => {
-          const meta = getSeverityMeta(story.severity);
+          const tier = sevTier(story.severity);
+          const sev = ((story.severity ?? 0) / 10).toFixed(1);
           return (
-            <article key={story.id} className="region-detail-card">
-              <div className="region-detail-card-severity" style={{ borderLeftColor: meta.accent }}>
-                <span className="region-detail-card-badge" style={{ background: meta.accent }}>
-                  {meta.label}
-                </span>
+            <div key={story.id} className="news-item">
+              <div className="news-meta">
+                <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
+                {story.category && <span className="tag">{story.category}</span>}
+                <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
+                <span>·</span>
+                <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
               </div>
-              <h3 className="region-detail-card-title">{story.title}</h3>
-              {story.summary && (
-                <p className="region-detail-card-summary">{story.summary}</p>
-              )}
-              <div className="region-detail-card-meta">
-                {story.source && <span className="region-detail-card-source">{story.source}</span>}
-                {story.publishedAt && (
-                  <time className="region-detail-card-time">
-                    {new Date(story.publishedAt).toLocaleDateString()}
-                  </time>
-                )}
+              <div className="news-title">{story.title}</div>
+              <div className="news-src">
+                <span className="mono">{story.id}</span>
+                {story.source && <> · {story.source}</>}
                 {story.url && (
-                  <a href={story.url} target="_blank" rel="noopener noreferrer" className="region-detail-card-link">
-                    <ExternalLink size={12} /> {t('regionDetail.readMore')}
-                  </a>
+                  <> · <a href={story.url} target="_blank" rel="noreferrer" style={{ color: 'var(--amber)' }}>OPEN</a></>
                 )}
               </div>
-            </article>
+            </div>
           );
         })}
+      </div>
+
+      <div className="region-minimap">
+        <div className="region-minimap-label">
+          <div className="micro">MINI-MAP · {iso?.toUpperCase()}</div>
+        </div>
+        <Suspense fallback={<MapLoadingFallback />}>
+          <FlatMap
+            newsList={regionNews}
+            regionSeverities={{}}
+            mapOverlay="severity"
+            coverageStatusByIso={{}}
+            velocitySpikes={[]}
+            trackingPoints={[]}
+            selectedRegion={iso?.toUpperCase()}
+            selectedStory={null}
+            onRegionSelect={() => {}}
+            onStorySelect={() => {}}
+            onArcSelect={() => {}}
+          />
+        </Suspense>
+        <div className="region-minimap-actions">
+          <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
+        </div>
       </div>
     </div>
   );

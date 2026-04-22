@@ -13,10 +13,11 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
  */
 
 /* ── Layout constants ── */
+/* Tactical palette — keep in step with design tokens (--amber/--cyan/--sev-green). */
 const TYPE_COLORS = {
-  person: '#e8a838',
-  organization: '#4fc3f7',
-  location: '#66bb6a',
+  person: '#3d9b6b',
+  organization: '#e8a33d',
+  location: '#5ec7d4',
 };
 
 const MIN_NODE_RADIUS = 6;

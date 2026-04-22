@@ -1,458 +1,130 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Globe2, Map as MapIcon, RefreshCw, Search, Languages, MapPin, Newspaper, X, ExternalLink, Sun, Moon, Download, Layers, Plane, Ship } from 'lucide-react';
-import { getSeverityMeta } from '../utils/mockData';
-import { getSourceHost } from '../utils/urlUtils';
-import ViewSwitcher from './ViewSwitcher';
+import { Search } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
+import useNewsStore from '../stores/newsStore';
 
-const LANGUAGES = [
-  { code: 'en', label: 'EN' },
-  { code: 'es', label: 'ES' },
-  { code: 'fr', label: 'FR' },
-  { code: 'ar', label: 'AR' },
-  { code: 'zh', label: 'ZH' }
+function BrandMark() {
+  return (
+    <div className="brand-mark" aria-hidden>
+      <svg width="20" height="20" viewBox="0 0 20 20">
+        <circle cx="10" cy="10" r="8.5" fill="none" stroke="var(--amber)" strokeWidth="1" />
+        <path d="M10 1.5 L10 18.5 M1.5 10 L18.5 10" stroke="var(--amber)" strokeWidth="0.6" opacity="0.5" />
+        <path d="M5 10 Q10 5 15 10 Q10 15 5 10 Z" fill="var(--amber)" />
+        <circle cx="10" cy="10" r="1.5" fill="var(--bg-0)" />
+      </svg>
+    </div>
+  );
+}
+
+const LANGS = ['en', 'es', 'fr', 'ar', 'zh'];
+const OVERLAY_KEYS = [
+  { key: 'severity', label: 'SEV' },
+  { key: 'coverage', label: 'COV' },
+  { key: 'geopolitical', label: 'GEO' },
 ];
 
-const BACKEND_STATUS_CONFIG = {
-  healthy: { tone: 'is-healthy', labelKey: 'healthy' },
-  degraded: { tone: 'is-degraded', labelKey: 'degraded' },
-  stale: { tone: 'is-stale', labelKey: 'stale' }
-};
-
-const Header = ({
-  searchQuery,
-  debouncedSearch,
-  onSearchChange,
-  onSearchSelect,
-  newsList = [],
-  regionSeverities = {},
-  storyCount,
-  regionCount,
-  verifiedCount = 0,
-  criticalCount,
-  mapMode,
-  onMapModeChange,
-  mapOverlay,
-  onMapOverlayChange,
-  dataSource,
-  onRefresh,
-  backendStatus = null,
-  savedViews = [],
-  activeViewId = null,
-  onSaveView,
-  onSelectView,
-  onDeleteView,
-  sessionDiff = null,
-  onExport,
-  children,
-}) => {
+/**
+ * Design header — brand · search · overlay chips (only on `/`) · lang · ops.
+ * Reads state directly from stores so it sits in the shared shell.
+ */
+export default function Header() {
   const { t, i18n } = useTranslation();
-  const trackingEnabled = import.meta.env.VITE_ENABLE_TRACKING === 'true';
-  const showFlightsLayer = useFilterStore((s) => s.showFlightsLayer);
-  const showVesselsLayer = useFilterStore((s) => s.showVesselsLayer);
-  const toggleFlightsLayer = useFilterStore((s) => s.toggleFlightsLayer);
-  const toggleVesselsLayer = useFilterStore((s) => s.toggleVesselsLayer);
-  const [showResults, setShowResults] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const [theme, setTheme] = useState(() => localStorage.getItem('mapr-theme') || 'dark');
-  const searchRef = useRef(null);
-  const resultsRef = useRef(null);
+  const location = useLocation();
+  const inputRef = useRef(null);
 
-  const changeLanguage = (lang) => {
-    i18n.changeLanguage(lang);
-    localStorage.setItem('mapr-lang', lang);
-  };
+  const searchQuery = useFilterStore((s) => s.searchQuery);
+  const setSearchQuery = useFilterStore((s) => s.setSearchQuery);
+  const mapOverlay = useFilterStore((s) => s.mapOverlay);
+  const setMapOverlay = useFilterStore((s) => s.setMapOverlay);
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('mapr-theme', next);
-  };
+  const opsHealth = useNewsStore((s) => s.opsHealth);
+  const backendStatus = useNewsStore((s) => s.sourceHealth?.backend?.status);
+  const opsOk = (opsHealth?.status ?? backendStatus ?? 'ok') === 'ok';
 
-  // Apply saved theme on mount
+  const isMap = location.pathname === '/';
+
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  // Build search results: regions + stories (uses debounced query for performance)
-  const searchResults = useMemo(() => {
-    const q = (debouncedSearch || '').trim().toLowerCase();
-    if (q.length < 2) return [];
-
-    const results = [];
-
-    // Region matches — deduplicate by isoA2, match on region name
-    const regionMatches = new Map();
-    for (const story of newsList) {
-      if (regionMatches.has(story.isoA2)) continue;
-      const regionName = (story.region || '').toLowerCase();
-      if (regionName.includes(q)) {
-        const rd = regionSeverities[story.isoA2];
-        regionMatches.set(story.isoA2, {
-          type: 'region',
-          iso: story.isoA2,
-          name: story.region,
-          count: rd?.count || 0,
-          severity: rd?.peakSeverity || 0,
-        });
-      }
-    }
-    // Sort regions by story count desc
-    const regions = [...regionMatches.values()].sort((a, b) => b.count - a.count);
-    results.push(...regions.slice(0, 5));
-
-    // Story matches — match on title, summary, locality, category
-    const storyMatches = [];
-    for (const story of newsList) {
-      const haystack = [story.title, story.summary, story.locality, story.category]
-        .join(' ').toLowerCase();
-      if (haystack.includes(q)) {
-        storyMatches.push({ type: 'story', story });
-      }
-      if (storyMatches.length >= 8) break;
-    }
-    results.push(...storyMatches);
-
-    return results;
-  }, [debouncedSearch, newsList, regionSeverities]);
-
-  // Show/hide dropdown
-  const queryLen = (searchQuery || '').trim().length;
-  const showEmpty = queryLen >= 2 && searchResults.length === 0;
-  useEffect(() => {
-    setShowResults(queryLen >= 2);
-    setActiveIndex(-1);
-  }, [searchResults, queryLen]);
-
-  // Click outside to close
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setShowResults(false);
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const handleSelect = useCallback((result) => {
-    if (result.type === 'region') {
-      onSearchSelect({ type: 'region', iso: result.iso });
-    } else {
-      onSearchSelect({ type: 'story', story: result.story });
-    }
-    setShowResults(false);
-    onSearchChange('');
-  }, [onSearchSelect, onSearchChange]);
-
-  // Keyboard navigation
-  const handleKeyDown = useCallback((e) => {
-    if (!showResults || searchResults.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIndex((prev) => Math.min(prev + 1, searchResults.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveIndex((prev) => Math.max(prev - 1, 0));
-    } else if (e.key === 'Enter' && activeIndex >= 0) {
-      e.preventDefault();
-      handleSelect(searchResults[activeIndex]);
-    } else if (e.key === 'Escape') {
-      setShowResults(false);
-    }
-  }, [showResults, searchResults, activeIndex, handleSelect]);
-
-  // Scroll active item into view
-  useEffect(() => {
-    if (activeIndex >= 0 && resultsRef.current) {
-      const item = resultsRef.current.children[activeIndex];
-      if (item) item.scrollIntoView({ block: 'nearest' });
-    }
-  }, [activeIndex]);
-
-  const handleClear = () => {
-    onSearchChange('');
-    setShowResults(false);
+  const cycleLang = () => {
+    const idx = LANGS.indexOf(i18n.language);
+    const next = LANGS[(idx + 1) % LANGS.length] || 'en';
+    i18n.changeLanguage(next);
+    try { localStorage.setItem('mapr-lang', next); } catch {}
   };
 
   return (
-    <header className="header">
-      <div className="brand">
-        <div className="brand-mark">
-          <Globe2 size={14} />
-        </div>
-        <span className="brand-name">Mapr</span>
-        <span className={`brand-live ${dataSource === 'loading' ? 'is-loading' : ''}`}>
-          <span className="brand-live-dot" />
-          {dataSource === 'live' ? t('header.live') : dataSource === 'loading' ? t('header.loading') : t('header.offline')}
-        </span>
-        {backendStatus && BACKEND_STATUS_CONFIG[backendStatus] && (() => {
-          const cfg = BACKEND_STATUS_CONFIG[backendStatus];
-          return (
-            <span className={`brand-backend ${cfg.tone}`}>
-              {t(`healthStatus.${cfg.labelKey}`)}
-            </span>
-          );
-        })()}
+    <header className="app-header" role="banner">
+      <div className="header-brand">
+        <BrandMark />
+        <span className="brand-title">MAPR</span>
+        <span className="brand-build">v4.12 · OSINT</span>
       </div>
 
-      <div className="search-wrapper" ref={searchRef}>
-        <label className="search-bar">
-          <Search size={13} />
-          <input
-            type="text"
-            className="search-input"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            onFocus={() => searchResults.length > 0 && setShowResults(true)}
-            onKeyDown={handleKeyDown}
-            placeholder={t('header.searchPlaceholder')}
-          />
-          {searchQuery && (
-            <button className="search-clear" onClick={handleClear} aria-label="Clear search">
-              <X size={13} />
-            </button>
-          )}
-        </label>
-
-        {showResults && (
-          <div className="search-results" ref={resultsRef}>
-            {showEmpty && (
-              <div className="search-empty">
-                No results for &ldquo;{searchQuery.trim()}&rdquo;
-              </div>
-            )}
-            {searchResults.map((result, idx) => {
-              if (result.type === 'region') {
-                const meta = getSeverityMeta(result.severity);
-                return (
-                  <button
-                    key={`r-${result.iso}`}
-                    className={`search-result ${idx === activeIndex ? 'is-active' : ''}`}
-                    onClick={() => handleSelect(result)}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                  >
-                    <MapPin size={13} style={{ color: meta.accent, flexShrink: 0 }} />
-                    <div className="search-result-text">
-                      <span className="search-result-title">{result.name}</span>
-                      <span className="search-result-meta">
-                        <span className="search-result-dot" style={{ background: meta.accent }} />
-                        {result.count} {t('header.stories')}
-                      </span>
-                    </div>
-                  </button>
-                );
-              } else {
-                const { story } = result;
-                const meta = getSeverityMeta(story.severity);
-                const sourceLabel = getSourceHost(story.url, story.source || t('article.readFull'));
-                return (
-                  <div
-                    key={`s-${story.id}`}
-                    className={`search-result-row ${idx === activeIndex ? 'is-active' : ''}`}
-                    onMouseEnter={() => setActiveIndex(idx)}
-                  >
-                    <button
-                      className={`search-result ${idx === activeIndex ? 'is-active' : ''}`}
-                      onClick={() => handleSelect(result)}
-                    >
-                      <Newspaper size={13} style={{ color: 'var(--text-tertiary)', flexShrink: 0 }} />
-                      <div className="search-result-text">
-                        <span className="search-result-title">{story.title}</span>
-                        <span className="search-result-meta">
-                          <span className="search-result-dot" style={{ background: meta.accent }} />
-                          {story.locality || story.region}
-                        </span>
-                      </div>
-                    </button>
-                    {story.url && (
-                      <a
-                        className="search-result-link"
-                        href={story.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={t('article.readFull')}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ExternalLink size={12} />
-                        {sourceLabel}
-                      </a>
-                    )}
-                  </div>
-                );
-              }
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="header-controls">
-        <ViewSwitcher
-          views={savedViews}
-          activeViewId={activeViewId}
-          onSelect={onSelectView}
-          onSave={onSaveView}
-          onDelete={onDeleteView}
+      <div className="header-search">
+        <Search size={15} color="var(--ink-2)" aria-hidden />
+        <input
+          ref={inputRef}
+          type="text"
+          className="search-input"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="QUERY · event, region, entity, source"
+          aria-label={t('nav.ariaLabel')}
         />
-
-        <div className="map-toggle" role="tablist" aria-label="Map mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mapMode === 'globe'}
-            className={`map-toggle-btn ${mapMode === 'globe' ? 'is-active' : ''}`}
-            onClick={() => onMapModeChange('globe')}
-          >
-            <Globe2 size={12} />
-            {t('header.globe')}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mapMode === 'flat'}
-            className={`map-toggle-btn ${mapMode === 'flat' ? 'is-active' : ''}`}
-            onClick={() => onMapModeChange('flat')}
-          >
-            <MapIcon size={12} />
-            {t('header.flat')}
-          </button>
-        </div>
-
-        {onMapOverlayChange && (
-          <div className="map-toggle overlay-toggle" role="tablist" aria-label="Map overlay">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mapOverlay === 'severity'}
-              className={`map-toggle-btn ${mapOverlay === 'severity' ? 'is-active' : ''}`}
-              onClick={() => onMapOverlayChange('severity')}
-              title="Severity overlay"
-            >
-              <Layers size={12} />
-              SEV
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mapOverlay === 'coverage'}
-              className={`map-toggle-btn ${mapOverlay === 'coverage' ? 'is-active' : ''}`}
-              onClick={() => onMapOverlayChange('coverage')}
-              title="Coverage overlay"
-            >
-              <Layers size={12} />
-              COV
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mapOverlay === 'geopolitical'}
-              className={`map-toggle-btn ${mapOverlay === 'geopolitical' ? 'is-active' : ''}`}
-              onClick={() => onMapOverlayChange('geopolitical')}
-              title="Geopolitical relationships"
-            >
-              <Layers size={12} />
-              GEO
-            </button>
-            {trackingEnabled && (
-              <button
-                type="button"
-                aria-pressed={showFlightsLayer}
-                className={`map-toggle-btn ${showFlightsLayer ? 'is-active' : ''}`}
-                onClick={toggleFlightsLayer}
-                title="Live flight positions (OpenSky ADS-B)"
-              >
-                <Plane size={12} />
-                Flights
-              </button>
-            )}
-            {trackingEnabled && (
-              <button
-                type="button"
-                aria-pressed={showVesselsLayer}
-                className={`map-toggle-btn ${showVesselsLayer ? 'is-active' : ''}`}
-                onClick={toggleVesselsLayer}
-                title="Live ship positions (AIS maritime tracking)"
-              >
-                <Ship size={12} />
-                Ships
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="lang-switcher">
-          <Languages size={12} className="lang-switcher-icon" />
-          <select
-            value={i18n.language}
-            onChange={(e) => changeLanguage(e.target.value)}
-            aria-label="Language"
-          >
-            {LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>{lang.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          className="refresh-btn"
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
-          title="Toggle theme"
-        >
-          {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
-        </button>
-
-        <button
-          className="refresh-btn"
-          onClick={onRefresh}
-          aria-label={t('header.refreshLabel')}
-          title={t('header.refreshLabel')}
-        >
-          <RefreshCw size={13} className={dataSource === 'loading' ? 'spin' : ''} />
-        </button>
-
-        {onExport && (
-          <button
-            className="refresh-btn"
-            onClick={onExport}
-            aria-label="Export briefing"
-            title="Export briefing"
-          >
-            <Download size={13} />
-          </button>
-        )}
+        <span className="search-kbd" aria-hidden>⌘K</span>
       </div>
 
-      <div className="header-stats">
-        <div className="stat-chip">
-          <strong>{regionCount}</strong>&nbsp;{t('header.regions')}
+      {isMap && (
+        <div className="header-overlays" role="group" aria-label="Map layers">
+          <span className="micro">LAYERS</span>
+          {OVERLAY_KEYS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              className="toggle-chip"
+              data-active={mapOverlay === key}
+              aria-pressed={mapOverlay === key}
+              onClick={() => setMapOverlay(key)}
+              title={label}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div className="stat-chip">
-          <strong>{storyCount}</strong>&nbsp;{t('header.stories')}
-        </div>
-        {verifiedCount > 0 && (
-          <div className="stat-chip is-verified">
-            <strong>{verifiedCount}</strong>&nbsp;{t('header.verified')}
-          </div>
-        )}
-        {criticalCount > 0 && (
-          <div className="stat-chip is-critical">
-            <strong>{criticalCount}</strong>&nbsp;{t('header.critical')}
-          </div>
-        )}
-        {sessionDiff && !sessionDiff.isFirstVisit && sessionDiff.newEvents.length > 0 && (
-          <div className="stat-chip is-new">
-            <strong>{sessionDiff.newEvents.length}</strong>&nbsp;new
-          </div>
-        )}
-      </div>
+      )}
 
-      {children}
+      <div className="header-right">
+        <button
+          type="button"
+          className="lang-select"
+          onClick={cycleLang}
+          title="Cycle language"
+          aria-label="Cycle language"
+        >
+          LANG · <b>{i18n.language.toUpperCase()}</b>
+        </button>
+        <div className="op-badge" aria-live="polite">
+          <span
+            className="op-dot"
+            style={{
+              background: opsOk ? 'var(--sev-green)' : 'var(--sev-red)',
+              boxShadow: `0 0 6px ${opsOk ? 'var(--sev-green)' : 'var(--sev-red)'}`,
+            }}
+          />
+          OPS · {opsOk ? 'NOMINAL' : 'DEGRADED'}
+        </div>
+      </div>
     </header>
   );
-};
-
-export default Header;
+}

@@ -4,11 +4,29 @@ import MapGLOverlay from './MapGLOverlay';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
-const DEFAULT_VIEW = { lng: 10, lat: 20, zoom: 1.2 };
+/**
+ * Calibrated "5× larger at rest" default — the current default was `1.2`; a
+ * zoom bump of `log2(√5) ≈ 1.16` produces ~5× rendered surface area on-screen.
+ * Rounded to `2.5` so the sphere fills more of the stage as the spec requires.
+ */
+const DEFAULT_ZOOM = 2.5;
+
+/** Starting zoom for the entry animation (matches the old default). */
+const ENTRY_START_ZOOM = 1.2;
+
+/** Duration of the initial zoom-in. Spec requires 1.5–2.5s. */
+const ENTRY_DURATION_MS = 2000;
+
+const DEFAULT_VIEW = { lng: 10, lat: 20, zoom: DEFAULT_ZOOM };
 
 const isMobile = typeof screen !== 'undefined' && screen.width < 768;
-const STORY_ZOOM = isMobile ? 3 : 5;
-const REGION_ZOOM = isMobile ? 2.2 : 3;
+const STORY_ZOOM = isMobile ? 4 : 5.5;
+const REGION_ZOOM = isMobile ? 3 : 4;
+
+/** easeInOutCubic — smooth entry. */
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 /* ──────────────────────────── component ──────────────────────────── */
 
@@ -29,6 +47,8 @@ const Globe = ({
   const containerRef = useRef(null);
   const [userDragged, setUserDragged] = useState(false);
   const autoRotateRef = useRef(null);
+  const entryPlayedRef = useRef(false);
+  const entryInProgressRef = useRef(false);
   const [theme, setTheme] = useState(() =>
     (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
   );
@@ -44,6 +64,48 @@ const Globe = ({
     return () => observer.disconnect();
   }, []);
 
+  /* ── entry animation (plays once per mount, zoomed-out → new default) ── */
+  const handleMapRef = useCallback((instance) => {
+    mapRef.current = instance;
+    if (!instance || entryPlayedRef.current) return;
+
+    const playEntry = () => {
+      if (entryPlayedRef.current || !mapRef.current) return;
+      entryPlayedRef.current = true;
+      entryInProgressRef.current = true;
+      try {
+        // Snap to the small-globe starting pose so the viewer reads the
+        // zoom-in as a motion cue on every fresh navigation.
+        instance.jumpTo({
+          center: [DEFAULT_VIEW.lng, DEFAULT_VIEW.lat],
+          zoom: ENTRY_START_ZOOM,
+        });
+        instance.easeTo({
+          center: [DEFAULT_VIEW.lng, DEFAULT_VIEW.lat],
+          zoom: DEFAULT_ZOOM,
+          duration: ENTRY_DURATION_MS,
+          easing: easeInOutCubic,
+        });
+        // Clear the flag once the animation would have completed; gives
+        // auto-rotate / selection flyTos a clean baseline.
+        setTimeout(() => { entryInProgressRef.current = false; }, ENTRY_DURATION_MS + 60);
+      } catch {
+        entryInProgressRef.current = false;
+      }
+    };
+
+    // Wait for style load so layers render during the animation.
+    try {
+      if (typeof instance.isStyleLoaded === 'function' && instance.isStyleLoaded()) {
+        playEntry();
+      } else {
+        instance.once('load', playEntry);
+      }
+    } catch {
+      playEntry();
+    }
+  }, []);
+
   /* ── fly-to on selection ── */
   const prevStoryRef = useRef(null);
   const prevRegionRef = useRef(null);
@@ -52,6 +114,8 @@ const Globe = ({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    // Don't steal the camera from the entry animation.
+    if (entryInProgressRef.current) return;
 
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
       try {
@@ -138,7 +202,7 @@ const Globe = ({
     };
   }, []);
 
-  /* ── auto-rotate loop (paused while selection or user-interacted) ── */
+  /* ── auto-rotate loop (paused during entry, selection, or user input) ── */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return undefined;
@@ -152,8 +216,8 @@ const Globe = ({
       return undefined;
     }
 
-    // Rotate slowly by shifting the center longitude ~0.12° per 100ms (~1.2°/s).
     autoRotateRef.current = setInterval(() => {
+      if (entryInProgressRef.current) return;
       const m = mapRef.current;
       if (!m) return;
       try {
@@ -186,19 +250,15 @@ const Globe = ({
     return () => observer.disconnect();
   }, []);
 
-  const handleMapRef = useCallback((instance) => {
-    mapRef.current = instance;
-  }, []);
-
   return (
-    <div ref={containerRef} className="globe-wrapper">
+    <div ref={containerRef} className="globe-wrapper" style={{ position: 'absolute', inset: 0 }}>
       <AppMap
         ref={handleMapRef}
         surface="globe"
         theme={isLight ? 'light' : 'dark'}
         viewport={{
           center: [DEFAULT_VIEW.lng, DEFAULT_VIEW.lat],
-          zoom: DEFAULT_VIEW.zoom,
+          zoom: ENTRY_START_ZOOM,
         }}
       >
         <MapGLOverlay
