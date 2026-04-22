@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Search, MapPin } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
@@ -51,6 +51,11 @@ function lifecycleMeta(lifecycle) {
  */
 export default function RegionDetailPage() {
   const { iso } = useParams();
+  if (!iso) return <RegionPicker />;
+  return <RegionBrief iso={iso} />;
+}
+
+function RegionBrief({ iso }) {
   const { t } = useTranslation();
 
   const [openStory, setOpenStory] = useState(null);
@@ -232,6 +237,130 @@ export default function RegionDetailPage() {
         </div>
       </div>
       <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
+    </div>
+  );
+}
+
+function RegionPicker() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+
+  const liveNews = useNewsStore((s) => s.liveNews);
+  const lastRegionIso = useUIStore((s) => s.lastRegionIso);
+
+  useEffect(() => {
+    if (!liveNews || liveNews.length === 0) {
+      useNewsStore.getState().loadLiveData?.();
+    }
+  }, [liveNews]);
+
+  const regions = useMemo(() => {
+    const byIso = new Map();
+    for (const story of liveNews || []) {
+      const k = story.isoA2;
+      if (!k) continue;
+      const cur = byIso.get(k) || {
+        iso: k, name: isoToCountry(k) || k, count: 0, maxSev: 0,
+      };
+      cur.count += 1;
+      if ((story.severity ?? 0) > cur.maxSev) cur.maxSev = story.severity ?? 0;
+      byIso.set(k, cur);
+    }
+    const list = [...byIso.values()];
+    list.sort((a, b) => b.count - a.count || b.maxSev - a.maxSev);
+    return list;
+  }, [liveNews]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return regions;
+    return regions.filter((r) =>
+      r.iso.toLowerCase().includes(q) || r.name.toLowerCase().includes(q),
+    );
+  }, [regions, query]);
+
+  const handlePick = (iso) => navigate(`/region/${iso}`);
+
+  return (
+    <div className="region-picker">
+      <div className="region-picker-head">
+        <div>
+          <div className="region-crumb">
+            <Link to="/" aria-label={t('nav.backToMap')}>/ MAP</Link>
+            &nbsp;›&nbsp;REGION
+          </div>
+          <div className="region-name">Select a region</div>
+          <div className="region-iso">
+            {t(
+              'nav.regionPickerHint',
+              'Click a region on the map, or pick one from the list.',
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="region-picker-body">
+        {lastRegionIso && (
+          <button
+            type="button"
+            className="region-picker-recent"
+            onClick={() => handlePick(lastRegionIso)}
+          >
+            <MapPin size={12} aria-hidden />
+            <span className="region-picker-recent-label">LAST VIEWED</span>
+            <span className="region-picker-recent-name">
+              {isoToCountry(lastRegionIso) || lastRegionIso}
+            </span>
+            <span className="region-picker-recent-iso">{lastRegionIso}</span>
+            <span className="region-picker-recent-arrow">→</span>
+          </button>
+        )}
+
+        <div className="region-picker-search">
+          <Search size={13} aria-hidden />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by country or ISO…"
+            aria-label="Search regions"
+          />
+          <span className="region-picker-count">{filtered.length}</span>
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="region-picker-empty">NO REGIONS MATCH</div>
+        )}
+        <ul className="region-picker-list">
+          {filtered.map((r) => (
+            <li key={r.iso}>
+              <button
+                type="button"
+                className="region-picker-row"
+                onClick={() => handlePick(r.iso)}
+              >
+                <span className="region-picker-iso">{r.iso}</span>
+                <span className="region-picker-name">{r.name}</span>
+                <span className="region-picker-sev">
+                  <span
+                    className="region-picker-sev-dot"
+                    style={{
+                      background:
+                        r.maxSev >= 85 ? 'var(--sev-black)' :
+                        r.maxSev >= 70 ? 'var(--sev-red)' :
+                        r.maxSev >= 40 ? 'var(--sev-amber)' : 'var(--sev-green)',
+                    }}
+                  />
+                  {(r.maxSev / 10).toFixed(1)}
+                </span>
+                <span className="region-picker-count-sm">{r.count}</span>
+                <span className="region-picker-arrow">→</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

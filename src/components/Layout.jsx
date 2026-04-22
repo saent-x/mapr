@@ -98,7 +98,6 @@ export default function Layout() {
   const location = useLocation();
   const lastRegionIso = useUIStore((s) => s.lastRegionIso);
   const regionTarget = lastRegionIso ? `/region/${lastRegionIso}` : '/region';
-  const regionDisabled = !lastRegionIso;
 
   return (
     <div className="layout">
@@ -126,16 +125,8 @@ export default function Layout() {
           <NavLink
             to={regionTarget}
             end={false}
-            className={({ isActive }) =>
-              `layout-nav-link${isActive ? ' active' : ''}${regionDisabled ? ' is-disabled' : ''}`
-            }
-            title={
-              regionDisabled
-                ? t('nav.regionDisabled', 'Select a region on the map first')
-                : t('nav.region', 'Region') + (lastRegionIso ? ` · ${lastRegionIso}` : '')
-            }
-            aria-disabled={regionDisabled || undefined}
-            onClick={(e) => { if (regionDisabled) e.preventDefault(); }}
+            className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
+            title={t('nav.region', 'Region') + (lastRegionIso ? ` · ${lastRegionIso}` : '')}
           >
             {Ico.region}
             <span className="side-label">

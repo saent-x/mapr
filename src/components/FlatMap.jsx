@@ -5,6 +5,7 @@ import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
 import { findStateInStory } from '../utils/statesData';
 import { isoToCountry } from '../utils/geocoder';
+import { getCountryBbox } from '../utils/countryBbox';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
@@ -111,6 +112,12 @@ const FlatMap = ({
     }
 
     if (selectedRegion && selectedRegion !== prevRegionRef.current) {
+      // In compact (minimap) mode, the country-bbox fit effect handles
+      // the camera — skip the story-focal flyTo so we don't over-zoom.
+      if (compact) {
+        prevRegionRef.current = selectedRegion;
+        return;
+      }
       const focal =
         regionSeverities[selectedRegion]?.peakStory ||
         newsList.find((s) => s.isoA2 === selectedRegion);
@@ -137,7 +144,7 @@ const FlatMap = ({
         duration: 1200,
       });
     }
-  }, [selectedStory, selectedRegion, regionSeverities, newsList]);
+  }, [selectedStory, selectedRegion, regionSeverities, newsList, compact]);
 
   /* ── drill region fly ── */
   useEffect(() => {
@@ -148,6 +155,35 @@ const FlatMap = ({
       try { map.fitBounds(region.bounds, { padding: 40, duration: 1200 }); } catch { /* ignore */ }
     }
   }, [drillRegion]);
+
+  /* ── compact-mode: fit to country bbox (minimap on region page) ── */
+  const bboxFittedRef = useRef(null);
+  useEffect(() => {
+    if (!compact || !selectedRegion) return undefined;
+    if (bboxFittedRef.current === selectedRegion) return undefined;
+    const map = mapRef.current;
+    if (!map) return undefined;
+    let cancelled = false;
+    const fit = (bbox) => {
+      if (cancelled || !bbox) return;
+      try {
+        map.fitBounds(
+          [[bbox[0], bbox[1]], [bbox[2], bbox[3]]],
+          { padding: 24, duration: 0, maxZoom: 6 },
+        );
+        bboxFittedRef.current = selectedRegion;
+      } catch { /* ignore */ }
+    };
+    const run = () => {
+      getCountryBbox(selectedRegion).then((bbox) => fit(bbox));
+    };
+    if (typeof map.isStyleLoaded === 'function' && map.isStyleLoaded()) {
+      run();
+    } else {
+      map.once?.('load', run);
+    }
+    return () => { cancelled = true; };
+  }, [compact, selectedRegion]);
 
   const regionStoryCounts = useMemo(() => {
     const counts = {};

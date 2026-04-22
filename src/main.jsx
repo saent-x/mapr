@@ -20,6 +20,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/health" element={<Suspense fallback={<PageLoadingFallback />}><HealthPage /></Suspense>} />
         <Route element={<Layout />}>
           <Route path="/" element={<App />} />
+          <Route path="/region" element={<RegionDetailPage />} />
           <Route path="/region/:iso" element={<RegionDetailPage />} />
           <Route path="/admin" element={<Suspense fallback={<PageLoadingFallback />}><AdminPage /></Suspense>} />
           <Route path="/entities" element={<Suspense fallback={<PageLoadingFallback />}><EntityExplorerPage /></Suspense>} />
