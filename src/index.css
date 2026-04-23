@@ -2012,3 +2012,62 @@ a { color: inherit; text-decoration: none; }
   .side-panels { width: 240px; }
   .header-overlays { display: none; }
 }
+
+/* ——— BottomSheet primitive (mobile-first, works at all widths) ——— */
+.bottom-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9000;
+  backdrop-filter: blur(2px);
+}
+.bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-1);
+  border-top: 1px solid var(--line);
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.45);
+  z-index: 9001;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  transition: transform 0.22s ease-out;
+  touch-action: pan-y;
+}
+.bottom-sheet-handle {
+  padding: 10px 16px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+  user-select: none;
+}
+.bottom-sheet-grabber {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.bottom-sheet-title {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-1);
+  color: var(--ink-0);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.bottom-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 16px 24px;
+  -webkit-overflow-scrolling: touch;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bottom-sheet {
+    transition: none;
+  }
+}
