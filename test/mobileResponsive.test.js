@@ -57,3 +57,26 @@ describe('FlatMap + Globe use useBreakpoint instead of inline matchMedia', () =>
     assert.equal(/window\.innerWidth/.test(globe), false);
   });
 });
+
+describe('desktop invariance', () => {
+  it('still has original layout grid-template-columns: 52px 1fr (outside media queries)', () => {
+    const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
+    assert.match(pre, /\.layout\s*\{[\s\S]*?grid-template-columns:\s*52px\s+1fr/);
+  });
+  it('still has .news-panel { width: ... } base rule', () => {
+    const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
+    assert.match(pre, /\.news-panel\s*\{/);
+  });
+  it('still has .side-panels base rule', () => {
+    const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
+    assert.match(pre, /\.side-panels\s*\{/);
+  });
+  it('still has .floating-panel base rule', () => {
+    const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
+    assert.match(pre, /\.floating-panel\s*\{/);
+  });
+  it('still has .article-sheet base rule', () => {
+    const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
+    assert.match(pre, /\.article-sheet\s*\{/);
+  });
+});
