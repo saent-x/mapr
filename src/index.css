@@ -2260,3 +2260,50 @@ a { color: inherit; text-decoration: none; }
   /* Hide the desktop .news-panel container entirely on mobile */
   .news-panel:not(.news-peek) { display: none; }
 }
+
+@media (max-width: 767px) {
+  .map-controls {
+    position: fixed;
+    top: auto;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    right: 8px;
+    left: auto;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 4px;
+    z-index: 6800;
+  }
+  .map-controls button {
+    min-width: 44px;
+    min-height: 44px;
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+  }
+  .map-controls button:last-child { border-right: 0; }
+
+  .map-corner.br {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(56px + 44px + 12px);
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .map-corner.br .legend-item {
+    font-size: 11px;
+  }
+  .entity-filter-breadcrumb {
+    left: 8px;
+    right: 8px;
+    top: 52px;
+    max-width: none;
+  }
+  .entity-filter-breadcrumb-inner {
+    flex-wrap: wrap;
+  }
+}
