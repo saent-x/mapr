@@ -40,8 +40,9 @@ describe('MOB-FIX-B: floating map icons', () => {
     assert.match(COMP, /aria-modal="false"/);
   });
 
-  it('intel icon opens Intel bottom sheet via drawerMode', () => {
-    assert.match(COMP, /setDrawerMode\(\s*drawerMode\s*===\s*'intel-mobile'\s*\?\s*null\s*:\s*'intel-mobile'\s*\)/);
+  it('intel icon navigates to /intel route', () => {
+    assert.match(COMP, /navigate\(\s*['"]\/intel['"]\s*\)/);
+    assert.match(COMP, /from\s+['"]react-router-dom['"]/);
   });
 
   it('reuses filterStore mapOverlay state (no new store)', () => {

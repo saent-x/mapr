@@ -315,6 +315,7 @@ const NewsPanel = ({
   selectedStoryId,
   onStorySelect,
   onClose,
+  variant,
 }) => {
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
@@ -400,6 +401,23 @@ const NewsPanel = ({
       )}
     </>
   );
+
+  if (variant === 'inline') {
+    return (
+      <>
+        <div className="news-panel news-panel-inline" role="region" aria-label="Live news feed">
+          <div className="panel-header">
+            <span className="dot" />
+            <span>FEED · LIVE</span>
+            <span className="spacer" />
+            <span style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+          </div>
+          <div className="panel-body">{listBody}</div>
+        </div>
+        <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
+      </>
+    );
+  }
 
   if (isMobile) {
     if (!isOpen) return null;

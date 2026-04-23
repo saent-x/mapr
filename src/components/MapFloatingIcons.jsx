@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Gauge, Layers, Globe as GlobeIcon, Activity } from 'lucide-react';
 import useBreakpoint from '../hooks/useBreakpoint';
 import useFilterStore from '../stores/filterStore';
-import useUIStore from '../stores/uiStore';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from '../utils/coverageMeta';
 
 const SEV_TIERS = [
@@ -75,15 +75,13 @@ function Popover({ id, title, onClose, children }) {
 
 export default function MapFloatingIcons() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isMobile, isTablet } = useBreakpoint();
 
   const mapOverlay = useFilterStore((s) => s.mapOverlay);
   const setMapOverlay = useFilterStore((s) => s.setMapOverlay);
   const minSeverity = useFilterStore((s) => s.minSeverity);
   const setMinSeverity = useFilterStore((s) => s.setMinSeverity);
-
-  const drawerMode = useUIStore((s) => s.drawerMode);
-  const setDrawerMode = useUIStore((s) => s.setDrawerMode);
 
   const [openPopover, setOpenPopover] = useState(null);
   const containerRef = useRef(null);
@@ -104,8 +102,8 @@ export default function MapFloatingIcons() {
 
   const handleIconTap = (id) => {
     if (id === 'intel') {
-      setDrawerMode(drawerMode === 'intel-mobile' ? null : 'intel-mobile');
       setOpenPopover(null);
+      navigate('/intel');
       return;
     }
     setOpenPopover((cur) => (cur === id ? null : id));
@@ -149,7 +147,7 @@ export default function MapFloatingIcons() {
           id="intel"
           icon={Activity}
           label="Intel"
-          active={drawerMode === 'intel-mobile'}
+          active={false}
           onClick={() => handleIconTap('intel')}
         />
       </div>

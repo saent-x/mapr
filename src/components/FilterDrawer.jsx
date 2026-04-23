@@ -4,17 +4,20 @@ import { X } from 'lucide-react';
 import { DATE_WINDOWS, SORT_OPTIONS } from '../utils/mockData';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
-import useBreakpoint from '../hooks/useBreakpoint';
-import BottomSheet from './ui/BottomSheet';
 
 const VERIFICATION_OPTIONS = ['all', 'official', 'verified', 'developing', 'single-source'];
 const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local'];
 const LANGUAGE_OPTIONS = ['all', 'en', 'es', 'fr', 'ar', 'zh'];
 
+/**
+ * FilterDrawer renders the desktop floating drawer. On mobile the same
+ * content is shown inline via FiltersPage — pass `variant="inline"` there.
+ */
 const FilterDrawer = ({
   isOpen,
   defaultTab = 'filters',
   onClose,
+  variant,
   filteredNews = [],
   allNews = [],
   sourceCoverageAudit,
@@ -27,12 +30,12 @@ const FilterDrawer = ({
   onRegionSelect,
 }) => {
   const { t } = useTranslation();
+  const inline = variant === 'inline';
   const [tab, setTab] = useState(defaultTab === 'intel' ? 'intel' : 'filters');
-  const { isMobile } = useBreakpoint();
 
   useEffect(() => {
-    if (isOpen) setTab(defaultTab === 'intel' ? 'intel' : 'filters');
-  }, [isOpen, defaultTab]);
+    if (isOpen || inline) setTab(defaultTab === 'intel' ? 'intel' : 'filters');
+  }, [isOpen, inline, defaultTab]);
 
   const dateWindow = useFilterStore((s) => s.dateWindow);
   const setDateWindow = useFilterStore((s) => s.setDateWindow);
@@ -83,7 +86,7 @@ const FilterDrawer = ({
     selectRegion(null);
   };
 
-  if (!isOpen) return null;
+  if (!inline && !isOpen) return null;
 
   const content = (
     <>
@@ -92,7 +95,9 @@ const FilterDrawer = ({
         {t('filters.label')}
         <span className="spacer" />
         <span style={{ color: 'var(--ink-2)' }}>{filteredNews.length}/{allNews.length}</span>
-        <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}><X size={12} aria-hidden /></button>
+        {onClose && (
+          <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}><X size={12} aria-hidden /></button>
+        )}
       </div>
 
       <div className="filter-section" role="tablist" aria-label="Drawer tabs">
@@ -332,17 +337,11 @@ const FilterDrawer = ({
     </>
   );
 
-  if (isMobile) {
+  if (inline) {
     return (
-      <BottomSheet
-        open={isOpen}
-        onClose={onClose}
-        title={t('filters.label')}
-        ariaLabel={t('filters.label')}
-        heightVh={90}
-      >
-        <div className="filter-drawer filter-drawer-mobile">{content}</div>
-      </BottomSheet>
+      <div className="filter-drawer filter-drawer-inline" role="region" aria-label={t('filters.label')}>
+        {content}
+      </div>
     );
   }
 

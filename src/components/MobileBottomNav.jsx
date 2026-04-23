@@ -2,43 +2,26 @@ import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Map as MapIcon, Activity, SlidersHorizontal } from 'lucide-react';
 import useBreakpoint from '../hooks/useBreakpoint';
-import useUIStore from '../stores/uiStore';
 
 export default function MobileBottomNav() {
   const { isMobile } = useBreakpoint();
   const loc = useLocation();
-  const drawerMode = useUIStore((s) => s.drawerMode);
-  const setDrawerMode = useUIStore((s) => s.setDrawerMode);
   if (!isMobile) return null;
-  const isMap = loc.pathname === '/';
+  const path = loc.pathname;
   return (
     <nav className="mobile-bottom-nav" role="navigation" aria-label="Mobile navigation">
-      <Link to="/" className="bottom-nav-btn" data-active={isMap || undefined} aria-label="Map">
+      <Link to="/" className="bottom-nav-btn" data-active={path === '/' || undefined} aria-label="Map">
         <MapIcon size={20} aria-hidden />
         <span>MAP</span>
       </Link>
-      <button
-        type="button"
-        className="bottom-nav-btn"
-        data-active={drawerMode === 'intel-mobile' || undefined}
-        onClick={() => setDrawerMode(drawerMode === 'intel-mobile' ? null : 'intel-mobile')}
-        aria-label="Intel"
-        aria-pressed={drawerMode === 'intel-mobile'}
-      >
+      <Link to="/intel" className="bottom-nav-btn" data-active={path === '/intel' || undefined} aria-label="Intel">
         <Activity size={20} aria-hidden />
         <span>INTEL</span>
-      </button>
-      <button
-        type="button"
-        className="bottom-nav-btn"
-        data-active={drawerMode === 'filters' || undefined}
-        onClick={() => setDrawerMode(drawerMode === 'filters' ? null : 'filters')}
-        aria-label="Filters"
-        aria-pressed={drawerMode === 'filters'}
-      >
+      </Link>
+      <Link to="/filters" className="bottom-nav-btn" data-active={path === '/filters' || undefined} aria-label="Filters">
         <SlidersHorizontal size={20} aria-hidden />
         <span>FILTERS</span>
-      </button>
+      </Link>
     </nav>
   );
 }

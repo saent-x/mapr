@@ -12,7 +12,6 @@ import NewsPanel from './components/NewsPanel';
 import AnomalyPanel from './components/AnomalyPanel';
 import WatchlistPanel from './components/WatchlistPanel';
 import NarrativePanel from './components/NarrativePanel';
-import MobileIntelSheet from './components/MobileIntelSheet';
 import MapFloatingIcons from './components/MapFloatingIcons';
 import MobileSeverityChips from './components/MobileSeverityChips';
 import MobileTimelineSheet from './components/MobileTimelineSheet';
@@ -420,13 +419,6 @@ function App() {
           onRegionSelect={handleRegionSelect}
         />
       </div>
-
-      <MobileIntelSheet
-        velocitySpikes={velocitySpikes}
-        silenceEntries={silenceEntries}
-        newsList={activeNews}
-        onRegionSelect={handleRegionSelect}
-      />
 
       <MapFloatingIcons />
 

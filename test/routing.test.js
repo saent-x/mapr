@@ -77,6 +77,50 @@ describe('frontend routing', () => {
     assert.ok(src.includes('TrendAnalysisPage'), 'main.jsx must reference TrendAnalysisPage');
   });
 
+  it('intel + filters routes are configured in main.jsx', () => {
+    const src = readFileSync(join(SRC, 'main.jsx'), 'utf8');
+    assert.ok(
+      src.includes('path="/intel"') || src.includes("path='/intel'"),
+      'intel route /intel must exist',
+    );
+    assert.ok(src.includes('IntelPage'), 'main.jsx must reference IntelPage');
+    assert.ok(
+      src.includes('path="/filters"') || src.includes("path='/filters'"),
+      'filters route /filters must exist',
+    );
+    assert.ok(src.includes('FiltersPage'), 'main.jsx must reference FiltersPage');
+  });
+
+  it('IntelPage + FiltersPage exist with default exports', () => {
+    const intelPath = join(SRC, 'pages', 'IntelPage.jsx');
+    const filtersPath = join(SRC, 'pages', 'FiltersPage.jsx');
+    assert.ok(existsSync(intelPath), 'IntelPage.jsx must exist in pages/');
+    assert.ok(existsSync(filtersPath), 'FiltersPage.jsx must exist in pages/');
+    const intel = readFileSync(intelPath, 'utf8');
+    const filters = readFileSync(filtersPath, 'utf8');
+    assert.ok(intel.includes('export default'), 'IntelPage must export default');
+    assert.ok(filters.includes('export default'), 'FiltersPage must export default');
+    assert.ok(intel.includes('mobile-tab-page'), 'IntelPage must render mobile-tab-page container');
+    assert.ok(filters.includes('mobile-tab-page'), 'FiltersPage must render mobile-tab-page container');
+  });
+
+  it('MobileBottomNav uses Link (not sheet toggles) for Intel + Filters', () => {
+    const src = readFileSync(join(SRC, 'components', 'MobileBottomNav.jsx'), 'utf8');
+    assert.ok(
+      src.includes('to="/intel"') || src.includes("to='/intel'"),
+      'MobileBottomNav must navigate to /intel',
+    );
+    assert.ok(
+      src.includes('to="/filters"') || src.includes("to='/filters'"),
+      'MobileBottomNav must navigate to /filters',
+    );
+    assert.equal(
+      /drawerMode|setDrawerMode|intel-mobile/.test(src),
+      false,
+      'MobileBottomNav must not reference drawerMode or intel-mobile',
+    );
+  });
+
   it('Layout has navigation link to trends', () => {
     const layoutPath = join(SRC, 'components', 'Layout.jsx');
     const src = readFileSync(layoutPath, 'utf8');
