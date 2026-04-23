@@ -2227,3 +2227,36 @@ a { color: inherit; text-decoration: none; }
     padding-top: 0;
   }
 }
+
+@media (max-width: 767px) {
+  .article-sheet-mobile {
+    padding: 0;
+  }
+  .news-peek {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 56px;
+    height: 44px;
+    background: var(--bg-2);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-0);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px;
+    font-family: var(--ff-mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    z-index: 6500;
+    cursor: pointer;
+  }
+  .news-peek-count {
+    color: var(--amber);
+    font-weight: 600;
+  }
+  /* Hide the desktop .news-panel container entirely on mobile */
+  .news-panel:not(.news-peek) { display: none; }
+}

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { ExternalLink, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
 import useUIStore from '../stores/uiStore.js';
+import useBreakpoint from '../hooks/useBreakpoint.js';
+import BottomSheet from './ui/BottomSheet';
 import { getSourceHost } from '../utils/urlUtils';
 
 function ago(ts) {
@@ -78,6 +80,7 @@ function NewsThumb({ story }) {
 
 export function ArticleSheet({ story, onClose }) {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
   useEffect(() => {
     if (!story) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
@@ -102,11 +105,9 @@ export function ArticleSheet({ story, onClose }) {
   const confidence = typeof story.confidence === 'number' ? story.confidence : null;
   const reasons = Array.isArray(story.confidenceReasons) ? story.confidenceReasons : [];
 
-  return (
+  const body = (
     <>
-      <div className="article-sheet-backdrop" onClick={onClose} aria-hidden />
-      <aside className="article-sheet" role="dialog" aria-label={story.title} aria-modal="true">
-        <div className="article-sheet-head">
+      <div className="article-sheet-head">
           <span className="dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--amber)' }} />
           EVENT · <span className="mono" style={{ color: 'var(--ink-0)' }}>{story.id}</span>
           <span className="spacer" style={{ flex: 1 }} />
@@ -273,6 +274,28 @@ export function ArticleSheet({ story, onClose }) {
             </div>
           )}
         </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <BottomSheet
+        open={!!story}
+        onClose={onClose}
+        title={story.title?.slice(0, 40) || 'Article'}
+        ariaLabel={story.title}
+        maxHeightVh={100}
+      >
+        <div className="article-sheet-mobile">{body}</div>
+      </BottomSheet>
+    );
+  }
+
+  return (
+    <>
+      <div className="article-sheet-backdrop" onClick={onClose} aria-hidden />
+      <aside className="article-sheet" role="dialog" aria-label={story.title} aria-modal="true">
+        {body}
       </aside>
     </>
   );
@@ -294,7 +317,9 @@ const NewsPanel = ({
   onClose,
 }) => {
   const { t } = useTranslation();
+  const { isMobile } = useBreakpoint();
   const [openStory, setOpenStory] = useState(null);
+  const [listOpen, setListOpen] = useState(false);
   const items = (news && news.length > 0) ? news : allEvents;
 
   const collapsed = useUIStore((s) => s.panelCollapsed.liveFeed);
@@ -305,6 +330,105 @@ const NewsPanel = ({
     batchSize: 20,
     resetKey: regionName || 'all',
   });
+
+  const listBody = (
+    <>
+      {regionIso && (
+        <Link
+          to={`/region/${String(regionIso).toUpperCase()}`}
+          className="feed-region-link"
+          aria-label={`Open region page for ${regionName || regionIso}`}
+        >
+          <Maximize2 size={11} aria-hidden />
+          <span className="feed-region-link-label">VIEW REGION PAGE</span>
+          <span className="feed-region-link-iso">{String(regionIso).toUpperCase()}</span>
+          <span className="feed-region-link-arrow">→</span>
+        </Link>
+      )}
+      {items.length === 0 && (
+        <div className="news-panel-empty">NO ITEMS</div>
+      )}
+      {visibleNews.map((story) => {
+        const tier = sevTier(story.severity);
+        const sev = ((story.severity ?? 0) / 10).toFixed(1);
+        const active = selectedStoryId === story.id;
+        const host = getSourceHost(story.url) || story.source || '';
+        const conf = typeof story.confidence === 'number' ? story.confidence : null;
+        const lMeta = lifecycleMeta(story.lifecycle);
+        return (
+          <div
+            key={story.id}
+            className="news-item"
+            data-active={active || undefined}
+            role="button"
+            tabIndex={0}
+            aria-label={story.title}
+            onClick={() => { onStorySelect?.(story); setOpenStory(story); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStorySelect?.(story); setOpenStory(story); }
+            }}
+          >
+            <div className="news-meta">
+              <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
+              {story.category && <span className="tag">{story.category}</span>}
+              {lMeta && (
+                <span className="tag" style={{ color: lMeta.color, borderColor: lMeta.color }}>
+                  {lMeta.label}
+                </span>
+              )}
+              <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
+              <span>·</span>
+              <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
+            </div>
+            <div className="news-title">{story.title}</div>
+            {story.summary && (
+              <div className="news-summary-preview">{story.summary}</div>
+            )}
+            <div className="news-src">
+              <span className="mono">{story.id}</span>
+              {host && <> · {host}</>}
+              {story.isoA2 && <> · {story.isoA2}</>}
+              {conf != null && <> · <span style={{ color: 'var(--ink-1)' }}>{conf}%</span></>}
+            </div>
+          </div>
+        );
+      })}
+      <div ref={sentinelRef} className="news-panel-load-more-sentinel" aria-hidden />
+      {hasMore && (
+        <div className="news-panel-load-more">
+          {t('panel.loadingMore', { shown: visibleNews.length, total: items.length })}
+        </div>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    if (!isOpen) return null;
+    return (
+      <>
+        <button
+          type="button"
+          className="news-peek"
+          onClick={() => setListOpen(true)}
+          aria-label="Open news list"
+        >
+          <span className="news-peek-count">{items.length}</span>
+          <span className="news-peek-label">UPDATES · TAP</span>
+        </button>
+        <BottomSheet
+          open={listOpen}
+          onClose={() => setListOpen(false)}
+          title={regionName || 'News'}
+          maxHeightVh={90}
+        >
+          <div className="news-panel-mobile-body">
+            {listBody}
+          </div>
+        </BottomSheet>
+        <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
+      </>
+    );
+  }
 
   return (
     <>
@@ -333,72 +457,7 @@ const NewsPanel = ({
           )}
         </div>
         <div className="panel-body" aria-hidden={collapsed || undefined}>
-          {regionIso && (
-            <Link
-              to={`/region/${String(regionIso).toUpperCase()}`}
-              className="feed-region-link"
-              aria-label={`Open region page for ${regionName || regionIso}`}
-            >
-              <Maximize2 size={11} aria-hidden />
-              <span className="feed-region-link-label">VIEW REGION PAGE</span>
-              <span className="feed-region-link-iso">{String(regionIso).toUpperCase()}</span>
-              <span className="feed-region-link-arrow">→</span>
-            </Link>
-          )}
-          {items.length === 0 && (
-            <div className="news-panel-empty">NO ITEMS</div>
-          )}
-          {visibleNews.map((story) => {
-            const tier = sevTier(story.severity);
-            const sev = ((story.severity ?? 0) / 10).toFixed(1);
-            const active = selectedStoryId === story.id;
-            const host = getSourceHost(story.url) || story.source || '';
-            const conf = typeof story.confidence === 'number' ? story.confidence : null;
-            const lMeta = lifecycleMeta(story.lifecycle);
-            return (
-              <div
-                key={story.id}
-                className="news-item"
-                data-active={active || undefined}
-                role="button"
-                tabIndex={0}
-                aria-label={story.title}
-                onClick={() => { onStorySelect?.(story); setOpenStory(story); }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStorySelect?.(story); setOpenStory(story); }
-                }}
-              >
-                <div className="news-meta">
-                  <span className={`sev-pill sev-${tier}`}>{tier.toUpperCase()} · {sev}</span>
-                  {story.category && <span className="tag">{story.category}</span>}
-                  {lMeta && (
-                    <span className="tag" style={{ color: lMeta.color, borderColor: lMeta.color }}>
-                      {lMeta.label}
-                    </span>
-                  )}
-                  <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
-                  <span>·</span>
-                  <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
-                </div>
-                <div className="news-title">{story.title}</div>
-                {story.summary && (
-                  <div className="news-summary-preview">{story.summary}</div>
-                )}
-                <div className="news-src">
-                  <span className="mono">{story.id}</span>
-                  {host && <> · {host}</>}
-                  {story.isoA2 && <> · {story.isoA2}</>}
-                  {conf != null && <> · <span style={{ color: 'var(--ink-1)' }}>{conf}%</span></>}
-                </div>
-              </div>
-            );
-          })}
-          <div ref={sentinelRef} className="news-panel-load-more-sentinel" aria-hidden />
-          {hasMore && (
-            <div className="news-panel-load-more">
-              {t('panel.loadingMore', { shown: visibleNews.length, total: items.length })}
-            </div>
-          )}
+          {listBody}
         </div>
       </div>
       <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
