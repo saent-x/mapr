@@ -2050,3 +2050,27 @@ a { color: inherit; text-decoration: none; }
     display: none;
   }
 }
+
+/* Admin — mobile + tablet */
+.admin-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 1023px) {
+  .admin-sections, .admin-grid, .admin-stat-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .admin-table-wrap table {
+    min-width: 600px;
+  }
+}
+@media (max-width: 767px) {
+  .admin-page {
+    padding: 12px !important;
+  }
+  .admin-stat-card {
+    padding: 10px;
+  }
+}

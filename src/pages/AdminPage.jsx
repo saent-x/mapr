@@ -486,7 +486,7 @@ function AdminDashboard() {
         {filteredFeeds.length === 0 ? (
           <p className="admin-no-sources">{t('admin.noSources')}</p>
         ) : (
-          <div className="admin-table-wrapper">
+          <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
