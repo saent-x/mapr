@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync as _rf, readFileSync } from 'node:fs';
+import { join as _join, join } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..');
 const CSS = readFileSync(join(ROOT, 'src/index.css'), 'utf-8');
@@ -36,5 +36,24 @@ describe('mobile CSS foundations', () => {
       CSS,
       /@media\s*\(max-width:\s*1023px\)[\s\S]*?min-height:\s*44px/,
     );
+  });
+});
+
+describe('FlatMap + Globe use useBreakpoint instead of inline matchMedia', () => {
+  const SRC = _join(import.meta.dirname, '..', 'src');
+  const flatmap = _rf(_join(SRC, 'components/FlatMap.jsx'), 'utf-8');
+  const globe = _rf(_join(SRC, 'components/Globe.jsx'), 'utf-8');
+
+  it('FlatMap imports useBreakpoint', () => {
+    assert.match(flatmap, /from\s+['"]\.\.\/hooks\/useBreakpoint['"]/);
+  });
+  it('FlatMap no longer calls window.innerWidth', () => {
+    assert.equal(/window\.innerWidth/.test(flatmap), false);
+  });
+  it('Globe imports useBreakpoint', () => {
+    assert.match(globe, /from\s+['"]\.\.\/hooks\/useBreakpoint['"]/);
+  });
+  it('Globe no longer calls window.innerWidth', () => {
+    assert.equal(/window\.innerWidth/.test(globe), false);
   });
 });

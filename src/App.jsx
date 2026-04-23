@@ -18,6 +18,7 @@ import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
 import usePanelState from './hooks/usePanelState';
+import useBreakpoint from './hooks/useBreakpoint';
 import useBriefingStream from './hooks/useBriefingStream';
 import useTrackingOverlayData from './hooks/useTrackingOverlayData';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
@@ -299,6 +300,15 @@ function App() {
   const handleGlobeFallback = useCallback(() => {
     useUIStore.getState().setMapMode('flat');
   }, []);
+
+  const { isMobile, isTablet } = useBreakpoint();
+  const didForceFlatRef = useRef(false);
+  useEffect(() => {
+    if ((isMobile || isTablet) && mapMode === 'globe' && !didForceFlatRef.current) {
+      didForceFlatRef.current = true;
+      setMapMode('flat');
+    }
+  }, [isMobile, isTablet, mapMode, setMapMode]);
 
   return (
     <ErrorBoundary>
