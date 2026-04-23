@@ -2036,3 +2036,17 @@ a { color: inherit; text-decoration: none; }
     padding: 0 !important;
   }
 }
+
+/* Entity explorer — mobile */
+@media (max-width: 767px) {
+  .entities-page {
+    grid-template-columns: 1fr !important;
+  }
+  .entity-canvas {
+    min-height: 60vh;
+    touch-action: none;
+  }
+  .entity-details {
+    display: none;
+  }
+}

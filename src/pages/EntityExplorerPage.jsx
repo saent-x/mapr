@@ -5,6 +5,8 @@ import useNewsStore from '../stores/newsStore.js';
 import useFilterStore from '../stores/filterStore.js';
 import { extractEntityGraph, getRelatedEvents } from '../utils/entityGraph.js';
 import PageLoadingFallback from '../components/PageLoadingFallback.jsx';
+import useBreakpoint from '../hooks/useBreakpoint';
+import BottomSheet from '../components/ui/BottomSheet';
 
 const EntityRelationshipGraph = lazy(() => import('../components/EntityRelationshipGraph.jsx'));
 
@@ -24,6 +26,7 @@ export default function EntityExplorerPage() {
   const liveNews = useNewsStore((s) => s.liveNews);
   const backendEvents = useNewsStore((s) => s.backendEvents);
   const setEntityFilter = useFilterStore((s) => s.setEntityFilter);
+  const { isMobile } = useBreakpoint();
 
   const [selected, setSelected] = useState(null);
   const [size, setSize] = useState({ w: 900, h: 560 });
@@ -117,84 +120,156 @@ export default function EntityExplorerPage() {
         </div>
       </div>
 
-      <aside className="entity-panel" aria-label="Selected entity">
-        {!selNode ? (
-          <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-            <div className="micro" style={{ marginBottom: 8 }}>NO ENTITY SELECTED</div>
-            <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-2)' }}>
-              Tap a node on the graph to inspect it and jump back to the map filtered by that entity.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="panel-header" style={{ height: 32 }}>
-              <span className="dot" style={{ background: TYPE_STYLES[selNode.type]?.color || 'var(--amber)' }} />
-              ENTITY · <span className="mono" style={{ color: 'var(--ink-0)', marginLeft: 4 }}>{selNode.id.slice(0, 18)}</span>
-            </div>
-            <div style={{ padding: '20px 20px 14px' }}>
-              <div className="micro" style={{ marginBottom: 6 }}>{selNode.type.toUpperCase()}</div>
-              <h2 style={{ fontFamily: 'var(--ff-serif)', fontWeight: 400, margin: '0 0 6px', fontSize: 24, color: 'var(--ink-0)' }}>
-                {selNode.name}
-              </h2>
-              <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                DEG {connectedIds.size} · MENTIONS {selNode.mentionCount || 0}
+      {isMobile ? (
+        <BottomSheet
+          open={!!selNode}
+          onClose={() => setSelected(null)}
+          title={selNode?.name || 'Entity'}
+          maxHeightVh={75}
+        >
+          {selNode && (
+            <>
+              <div style={{ padding: '12px 4px 14px' }}>
+                <div className="micro" style={{ marginBottom: 6 }}>{selNode.type.toUpperCase()}</div>
+                <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  DEG {connectedIds.size} · MENTIONS {selNode.mentionCount || 0}
+                </div>
               </div>
-            </div>
 
-            <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
-              <div className="micro" style={{ marginBottom: 8 }}>CONNECTED · {connectedIds.size}</div>
-              {connectedNodes.slice(0, 12).map((n) => (
-                <div
-                  key={n.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelected(n.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n.id); }
-                  }}
-                  style={{ padding: '5px 0', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, fontSize: 12, cursor: 'pointer' }}
-                >
-                  <span style={{ width: 14, color: TYPE_STYLES[n.type]?.color, fontFamily: 'var(--ff-mono)' }}>
-                    {TYPE_STYLES[n.type]?.glyph}
-                  </span>
-                  <span style={{ flex: 1, color: 'var(--ink-0)' }}>{n.name}</span>
-                  <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{n.mentionCount}</span>
-                </div>
-              ))}
-              {connectedNodes.length === 0 && (
-                <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
-                  NO EDGES
-                </div>
-              )}
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
-              <div className="micro" style={{ marginBottom: 8 }}>RELATED EVENTS · {relatedEvents.length}</div>
-              {relatedEvents.map((ev) => (
-                <div
-                  key={ev.id}
-                  style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 11, color: 'var(--ink-1)' }}
-                >
-                  <div style={{ color: 'var(--ink-0)' }}>{ev.title}</div>
-                  <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.08em' }}>
-                    {ev.isoA2 || '—'} · SEV {((ev.severity ?? 0) / 10).toFixed(1)}
+              <div style={{ borderTop: '1px solid var(--line)', padding: '12px 4px' }}>
+                <div className="micro" style={{ marginBottom: 8 }}>CONNECTED · {connectedIds.size}</div>
+                {connectedNodes.slice(0, 12).map((n) => (
+                  <div
+                    key={n.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelected(n.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n.id); }
+                    }}
+                    style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, fontSize: 13, cursor: 'pointer', minHeight: 44 }}
+                  >
+                    <span style={{ width: 14, color: TYPE_STYLES[n.type]?.color, fontFamily: 'var(--ff-mono)' }}>
+                      {TYPE_STYLES[n.type]?.glyph}
+                    </span>
+                    <span style={{ flex: 1, color: 'var(--ink-0)' }}>{n.name}</span>
+                    <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{n.mentionCount}</span>
                   </div>
-                </div>
-              ))}
-              {relatedEvents.length === 0 && (
-                <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
-                  NO EVENTS
-                </div>
-              )}
-            </div>
+                ))}
+                {connectedNodes.length === 0 && (
+                  <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
+                    NO EDGES
+                  </div>
+                )}
+              </div>
 
-            <div style={{ padding: '14px 20px', display: 'flex', gap: 8, marginTop: 'auto' }}>
-              <button type="button" className="btn primary" onClick={showOnMap}>SHOW ON MAP</button>
-              <button type="button" className="btn" onClick={() => setSelected(null)}>CLEAR</button>
+              <div style={{ borderTop: '1px solid var(--line)', padding: '12px 4px' }}>
+                <div className="micro" style={{ marginBottom: 8 }}>RELATED EVENTS · {relatedEvents.length}</div>
+                {relatedEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-1)' }}
+                  >
+                    <div style={{ color: 'var(--ink-0)' }}>{ev.title}</div>
+                    <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.08em' }}>
+                      {ev.isoA2 || '—'} · SEV {((ev.severity ?? 0) / 10).toFixed(1)}
+                    </div>
+                  </div>
+                ))}
+                {relatedEvents.length === 0 && (
+                  <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
+                    NO EVENTS
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: '14px 4px', display: 'flex', gap: 8 }}>
+                <button type="button" className="btn primary" onClick={showOnMap}>SHOW ON MAP</button>
+                <button type="button" className="btn" onClick={() => setSelected(null)}>CLEAR</button>
+              </div>
+            </>
+          )}
+        </BottomSheet>
+      ) : (
+        <aside className="entity-panel" aria-label="Selected entity">
+          {!selNode ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <div className="micro" style={{ marginBottom: 8 }}>NO ENTITY SELECTED</div>
+              <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-2)' }}>
+                Tap a node on the graph to inspect it and jump back to the map filtered by that entity.
+              </p>
             </div>
-          </>
-        )}
-      </aside>
+          ) : (
+            <>
+              <div className="panel-header" style={{ height: 32 }}>
+                <span className="dot" style={{ background: TYPE_STYLES[selNode.type]?.color || 'var(--amber)' }} />
+                ENTITY · <span className="mono" style={{ color: 'var(--ink-0)', marginLeft: 4 }}>{selNode.id.slice(0, 18)}</span>
+              </div>
+              <div style={{ padding: '20px 20px 14px' }}>
+                <div className="micro" style={{ marginBottom: 6 }}>{selNode.type.toUpperCase()}</div>
+                <h2 style={{ fontFamily: 'var(--ff-serif)', fontWeight: 400, margin: '0 0 6px', fontSize: 24, color: 'var(--ink-0)' }}>
+                  {selNode.name}
+                </h2>
+                <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  DEG {connectedIds.size} · MENTIONS {selNode.mentionCount || 0}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
+                <div className="micro" style={{ marginBottom: 8 }}>CONNECTED · {connectedIds.size}</div>
+                {connectedNodes.slice(0, 12).map((n) => (
+                  <div
+                    key={n.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelected(n.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n.id); }
+                    }}
+                    style={{ padding: '5px 0', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, fontSize: 12, cursor: 'pointer' }}
+                  >
+                    <span style={{ width: 14, color: TYPE_STYLES[n.type]?.color, fontFamily: 'var(--ff-mono)' }}>
+                      {TYPE_STYLES[n.type]?.glyph}
+                    </span>
+                    <span style={{ flex: 1, color: 'var(--ink-0)' }}>{n.name}</span>
+                    <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{n.mentionCount}</span>
+                  </div>
+                ))}
+                {connectedNodes.length === 0 && (
+                  <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
+                    NO EDGES
+                  </div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
+                <div className="micro" style={{ marginBottom: 8 }}>RELATED EVENTS · {relatedEvents.length}</div>
+                {relatedEvents.map((ev) => (
+                  <div
+                    key={ev.id}
+                    style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 11, color: 'var(--ink-1)' }}
+                  >
+                    <div style={{ color: 'var(--ink-0)' }}>{ev.title}</div>
+                    <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.08em' }}>
+                      {ev.isoA2 || '—'} · SEV {((ev.severity ?? 0) / 10).toFixed(1)}
+                    </div>
+                  </div>
+                ))}
+                {relatedEvents.length === 0 && (
+                  <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
+                    NO EVENTS
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: '14px 20px', display: 'flex', gap: 8, marginTop: 'auto' }}>
+                <button type="button" className="btn primary" onClick={showOnMap}>SHOW ON MAP</button>
+                <button type="button" className="btn" onClick={() => setSelected(null)}>CLEAR</button>
+              </div>
+            </>
+          )}
+        </aside>
+      )}
     </div>
   );
 }
