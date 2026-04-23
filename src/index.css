@@ -2071,3 +2071,33 @@ a { color: inherit; text-decoration: none; }
     transition: none;
   }
 }
+
+/* ============================================================
+   Mobile + Tablet base (≤ 1023px). Desktop rules above untouched.
+   ============================================================ */
+@media (max-width: 1023px) {
+  html, body {
+    overflow-x: hidden;
+  }
+  button, .chip, .toggle-chip, .filter-toggle, .collapse-all-toggle,
+  .map-controls button, .layout-nav-link, .bottom-nav-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .micro, .status-item, .intel-ticker-item { font-size: 12px; }
+  .app-status { overflow-x: auto; }
+}
+
+@media (max-width: 767px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 44px 1fr 56px;
+  }
+  .app-sidebar { display: none; }
+  .app-status { display: none; }
+  .app-header { min-height: 44px; }
+  .app-main, .layout-content {
+    padding-bottom: 56px;
+  }
+  .intel-ticker { display: none; }
+}
