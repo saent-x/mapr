@@ -108,7 +108,7 @@ export default function Header() {
         </div>
       )}
 
-      {isMap && !isMobile && (
+      {isMap && !isMobile && !isTablet && (
         <div className="header-overlays" role="group" aria-label="Map layers">
           <span className="micro">LAYERS</span>
           {OVERLAY_KEYS.map(({ key, label }) => (
@@ -181,23 +181,6 @@ export default function Header() {
           >
             LANG · <b>{i18n.language.toUpperCase()}</b>
           </button>
-          {isMap && (
-            <div className="header-overlays header-overlays-mobile" role="group" aria-label="Map layers">
-              <span className="micro">LAYERS</span>
-              {OVERLAY_KEYS.map(({ key, label }) => (
-                <button
-                  key={key}
-                  type="button"
-                  className="toggle-chip"
-                  data-active={mapOverlay === key}
-                  aria-pressed={mapOverlay === key}
-                  onClick={() => setMapOverlay(mapOverlay === key ? null : key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
