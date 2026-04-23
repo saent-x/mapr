@@ -2163,3 +2163,53 @@ a { color: inherit; text-decoration: none; }
   }
   .header-search.header-search-tablet .search-kbd { display: none; }
 }
+
+/* Bottom nav (mobile only) */
+@media (max-width: 767px) {
+  .side-panels { display: none; }
+  .drawer-toggles { display: none; }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--bg-1);
+    border-top: 1px solid var(--line);
+    display: flex;
+    z-index: 7000;
+  }
+  .bottom-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    background: transparent;
+    border: 0;
+    color: var(--ink-1);
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .bottom-nav-btn[data-active] {
+    color: var(--amber);
+  }
+  .bottom-nav-btn:focus-visible {
+    outline: 2px solid var(--accent, var(--amber));
+    outline-offset: -2px;
+  }
+  .mobile-intel-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mobile-intel-stack .mini-panel {
+    width: 100%;
+  }
+}

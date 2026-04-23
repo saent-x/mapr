@@ -12,6 +12,7 @@ import NewsPanel from './components/NewsPanel';
 import AnomalyPanel from './components/AnomalyPanel';
 import WatchlistPanel from './components/WatchlistPanel';
 import NarrativePanel from './components/NarrativePanel';
+import MobileIntelSheet from './components/MobileIntelSheet';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
@@ -416,6 +417,13 @@ function App() {
           onRegionSelect={handleRegionSelect}
         />
       </div>
+
+      <MobileIntelSheet
+        velocitySpikes={velocitySpikes}
+        silenceEntries={silenceEntries}
+        newsList={activeNews}
+        onRegionSelect={handleRegionSelect}
+      />
 
       {entityFilter && (
         <div className="entity-filter-breadcrumb" role="status" aria-live="polite">
