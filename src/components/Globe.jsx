@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
+import useBreakpoint from '../hooks/useBreakpoint';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
@@ -18,16 +19,6 @@ const ENTRY_START_ZOOM = 1.2;
 const ENTRY_DURATION_MS = 2000;
 
 const DEFAULT_VIEW = { lng: 10, lat: 20, zoom: DEFAULT_ZOOM };
-
-const MOBILE_QUERY = '(max-width: 767px)';
-
-function getInitialIsMobile() {
-  if (typeof window === 'undefined') return false;
-  if (typeof window.matchMedia === 'function') {
-    return window.matchMedia(MOBILE_QUERY).matches;
-  }
-  return window.innerWidth < 768;
-}
 
 /** easeInOutCubic — smooth entry. */
 function easeInOutCubic(t) {
@@ -59,27 +50,13 @@ const Globe = ({
   const [theme, setTheme] = useState(() =>
     (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
   );
-  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
+  const { isMobile } = useBreakpoint();
   const isLight = theme === 'light';
 
   const { STORY_ZOOM, REGION_ZOOM } = useMemo(() => ({
     STORY_ZOOM: isMobile ? 4 : 5.5,
     REGION_ZOOM: isMobile ? 3 : 4,
   }), [isMobile]);
-
-  /* ── mobile breakpoint observer ── */
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const mq = window.matchMedia(MOBILE_QUERY);
-    const handler = (e) => setIsMobile(e.matches);
-    setIsMobile(mq.matches);
-    if (typeof mq.addEventListener === 'function') {
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    }
-    mq.addListener(handler);
-    return () => mq.removeListener(handler);
-  }, []);
 
   /* ── theme observer ── */
   useEffect(() => {
@@ -288,6 +265,7 @@ const Globe = ({
         viewport={{
           center: [DEFAULT_VIEW.lng, DEFAULT_VIEW.lat],
           zoom: ENTRY_START_ZOOM,
+          ...(isMobile ? { pitch: 0 } : {}),
         }}
       >
         <MapGLOverlay

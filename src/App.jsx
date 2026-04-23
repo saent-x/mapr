@@ -12,12 +12,14 @@ import NewsPanel from './components/NewsPanel';
 import AnomalyPanel from './components/AnomalyPanel';
 import WatchlistPanel from './components/WatchlistPanel';
 import NarrativePanel from './components/NarrativePanel';
+import MobileIntelSheet from './components/MobileIntelSheet';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
 import usePanelState from './hooks/usePanelState';
+import useBreakpoint from './hooks/useBreakpoint';
 import useBriefingStream from './hooks/useBriefingStream';
 import useTrackingOverlayData from './hooks/useTrackingOverlayData';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
@@ -300,6 +302,15 @@ function App() {
     useUIStore.getState().setMapMode('flat');
   }, []);
 
+  const { isMobile, isTablet } = useBreakpoint();
+  const didForceFlatRef = useRef(false);
+  useEffect(() => {
+    if ((isMobile || isTablet) && mapMode === 'globe' && !didForceFlatRef.current) {
+      didForceFlatRef.current = true;
+      setMapMode('flat');
+    }
+  }, [isMobile, isTablet, mapMode, setMapMode]);
+
   return (
     <ErrorBoundary>
       <div className="map-stage">
@@ -406,6 +417,13 @@ function App() {
           onRegionSelect={handleRegionSelect}
         />
       </div>
+
+      <MobileIntelSheet
+        velocitySpikes={velocitySpikes}
+        silenceEntries={silenceEntries}
+        newsList={activeNews}
+        onRegionSelect={handleRegionSelect}
+      />
 
       {entityFilter && (
         <div className="entity-filter-breadcrumb" role="status" aria-live="polite">

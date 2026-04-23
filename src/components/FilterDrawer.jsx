@@ -4,6 +4,8 @@ import { X } from 'lucide-react';
 import { DATE_WINDOWS, SORT_OPTIONS } from '../utils/mockData';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
+import useBreakpoint from '../hooks/useBreakpoint';
+import BottomSheet from './ui/BottomSheet';
 
 const VERIFICATION_OPTIONS = ['all', 'official', 'verified', 'developing', 'single-source'];
 const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local'];
@@ -26,6 +28,7 @@ const FilterDrawer = ({
 }) => {
   const { t } = useTranslation();
   const [tab, setTab] = useState(defaultTab === 'intel' ? 'intel' : 'filters');
+  const { isMobile } = useBreakpoint();
 
   useEffect(() => {
     if (isOpen) setTab(defaultTab === 'intel' ? 'intel' : 'filters');
@@ -82,8 +85,8 @@ const FilterDrawer = ({
 
   if (!isOpen) return null;
 
-  return (
-    <aside className="floating-panel filter-drawer" role="dialog" aria-label={t('filters.label')}>
+  const content = (
+    <>
       <div className="panel-header">
         <span className="dot" />
         {t('filters.label')}
@@ -326,6 +329,26 @@ const FilterDrawer = ({
           />
         </div>
       )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <BottomSheet
+        open={isOpen}
+        onClose={onClose}
+        title={t('filters.label')}
+        ariaLabel={t('filters.label')}
+        maxHeightVh={90}
+      >
+        <div className="filter-drawer filter-drawer-mobile">{content}</div>
+      </BottomSheet>
+    );
+  }
+
+  return (
+    <aside className="floating-panel filter-drawer" role="dialog" aria-label={t('filters.label')}>
+      {content}
     </aside>
   );
 };

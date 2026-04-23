@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Header from './Header';
+import MobileBottomNav from './MobileBottomNav';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 
@@ -158,6 +159,7 @@ export default function Layout() {
       </main>
 
       <StatusBar />
+      <MobileBottomNav />
     </div>
   );
 }

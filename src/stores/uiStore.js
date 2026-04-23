@@ -60,7 +60,7 @@ const useUIStore = create((set, get) => ({
   mapMode: 'flat',
 
   /* ── drawer ── */
-  drawerMode: null, // null | 'filters' | 'intel'
+  drawerMode: null, // null | 'filters' | 'intel' | 'intel-mobile'
 
   /* ── selection ── */
   selectedRegion: null,

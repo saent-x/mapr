@@ -4,22 +4,14 @@ import { ChevronRight, Globe2, Crosshair } from 'lucide-react';
 import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
 import { useMap } from '@/components/ui/map';
+import useBreakpoint from '../hooks/useBreakpoint';
 import { findStateInStory } from '../utils/statesData';
 import { isoToCountry } from '../utils/geocoder';
 import { getCountryBbox } from '../utils/countryBbox';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
-const MOBILE_QUERY = '(max-width: 767px)';
 const DEFAULT_CENTER = { lng: 10, lat: 20 };
-
-function getInitialIsMobile() {
-  if (typeof window === 'undefined') return false;
-  if (typeof window.matchMedia === 'function') {
-    return window.matchMedia(MOBILE_QUERY).matches;
-  }
-  return window.innerWidth < 768;
-}
 
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
 const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
@@ -127,7 +119,7 @@ const FlatMap = ({
   const [theme, setTheme] = useState(() =>
     (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
   );
-  const [isMobile, setIsMobile] = useState(getInitialIsMobile);
+  const { isMobile } = useBreakpoint();
 
   const handleMapRef = useCallback((instance) => {
     mapRef.current = instance;
@@ -158,21 +150,6 @@ const FlatMap = ({
     });
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     return () => observer.disconnect();
-  }, []);
-
-  /* ── mobile breakpoint observer ── */
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
-    const mq = window.matchMedia(MOBILE_QUERY);
-    const handler = (e) => setIsMobile(e.matches);
-    setIsMobile(mq.matches);
-    if (typeof mq.addEventListener === 'function') {
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    }
-    // Older Safari
-    mq.addListener(handler);
-    return () => mq.removeListener(handler);
   }, []);
 
   /* ── resize handling ── */
@@ -321,6 +298,7 @@ const FlatMap = ({
         viewport={{
           center: [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat],
           zoom: DEFAULT_ZOOM,
+          ...(isMobile ? { pitch: 0 } : {}),
         }}
       >
         <MapGLOverlay

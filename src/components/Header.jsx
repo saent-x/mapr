@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search } from 'lucide-react';
+import { Search, Menu, X } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
+import useBreakpoint from '../hooks/useBreakpoint';
 
 function BrandMark() {
   return (
@@ -46,6 +47,10 @@ export default function Header() {
 
   const isMap = location.pathname === '/';
 
+  const { isMobile, isTablet } = useBreakpoint();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -65,28 +70,45 @@ export default function Header() {
   };
 
   return (
-    <header className="app-header" role="banner">
+    <header className="app-header" role="banner" data-mobile={isMobile || undefined}>
       <div className="header-brand">
         <BrandMark />
         <span className="brand-title">MAPR</span>
-        <span className="brand-build">v4.12 · OSINT</span>
+        {!isMobile && <span className="brand-build">v4.12 · OSINT</span>}
       </div>
 
-      <div className="header-search">
-        <Search size={15} color="var(--ink-2)" aria-hidden />
-        <input
-          ref={inputRef}
-          type="text"
-          className="search-input"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="QUERY · event, region, entity, source"
-          aria-label={t('nav.ariaLabel')}
-        />
-        <span className="search-kbd" aria-hidden>⌘K</span>
-      </div>
+      {(!isMobile && !isTablet) && (
+        <div className="header-search">
+          <Search size={15} color="var(--ink-2)" aria-hidden />
+          <input
+            ref={inputRef}
+            type="text"
+            className="search-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="QUERY · event, region, entity, source"
+            aria-label={t('nav.ariaLabel')}
+          />
+          <span className="search-kbd" aria-hidden>⌘K</span>
+        </div>
+      )}
 
-      {isMap && (
+      {isTablet && (
+        <div className="header-search header-search-tablet">
+          <Search size={14} color="var(--ink-2)" aria-hidden />
+          <input
+            ref={inputRef}
+            type="text"
+            className="search-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="QUERY"
+            aria-label={t('nav.ariaLabel')}
+          />
+        </div>
+      )}
+
+      {isMap && !isMobile && (
         <div className="header-overlays" role="group" aria-label="Map layers">
           <span className="micro">LAYERS</span>
           {OVERLAY_KEYS.map(({ key, label }) => (
@@ -106,15 +128,17 @@ export default function Header() {
       )}
 
       <div className="header-right">
-        <button
-          type="button"
-          className="lang-select"
-          onClick={cycleLang}
-          title="Cycle language"
-          aria-label="Cycle language"
-        >
-          LANG · <b>{i18n.language.toUpperCase()}</b>
-        </button>
+        {!isMobile && (
+          <button
+            type="button"
+            className="lang-select"
+            onClick={cycleLang}
+            title="Cycle language"
+            aria-label="Cycle language"
+          >
+            LANG · <b>{i18n.language.toUpperCase()}</b>
+          </button>
+        )}
         <div className="op-badge" aria-live="polite">
           <span
             className="op-dot"
@@ -123,9 +147,83 @@ export default function Header() {
               boxShadow: `0 0 6px ${opsOk ? 'var(--sev-green)' : 'var(--sev-red)'}`,
             }}
           />
-          OPS · {opsOk ? 'NOMINAL' : 'DEGRADED'}
+          {isMobile ? 'OPS' : `OPS · ${opsOk ? 'NOMINAL' : 'DEGRADED'}`}
         </div>
+        {isMobile && (
+          <>
+            <button
+              type="button"
+              className="header-icon-btn"
+              aria-label="Search"
+              onClick={() => setSearchOpen((v) => !v)}
+            >
+              <Search size={18} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="header-icon-btn"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              {menuOpen ? <X size={18} aria-hidden /> : <Menu size={18} aria-hidden />}
+            </button>
+          </>
+        )}
       </div>
+
+      {isMobile && menuOpen && (
+        <div className="header-mobile-menu" role="menu">
+          <button
+            type="button"
+            className="lang-select"
+            onClick={() => { cycleLang(); setMenuOpen(false); }}
+          >
+            LANG · <b>{i18n.language.toUpperCase()}</b>
+          </button>
+          {isMap && (
+            <div className="header-overlays header-overlays-mobile" role="group" aria-label="Map layers">
+              <span className="micro">LAYERS</span>
+              {OVERLAY_KEYS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="toggle-chip"
+                  data-active={mapOverlay === key}
+                  aria-pressed={mapOverlay === key}
+                  onClick={() => setMapOverlay(mapOverlay === key ? null : key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {isMobile && searchOpen && (
+        <div className="header-mobile-search">
+          <Search size={15} color="var(--ink-2)" aria-hidden />
+          <input
+            ref={inputRef}
+            type="text"
+            className="search-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="QUERY"
+            aria-label={t('nav.ariaLabel')}
+            autoFocus
+          />
+          <button
+            type="button"
+            className="header-icon-btn"
+            aria-label="Close search"
+            onClick={() => setSearchOpen(false)}
+          >
+            <X size={16} aria-hidden />
+          </button>
+        </div>
+      )}
     </header>
   );
 }
