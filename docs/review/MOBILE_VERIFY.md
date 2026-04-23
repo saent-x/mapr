@@ -84,3 +84,34 @@ No `MOB-A..D` commit modified a desktop CSS rule — every change is appended af
 - **Real-device + visual diff not performed.** Code-level audit + Vite boot smoke only. A pixel-level snapshot diff at 1440×900 (pre-/post-merge) would be the gold standard; recommend running it before shipping to production.
 - **Touch-gesture verification not performed.** `EntityRelationshipGraph` pinch-zoom + tap-select is implemented in code but not exercised against a touch input device.
 - **Reduced-motion / focus-trap a11y** verified by grep, not by screen reader.
+
+---
+
+## MOB-FIX-C — Severity filter + Timeline mobile redesign (2026-04-23)
+
+Follow-up fix for the two mobile controls still rendering poorly after MOB-A..E.
+
+**Pattern landed:**
+- **Severity filter → Option A** (top chip-row). New `MobileSeverityChips.jsx` mounted by `App.jsx`. Fixed at `top:44px` (below header) on ≤1023px. Four 44px chips (BLACK/RED/AMBER/GREEN) with counts. Tap toggles `filterStore.minSeverity`. Horizontal scroll overflow if needed. Color per tier when active.
+- **Timeline → Option C** (floating icon + BottomSheet). New `MobileTimelineSheet.jsx` renders a fixed `TIME` FAB at `bottom:calc(56px + safe-area), left:8px` (≤1023px) that opens a `BottomSheet` hosting the existing `EventTimeline`. FAB shows an amber ghost dot when `uiStore.scrubTime !== null`. Desktop `.timeline` absolute-positioned strip unchanged; hidden only when inside the mobile media query (outside `.bottom-sheet`).
+
+**Files changed:**
+| Change | Location |
+|---|---|
+| New component | `src/components/MobileSeverityChips.jsx` |
+| New component | `src/components/MobileTimelineSheet.jsx` |
+| Mount + import | `src/App.jsx` (mounts both beside `<EventTimeline>`) |
+| CSS | `src/index.css:2374+` — `.mobile-severity-chips`, `.mobile-severity-chip`, `.mobile-timeline-fab*`, `.mobile-timeline-wrap .timeline*`, hides desktop `.timeline` inside ≤1023px but re-enables inside `.bottom-sheet`. Entity breadcrumb `top:` bumped to 96/100px to clear the chip strip. |
+
+**Verify results:**
+- `npx tsc --noEmit` — clean.
+- `npm run build` — `built in 312ms`, no errors.
+- `npm test` — **568 pass, 0 fail, 4 skip** (+1 vs MOB-E baseline, pre-existing).
+- `vite dev` — HTTP 200 on `/`.
+- Desktop invariance — `.timeline` base rule still outside mobile media queries; `.mobile-*` rules all scoped to `(max-width: 1023px)`. MOB-E desktop-invariance test still passes.
+- Touch targets ≥ 44px — all chips + FAB + timeline ctrl buttons use `min-height/min-width: 44px` (chips and `.tl-btn` inside `.mobile-timeline-wrap`).
+- A11y — chips carry `aria-pressed` + `aria-label`; FAB has `aria-expanded` + descriptive `aria-label` including scrub state; BottomSheet primitive provides Escape + focus + swipe-dismiss (from MOB-E).
+
+**Caveats (this task):**
+- 360/414/768/1440 browser walkthrough not run — same caveat as MOB-E (code-level only).
+- Pinch-scrub on the timeline track not exercised on a touch device; scrub still uses the existing click-to-scrub + keyboard-arrow path inside the sheet, which the MOB-E accessibility test covers.

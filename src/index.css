@@ -2432,3 +2432,157 @@ a { color: inherit; text-decoration: none; }
     padding: 10px;
   }
 }
+
+/* ============================================================
+   MOB-FIX-C — Mobile severity chip strip + timeline BottomSheet
+   ============================================================ */
+@media (max-width: 1023px) {
+  /* Hide desktop bottom timeline strip on mobile + tablet.
+     EventTimeline is reachable via the floating TIME button
+     (mobile-timeline-fab) which opens it inside a BottomSheet. */
+  .timeline { display: none !important; }
+  .bottom-sheet .timeline { display: grid !important; }
+
+  /* Severity chip strip — fixed below header, above map */
+  .mobile-severity-chips {
+    position: fixed;
+    top: 44px;
+    left: 0;
+    right: 0;
+    z-index: 6600;
+    display: flex;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mobile-severity-chips::-webkit-scrollbar { display: none; }
+  .mobile-severity-chip {
+    flex: 1 0 auto;
+    min-width: 72px;
+    min-height: 44px;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    color: var(--ink-1);
+    font-family: var(--ff-mono);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .mobile-severity-chip[data-active] {
+    background: var(--bg-4);
+    color: var(--ink-0);
+    border-color: var(--amber);
+  }
+  .mobile-severity-chip[data-sev="black"][data-active]  { border-color: var(--ink-0); }
+  .mobile-severity-chip[data-sev="red"][data-active]    { border-color: var(--sev-red, #d25757); color: var(--sev-red, #d25757); }
+  .mobile-severity-chip[data-sev="amber"][data-active]  { border-color: var(--amber, #d9a441); color: var(--amber, #d9a441); }
+  .mobile-severity-chip[data-sev="green"][data-active]  { border-color: var(--sev-green, #5ec269); color: var(--sev-green, #5ec269); }
+  .mobile-severity-chip:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: -2px;
+  }
+  .mobile-severity-chip .ct {
+    color: var(--ink-2);
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .mobile-severity-chip[data-active] .ct { color: inherit; }
+
+  /* Floating TIME button — mirrors map-controls stack, bottom-left */
+  .mobile-timeline-fab {
+    position: fixed;
+    left: 8px;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    z-index: 6800;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    background: var(--bg-1);
+    border: 1px solid var(--line);
+    color: var(--ink-1);
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .mobile-timeline-fab:hover { background: var(--bg-3); color: var(--ink-0); }
+  .mobile-timeline-fab[data-scrub-active] { color: var(--amber); border-color: var(--amber); }
+  .mobile-timeline-fab:focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: -2px;
+  }
+  .mobile-timeline-fab-label { letter-spacing: 0.14em; }
+  .mobile-timeline-fab-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    display: inline-block;
+    margin-left: 2px;
+  }
+
+  /* Timeline inside BottomSheet — stacked, full-width, finger-sized controls */
+  .mobile-timeline-wrap .timeline {
+    position: static;
+    left: auto; right: auto; bottom: auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    height: auto;
+    border: 0;
+    background: transparent;
+    z-index: auto;
+  }
+  .mobile-timeline-wrap .timeline-label {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 4px;
+  }
+  .mobile-timeline-wrap .timeline-track {
+    padding: 14px 4px 8px;
+    min-height: 120px;
+    touch-action: pan-y;
+  }
+  .mobile-timeline-wrap .timeline-track svg {
+    height: 88px;
+  }
+  .mobile-timeline-wrap .timeline-ctrl {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 10px 4px 2px;
+    justify-content: center;
+    gap: 14px;
+  }
+  .mobile-timeline-wrap .tl-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Breadcrumb must clear the severity strip on mobile */
+@media (max-width: 767px) {
+  .entity-filter-breadcrumb {
+    top: 96px;
+  }
+}
+@media (max-width: 1023px) and (min-width: 768px) {
+  .entity-filter-breadcrumb {
+    top: 100px;
+  }
+}

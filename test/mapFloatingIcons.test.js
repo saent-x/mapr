@@ -95,7 +95,7 @@ describe('MOB-FIX-B: floating map icons', () => {
   });
 
   it('removed the MOB-C bottom-strip override of .map-controls (no fixed position+bottom:56px)', () => {
-    const noStrip = !/\.map-controls\s*\{[\s\S]*?position:\s*fixed[\s\S]*?bottom:\s*calc\(56px/m.test(CSS);
+    const noStrip = !/\.map-controls\s*\{[^}]*position:\s*fixed[^}]*bottom:\s*calc\(56px/m.test(CSS);
     assert.ok(noStrip, 'bottom-strip override should be removed');
   });
 });

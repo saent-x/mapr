@@ -14,6 +14,8 @@ import WatchlistPanel from './components/WatchlistPanel';
 import NarrativePanel from './components/NarrativePanel';
 import MobileIntelSheet from './components/MobileIntelSheet';
 import MapFloatingIcons from './components/MapFloatingIcons';
+import MobileSeverityChips from './components/MobileSeverityChips';
+import MobileTimelineSheet from './components/MobileTimelineSheet';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
@@ -491,6 +493,15 @@ function App() {
       />
 
       <EventTimeline
+        events={activeNews}
+        scrubTime={scrubTime}
+        onScrub={useUIStore.getState().setScrubTime}
+        onEventSelect={handleStorySelect}
+        selectedStoryId={selectedStoryId}
+      />
+
+      <MobileSeverityChips allNews={canonicalNews} />
+      <MobileTimelineSheet
         events={activeNews}
         scrubTime={scrubTime}
         onScrub={useUIStore.getState().setScrubTime}
