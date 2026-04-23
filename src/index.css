@@ -2012,3 +2012,27 @@ a { color: inherit; text-decoration: none; }
   .side-panels { width: 240px; }
   .header-overlays { display: none; }
 }
+
+/* Region detail — mobile + tablet */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .region-page .region-header { grid-template-columns: 1fr; }
+  .region-stats, .region-stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 767px) {
+  .region-page {
+    padding: 12px;
+  }
+  .region-stats, .region-stat-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .region-minimap, .region-minimap-wrap, .region-page .map-stage {
+    height: 220px !important;
+    min-height: 200px;
+    max-height: 240px;
+  }
+  .region-articles {
+    padding: 0 !important;
+  }
+}
