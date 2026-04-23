@@ -22,7 +22,7 @@ export default function MobileIntelSheet({
       onClose={() => setDrawerMode(null)}
       title="Intel"
       ariaLabel="Intel panel"
-      maxHeightVh={85}
+      heightVh={85}
     >
       <div className="mobile-intel-stack">
         <AnomalyPanel

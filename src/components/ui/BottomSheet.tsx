@@ -7,10 +7,13 @@ export type BottomSheetProps = {
   title?: string;
   ariaLabel?: string;
   maxHeightVh?: number;
+  peekVh?: number;
+  heightVh?: number;
   children?: React.ReactNode;
 };
 
 const DISMISS_PX = 80;
+const EXPAND_PX = 80;
 
 export default function BottomSheet({
   open,
@@ -18,11 +21,18 @@ export default function BottomSheet({
   title,
   ariaLabel,
   maxHeightVh = 85,
+  peekVh,
+  heightVh,
   children,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const dragStartY = useRef<number | null>(null);
   const [dragDy, setDragDy] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!open) setExpanded(false);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -60,47 +70,41 @@ export default function BottomSheet({
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (dragStartY.current == null) return;
     const dy = e.clientY - dragStartY.current;
-    setDragDy(Math.max(0, dy));
+    setDragDy(dy);
   }, []);
   const onPointerUp = useCallback(() => {
     const dy = dragDy;
     dragStartY.current = null;
     setDragDy(0);
+    if (peekVh != null) {
+      if (dy < -EXPAND_PX && !expanded) {
+        setExpanded(true);
+        return;
+      }
+      if (dy > DISMISS_PX) {
+        if (expanded) setExpanded(false);
+        else onClose();
+      }
+      return;
+    }
     if (dy > DISMISS_PX) onClose();
-  }, [dragDy, onClose]);
+  }, [dragDy, expanded, peekVh, onClose]);
 
   if (!open) return null;
-  if (typeof document === 'undefined') {
-    return (
-      <>
-        <div className="bottom-sheet-scrim" aria-hidden onClick={onClose} />
-        <aside
-          ref={sheetRef}
-          className="bottom-sheet"
-          role="dialog"
-          aria-modal="true"
-          aria-label={ariaLabel || title || 'Bottom sheet'}
-          style={{ maxHeight: `${maxHeightVh}vh` }}
-        >
-          <div
-            className="bottom-sheet-handle"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            role="presentation"
-          >
-            <span className="bottom-sheet-grabber" aria-hidden />
-            {title ? <span className="bottom-sheet-title">{title}</span> : null}
-          </div>
-          <div className="bottom-sheet-body">{children}</div>
-        </aside>
-      </>
-    );
-  }
 
+  let sheetHeight: number | null = null;
+  if (heightVh != null) sheetHeight = heightVh;
+  else if (peekVh != null) sheetHeight = expanded ? maxHeightVh : peekVh;
+
+  const baseStyle: React.CSSProperties = sheetHeight != null
+    ? { height: `${sheetHeight}vh` }
+    : { maxHeight: `${maxHeightVh}vh` };
   const transform = dragDy > 0 ? `translateY(${dragDy}px)` : undefined;
+  const sheetStyle: React.CSSProperties = transform
+    ? { ...baseStyle, transform }
+    : baseStyle;
 
-  return createPortal(
+  const content = (
     <>
       <div className="bottom-sheet-scrim" aria-hidden onClick={onClose} />
       <aside
@@ -109,7 +113,7 @@ export default function BottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel || title || 'Bottom sheet'}
-        style={{ maxHeight: `${maxHeightVh}vh`, transform }}
+        style={sheetStyle}
       >
         <div
           className="bottom-sheet-handle"
@@ -123,7 +127,9 @@ export default function BottomSheet({
         </div>
         <div className="bottom-sheet-body">{children}</div>
       </aside>
-    </>,
-    document.body,
+    </>
   );
+
+  if (typeof document === 'undefined') return content;
+  return createPortal(content, document.body);
 }

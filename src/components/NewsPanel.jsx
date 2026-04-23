@@ -319,7 +319,6 @@ const NewsPanel = ({
   const { t } = useTranslation();
   const { isMobile } = useBreakpoint();
   const [openStory, setOpenStory] = useState(null);
-  const [listOpen, setListOpen] = useState(false);
   const items = (news && news.length > 0) ? news : allEvents;
 
   const collapsed = useUIStore((s) => s.panelCollapsed.liveFeed);
@@ -406,19 +405,11 @@ const NewsPanel = ({
     if (!isOpen) return null;
     return (
       <>
-        <button
-          type="button"
-          className="news-peek"
-          onClick={() => setListOpen(true)}
-          aria-label="Open news list"
-        >
-          <span className="news-peek-count">{items.length}</span>
-          <span className="news-peek-label">UPDATES · TAP</span>
-        </button>
         <BottomSheet
-          open={listOpen}
-          onClose={() => setListOpen(false)}
+          open={isOpen}
+          onClose={onClose}
           title={regionName || 'News'}
+          peekVh={50}
           maxHeightVh={90}
         >
           <div className="news-panel-mobile-body">

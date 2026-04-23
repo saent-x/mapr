@@ -339,7 +339,7 @@ const FilterDrawer = ({
         onClose={onClose}
         title={t('filters.label')}
         ariaLabel={t('filters.label')}
-        maxHeightVh={90}
+        heightVh={90}
       >
         <div className="filter-drawer filter-drawer-mobile">{content}</div>
       </BottomSheet>
