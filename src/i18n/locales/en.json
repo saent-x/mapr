@@ -5,6 +5,8 @@
     "admin": "Admin",
     "entities": "Entities",
     "trends": "Trends",
+    "intel": "Intel",
+    "region": "Region",
     "expand": "Expand navigation",
     "collapse": "Collapse navigation",
     "backToMap": "Back to map"

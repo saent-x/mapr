@@ -13,7 +13,6 @@ const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const EntityExplorerPage = lazy(() => import('./pages/EntityExplorerPage.jsx'))
 const TrendAnalysisPage = lazy(() => import('./pages/TrendAnalysisPage.jsx'))
 const IntelPage = lazy(() => import('./pages/IntelPage.jsx'))
-const FiltersPage = lazy(() => import('./pages/FiltersPage.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -28,7 +27,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/entities" element={<Suspense fallback={<PageLoadingFallback />}><EntityExplorerPage /></Suspense>} />
           <Route path="/trends" element={<Suspense fallback={<PageLoadingFallback />}><TrendAnalysisPage /></Suspense>} />
           <Route path="/intel" element={<Suspense fallback={<PageLoadingFallback />}><IntelPage /></Suspense>} />
-          <Route path="/filters" element={<Suspense fallback={<PageLoadingFallback />}><FiltersPage /></Suspense>} />
         </Route>
       </Routes>
     </BrowserRouter>

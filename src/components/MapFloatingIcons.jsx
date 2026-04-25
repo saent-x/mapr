@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Gauge, Layers, Globe as GlobeIcon, Activity } from 'lucide-react';
+import { Gauge, Layers, Globe as GlobeIcon, Activity, SlidersHorizontal } from 'lucide-react';
 import useBreakpoint from '../hooks/useBreakpoint';
 import useFilterStore from '../stores/filterStore';
+import useDerivedIntel from '../hooks/useDerivedIntel';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from '../utils/coverageMeta';
+import BottomSheet from './ui/BottomSheet';
+import FilterDrawer from './FilterDrawer';
 
 const SEV_TIERS = [
   { key: 'black', min: 85, label: 'BLACK' },
@@ -84,9 +87,11 @@ export default function MapFloatingIcons() {
   const setMinSeverity = useFilterStore((s) => s.setMinSeverity);
 
   const [openPopover, setOpenPopover] = useState(null);
+  const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   const containerRef = useRef(null);
 
   const closePopover = useCallback(() => setOpenPopover(null), []);
+  const closeFiltersSheet = useCallback(() => setFiltersSheetOpen(false), []);
 
   useEffect(() => {
     if (!openPopover) return undefined;
@@ -104,6 +109,11 @@ export default function MapFloatingIcons() {
     if (id === 'intel') {
       setOpenPopover(null);
       navigate('/intel');
+      return;
+    }
+    if (id === 'filters') {
+      setOpenPopover(null);
+      setFiltersSheetOpen(true);
       return;
     }
     setOpenPopover((cur) => (cur === id ? null : id));
@@ -149,6 +159,13 @@ export default function MapFloatingIcons() {
           label="Intel"
           active={false}
           onClick={() => handleIconTap('intel')}
+        />
+        <IconButton
+          id="filters"
+          icon={SlidersHorizontal}
+          label="Filters"
+          active={filtersSheetOpen}
+          onClick={() => handleIconTap('filters')}
         />
       </div>
 
@@ -233,6 +250,50 @@ export default function MapFloatingIcons() {
           </div>
         </Popover>
       )}
+
+      {filtersSheetOpen && (
+        <FiltersSheet open={filtersSheetOpen} onClose={closeFiltersSheet} />
+      )}
     </div>
+  );
+}
+
+function FiltersSheet({ open, onClose }) {
+  const { t } = useTranslation();
+  const {
+    canonicalNews,
+    activeNews,
+    sourceCoverageAudit,
+    coverageMetrics,
+    coverageDiagnostics,
+    coverageTrends,
+    coverageHistory,
+    opsHealth,
+    sourceHealth,
+  } = useDerivedIntel();
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title={t('filters.label')}
+      ariaLabel={t('filters.label')}
+      heightVh={85}
+    >
+      <FilterDrawer
+        variant="inline"
+        isOpen
+        onClose={onClose}
+        allNews={canonicalNews}
+        filteredNews={activeNews}
+        sourceCoverageAudit={sourceCoverageAudit}
+        coverageMetrics={coverageMetrics}
+        coverageDiagnostics={coverageDiagnostics}
+        coverageTrends={coverageTrends}
+        coverageHistory={coverageHistory}
+        opsHealth={opsHealth}
+        sourceHealth={sourceHealth}
+      />
+    </BottomSheet>
   );
 }

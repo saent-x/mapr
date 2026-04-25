@@ -21,11 +21,12 @@ describe('MOB-FIX-B: floating map icons', () => {
     assert.match(COMP, /!isMobile\s*&&\s*!isTablet/);
   });
 
-  it('renders 4 icon buttons: severity, coverage, geo, intel', () => {
+  it('renders 5 icon buttons: severity, coverage, geo, intel, filters', () => {
     assert.match(COMP, /id="severity"/);
     assert.match(COMP, /id="coverage"/);
     assert.match(COMP, /id="geo"/);
     assert.match(COMP, /id="intel"/);
+    assert.match(COMP, /id="filters"/);
   });
 
   it('icons have aria-labels for a11y', () => {
@@ -33,6 +34,13 @@ describe('MOB-FIX-B: floating map icons', () => {
     assert.match(COMP, /label="Coverage overlay"/);
     assert.match(COMP, /label="Geopolitical overlay"/);
     assert.match(COMP, /label="Intel"/);
+    assert.match(COMP, /label="Filters"/);
+  });
+
+  it('filters icon opens BottomSheet (not navigation)', () => {
+    assert.match(COMP, /from\s+['"]\.\/ui\/BottomSheet['"]/);
+    assert.match(COMP, /<BottomSheet[\s\S]*?heightVh=\{?85/);
+    assert.match(COMP, /FilterDrawer[\s\S]*?variant=["']inline["']/);
   });
 
   it('popover has role="dialog" aria-modal="false"', () => {

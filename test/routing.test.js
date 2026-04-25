@@ -77,48 +77,63 @@ describe('frontend routing', () => {
     assert.ok(src.includes('TrendAnalysisPage'), 'main.jsx must reference TrendAnalysisPage');
   });
 
-  it('intel + filters routes are configured in main.jsx', () => {
+  it('intel route is configured in main.jsx; /filters route retired', () => {
     const src = readFileSync(join(SRC, 'main.jsx'), 'utf8');
     assert.ok(
       src.includes('path="/intel"') || src.includes("path='/intel'"),
       'intel route /intel must exist',
     );
     assert.ok(src.includes('IntelPage'), 'main.jsx must reference IntelPage');
-    assert.ok(
+    assert.equal(
       src.includes('path="/filters"') || src.includes("path='/filters'"),
-      'filters route /filters must exist',
+      false,
+      '/filters route must be retired (Filters is now a map FAB BottomSheet)',
     );
-    assert.ok(src.includes('FiltersPage'), 'main.jsx must reference FiltersPage');
+    assert.equal(
+      src.includes('FiltersPage'),
+      false,
+      'main.jsx must not reference FiltersPage (file deleted)',
+    );
   });
 
-  it('IntelPage + FiltersPage exist with default exports', () => {
+  it('IntelPage exists with mobile-tab-page chrome; FiltersPage retired', () => {
     const intelPath = join(SRC, 'pages', 'IntelPage.jsx');
-    const filtersPath = join(SRC, 'pages', 'FiltersPage.jsx');
     assert.ok(existsSync(intelPath), 'IntelPage.jsx must exist in pages/');
-    assert.ok(existsSync(filtersPath), 'FiltersPage.jsx must exist in pages/');
     const intel = readFileSync(intelPath, 'utf8');
-    const filters = readFileSync(filtersPath, 'utf8');
     assert.ok(intel.includes('export default'), 'IntelPage must export default');
-    assert.ok(filters.includes('export default'), 'FiltersPage must export default');
     assert.ok(intel.includes('mobile-tab-page'), 'IntelPage must render mobile-tab-page container');
-    assert.ok(filters.includes('mobile-tab-page'), 'FiltersPage must render mobile-tab-page container');
+    assert.equal(
+      existsSync(join(SRC, 'pages', 'FiltersPage.jsx')),
+      false,
+      'FiltersPage.jsx must be deleted (Filters now lives in MapFloatingIcons BottomSheet)',
+    );
   });
 
-  it('MobileBottomNav uses Link (not sheet toggles) for Intel + Filters', () => {
+  it('MobileBottomNav links to all 6 desktop sidebar routes + Intel', () => {
     const src = readFileSync(join(SRC, 'components', 'MobileBottomNav.jsx'), 'utf8');
-    assert.ok(
-      src.includes('to="/intel"') || src.includes("to='/intel'"),
-      'MobileBottomNav must navigate to /intel',
-    );
-    assert.ok(
-      src.includes('to="/filters"') || src.includes("to='/filters'"),
-      'MobileBottomNav must navigate to /filters',
+    // Each target must appear as a routable string literal somewhere in the file
+    // (either as `to="/x"`, in a tab table like `to: '/x'`, or via a template
+    // literal for the dynamic /region/{iso} link).
+    const targets = ['/', '/entities', '/region', '/trends', '/admin', '/intel'];
+    for (const target of targets) {
+      const escaped = target.replace(/[/]/g, '\\/');
+      const re = new RegExp(`['"\`]${escaped}['"\`/]`);
+      assert.ok(
+        re.test(src) || (target === '/region' && /\/region\/\$\{/.test(src)),
+        `MobileBottomNav must navigate to ${target}`,
+      );
+    }
+    assert.equal(
+      src.includes('to="/filters"') || src.includes("to='/filters'") || src.includes("'/filters'"),
+      false,
+      'MobileBottomNav must NOT navigate to /filters (route retired)',
     );
     assert.equal(
       /drawerMode|setDrawerMode|intel-mobile/.test(src),
       false,
       'MobileBottomNav must not reference drawerMode or intel-mobile',
     );
+    assert.match(src, /<Link\b/, 'MobileBottomNav must render Link components');
   });
 
   it('Layout has navigation link to trends', () => {
@@ -153,8 +168,8 @@ describe('frontend routing', () => {
   it('i18n keys exist for navigation items', () => {
     const en = JSON.parse(readFileSync(join(SRC, 'i18n', 'locales', 'en.json'), 'utf8'));
     assert.ok(en.nav, 'nav section must exist in i18n');
-    assert.ok(en.nav.map, 'nav.map key must exist');
-    assert.ok(en.nav.admin, 'nav.admin key must exist');
-    assert.ok(en.nav.entities, 'nav.entities key must exist');
+    for (const key of ['map', 'admin', 'entities', 'trends', 'intel', 'region']) {
+      assert.ok(en.nav[key], `nav.${key} key must exist`);
+    }
   });
 });
