@@ -2019,7 +2019,7 @@ a { color: inherit; text-decoration: none; }
 }
 @media (max-width: 767px) {
   .trends-page {
-    padding: 12px 12px 72px;
+    padding: 12px 0 72px;
     gap: 12px;
   }
   .trend-card .head {
@@ -2121,7 +2121,7 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 767px) {
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: 44px 1fr 56px;
+    grid-template-rows: 44px 1fr;
   }
   .app-sidebar { display: none; }
   .app-status { display: none; }
@@ -2641,7 +2641,11 @@ a { color: inherit; text-decoration: none; }
 }
 @media (max-width: 767px) {
   .admin-page {
-    padding: 12px !important;
+    padding: 12px 0 !important;
+  }
+  .admin-head, .admin-sections, .admin-grid, .admin-stat-grid {
+    padding-left: 12px;
+    padding-right: 12px;
   }
   .admin-stat-card {
     padding: 10px;
