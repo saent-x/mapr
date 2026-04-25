@@ -107,8 +107,8 @@ describe('desktop invariance', () => {
     const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
     assert.match(pre, /\.floating-panel\s*\{/);
   });
-  it('still has .article-sheet base rule', () => {
+  it('still has .news-item-detail base rule', () => {
     const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
-    assert.match(pre, /\.article-sheet\s*\{/);
+    assert.match(pre, /\.news-item-detail\s*\{/);
   });
 });

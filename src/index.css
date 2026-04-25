@@ -545,6 +545,23 @@ a { color: inherit; text-decoration: none; }
   background: var(--bg-2);
   box-shadow: inset 2px 0 0 var(--amber);
 }
+.news-item[data-expanded] {
+  background: var(--bg-2);
+}
+.news-item-detail {
+  margin-top: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px dashed var(--line);
+  cursor: default;
+}
+.news-item-detail h2 {
+  font-family: var(--ff-serif);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.3;
+  margin: 0 0 12px;
+  color: var(--ink-0);
+}
 .news-meta {
   display: flex;
   align-items: center;
@@ -960,61 +977,7 @@ a { color: inherit; text-decoration: none; }
   border-color: var(--ink-2);
 }
 
-/* ——— Article sheet ——— */
-.article-sheet-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 40;
-  backdrop-filter: blur(2px);
-}
-.article-sheet {
-  position: absolute;
-  top: 0; right: 0; bottom: 0;
-  width: 520px;
-  max-width: 90vw;
-  background: var(--bg-1);
-  border-left: 1px solid var(--line-2);
-  z-index: 41;
-  display: flex;
-  flex-direction: column;
-  animation: slideIn 0.22s var(--ease);
-}
-@keyframes slideIn {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
-.article-sheet-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px;
-  height: 36px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-2);
-  font-family: var(--ff-mono);
-  font-size: var(--fs-0);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-1);
-}
-.article-sheet-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
-.article-sheet h2 {
-  font-family: var(--ff-serif);
-  font-weight: 400;
-  font-size: 22px;
-  line-height: 1.25;
-  margin: 0 0 16px;
-  color: var(--ink-0);
-}
-.article-sheet p {
-  color: var(--ink-1);
-  line-height: 1.55;
-  font-size: 13px;
-  margin: 0 0 20px;
-}
-
-/* ——— News card (feed + sheet) ——— */
+/* ——— News card (feed + inline detail) ——— */
 .news-card-image {
   display: block;
   width: 100%;
@@ -2349,9 +2312,6 @@ a { color: inherit; text-decoration: none; }
 }
 
 @media (max-width: 767px) {
-  .article-sheet-mobile {
-    padding: 0;
-  }
   .news-peek {
     position: fixed;
     left: 0;

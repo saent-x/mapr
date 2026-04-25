@@ -11,7 +11,7 @@ import { canonicalizeArticles } from '../utils/newsPipeline';
 import { resolveDateFloor } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 import MapLoadingFallback from '../components/MapLoadingFallback';
-import { ArticleSheet } from '../components/NewsPanel';
+import { ArticleDetail } from '../components/NewsPanel';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
 
@@ -58,7 +58,7 @@ export default function RegionDetailPage() {
 function RegionBrief({ iso }) {
   const { t } = useTranslation();
 
-  const [openStory, setOpenStory] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const regionBackfills = useNewsStore((s) => s.regionBackfills);
@@ -161,16 +161,22 @@ function RegionBrief({ iso }) {
           const host = getSourceHost(story.url) || story.source || '';
           const conf = typeof story.confidence === 'number' ? story.confidence : null;
           const lMeta = lifecycleMeta(story.lifecycle);
+          const expanded = expandedId === story.id;
+          const toggle = () =>
+            setExpandedId((id) => (id === story.id ? null : story.id));
           return (
             <div
               key={story.id}
               className="news-item"
+              data-expanded={expanded || undefined}
               role="button"
               tabIndex={0}
               aria-label={story.title}
-              onClick={() => setOpenStory(story)}
+              aria-expanded={expanded}
+              aria-controls={`detail-${story.id}`}
+              onClick={toggle}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenStory(story); }
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
               }}
             >
               <div className="news-meta">
@@ -205,6 +211,15 @@ function RegionBrief({ iso }) {
                   </a></>
                 )}
               </div>
+              {expanded && (
+                <div
+                  id={`detail-${story.id}`}
+                  className="news-item-detail"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ArticleDetail story={story} />
+                </div>
+              )}
             </div>
           );
         })}
@@ -234,7 +249,6 @@ function RegionBrief({ iso }) {
           <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
         </div>
       </div>
-      <ArticleSheet story={openStory} onClose={() => setOpenStory(null)} />
     </div>
   );
 }
