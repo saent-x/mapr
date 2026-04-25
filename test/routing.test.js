@@ -34,8 +34,12 @@ describe('frontend routing', () => {
     assert.ok(src.includes('Link') || src.includes('NavLink'), 'Layout must use Link or NavLink for navigation');
     // Navigation targets
     assert.ok(src.includes('to="/"') || src.includes("to='/'"), 'Link to / must exist');
-    // Admin sidebar link restored — admin page still gated by password internally
-    assert.ok(src.includes('to="/admin"') || src.includes("to='/admin'"), 'Link to /admin must exist in sidebar');
+    // Admin sidebar link removed — /admin route still reachable via direct URL only
+    assert.equal(
+      src.includes('to="/admin"') || src.includes("to='/admin'"),
+      false,
+      'Link to /admin must NOT exist in sidebar (admin hidden from nav)',
+    );
     assert.ok(src.includes('to="/entities"') || src.includes("to='/entities'"), 'Link to /entities must exist');
   });
 
@@ -109,12 +113,12 @@ describe('frontend routing', () => {
     );
   });
 
-  it('MobileBottomNav links to all 6 desktop sidebar routes + Intel', () => {
+  it('MobileBottomNav links to the 5 visible routes (admin hidden from nav)', () => {
     const src = readFileSync(join(SRC, 'components', 'MobileBottomNav.jsx'), 'utf8');
     // Each target must appear as a routable string literal somewhere in the file
     // (either as `to="/x"`, in a tab table like `to: '/x'`, or via a template
     // literal for the dynamic /region/{iso} link).
-    const targets = ['/', '/entities', '/region', '/trends', '/admin', '/intel'];
+    const targets = ['/', '/entities', '/region', '/trends', '/intel'];
     for (const target of targets) {
       const escaped = target.replace(/[/]/g, '\\/');
       const re = new RegExp(`['"\`]${escaped}['"\`/]`);
@@ -123,6 +127,11 @@ describe('frontend routing', () => {
         `MobileBottomNav must navigate to ${target}`,
       );
     }
+    assert.equal(
+      src.includes('to="/admin"') || src.includes("to='/admin'") || src.includes("'/admin'"),
+      false,
+      'MobileBottomNav must NOT navigate to /admin (admin hidden from nav, reachable by direct URL only)',
+    );
     assert.equal(
       src.includes('to="/filters"') || src.includes("to='/filters'") || src.includes("'/filters'"),
       false,

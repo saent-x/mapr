@@ -6,7 +6,6 @@ import {
   Network,
   MapPin,
   TrendingUp,
-  Shield,
   Activity,
 } from 'lucide-react';
 import useBreakpoint from '../hooks/useBreakpoint';
@@ -27,7 +26,6 @@ export default function MobileBottomNav() {
     { to: '/entities', label: t('nav.entities', 'Entities'), icon: Network, active: path.startsWith('/entities') },
     { to: regionTarget, label: t('nav.region', 'Region'), icon: MapPin, active: path.startsWith('/region') },
     { to: '/trends', label: t('nav.trends', 'Trends'), icon: TrendingUp, active: path.startsWith('/trends') },
-    { to: '/admin', label: t('nav.admin', 'Admin'), icon: Shield, active: path.startsWith('/admin') },
     { to: '/intel', label: t('nav.intel', 'Intel'), icon: Activity, active: path.startsWith('/intel') },
   ];
 

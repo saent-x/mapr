@@ -6,13 +6,14 @@ import { resolve } from 'node:path';
 const ROOT = resolve(import.meta.dirname, '..');
 
 describe('admin password gate', () => {
-  describe('Layout sidebar exposes Admin NavLink', () => {
+  describe('Layout sidebar hides Admin (URL still reachable)', () => {
     const layout = readFileSync(resolve(ROOT, 'src/components/Layout.jsx'), 'utf8');
 
-    it('contains a NavLink to /admin', () => {
-      assert.ok(
+    it('does NOT contain a NavLink to /admin (admin hidden from sidebar)', () => {
+      assert.equal(
         layout.includes('to="/admin"') || layout.includes("to='/admin'"),
-        'Layout.jsx should contain NavLink to /admin',
+        false,
+        'Layout.jsx must not expose /admin in sidebar — direct URL access only',
       );
     });
   });
