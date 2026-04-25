@@ -2127,7 +2127,7 @@ a { color: inherit; text-decoration: none; }
   .app-status { display: none; }
   .app-header { min-height: 44px; }
   .app-main, .layout-content {
-    padding-bottom: 56px;
+    padding-bottom: 0;
   }
   .intel-ticker { display: none; }
 }
@@ -2247,6 +2247,7 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-height: 100%;
   }
   .mobile-intel-stack .mini-panel {
     width: 100%;
@@ -2303,7 +2304,7 @@ a { color: inherit; text-decoration: none; }
     flex: 1 1 auto;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 12px;
+    padding: 12px 12px 56px;
   }
 
   .filter-drawer-inline {
@@ -2525,10 +2526,12 @@ a { color: inherit; text-decoration: none; }
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    padding: 0;
+    padding: 0 0 56px;
+    background: var(--bg-0);
   }
   .region-page .region-header {
     grid-column: 1;
@@ -2573,16 +2576,17 @@ a { color: inherit; text-decoration: none; }
     height: 240px;
   }
   .region-minimap-actions .btn { min-height: 36px; padding: 6px 10px; }
-  /* Bottom-nav clearance — page sits inside .app-main which already has
-     padding-bottom:56px, but ensure the last article isn't hidden. */
   .region-page .region-articles { padding-bottom: 8px; }
 
   /* Region picker (no iso) */
   .region-picker {
     height: 100%;
+    min-height: 100%;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    padding-bottom: 56px;
+    background: var(--bg-0);
   }
   .region-picker-head { padding: 14px 14px 10px; }
   .region-picker-head .region-name { font-size: 22px; }
@@ -2614,6 +2618,7 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 767px) {
   .entities-page {
     grid-template-columns: 1fr !important;
+    padding-bottom: 56px;
   }
   .entity-canvas {
     min-height: 60vh;
@@ -2641,7 +2646,7 @@ a { color: inherit; text-decoration: none; }
 }
 @media (max-width: 767px) {
   .admin-page {
-    padding: 12px 0 !important;
+    padding: 12px 0 56px !important;
   }
   .admin-head, .admin-sections, .admin-grid, .admin-stat-grid {
     padding-left: 12px;
