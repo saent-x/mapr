@@ -6,6 +6,8 @@ import MobileBottomNav from './MobileBottomNav';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 
+let _layoutAutoRefreshActive = false;
+
 const Ico = {
   map: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
@@ -98,7 +100,19 @@ export default function Layout() {
   const { t } = useTranslation();
   const location = useLocation();
   const lastRegionIso = useUIStore((s) => s.lastRegionIso);
+  const addToast = useUIStore((s) => s.addToast);
   const regionTarget = lastRegionIso ? `/region/${lastRegionIso}` : '/region';
+
+  useEffect(() => {
+    if (_layoutAutoRefreshActive) return undefined;
+    _layoutAutoRefreshActive = true;
+    useNewsStore.getState().startAutoRefresh(addToast);
+    useNewsStore.getState().loadSnapshotHistory();
+    return () => {
+      _layoutAutoRefreshActive = false;
+      useNewsStore.getState().stopAutoRefresh();
+    };
+  }, [addToast]);
 
   return (
     <div className="layout">

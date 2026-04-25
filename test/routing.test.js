@@ -155,6 +155,21 @@ describe('frontend routing', () => {
     );
   });
 
+  it('Layout — not App.jsx — owns the data pipeline kick (so direct-nav to /intel, /trends, /region works)', () => {
+    const layout = readFileSync(join(SRC, 'components', 'Layout.jsx'), 'utf8');
+    const app = readFileSync(join(SRC, 'App.jsx'), 'utf8');
+    assert.match(
+      layout,
+      /startAutoRefresh\s*\(/,
+      'Layout must call startAutoRefresh so every Layout-wrapped route gets the data pipeline',
+    );
+    assert.equal(
+      /startAutoRefresh\s*\(/.test(app),
+      false,
+      'App.jsx must not call startAutoRefresh — Layout owns that now (else /intel, /trends direct-nav stay loading)',
+    );
+  });
+
   it('navigation uses react-router-dom Link (no full page reloads)', () => {
     const layoutPath = join(SRC, 'components', 'Layout.jsx');
     const src = readFileSync(layoutPath, 'utf8');

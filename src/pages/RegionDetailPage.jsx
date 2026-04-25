@@ -69,15 +69,6 @@ function RegionBrief({ iso }) {
   } = useFilterStore();
 
   useEffect(() => {
-    const store = useNewsStore.getState();
-    if (!liveNews || liveNews.length === 0) {
-      store.startAutoRefresh(() => {});
-      return () => store.stopAutoRefresh();
-    }
-    return undefined;
-  }, [liveNews]);
-
-  useEffect(() => {
     if (!iso) return;
     const upper = iso.toUpperCase();
     useUIStore.getState().setLastRegionIso(upper);
@@ -255,12 +246,6 @@ function RegionPicker() {
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const lastRegionIso = useUIStore((s) => s.lastRegionIso);
-
-  useEffect(() => {
-    if (!liveNews || liveNews.length === 0) {
-      useNewsStore.getState().loadLiveData?.();
-    }
-  }, [liveNews]);
 
   const regions = useMemo(() => {
     const byIso = new Map();

@@ -58,6 +58,38 @@ describe('FlatMap + Globe use useBreakpoint instead of inline matchMedia', () =>
   });
 });
 
+describe('region detail mobile layout', () => {
+  it('region-page collapses 2-col grid to single-column flex on mobile', () => {
+    assert.match(
+      CSS,
+      /@media\s*\(max-width:\s*767px\)[\s\S]*?\.region-page\s*\{[\s\S]*?flex-direction:\s*column/,
+    );
+  });
+  it('region-page allows vertical scroll and prevents horizontal scroll on mobile', () => {
+    assert.match(
+      CSS,
+      /@media\s*\(max-width:\s*767px\)[\s\S]*?\.region-page\s*\{[\s\S]*?overflow-x:\s*hidden/,
+    );
+  });
+  it('region-articles drops the desktop right border on mobile', () => {
+    assert.match(
+      CSS,
+      /@media\s*\(max-width:\s*767px\)[\s\S]*?\.region-articles\s*\{[\s\S]*?border-right:\s*0/,
+    );
+  });
+  it('region-name hero font shrinks on mobile (≤30px)', () => {
+    const m = CSS.match(/@media\s*\(max-width:\s*767px\)[\s\S]*?\.region-page\s+\.region-name\s*\{[\s\S]*?font-size:\s*(\d+)px/);
+    assert.ok(m, 'region-name font-size override must exist on mobile');
+    assert.ok(parseInt(m[1], 10) <= 30, `region-name font-size on mobile should be ≤30px, got ${m[1]}px`);
+  });
+  it('region-picker-row meets 44px touch target on mobile', () => {
+    assert.match(
+      CSS,
+      /@media\s*\(max-width:\s*767px\)[\s\S]*?\.region-picker-row\s*\{[\s\S]*?min-height:\s*44px/,
+    );
+  });
+});
+
 describe('desktop invariance', () => {
   it('still has original layout grid-template-columns: 52px 1fr (outside media queries)', () => {
     const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];

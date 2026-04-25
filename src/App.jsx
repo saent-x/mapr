@@ -82,12 +82,6 @@ function App() {
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
 
-  useEffect(() => {
-    useNewsStore.getState().startAutoRefresh(addToast);
-    useNewsStore.getState().loadSnapshotHistory();
-    return () => useNewsStore.getState().stopAutoRefresh();
-  }, [addToast]);
-
   const prevLiveNewsRef = useRef(liveNews);
   useEffect(() => {
     if (liveNews && liveNews !== prevLiveNewsRef.current) {
