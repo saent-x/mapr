@@ -694,7 +694,15 @@ a { color: inherit; text-decoration: none; }
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   transition: max-height 0.22s var(--ease), padding 0.22s var(--ease), opacity 0.18s var(--ease);
+}
+.mini-panel .panel-body > form {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-1);
 }
 .mini-panel[data-collapsed] .panel-body {
   max-height: 0 !important;

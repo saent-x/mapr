@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import useWatchStore from '../stores/watchStore.js';
 import useUIStore from '../stores/uiStore.js';
+import useFilterStore from '../stores/filterStore.js';
 import { isoToCountry } from '../utils/geocoder.js';
 
 /**
@@ -15,6 +16,8 @@ const WatchlistPanel = ({ onRegionSelect }) => {
   const matchCounts = useWatchStore((s) => s.matchCounts);
   const removeWatch = useWatchStore((s) => s.removeWatch);
   const addWatch = useWatchStore((s) => s.addWatch);
+  const setSearchQuery = useFilterStore((s) => s.setSearchQuery);
+  const setEntityFilter = useFilterStore((s) => s.setEntityFilter);
 
   const [addType, setAddType] = useState('topic');
   const [addValue, setAddValue] = useState('');
@@ -27,7 +30,13 @@ const WatchlistPanel = ({ onRegionSelect }) => {
   }, [addType, addValue, addWatch]);
 
   const handleClick = (item) => {
-    if (item.type === 'region' && onRegionSelect) onRegionSelect(item.value);
+    if (item.type === 'region' && onRegionSelect) {
+      onRegionSelect(item.value);
+    } else if (item.type === 'topic') {
+      setSearchQuery(item.value);
+    } else if (item.type === 'entity') {
+      setEntityFilter({ id: item.id, name: item.label || item.value, type: 'entity' });
+    }
   };
 
   const collapsed = useUIStore((s) => s.panelCollapsed.watchlist);
