@@ -467,15 +467,38 @@ export async function pruneOrphanedArticles(maxAgeDays = 30) {
 
 // ── DB Size Management ───────────────────────────────────────
 //
-// Postgres free tiers (Neon) cap at 500 MB. Default soft limit 400 MB.
-// When DB exceeds limit, trim oldest articles in batches until under target.
-// CASCADE on event_articles FK auto-cleans junctions; orphaned events pruned after.
+// Limits derive from plan capacity + percentages so they track whatever tier
+// is in use. When DB exceeds soft limit, trim oldest articles in batches
+// until under target. CASCADE on event_articles FK auto-cleans junctions;
+// orphaned events pruned after.
 //
-// Env vars:
-//   MAPR_DB_SIZE_LIMIT_MB  — soft ceiling (default 400). Trim triggered above this.
-//   MAPR_DB_SIZE_TARGET_MB — trim down to this (default = limit - 50).
-//   MAPR_DB_SIZE_HARD_MB   — hard ceiling (default 500). Aggressive trim above.
+// Primary env vars (percentage-based):
+//   MAPR_DB_CAPACITY_MB    — plan capacity (default 5120 = 5 GB).
+//   MAPR_DB_TRIM_PERCENT   — soft-trim trigger % (default 90). limit = cap * pct/100.
+//   MAPR_DB_HARD_PERCENT   — aggressive-batch % (default 95). hard = cap * pct/100.
+//                            target = cap * (trim% - 5) / 100 (trim down ~5% below soft).
+//
+// Explicit MB overrides (ops escape hatch — win over percentage derivation):
+//   MAPR_DB_SIZE_LIMIT_MB  — soft ceiling override.
+//   MAPR_DB_SIZE_TARGET_MB — target override.
+//   MAPR_DB_SIZE_HARD_MB   — hard ceiling override.
+//
 //   MAPR_DB_TRIM_BATCH     — rows deleted per pass (default 1000).
+
+/**
+ * Resolve effective DB size limits from env. Explicit MB overrides win over
+ * percentage derivation from capacity.
+ */
+export function getDbSizeLimits() {
+  const capacityMb = Number(process.env.MAPR_DB_CAPACITY_MB) || 5120;
+  const trimPct = Number(process.env.MAPR_DB_TRIM_PERCENT) || 90;
+  const hardPct = Number(process.env.MAPR_DB_HARD_PERCENT) || 95;
+  const targetPct = Math.max(0, trimPct - 5);
+  const limitMb = Number(process.env.MAPR_DB_SIZE_LIMIT_MB) || Math.round(capacityMb * trimPct / 100);
+  const hardMb = Number(process.env.MAPR_DB_SIZE_HARD_MB) || Math.round(capacityMb * hardPct / 100);
+  const targetMb = Number(process.env.MAPR_DB_SIZE_TARGET_MB) || Math.round(capacityMb * targetPct / 100);
+  return { capacityMb, trimPct, hardPct, limitMb, hardMb, targetMb };
+}
 
 export async function getDbSize() {
   const db = await ensureDatabase();
@@ -513,13 +536,17 @@ export async function getTableSizes() {
  * Returns summary { startMb, endMb, deletedArticles, deletedEvents, passes }.
  */
 export async function enforceDbSizeLimit({
-  limitMb = Number(process.env.MAPR_DB_SIZE_LIMIT_MB || 400),
-  targetMb = Number(process.env.MAPR_DB_SIZE_TARGET_MB || 0) || null,
-  hardMb = Number(process.env.MAPR_DB_SIZE_HARD_MB || 500),
+  limitMb,
+  targetMb,
+  hardMb,
   batchSize = Number(process.env.MAPR_DB_TRIM_BATCH || 1000),
   maxPasses = 40
 } = {}) {
   const db = await ensureDatabase();
+  const defaults = getDbSizeLimits();
+  if (limitMb == null) limitMb = defaults.limitMb;
+  if (hardMb == null) hardMb = defaults.hardMb;
+  if (targetMb == null) targetMb = defaults.targetMb;
   const target = targetMb ?? Math.max(50, limitMb - 50);
   const start = await getDbSize();
 

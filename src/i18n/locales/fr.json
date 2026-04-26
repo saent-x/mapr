@@ -269,5 +269,9 @@
     "regional": "régionales",
     "local": "locales",
     "unknown": "inconnues"
+  },
+  "panels": {
+    "collapseAll": "Réduire les panneaux",
+    "expandAll": "Développer les panneaux"
   }
 }

@@ -3,18 +3,21 @@ import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import useWatchStore from '../stores/watchStore.js';
 import useUIStore from '../stores/uiStore.js';
+import useFilterStore from '../stores/filterStore.js';
 import { isoToCountry } from '../utils/geocoder.js';
 
 /**
  * WatchlistPanel — left mini-panel. Shows watched regions / topics / entities
  * with current article match counts. Expand-on-open for add/remove controls.
  */
-const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
+const WatchlistPanel = ({ onRegionSelect }) => {
   const { t } = useTranslation();
   const watchItems = useWatchStore((s) => s.watchItems);
   const matchCounts = useWatchStore((s) => s.matchCounts);
   const removeWatch = useWatchStore((s) => s.removeWatch);
   const addWatch = useWatchStore((s) => s.addWatch);
+  const setSearchQuery = useFilterStore((s) => s.setSearchQuery);
+  const setEntityFilter = useFilterStore((s) => s.setEntityFilter);
 
   const [addType, setAddType] = useState('topic');
   const [addValue, setAddValue] = useState('');
@@ -27,7 +30,13 @@ const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
   }, [addType, addValue, addWatch]);
 
   const handleClick = (item) => {
-    if (item.type === 'region' && onRegionSelect) onRegionSelect(item.value);
+    if (item.type === 'region' && onRegionSelect) {
+      onRegionSelect(item.value);
+    } else if (item.type === 'topic') {
+      setSearchQuery(item.value);
+    } else if (item.type === 'entity') {
+      setEntityFilter({ id: item.id, name: item.label || item.value, type: 'entity' });
+    }
   };
 
   const collapsed = useUIStore((s) => s.panelCollapsed.watchlist);
@@ -49,11 +58,8 @@ const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
         >
           {collapsed ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
         </button>
-        {isOpen && (
-          <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
-        )}
       </div>
-      <div className="panel-body" style={isOpen ? { maxHeight: 'none' } : undefined} aria-hidden={collapsed || undefined}>
+      <div className="panel-body" aria-hidden={collapsed || undefined}>
         {watchItems.length === 0 && (
           <div className="mini-panel-empty">WATCHLIST EMPTY</div>
         )}
@@ -78,25 +84,22 @@ const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
               <span className="name">{label}</span>
               <span className="ct">
                 {count}
-                {isOpen && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); removeWatch(item.id); }}
-                    aria-label={`Remove ${label}`}
-                    style={{ marginLeft: 6, color: 'var(--ink-2)' }}
-                  >
-                    ×
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeWatch(item.id); }}
+                  aria-label={`Remove ${label}`}
+                  style={{ marginLeft: 6, color: 'var(--ink-2)' }}
+                >
+                  ×
+                </button>
               </span>
             </div>
           );
         })}
-        {isOpen && (
-          <form
-            onSubmit={handleAdd}
-            style={{ padding: '8px 10px', borderTop: '1px solid var(--line)', display: 'flex', gap: 4 }}
-          >
+        <form
+          onSubmit={handleAdd}
+          style={{ padding: '8px 10px', borderTop: '1px solid var(--line)', display: 'flex', gap: 4 }}
+        >
             <select
               value={addType}
               onChange={(e) => setAddType(e.target.value)}
@@ -121,8 +124,7 @@ const WatchlistPanel = ({ isOpen, onClose, onRegionSelect }) => {
               }}
             />
             <button type="submit" className="btn primary">ADD</button>
-          </form>
-        )}
+        </form>
       </div>
     </div>
   );

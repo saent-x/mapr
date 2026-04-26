@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import useBreakpoint from '../hooks/useBreakpoint';
 
 /**
  * Force-directed entity relationship graph on HTML5 Canvas.
@@ -449,6 +450,7 @@ export default function EntityRelationshipGraph({
   width = 800,
   height = 600,
 }) {
+  const { isMobile } = useBreakpoint();
   const canvasRef = useRef(null);
   const wrapperRef = useRef(null);
   const simRef = useRef(null);
@@ -630,6 +632,12 @@ export default function EntityRelationshipGraph({
     // when cursor leaves it. Fixes "drop outside canvas pins node forever".
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
     const node = findNodeAt(e.clientX, e.clientY);
+    if (isMobile) {
+      // Mobile: tap-select only. Pan/pinch handled by touch listeners.
+      if (node) onEntitySelect?.(node.id === selectedEntity ? null : node.id);
+      else onEntitySelect?.(null);
+      return;
+    }
     if (node) {
       node.fixed = true;
       node.vx = 0;
@@ -653,7 +661,7 @@ export default function EntityRelationshipGraph({
         startView: { ...viewRef.current },
       };
     }
-  }, [findNodeAt]);
+  }, [findNodeAt, isMobile, onEntitySelect, selectedEntity]);
 
   const handlePointerMove = useCallback((e) => {
     const d = dragRef.current;
@@ -767,6 +775,75 @@ export default function EntityRelationshipGraph({
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !isMobile) return undefined;
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
+    let pinchMid = null;
+    let panStart = null;
+
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        const [a, b] = e.touches;
+        pinchStartDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        pinchStartScale = viewRef.current.scale;
+        const rect = canvas.getBoundingClientRect();
+        pinchMid = {
+          x: (a.clientX + b.clientX) / 2 - rect.left,
+          y: (a.clientY + b.clientY) / 2 - rect.top,
+          startView: { ...viewRef.current },
+        };
+        panStart = null;
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        panStart = {
+          x: t.clientX,
+          y: t.clientY,
+          startView: { ...viewRef.current },
+        };
+      }
+    };
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2 && pinchStartDist > 0 && pinchMid) {
+        const [a, b] = e.touches;
+        const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        const ratio = dist / pinchStartDist;
+        const newScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, pinchStartScale * ratio));
+        const r = newScale / pinchMid.startView.scale;
+        const tx = pinchMid.x - (pinchMid.x - pinchMid.startView.tx) * r;
+        const ty = pinchMid.y - (pinchMid.y - pinchMid.startView.ty) * r;
+        viewRef.current = clampView(
+          { scale: newScale, tx, ty },
+          { width, height }, worldW, worldH,
+        );
+        setZoomDisplay(newScale);
+        e.preventDefault();
+      } else if (e.touches.length === 1 && panStart) {
+        const t = e.touches[0];
+        const dx = t.clientX - panStart.x;
+        const dy = t.clientY - panStart.y;
+        viewRef.current = clampView(
+          { scale: panStart.startView.scale, tx: panStart.startView.tx + dx, ty: panStart.startView.ty + dy },
+          { width, height }, worldW, worldH,
+        );
+        e.preventDefault();
+      }
+    };
+    const onTouchEnd = () => { pinchStartDist = 0; pinchMid = null; panStart = null; };
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+    canvas.addEventListener('touchcancel', onTouchEnd);
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+      canvas.removeEventListener('touchcancel', onTouchEnd);
+    };
+  }, [isMobile, width, height, worldW, worldH]);
 
   const zoomBy = useCallback((factor) => {
     const v = viewRef.current;

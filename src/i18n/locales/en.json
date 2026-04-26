@@ -5,6 +5,8 @@
     "admin": "Admin",
     "entities": "Entities",
     "trends": "Trends",
+    "intel": "Intel",
+    "region": "Region",
     "expand": "Expand navigation",
     "collapse": "Collapse navigation",
     "backToMap": "Back to map"
@@ -489,5 +491,9 @@
     "stageFirst": "First Report",
     "stageDeveloping": "Developing",
     "stageContinued": "Continued Coverage"
+  },
+  "panels": {
+    "collapseAll": "Collapse panels",
+    "expandAll": "Expand panels"
   }
 }

@@ -269,5 +269,9 @@
     "regional": "regionales",
     "local": "locales",
     "unknown": "desconocidas"
+  },
+  "panels": {
+    "collapseAll": "Contraer paneles",
+    "expandAll": "Expandir paneles"
   }
 }

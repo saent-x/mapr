@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, AlertTriangle, Eye, Network, X, Users, Building2, MapPin } from 'lucide-react';
+import { SlidersHorizontal, ChevronsDownUp, ChevronsUpDown, X, Users, Building2, MapPin } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
 import MapLoadingFallback from './components/MapLoadingFallback';
@@ -12,12 +12,16 @@ import NewsPanel from './components/NewsPanel';
 import AnomalyPanel from './components/AnomalyPanel';
 import WatchlistPanel from './components/WatchlistPanel';
 import NarrativePanel from './components/NarrativePanel';
+import MapFloatingIcons from './components/MapFloatingIcons';
+import MobileSeverityChips from './components/MobileSeverityChips';
+import MobileTimelineSheet from './components/MobileTimelineSheet';
 import EventTimeline from './components/EventTimeline';
 import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
 import usePanelState from './hooks/usePanelState';
+import useBreakpoint from './hooks/useBreakpoint';
 import useBriefingStream from './hooks/useBriefingStream';
 import useTrackingOverlayData from './hooks/useTrackingOverlayData';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
@@ -77,12 +81,6 @@ function App() {
     document.documentElement.dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = i18n.language;
   }, [i18n.language]);
-
-  useEffect(() => {
-    useNewsStore.getState().startAutoRefresh(addToast);
-    useNewsStore.getState().loadSnapshotHistory();
-    return () => useNewsStore.getState().stopAutoRefresh();
-  }, [addToast]);
 
   const prevLiveNewsRef = useRef(liveNews);
   useEffect(() => {
@@ -186,15 +184,16 @@ function App() {
     velocitySpikes,
   }), [activeNews, regionSeverities, coverageStatusByIso, velocitySpikes]);
 
-  /* ── Panel toggles (kept for keyboard / test compatibility) ── */
-  const [anomalyPanelOpen, setAnomalyPanelOpen] = React.useState(false);
-  const [watchlistPanelOpen, setWatchlistPanelOpen] = React.useState(false);
-  const [narrativePanelOpen, setNarrativePanelOpen] = React.useState(false);
-  const anomalyCount = velocitySpikes.length + silenceEntries.length;
-
   const watchItems = useWatchStore((s) => s.watchItems);
-  const watchNotifications = useWatchStore((s) => s.notifications);
-  const watchNotificationCount = watchNotifications.reduce((sum, n) => sum + n.newCount, 0);
+
+  const panelCollapsed = useUIStore((s) => s.panelCollapsed);
+  const toggleAllPanelsCollapsed = useUIStore((s) => s.toggleAllPanelsCollapsed);
+  const panelsMostlyCollapsed = (
+    (panelCollapsed.anomaly ? 1 : 0)
+    + (panelCollapsed.watchlist ? 1 : 0)
+    + (panelCollapsed.narrative ? 1 : 0)
+    + (panelCollapsed.liveFeed ? 1 : 0)
+  ) > 2;
 
   /* ── Watchlist: new-article notifications on data change ── */
   const prevWatchNewsRef = useRef(null);
@@ -267,9 +266,6 @@ function App() {
           if (showExport) { setShowExport(false); break; }
           if (showSaveDialog) { setShowSaveDialog(false); break; }
           if (selectedArc) { useUIStore.setState({ selectedArc: null }); break; }
-          if (anomalyPanelOpen) { setAnomalyPanelOpen(false); break; }
-          if (watchlistPanelOpen) { setWatchlistPanelOpen(false); break; }
-          if (narrativePanelOpen) { setNarrativePanelOpen(false); break; }
           if (panelOpen) { handleClosePanel(); break; }
           if (filtersOpen) { setDrawerMode(null); break; }
           break;
@@ -283,7 +279,6 @@ function App() {
   }, [
     panelOpen, filtersOpen, handleRefresh, handleClosePanel, setDrawerMode,
     showExport, setShowExport, showSaveDialog, selectedArc,
-    anomalyPanelOpen, watchlistPanelOpen, narrativePanelOpen,
   ]);
 
   /* ── URL sync ── */
@@ -302,6 +297,15 @@ function App() {
   const handleGlobeFallback = useCallback(() => {
     useUIStore.getState().setMapMode('flat');
   }, []);
+
+  const { isMobile, isTablet } = useBreakpoint();
+  const didForceFlatRef = useRef(false);
+  useEffect(() => {
+    if ((isMobile || isTablet) && mapMode === 'globe' && !didForceFlatRef.current) {
+      didForceFlatRef.current = true;
+      setMapMode('flat');
+    }
+  }, [isMobile, isTablet, mapMode, setMapMode]);
 
   return (
     <ErrorBoundary>
@@ -383,33 +387,16 @@ function App() {
         </button>
         <button
           type="button"
-          className={`anomaly-toggle ${anomalyPanelOpen ? 'is-active' : ''}`}
-          onClick={() => setAnomalyPanelOpen((v) => !v)}
-          aria-pressed={anomalyPanelOpen}
-          aria-label={t('anomaly.toggleLabel')}
+          className="collapse-all-toggle"
+          onClick={toggleAllPanelsCollapsed}
+          aria-pressed={panelsMostlyCollapsed}
+          aria-label={panelsMostlyCollapsed ? t('panels.expandAll') : t('panels.collapseAll')}
         >
-          <AlertTriangle size={12} aria-hidden /> {t('anomaly.toggleLabel')}
-          {anomalyCount > 0 && <span className="anomaly-toggle-count">{anomalyCount}</span>}
-        </button>
-        <button
-          type="button"
-          className={`watchlist-toggle ${watchlistPanelOpen ? 'is-active' : ''}`}
-          onClick={() => { setWatchlistPanelOpen((v) => !v); useWatchStore.getState().clearNotifications(); }}
-          aria-pressed={watchlistPanelOpen}
-          aria-label={t('watchlist.toggleLabel')}
-        >
-          <Eye size={12} aria-hidden /> {t('watchlist.toggleLabel')}
-          {watchItems.length > 0 && <span className="watchlist-toggle-count">{watchItems.length}</span>}
-          {watchNotificationCount > 0 && <span className="watchlist-toggle-alert">+{watchNotificationCount}</span>}
-        </button>
-        <button
-          type="button"
-          className={`narrative-toggle ${narrativePanelOpen ? 'is-active' : ''}`}
-          onClick={() => setNarrativePanelOpen((v) => !v)}
-          aria-pressed={narrativePanelOpen}
-          aria-label={t('narrative.toggleLabel', 'NARRATIVES')}
-        >
-          <Network size={12} aria-hidden /> {t('narrative.toggleLabel', 'NARRATIVES')}
+          {panelsMostlyCollapsed
+            ? <ChevronsUpDown size={12} aria-hidden />
+            : <ChevronsDownUp size={12} aria-hidden />}
+          {' '}
+          {panelsMostlyCollapsed ? t('panels.expandAll') : t('panels.collapseAll')}
         </button>
       </div>
 
@@ -418,22 +405,16 @@ function App() {
         <AnomalyPanel
           velocitySpikes={velocitySpikes}
           silenceEntries={silenceEntries}
-          isOpen={anomalyPanelOpen}
-          onClose={() => setAnomalyPanelOpen(false)}
           onRegionSelect={handleRegionSelect}
         />
-        <WatchlistPanel
-          isOpen={watchlistPanelOpen}
-          onClose={() => setWatchlistPanelOpen(false)}
-          onRegionSelect={handleRegionSelect}
-        />
+        <WatchlistPanel onRegionSelect={handleRegionSelect} />
         <NarrativePanel
           newsList={activeNews}
-          isOpen={narrativePanelOpen}
-          onClose={() => setNarrativePanelOpen(false)}
           onRegionSelect={handleRegionSelect}
         />
       </div>
+
+      <MapFloatingIcons />
 
       {entityFilter && (
         <div className="entity-filter-breadcrumb" role="status" aria-live="polite">
@@ -498,6 +479,15 @@ function App() {
       />
 
       <EventTimeline
+        events={activeNews}
+        scrubTime={scrubTime}
+        onScrub={useUIStore.getState().setScrubTime}
+        onEventSelect={handleStorySelect}
+        selectedStoryId={selectedStoryId}
+      />
+
+      <MobileSeverityChips allNews={canonicalNews} />
+      <MobileTimelineSheet
         events={activeNews}
         scrubTime={scrubTime}
         onScrub={useUIStore.getState().setScrubTime}

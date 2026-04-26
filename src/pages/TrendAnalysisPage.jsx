@@ -211,13 +211,7 @@ export default function TrendAnalysisPage() {
           ) : (
             <>
               <TrendLineChart series={regional} h={260} />
-              <div
-                style={{
-                  position: 'absolute', top: 20, right: 24,
-                  display: 'flex', gap: 14, flexWrap: 'wrap',
-                  fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em',
-                }}
-              >
+              <div className="trend-chart-legend">
                 {regional.map((s) => (
                   <span key={s.iso}>
                     <span style={{ display: 'inline-block', width: 10, height: 2, background: s.color, verticalAlign: 'middle', marginRight: 4 }} />

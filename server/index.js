@@ -38,7 +38,7 @@ function serveStaticFile(response, filePath) {
   createReadStream(filePath).pipe(response);
 }
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
-import { closeStorage, enforceDbSizeLimit, getDbSize, getTableSizes } from './storage.js';
+import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes } from './storage.js';
 import {
   getBriefing,
   getCoverageHistory,
@@ -294,10 +294,12 @@ const server = http.createServer(async (request, response) => {
       health.circuitBreaker = getCircuitSummary();
       try {
         const size = await getDbSize();
+        const limits = getDbSizeLimits();
         health.database = {
           ...size,
-          limitMb: Number(process.env.MAPR_DB_SIZE_LIMIT_MB || 400),
-          hardMb: Number(process.env.MAPR_DB_SIZE_HARD_MB || 500)
+          limitMb: limits.limitMb,
+          hardMb: limits.hardMb,
+          capacityMb: limits.capacityMb
         };
       } catch { /* ignore */ }
       sendJson(response, 200, health);
@@ -310,11 +312,13 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const [size, tables] = await Promise.all([getDbSize(), getTableSizes()]);
+      const limits = getDbSizeLimits();
       sendJson(response, 200, {
         ...size,
-        limitMb: Number(process.env.MAPR_DB_SIZE_LIMIT_MB || 400),
-        targetMb: Number(process.env.MAPR_DB_SIZE_TARGET_MB || 0) || null,
-        hardMb: Number(process.env.MAPR_DB_SIZE_HARD_MB || 500),
+        capacityMb: limits.capacityMb,
+        limitMb: limits.limitMb,
+        targetMb: limits.targetMb,
+        hardMb: limits.hardMb,
         tables
       });
       return;

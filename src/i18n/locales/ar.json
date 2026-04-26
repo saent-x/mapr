@@ -269,5 +269,9 @@
     "regional": "إقليمية",
     "local": "محلية",
     "unknown": "غير معروفة"
+  },
+  "panels": {
+    "collapseAll": "طيّ اللوحات",
+    "expandAll": "توسيع اللوحات"
   }
 }

@@ -46,8 +46,6 @@ function Sparkline({ data, color = 'var(--sev-red)', w = 34, h = 18 }) {
 const AnomalyPanel = ({
   velocitySpikes = [],
   silenceEntries = [],
-  isOpen,
-  onClose,
   onRegionSelect,
 }) => {
   const { t } = useTranslation();
@@ -59,8 +57,6 @@ const AnomalyPanel = ({
 
   const collapsed = useUIStore((s) => s.panelCollapsed.anomaly);
   const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
-
-  const bodyStyle = isOpen ? { maxHeight: 'none' } : undefined;
 
   return (
     <div className="mini-panel" data-collapsed={collapsed || undefined} role="region" aria-label={t('anomaly.title')}>
@@ -78,11 +74,8 @@ const AnomalyPanel = ({
         >
           {collapsed ? <ChevronDown size={12} aria-hidden /> : <ChevronUp size={12} aria-hidden />}
         </button>
-        {isOpen && (
-          <button type="button" onClick={onClose} aria-label={t('panel.closePanel')}>×</button>
-        )}
       </div>
-      <div className="panel-body" style={bodyStyle} aria-hidden={collapsed || undefined}>
+      <div className="panel-body" aria-hidden={collapsed || undefined}>
         {anomalies.length === 0 && (
           <div className="mini-panel-empty">NO ANOMALIES DETECTED</div>
         )}
