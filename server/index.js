@@ -544,12 +544,17 @@ const RATE_LIMIT_MAX_ATTEMPTS = 5;
 const rateLimitMap = new Map();
 
 function getClientIp(request) {
+  // x-forwarded-for is comma-separated, client-controlled values on the left,
+  // trusted proxy (Railway) appends real IP on the right. Take the last entry.
+  const forwarded = String(request.headers['x-forwarded-for'] || '');
+  if (forwarded) {
+    const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+    if (ips.length > 0) return ips[ips.length - 1];
+  }
   return String(
-    request.headers['x-forwarded-for'] ||
-    request.headers['x-real-ip'] ||
     request.socket?.remoteAddress ||
     'unknown'
-  ).split(',')[0].trim();
+  );
 }
 
 /** Returns true if the request should be rate-limited (blocked). */
