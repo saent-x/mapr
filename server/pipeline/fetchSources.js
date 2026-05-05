@@ -20,8 +20,10 @@ import {
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitSummary } from '../circuitBreaker.js';
 import { fetchCatalogSource } from '../sourceFetcher.js';
 
-const RSS_BATCH_SIZE = 6;
-const RSS_BATCH_DELAY_MS = 400;
+const LOW_RESOURCE_MODE = process.env.MAPR_LOW_RESOURCE_MODE === '1';
+const RSS_BATCH_SIZE = Number(process.env.MAPR_RSS_BATCH_SIZE || (LOW_RESOURCE_MODE ? 3 : 6));
+const RSS_BATCH_DELAY_MS = Number(process.env.MAPR_RSS_BATCH_DELAY_MS || (LOW_RESOURCE_MODE ? 800 : 400));
+const RSS_FEED_LIMIT = Number(process.env.MAPR_RSS_FEED_LIMIT || (LOW_RESOURCE_MODE ? 24 : 0));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,7 +153,10 @@ async function fetchRssFeed(feed) {
  * Returns articles, checked feed IDs, health summary, and updated source state.
  */
 export async function fetchRssNewsDirect({ force = false, catalog, sourceState: inputSourceState } = {}) {
-  const allSelectedFeeds = selectSourcesForRun(catalog, inputSourceState, { force });
+  const allSelectedFeeds = selectSourcesForRun(catalog, inputSourceState, {
+    force,
+    limit: RSS_FEED_LIMIT > 0 ? RSS_FEED_LIMIT : null
+  });
 
   // Filter out feeds with open circuit breakers
   const skippedByCircuitBreaker = [];

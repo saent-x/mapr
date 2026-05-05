@@ -12,7 +12,7 @@ import { isCircuitOpen, recordSuccess, recordFailure } from './circuitBreaker.js
 
 const OPENSKY_URL = 'https://opensky-network.org/api/states/all';
 const OPENSKY_TOKEN_URL = 'https://opensky-network.org/auth/token';
-const POLL_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (reduced from 2min to save resources)
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_CACHE_SIZE = 15_000;
 const CIRCUIT_ID = 'opensky';

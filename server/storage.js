@@ -19,8 +19,9 @@ function getPool() {
   pool = new Pool({
     connectionString: cleanUrl,
     ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
-    max: 5,
-    idleTimeoutMillis: 30000
+    max: 2,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 5000
   });
 
   return pool;
@@ -249,7 +250,36 @@ export async function writeCoverageHistory(history) {
   }
 }
 
+// Append a single coverage snapshot and prune older rows past `limit`.
+// Assumes a single writer (refresh is single-flighted in ingest.js).
+export async function appendCoverageSnapshot(entry, limit = 48) {
+  const db = await ensureDatabase();
+  await db.query(
+    'INSERT INTO coverage_history (at, payload) VALUES ($1, $2)',
+    [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
+  );
+  await db.query(`
+    DELETE FROM coverage_history WHERE id NOT IN (
+      SELECT id FROM coverage_history ORDER BY id DESC LIMIT $1
+    )
+  `, [limit]);
+}
+
 // ── Articles ─────────────────────────────────────────────────
+
+// Fields already stored as dedicated columns — strip them from the JSON payload
+// to avoid storing them twice.
+const ARTICLE_COLUMN_FIELDS = new Set([
+  'id', 'title', 'url', 'source', 'publishedAt', 'isoA2', 'severity', 'geocodePrecision', 'createdAt'
+]);
+
+function buildArticlePayload(article) {
+  const stripped = {};
+  for (const [k, v] of Object.entries(article)) {
+    if (!ARTICLE_COLUMN_FIELDS.has(k)) stripped[k] = v;
+  }
+  return JSON.stringify(stripped);
+}
 
 export async function upsertArticles(articles) {
   const db = await ensureDatabase();
@@ -276,7 +306,7 @@ export async function upsertArticles(articles) {
       params.push(
         a.id, a.title, a.url ?? null, a.source ?? null,
         a.publishedAt ?? null, a.isoA2 ?? null, a.severity ?? null,
-        a.geocodePrecision ?? null, JSON.stringify(a)
+        a.geocodePrecision ?? null, buildArticlePayload(a)
       );
     }
     try {
@@ -309,7 +339,7 @@ export async function upsertArticles(articles) {
           `, [
             article.id, article.title, article.url ?? null, article.source ?? null,
             article.publishedAt ?? null, article.isoA2 ?? null, article.severity ?? null,
-            article.geocodePrecision ?? null, JSON.stringify(article)
+            article.geocodePrecision ?? null, buildArticlePayload(article)
           ]);
           inserted++;
         } catch (err) {
@@ -439,15 +469,60 @@ export async function linkArticlesToEvent(eventId, articleIds) {
   }
 }
 
+// Reconstruct a full article object from columns + stripped payload.
+// Column fields were removed from the payload to avoid storing them twice.
+function reconstructArticle(row) {
+  const payload = parseJson(row.payload, {});
+  return {
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    source: row.source,
+    publishedAt: row.publishedAt,
+    isoA2: row.isoA2,
+    severity: row.severity,
+    geocodePrecision: row.geocodePrecision,
+    ...payload
+  };
+}
+
 export async function readEventArticles(eventId) {
   const db = await ensureDatabase();
   const { rows } = await db.query(`
-    SELECT a.payload FROM articles a
+    SELECT a.id, a.title, a.url, a.source, a."publishedAt", a."isoA2", a.severity, a."geocodePrecision", a.payload
+    FROM articles a
     INNER JOIN event_articles ea ON ea."articleId" = a.id
     WHERE ea."eventId" = $1
     ORDER BY a."publishedAt" DESC
   `, [eventId]);
-  return rows.map(r => parseJson(r.payload, null)).filter(Boolean);
+  return rows.map(r => reconstructArticle(r)).filter(Boolean);
+}
+
+// Batched variant: fetch articles for many events in a single round-trip.
+// Returns Map<eventId, articles[]>. Use instead of N parallel
+// readEventArticles calls on hot paths like /api/briefing.
+export async function readEventArticlesBatch(eventIds) {
+  if (!eventIds?.length) return new Map();
+  const db = await ensureDatabase();
+  const { rows } = await db.query(`
+    SELECT ea."eventId", a.id, a.title, a.url, a.source, a."publishedAt", a."isoA2", a.severity, a."geocodePrecision", a.payload
+    FROM articles a
+    INNER JOIN event_articles ea ON ea."articleId" = a.id
+    WHERE ea."eventId" = ANY($1)
+    ORDER BY ea."eventId", a."publishedAt" DESC NULLS LAST
+  `, [eventIds]);
+  const out = new Map();
+  for (const r of rows) {
+    const article = reconstructArticle(r);
+    if (!article) continue;
+    let bucket = out.get(r.eventId);
+    if (!bucket) {
+      bucket = [];
+      out.set(r.eventId, bucket);
+    }
+    bucket.push(article);
+  }
+  return out;
 }
 
 export async function pruneResolvedEvents(maxAgeDays = 30) {
@@ -473,9 +548,9 @@ export async function pruneOrphanedArticles(maxAgeDays = 30) {
 // orphaned events pruned after.
 //
 // Primary env vars (percentage-based):
-//   MAPR_DB_CAPACITY_MB    — plan capacity (default 5120 = 5 GB).
-//   MAPR_DB_TRIM_PERCENT   — soft-trim trigger % (default 90). limit = cap * pct/100.
-//   MAPR_DB_HARD_PERCENT   — aggressive-batch % (default 95). hard = cap * pct/100.
+//   MAPR_DB_CAPACITY_MB    — plan capacity (default 512 MB on Railway, otherwise 5120 = 5 GB).
+//   MAPR_DB_TRIM_PERCENT   — soft-trim trigger % (default 70 on Railway, otherwise 90). limit = cap * pct/100.
+//   MAPR_DB_HARD_PERCENT   — aggressive-batch % (default 85 on Railway, otherwise 95). hard = cap * pct/100.
 //                            target = cap * (trim% - 5) / 100 (trim down ~5% below soft).
 //
 // Explicit MB overrides (ops escape hatch — win over percentage derivation):
@@ -490,9 +565,11 @@ export async function pruneOrphanedArticles(maxAgeDays = 30) {
  * percentage derivation from capacity.
  */
 export function getDbSizeLimits() {
-  const capacityMb = Number(process.env.MAPR_DB_CAPACITY_MB) || 5120;
-  const trimPct = Number(process.env.MAPR_DB_TRIM_PERCENT) || 90;
-  const hardPct = Number(process.env.MAPR_DB_HARD_PERCENT) || 95;
+  const isRailwayHobby = (process.env.MAPR_DEPLOYMENT_PROFILE || '').toLowerCase() === 'railway-hobby'
+    || Boolean(process.env.RAILWAY_ENVIRONMENT);
+  const capacityMb = Number(process.env.MAPR_DB_CAPACITY_MB) || (isRailwayHobby ? 512 : 5120);
+  const trimPct = Number(process.env.MAPR_DB_TRIM_PERCENT) || (isRailwayHobby ? 70 : 90);
+  const hardPct = Number(process.env.MAPR_DB_HARD_PERCENT) || (isRailwayHobby ? 85 : 95);
   const targetPct = Math.max(0, trimPct - 5);
   const limitMb = Number(process.env.MAPR_DB_SIZE_LIMIT_MB) || Math.round(capacityMb * trimPct / 100);
   const hardMb = Number(process.env.MAPR_DB_SIZE_HARD_MB) || Math.round(capacityMb * hardPct / 100);
@@ -539,7 +616,7 @@ export async function enforceDbSizeLimit({
   limitMb,
   targetMb,
   hardMb,
-  batchSize = Number(process.env.MAPR_DB_TRIM_BATCH || 1000),
+  batchSize = Number(process.env.MAPR_DB_TRIM_BATCH || (getDbSizeLimits().capacityMb <= 512 ? 500 : 1000)),
   maxPasses = 40
 } = {}) {
   const db = await ensureDatabase();
@@ -584,19 +661,17 @@ export async function enforceDbSizeLimit({
     `);
     deletedEvents += eDel || 0;
 
-    // VACUUM to reclaim space — without it pg_database_size won't drop
-    await db.query('VACUUM articles').catch(() => {});
-    await db.query('VACUUM events').catch(() => {});
-    await db.query('VACUUM event_articles').catch(() => {});
-
+    // No manual VACUUM here — autovacuum reclaims dead tuples lazily. Manual
+    // VACUUM on every cycle was the dominant DB CPU spike. Trade-off:
+    // pg_database_size lags actual on-disk size for minutes after a trim.
     const cur = await getDbSize();
-    if (cur.mb <= target || aDel === 0) {
+    if (aDel === 0 || cur.mb <= target) {
       lastSize = cur.mb;
       break;
     }
-    // Stuck: size not dropping despite deletes
-    if (Math.abs(lastSize - cur.mb) < 0.1 && i > 2) {
-      console.warn(`[storage] DB size not shrinking (${cur.mb} MB). Stopping trim.`);
+    // Without VACUUM, size readings lag deletes — trust aDel above and stop
+    // looping if size hasn't moved after the first pass.
+    if (Math.abs(lastSize - cur.mb) < 0.1 && i > 0) {
       lastSize = cur.mb;
       break;
     }

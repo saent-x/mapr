@@ -1,6 +1,7 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { join, extname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -178,6 +179,7 @@ function withTimeout(asyncFn, timeoutMs = API_TIMEOUT_MS) {
 /**
  * Classify an error into an HTTP status code and structured response.
  * Maps known error patterns to appropriate status codes.
+ * Default 500 uses a generic message to avoid leaking internal details.
  */
 function classifyError(error) {
   const message = error?.message || 'Internal server error';
@@ -185,24 +187,24 @@ function classifyError(error) {
 
   // Timeout errors → 504
   if (code === 'REQUEST_TIMEOUT' || error?.statusCode === 504) {
-    return { status: 504, body: { error: message, code: 'REQUEST_TIMEOUT' } };
+    return { status: 504, body: { error: 'Request timed out', code: 'REQUEST_TIMEOUT' } };
   }
 
   if (code === 'PAYLOAD_TOO_LARGE' || error?.statusCode === 413) {
-    return { status: 413, body: { error: message, code: 'PAYLOAD_TOO_LARGE' } };
+    return { status: 413, body: { error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' } };
   }
 
   if (code === 'BAD_REQUEST' && error?.statusCode === 400) {
     return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
   }
 
-  // Bad request patterns (missing/invalid parameters)
+  // Bad request patterns (missing/invalid parameters) — safe to expose
   if (/^Missing\b/i.test(message) || /^Unknown region/i.test(message) || /^Invalid\b/i.test(message)) {
     return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
   }
 
-  // Default → 500
-  return { status: 500, body: { error: message, code: code || 'INTERNAL_ERROR' } };
+  // Default → 500 with generic message (don't leak internal error details)
+  return { status: 500, body: { error: 'Internal server error', code: code || 'INTERNAL_ERROR' } };
 }
 
 /**
@@ -270,22 +272,30 @@ const server = http.createServer(async (request, response) => {
   try {
     // ── Stateful routes (use server's cache/SQLite) ──
 
+    // /api/briefing & /api/events: response is identical for all viewers, so
+    // public 60s cache is safe. If per-user data is ever added, switch to `private`.
     if (request.method === 'GET' && url.pathname === '/api/briefing') {
       const briefing = await withTimeout(() => getBriefing());
       const hasSnapshot = briefing.meta.fetchedAt || briefing.articles.length > 0;
-      sendJson(response, hasSnapshot ? 200 : 503, briefing);
+      const cacheHeaders = hasSnapshot
+        ? { 'cache-control': 'public, max-age=60, stale-while-revalidate=120', vary: 'Origin, Accept-Encoding' }
+        : {};
+      sendJson(response, hasSnapshot ? 200 : 503, briefing, cacheHeaders);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/events') {
       const briefing = await withTimeout(() => getBriefing());
       const hasSnapshot = briefing.meta.fetchedAt || briefing.events.length > 0;
+      const cacheHeaders = hasSnapshot
+        ? { 'cache-control': 'public, max-age=60, stale-while-revalidate=120', vary: 'Origin, Accept-Encoding' }
+        : {};
       sendJson(response, hasSnapshot ? 200 : 503, {
         meta: briefing.meta,
         events: briefing.events,
         sourceHealth: briefing.sourceHealth,
         ingestHealth: briefing.ingestHealth
-      });
+      }, cacheHeaders);
       return;
     }
 
@@ -423,6 +433,10 @@ const server = http.createServer(async (request, response) => {
     // ── Admin session (httpOnly cookie; optional X-Admin-Password for scripts) ──
 
     if (request.method === 'POST' && url.pathname === '/api/admin/session') {
+      if (checkAdminRateLimit(request)) {
+        sendJson(response, 429, { error: 'Too many attempts', code: 'RATE_LIMITED' });
+        return;
+      }
       if (!adminPasswordConfigured()) {
         sendJson(response, 503, { error: 'ADMIN_PASSWORD not configured', code: 'SERVICE_UNAVAILABLE' });
         return;
@@ -440,13 +454,13 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const password = String(body.password || '').trim();
-      if (password !== getAdminPassword()) {
+      if (!timingSafeEqual(password, getAdminPassword())) {
         sendJson(response, 401, { error: 'Invalid password', code: 'UNAUTHORIZED' });
         return;
       }
       const token = createSessionToken();
       if (!token) {
-        sendJson(response, 500, { error: 'Could not create session', code: 'INTERNAL_ERROR' });
+        sendJson(response, 500, { error: 'Internal server error', code: 'INTERNAL_ERROR' });
         return;
       }
       const secure = isHttpsRequest(request);
@@ -469,6 +483,10 @@ const server = http.createServer(async (request, response) => {
 
     // Legacy JSON check (no cookie) — used by some API clients
     if (request.method === 'POST' && url.pathname === '/api/admin-auth') {
+      if (checkAdminRateLimit(request)) {
+        sendJson(response, 429, { error: 'Too many attempts', code: 'RATE_LIMITED' });
+        return;
+      }
       if (!adminPasswordConfigured()) {
         sendJson(response, 500, { error: 'ADMIN_PASSWORD not configured' });
         return;
@@ -481,8 +499,8 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, status, b);
         return;
       }
-      const password = body.password;
-      if (String(password || '').trim() === getAdminPassword()) {
+      const password = String(body.password || '').trim();
+      if (timingSafeEqual(password, getAdminPassword())) {
         return sendJson(response, 200, { ok: true });
       }
       return sendJson(response, 401, { error: 'Invalid password' });
@@ -494,11 +512,15 @@ const server = http.createServer(async (request, response) => {
 
     // ── Serve static frontend from dist/ ──
     if (HAS_DIST && request.method === 'GET') {
-      // Try exact file match (e.g. /assets/index-abc.js)
-      const safePath = url.pathname.replace(/\.\./g, '');
-      const filePath = join(DIST_DIR, safePath);
-      if (existsSync(filePath) && statSync(filePath).isFile()) {
-        serveStaticFile(response, filePath);
+      // Normalize and resolve the requested path, ensuring it stays within DIST_DIR
+      const normalizedPath = normalize(url.pathname).replace(/^\.\.?(\/|$)/, '');
+      const resolved = resolve(DIST_DIR, normalizedPath);
+      if (!resolved.startsWith(resolve(DIST_DIR) + '/') && resolved !== resolve(DIST_DIR)) {
+        sendJson(response, 403, { error: 'Forbidden', code: 'FORBIDDEN' });
+        return;
+      }
+      if (existsSync(resolved) && statSync(resolved).isFile()) {
+        serveStaticFile(response, resolved);
         return;
       }
       // SPA fallback — serve index.html for all non-API routes
@@ -516,6 +538,62 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+// ── Rate limiter for admin auth endpoints ──
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_ATTEMPTS = 5;
+const rateLimitMap = new Map();
+
+function getClientIp(request) {
+  // x-forwarded-for is comma-separated, client-controlled values on the left,
+  // trusted proxy (Railway) appends real IP on the right. Take the last entry.
+  const forwarded = String(request.headers['x-forwarded-for'] || '');
+  if (forwarded) {
+    const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+    if (ips.length > 0) return ips[ips.length - 1];
+  }
+  return String(
+    request.socket?.remoteAddress ||
+    'unknown'
+  );
+}
+
+/** Returns true if the request should be rate-limited (blocked). */
+function checkAdminRateLimit(request) {
+  const ip = getClientIp(request);
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.windowEnd) {
+    rateLimitMap.set(ip, { count: 1, windowEnd: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX_ATTEMPTS) {
+    return true;
+  }
+  return false;
+}
+
+// Periodic cleanup of expired rate-limit entries (every 5 min)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.windowEnd) rateLimitMap.delete(ip);
+  }
+}, 300_000).unref();
+
+/** Constant-time string comparison to prevent timing attacks on secrets. */
+function timingSafeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 // Start server FIRST so healthcheck passes, then initialize data in background
 const HOST = process.env.HOST || '0.0.0.0';
 log.info('mapr_server_starting', { host: HOST, port: PORT, databaseUrl: process.env.DATABASE_URL ? 'set' : 'not_set' });
@@ -525,8 +603,7 @@ server.listen(PORT, HOST, async () => {
   try {
     await initializeIngestion();
   } catch (err) {
-    console.error('Ingestion initialization failed:', err.message);
-    console.error(err.stack);
+    log.error('Ingestion initialization failed', { message: err.message });
   }
 
   startScheduler();
@@ -547,14 +624,8 @@ server.listen(PORT, HOST, async () => {
   }
   console.log('Scheduler and trackers started.');
 
-  // Keep-alive: self-ping every 4 minutes to prevent Railway from scaling to zero
-  if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT) {
-    const keepAliveUrl = `http://127.0.0.1:${PORT}/api/health`;
-    setInterval(() => {
-      fetch(keepAliveUrl).catch(() => {});
-    }, 4 * 60 * 1000);
-    console.log('Keep-alive ping enabled (every 4 min).');
-  }
+  // Railway sleep is enabled — no keep-alive ping needed.
+  // The app will sleep after inactivity and wake on incoming requests.
 });
 
 server.on('error', (err) => {

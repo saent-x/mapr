@@ -11,7 +11,9 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('ErrorBoundary caught:', error, info?.componentStack);
+    if (import.meta.env.DEV) {
+      console.error('ErrorBoundary caught:', error, info?.componentStack);
+    }
   }
 
   handleRetry = () => {
@@ -28,7 +30,7 @@ class ErrorBoundary extends React.Component {
               Something went wrong
             </h2>
             <p style={{ color: 'var(--ink-1)', fontSize: 'var(--fs-2)' }}>
-              {this.state.error?.message || 'An unexpected error occurred.'}
+              {import.meta.env.DEV ? (this.state.error?.message || 'An unexpected error occurred.') : 'An unexpected error occurred.'}
             </p>
             <button type="button" className="error-boundary-retry" onClick={this.handleRetry}>
               Try again

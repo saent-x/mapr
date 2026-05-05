@@ -15,6 +15,6 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     }));
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
