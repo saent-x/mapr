@@ -70,12 +70,26 @@ export const GDELT_LANGUAGE_QUERIES = [
   { id: 'lang-chinese', query: 'sourcelang:chinese (crisis OR conflict OR government OR protest OR disaster OR election)' },
 ];
 
+function getServerEnv(name) {
+  return typeof process !== 'undefined' ? process.env?.[name] : undefined;
+}
+
+function isLowResourceMode() {
+  return getServerEnv('MAPR_LOW_RESOURCE_MODE') === '1';
+}
+
 /**
  * Returns all default query profiles: base thematic + region-specific + language-specific.
  * Used by fetchLiveNews when no custom queries are supplied.
  */
 export function getDefaultQueryProfiles() {
-  return [...GDELT_QUERY_PROFILES, ...GDELT_REGION_QUERIES, ...GDELT_LANGUAGE_QUERIES];
+  const profileSet = String(getServerEnv('MAPR_GDELT_PROFILE_SET') || (isLowResourceMode() ? 'core' : 'full')).toLowerCase();
+  const profiles = profileSet === 'core'
+    ? GDELT_QUERY_PROFILES
+    : [...GDELT_QUERY_PROFILES, ...GDELT_REGION_QUERIES, ...GDELT_LANGUAGE_QUERIES];
+  const limit = Number(getServerEnv('MAPR_GDELT_PROFILE_LIMIT') || 0);
+
+  return limit > 0 ? profiles.slice(0, limit) : profiles;
 }
 
 // Cache and throttle state

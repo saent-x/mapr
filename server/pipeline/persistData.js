@@ -6,6 +6,7 @@
  */
 
 import {
+  appendCoverageSnapshot,
   appendHistory,
   enforceDbSizeLimit,
   getDbSize,
@@ -65,13 +66,24 @@ export async function persistSnapshot(snapshot) {
 }
 
 /**
- * Write coverage history to storage.
+ * Persist coverage history.
  *
- * @param {Array} history - Coverage history array
- * @returns {Promise<void>}
+ * Accepts either a single new entry (preferred — append-only, ~2 row writes)
+ * or a full history array (legacy — DELETE-all + reinsert). Detects shape:
+ * arrays are treated as the legacy bootstrap path; plain objects as a single
+ * entry to append.
+ *
+ * @param {Array|Object} historyOrEntry - Full array (legacy) or one entry
+ * @param {number} [limit=48] - Max rows kept when appending
  */
-export async function persistCoverageHistory(history) {
-  await writeCoverageHistory(history);
+export async function persistCoverageHistory(historyOrEntry, limit = 48) {
+  if (Array.isArray(historyOrEntry)) {
+    await writeCoverageHistory(historyOrEntry);
+    return;
+  }
+  if (historyOrEntry && typeof historyOrEntry === 'object') {
+    await appendCoverageSnapshot(historyOrEntry, limit);
+  }
 }
 
 /**
