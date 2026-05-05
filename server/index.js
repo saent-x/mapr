@@ -1,7 +1,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
-import { join, extname, normalize, resolve } from 'node:path';
+import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -512,15 +512,15 @@ const server = http.createServer(async (request, response) => {
 
     // ── Serve static frontend from dist/ ──
     if (HAS_DIST && request.method === 'GET') {
-      // Normalize and resolve the requested path, ensuring it stays within DIST_DIR
-      const normalizedPath = normalize(url.pathname).replace(/^\.\.?(\/|$)/, '');
-      const resolved = resolve(DIST_DIR, normalizedPath);
-      if (!resolved.startsWith(resolve(DIST_DIR) + '/') && resolved !== resolve(DIST_DIR)) {
+      // Strip .. and leading slash, then join. Verify result stays within DIST_DIR.
+      const safeName = url.pathname.replace(/\.\./g, '').replace(/^\/+/, '');
+      const filePath = join(DIST_DIR, safeName);
+      if (!filePath.startsWith(DIST_DIR)) {
         sendJson(response, 403, { error: 'Forbidden', code: 'FORBIDDEN' });
         return;
       }
-      if (existsSync(resolved) && statSync(resolved).isFile()) {
-        serveStaticFile(response, resolved);
+      if (safeName && existsSync(filePath) && statSync(filePath).isFile()) {
+        serveStaticFile(response, filePath);
         return;
       }
       // SPA fallback — serve index.html for all non-API routes
