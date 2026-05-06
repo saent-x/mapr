@@ -3486,3 +3486,349 @@ a { color: inherit; text-decoration: none; }
     font-size: var(--fs-1);
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Onboarding overlay — first-visit guided tour
+   ══════════════════════════════════════════════════════════════════════ */
+
+.onboard-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(5, 7, 10, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="light"] .onboard-backdrop {
+  background: rgba(20, 20, 18, 0.70);
+}
+
+/* ── Close (X) button ── */
+.onboard-close {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  color: var(--ink-1);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+
+.onboard-close:hover {
+  color: var(--ink-0);
+  border-color: var(--amber);
+  background: var(--bg-2);
+}
+
+/* ── Callout cards — positioned around the screen ── */
+.onboard-callouts {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none; /* allow backdrop click-through for individual callouts */
+}
+
+.onboard-callout {
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--glass);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  max-width: 240px;
+  font-family: var(--ff-mono);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.onboard-callout:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--amber);
+}
+
+.onboard-callout-connector {
+  position: absolute;
+  pointer-events: none;
+}
+
+.onboard-callout-step {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--bg-0);
+  background: var(--amber);
+  border-radius: 2px;
+  line-height: 1;
+}
+
+.onboard-callout-icon {
+  flex-shrink: 0;
+  color: var(--cyan);
+  margin-top: 2px;
+}
+
+.onboard-callout-body {
+  min-width: 0;
+}
+
+.onboard-callout-title {
+  margin: 0 0 3px 0;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-1);
+  font-weight: 600;
+  color: var(--ink-0);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+}
+
+.onboard-callout-desc {
+  margin: 0;
+  font-family: var(--ff-sans);
+  font-size: var(--fs-1);
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+/* Positioning for each callout (targets on a 1080p+ viewport) */
+
+/* 01 Search — near header search input */
+.onboard-callout--top-left {
+  top: 60px;
+  left: 260px;
+}
+
+/* 02 Severity layers — near header overlay chips */
+.onboard-callout--top-right {
+  top: 60px;
+  right: 260px;
+}
+
+/* 03 Sidebar — near left nav */
+.onboard-callout--left-mid {
+  top: 380px;
+  left: 60px;
+}
+
+/* 04 News panels — near right-side panels */
+.onboard-callout--right-mid {
+  top: 380px;
+  right: 60px;
+}
+
+/* 05 Keyboard shortcuts hint — near bottom center */
+.onboard-callout--bottom-center {
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.onboard-callout--bottom-center:hover {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+/* ── Getting Started reference card ── */
+.onboard-getting-started {
+  position: relative;
+  z-index: 10001;
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  max-width: 580px;
+  width: 100%;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 1px var(--accent-border);
+  font-family: var(--ff-mono);
+}
+
+.onboard-gs-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-0);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onboard-gs-title {
+  margin: 0;
+  font-family: var(--ff-serif);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink-0);
+  letter-spacing: 0.01em;
+}
+
+.onboard-gs-accent {
+  width: 40px;
+  height: 2px;
+  background: var(--amber);
+  flex-shrink: 0;
+}
+
+.onboard-gs-body {
+  padding: 16px 20px;
+}
+
+.onboard-gs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.onboard-gs-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.onboard-gs-label {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  font-weight: 600;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  line-height: 1.3;
+}
+
+.onboard-gs-text {
+  font-family: var(--ff-sans);
+  font-size: var(--fs-1);
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.onboard-gs-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-0);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.onboard-got-it-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 18px;
+  background: var(--amber);
+  color: var(--bg-0);
+  border: 0;
+  border-radius: var(--radius);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+
+.onboard-got-it-btn:hover {
+  background: var(--amber);
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.onboard-got-it-btn:active {
+  transform: translateY(0);
+}
+
+/* ── Responsive: stack layout on narrower screens ── */
+@media (max-width: 1280px) {
+  .onboard-callout {
+    max-width: 200px;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .onboard-callout--top-left {
+    left: 60px;
+  }
+
+  .onboard-callout--top-right {
+    right: 60px;
+  }
+
+  .onboard-callout--left-mid {
+    left: 10px;
+  }
+
+  .onboard-callout--right-mid {
+    right: 10px;
+  }
+
+  .onboard-getting-started {
+    max-width: 480px;
+  }
+
+  .onboard-gs-grid {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .onboard-callouts {
+    display: none; /* hide positioned callouts on mobile — too cramped */
+  }
+
+  .onboard-backdrop {
+    align-items: flex-start;
+    padding-top: 10px;
+    overflow-y: auto;
+  }
+
+  .onboard-getting-started {
+    max-width: calc(100vw - 24px);
+    margin: 10px 12px;
+  }
+
+  .onboard-gs-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .onboard-gs-header {
+    padding: 12px 14px;
+  }
+
+  .onboard-gs-body {
+    padding: 12px 14px;
+  }
+
+  .onboard-gs-footer {
+    padding: 10px 14px;
+  }
+
+  .onboard-gs-title {
+    font-size: 16px;
+  }
+}

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Header from './Header';
 import MobileBottomNav from './MobileBottomNav';
 import ShortcutHelp from './ShortcutHelp';
+import OnboardingOverlay from './OnboardingOverlay';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 
@@ -162,6 +163,7 @@ export default function Layout() {
       <StatusBar />
       <MobileBottomNav />
       <ShortcutHelp />
+      {location.pathname === '/' && <OnboardingOverlay />}
     </div>
   );
 }
