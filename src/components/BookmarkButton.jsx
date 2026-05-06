@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Bookmark } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SignedIn, SignedOut } from './auth';
@@ -7,10 +8,12 @@ import useBookmarks from '../hooks/useBookmarks';
 /**
  * BookmarkButton — toggle bookmark on a news item.
  * Shows filled icon when bookmarked, outline when not.
- * Unauthenticated users see a login prompt on click.
+ * Unauthenticated users are navigated to /login with a returnUrl.
  */
 export default function BookmarkButton({ story, className = '' }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isBookmarked, toggleBookmark, needsAuth } = useBookmarks();
   const bookmarked = isBookmarked(story?.id);
 
@@ -46,10 +49,11 @@ export default function BookmarkButton({ story, className = '' }) {
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
+            const returnUrl = encodeURIComponent(location.pathname + location.search);
+            navigate(`/login?returnUrl=${returnUrl}`);
           }}
           aria-label={t('bookmarks.signInToBookmark')}
           title={t('bookmarks.signInToBookmark')}
-          disabled={!needsAuth}
         >
           <Bookmark size={14} fill="none" aria-hidden />
         </button>

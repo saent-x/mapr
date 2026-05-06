@@ -212,12 +212,17 @@ test('VAL-M3-022: filter show/hide toggle', () => {
 // VAL-M3-023: Auth-Gated — Bookmarking Requires Login
 // ---------------------------------------------------------------------------
 
-test('VAL-M3-023: bookmark button shows login prompt when unauthenticated', () => {
+test('VAL-M3-023: bookmark button navigates to login when unauthenticated', () => {
   const content = readFileSync(resolve(root, 'src/components/BookmarkButton.jsx'), 'utf8');
 
   assert.ok(content.includes('SignedOut'), 'should use SignedOut wrapper');
   assert.ok(content.includes("title={t('bookmarks.signInToBookmark')}"), 'should show login prompt title');
-  assert.ok(content.includes('disabled={!needsAuth}'), 'should disable button when unauthenticated');
+  assert.ok(content.includes('useNavigate'), 'should import useNavigate');
+  assert.ok(content.includes('useLocation'), 'should import useLocation from react-router-dom');
+  assert.ok(content.includes("navigate(`/login?returnUrl="), 'should navigate to /login with returnUrl');
+  assert.ok(content.includes('encodeURIComponent(location.pathname + location.search)'), 'should encode current URL as returnUrl');
+  assert.ok(content.includes('e.stopPropagation()'), 'should stop propagation in SignedOut handler');
+  assert.ok(content.includes('e.preventDefault()'), 'should prevent default in SignedOut handler');
 });
 
 test('VAL-M3-023: bookmark panel shows login prompt when unauthenticated', () => {
