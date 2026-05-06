@@ -273,5 +273,24 @@
   "panels": {
     "collapseAll": "Réduire les panneaux",
     "expandAll": "Développer les panneaux"
+  },
+  "auth": {
+    "signIn": "Connexion",
+    "signOut": "Déconnexion",
+    "sendCode": "Envoyer le Code",
+    "verifyCode": "Vérifier le Code",
+    "emailPlaceholder": "agent@mapr.io",
+    "codeSent": "Code envoyé à {{email}}",
+    "codeLabel": "Code de Vérification",
+    "emailLabel": "Adresse Email",
+    "loginTitle": "MAPR",
+    "loginSubtitle": "Console de Renseignement OSINT",
+    "loginFooter": "Connectez-vous pour enregistrer des vues, créer des alertes et ajouter des favoris.",
+    "sending": "Envoi…",
+    "verifying": "Vérification…",
+    "codeError": "Code invalide ou expiré",
+    "sendError": "Échec de l'envoi du code",
+    "signInPrompt": "Connectez-vous pour utiliser cette fonction",
+    "backToEmail": "← Retour à l'email"
   }
 }

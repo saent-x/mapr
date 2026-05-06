@@ -273,5 +273,24 @@
   "panels": {
     "collapseAll": "طيّ اللوحات",
     "expandAll": "توسيع اللوحات"
+  },
+  "auth": {
+    "signIn": "تسجيل الدخول",
+    "signOut": "تسجيل الخروج",
+    "sendCode": "إرسال الرمز",
+    "verifyCode": "التحقق من الرمز",
+    "emailPlaceholder": "agent@mapr.io",
+    "codeSent": "تم إرسال الرمز إلى {{email}}",
+    "codeLabel": "رمز التحقق",
+    "emailLabel": "البريد الإلكتروني",
+    "loginTitle": "MAPR",
+    "loginSubtitle": "وحدة تحكم استخبارات OSINT",
+    "loginFooter": "سجل الدخول لحفظ المشاهدات وإنشاء التنبيهات ووضع إشارات مرجعية على القصص.",
+    "sending": "جارٍ الإرسال…",
+    "verifying": "جارٍ التحقق…",
+    "codeError": "الرمز غير صالح أو منتهي الصلاحية",
+    "sendError": "فشل إرسال الرمز",
+    "signInPrompt": "سجل الدخول لاستخدام هذه الميزة",
+    "backToEmail": "← العودة إلى البريد الإلكتروني"
   }
 }

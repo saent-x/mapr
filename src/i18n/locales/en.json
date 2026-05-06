@@ -495,5 +495,24 @@
   "panels": {
     "collapseAll": "Collapse panels",
     "expandAll": "Expand panels"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "sendCode": "Send Magic Code",
+    "verifyCode": "Verify Code",
+    "emailPlaceholder": "agent@mapr.io",
+    "codeSent": "Code sent to {{email}}",
+    "codeLabel": "Verification Code",
+    "emailLabel": "Email Address",
+    "loginTitle": "MAPR",
+    "loginSubtitle": "OSINT Intelligence Console",
+    "loginFooter": "Sign in to save views, create alerts, and bookmark stories.",
+    "sending": "Sending…",
+    "verifying": "Verifying…",
+    "codeError": "Invalid or expired code",
+    "sendError": "Failed to send code",
+    "signInPrompt": "Sign in to use this feature",
+    "backToEmail": "← Back to email"
   }
 }

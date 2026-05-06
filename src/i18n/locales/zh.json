@@ -273,5 +273,24 @@
   "panels": {
     "collapseAll": "折叠面板",
     "expandAll": "展开面板"
+  },
+  "auth": {
+    "signIn": "登录",
+    "signOut": "退出",
+    "sendCode": "发送验证码",
+    "verifyCode": "验证代码",
+    "emailPlaceholder": "agent@mapr.io",
+    "codeSent": "验证码已发送至 {{email}}",
+    "codeLabel": "验证码",
+    "emailLabel": "电子邮件",
+    "loginTitle": "MAPR",
+    "loginSubtitle": "OSINT 情报控制台",
+    "loginFooter": "登录以保存视图、创建提醒和收藏故事。",
+    "sending": "发送中…",
+    "verifying": "验证中…",
+    "codeError": "验证码无效或已过期",
+    "sendError": "发送验证码失败",
+    "signInPrompt": "请登录以使用此功能",
+    "backToEmail": "← 返回电子邮件"
   }
 }

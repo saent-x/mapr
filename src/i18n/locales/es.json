@@ -273,5 +273,24 @@
   "panels": {
     "collapseAll": "Contraer paneles",
     "expandAll": "Expandir paneles"
+  },
+  "auth": {
+    "signIn": "Iniciar Sesión",
+    "signOut": "Cerrar Sesión",
+    "sendCode": "Enviar Código",
+    "verifyCode": "Verificar Código",
+    "emailPlaceholder": "agente@mapr.io",
+    "codeSent": "Código enviado a {{email}}",
+    "codeLabel": "Código de Verificación",
+    "emailLabel": "Correo Electrónico",
+    "loginTitle": "MAPR",
+    "loginSubtitle": "Consola de Inteligencia OSINT",
+    "loginFooter": "Inicia sesión para guardar vistas, crear alertas y marcar historias.",
+    "sending": "Enviando…",
+    "verifying": "Verificando…",
+    "codeError": "Código inválido o expirado",
+    "sendError": "Error al enviar el código",
+    "signInPrompt": "Inicia sesión para usar esta función",
+    "backToEmail": "← Volver al correo"
   }
 }

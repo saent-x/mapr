@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Menu, X } from 'lucide-react';
+import { Search, Menu, X, LogOut, LogIn } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
 import useBreakpoint from '../hooks/useBreakpoint';
+import db from '../services/instantDb';
 
 function BrandMark() {
   return (
@@ -44,6 +45,8 @@ export default function Header() {
   const backendStatus = useNewsStore((s) => s.sourceHealth?.backend?.status);
   const status = opsHealth?.status ?? backendStatus ?? 'healthy';
   const opsOk = status === 'healthy' || status === 'ok';
+
+  const { user, isLoading: authLoading } = db.useAuth();
 
   const isMap = location.pathname === '/';
 
@@ -128,6 +131,34 @@ export default function Header() {
       )}
 
       <div className="header-right">
+        {!isMobile && !authLoading && (
+          user ? (
+            <div className="header-user-menu">
+              <span className="header-user-email" title={user.email}>
+                {user.email}
+              </span>
+              <button
+                type="button"
+                className="header-signout-btn"
+                onClick={() => db.auth.signOut()}
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <LogOut size={12} />
+                OUT
+              </button>
+            </div>
+          ) : (
+            <Link
+              to={`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`}
+              className="header-signin-link"
+              aria-label="Sign in"
+            >
+              <LogIn size={12} />
+              SIGN IN
+            </Link>
+          )
+        )}
         {!isMobile && (
           <button
             type="button"

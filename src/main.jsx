@@ -13,12 +13,14 @@ const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const EntityExplorerPage = lazy(() => import('./pages/EntityExplorerPage.jsx'))
 const TrendAnalysisPage = lazy(() => import('./pages/TrendAnalysisPage.jsx'))
 const IntelPage = lazy(() => import('./pages/IntelPage.jsx'))
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
         <Route path="/health" element={<Suspense fallback={<PageLoadingFallback />}><HealthPage /></Suspense>} />
+        <Route path="/login" element={<Suspense fallback={<PageLoadingFallback />}><LoginPage /></Suspense>} />
         <Route element={<Layout />}>
           <Route path="/" element={<App />} />
           <Route path="/region" element={<RegionDetailPage />} />

@@ -36,12 +36,14 @@ function parseDirectives(cspString) {
 }
 
 // Baseline CSP value before M1 changes (for diff comparison)
+// Updated with InstantDB auth domain (https://*.instantdb.com) added to connect-src
 const BASELINE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' https://fonts.gstatic.com; " +
   "img-src 'self' data: blob: https://*.basemaps.cartocdn.com; " +
   "connect-src 'self' ws: wss: https://*.gdeltproject.org https://opensky-network.org " +
-  "https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com; " +
+  "https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com " +
+  "https://*.instantdb.com; " +
   "frame-src 'self';";
 
 describe('CSP img-src directive', () => {
@@ -119,7 +121,8 @@ describe('CSP directive integrity (VAL-M1-003)', () => {
     assert.equal(
       directives['connect-src'],
       "'self' ws: wss: https://*.gdeltproject.org https://opensky-network.org " +
-        'https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com',
+        'https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com ' +
+        'https://*.instantdb.com',
       'connect-src must remain unchanged'
     );
   });
