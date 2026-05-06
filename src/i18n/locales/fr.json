@@ -293,6 +293,12 @@
     "signInPrompt": "Connectez-vous pour utiliser cette fonction",
     "backToEmail": "← Retour à l'email"
   },
+  "trends": {
+    "timeRangeLabel": "Période",
+    "timeRange7d": "7J",
+    "timeRange30d": "30J",
+    "timeRange90d": "90J"
+  },
   "watchlist": {
     "bookmarked": "Marqué: {{title}}"
   },

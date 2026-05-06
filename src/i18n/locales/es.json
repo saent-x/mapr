@@ -293,6 +293,12 @@
     "signInPrompt": "Inicia sesión para usar esta función",
     "backToEmail": "← Volver al correo"
   },
+  "trends": {
+    "timeRangeLabel": "Periodo",
+    "timeRange7d": "7D",
+    "timeRange30d": "30D",
+    "timeRange90d": "90D"
+  },
   "watchlist": {
     "bookmarked": "Marcado: {{title}}"
   },

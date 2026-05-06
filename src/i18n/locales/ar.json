@@ -293,6 +293,12 @@
     "signInPrompt": "سجل الدخول لاستخدام هذه الميزة",
     "backToEmail": "← العودة إلى البريد الإلكتروني"
   },
+  "trends": {
+    "timeRangeLabel": "الفترة",
+    "timeRange7d": "٧ي",
+    "timeRange30d": "٣٠ي",
+    "timeRange90d": "٩٠ي"
+  },
   "watchlist": {
     "bookmarked": "تم وضع إشارة: {{title}}"
   },

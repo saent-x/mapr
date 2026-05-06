@@ -293,6 +293,12 @@
     "signInPrompt": "请登录以使用此功能",
     "backToEmail": "← 返回电子邮件"
   },
+  "trends": {
+    "timeRangeLabel": "时间范围",
+    "timeRange7d": "7天",
+    "timeRange30d": "30天",
+    "timeRange90d": "90天"
+  },
   "watchlist": {
     "bookmarked": "已收藏: {{title}}"
   },

@@ -425,7 +425,11 @@
     "severityChartAriaLabel": "Bar chart showing event counts by severity level",
     "categoryTitle": "Category Breakdown",
     "categoryHint": "Event counts grouped by topic category",
-    "categoryChartAriaLabel": "Bar chart showing event counts by category"
+    "categoryChartAriaLabel": "Bar chart showing event counts by category",
+    "timeRangeLabel": "Time range",
+    "timeRange7d": "7D",
+    "timeRange30d": "30D",
+    "timeRange90d": "90D"
   },
   "sourceType": {
     "official": "official",
