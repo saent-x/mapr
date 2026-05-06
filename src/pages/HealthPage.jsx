@@ -117,6 +117,7 @@ const HealthPage = () => {
   if (!authed) {
     return (
       <div style={s.page}>
+        <ShortcutHelp />
         <div style={s.loginCard}>
           <div style={s.loginTitle}>MAPR ADMIN</div>
           <form onSubmit={handleLogin} style={s.loginForm}>
