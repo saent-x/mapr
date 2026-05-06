@@ -64,9 +64,9 @@ test('isoToCountry resolves known ISO country codes', () => {
 // === Expanded geocoder tests ===
 
 test('geocoder city database has 500+ entries (VAL-DATA-007)', () => {
-  const content = readFileSync(new URL('../src/utils/geocoder.js', import.meta.url), 'utf-8');
-  const locationMatch = content.match(/const LOCATIONS = \[([\s\S]*?)\];/);
-  assert.ok(locationMatch, 'LOCATIONS array found');
+  const content = readFileSync(new URL('../src/utils/geocoder-data.js', import.meta.url), 'utf-8');
+  const locationMatch = content.match(/(?:const|export const) LOCATIONS = \[([\s\S]*?)\];/);
+  assert.ok(locationMatch, 'LOCATIONS array found in geocoder-data.js');
   const entries = locationMatch[1].match(/\{ name:/g);
   assert.ok(entries, 'City entries found');
   assert.ok(entries.length >= 500, `Expected 500+ cities, got ${entries.length}`);
