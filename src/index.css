@@ -346,6 +346,105 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.3;
 }
 
+/* ── Alert Rules Sidebar ── */
+.alert-rules-sidebar {
+  border-top: 1px solid var(--line);
+  padding: 6px 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+.alert-rules-item {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--line);
+}
+.alert-rules-item:last-child { border-bottom: 0; }
+.alert-rules-item-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 6px;
+}
+.alert-rules-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  background: transparent;
+  border: 1px solid var(--ink-3);
+  color: var(--ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.alert-rules-toggle[data-active] {
+  border-color: var(--sev-red);
+  color: var(--sev-red);
+}
+.alert-rules-toggle:hover { border-color: var(--ink-2); color: var(--ink-0); }
+.alert-rules-toggle[data-active]:hover { border-color: var(--sev-red); color: var(--sev-red); }
+.alert-rules-info-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s var(--ease);
+}
+.alert-rules-info-btn:hover { background: var(--bg-3); }
+.alert-rules-name {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  color: var(--ink-0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+.alert-rules-meta {
+  font-family: var(--ff-mono);
+  font-size: 7px;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-views-count[data-alert-count="active"] {
+  background: rgba(217, 83, 59, 0.15);
+  color: var(--sev-red);
+}
+.alert-rules-delete {
+  border-left: 0 !important;
+}
+.alert-rules-create-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-1);
+  cursor: pointer;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  letter-spacing: 0.06em;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
+}
+.alert-rules-create-btn:hover { background: var(--bg-3); color: var(--ink-0); }
+.alert-rules-create-btn:disabled { color: var(--ink-3); cursor: not-allowed; }
+
 /* ── Save View Dialog ── */
 .save-view-overlay {
   position: fixed;
