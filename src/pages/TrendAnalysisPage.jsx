@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useNewsStore from '../stores/newsStore.js';
@@ -6,8 +6,12 @@ import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { canonicalizeArticles } from '../utils/newsPipeline.js';
 import { buildRegionalSeries, buildByCategory, buildSourceVelocity, buildSeverityDistribution, buildLangMix } from '../utils/trendBuilders.js';
 
+const EventCorrelationTimeline = lazy(() => import('../components/EventCorrelationTimeline.jsx'));
+
 const VALID_RANGES = ['7d', '30d', '90d'];
 const DEFAULT_RANGE = '30d';
+const VALID_TABS = ['charts', 'correlation'];
+const DEFAULT_TAB = 'charts';
 
 const SERIES_COLORS = ['var(--amber)', 'var(--cyan)', 'var(--sev-red)', 'var(--sev-green)', 'var(--sev-amber)'];
 
@@ -187,6 +191,10 @@ export default function TrendAnalysisPage() {
   const range = VALID_RANGES.includes(rangeParam) ? rangeParam : DEFAULT_RANGE;
   const rangeDays = parseInt(range, 10);
 
+  // Tab from URL params; default to charts.
+  const tabParam = searchParams.get('tab');
+  const tab = VALID_TABS.includes(tabParam) ? tabParam : DEFAULT_TAB;
+
   // Sync URL if range param is missing or invalid.
   useEffect(() => {
     if (!VALID_RANGES.includes(rangeParam)) {
@@ -199,6 +207,12 @@ export default function TrendAnalysisPage() {
   const handleRangeChange = (newRange) => {
     const next = new URLSearchParams(searchParams);
     next.set('range', newRange);
+    setSearchParams(next, { replace: true });
+  };
+
+  const handleTabChange = (newTab) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', newTab);
     setSearchParams(next, { replace: true });
   };
 
@@ -259,6 +273,32 @@ export default function TrendAnalysisPage() {
 
   return (
     <div className="trends-page">
+      {/* Tab bar */}
+      <div className="trends-tab-bar" role="tablist" aria-label={t('trends.tabAriaLabel') || t('nav.trends')}>
+        {VALID_TABS.map((tv) => (
+          <button
+            key={tv}
+            role="tab"
+            className="trends-tab"
+            data-active={tab === tv ? 'true' : 'false'}
+            aria-selected={tab === tv}
+            onClick={() => handleTabChange(tv)}
+          >
+            {t(`trends.tab${tv.charAt(0).toUpperCase() + tv.slice(1)}`)}
+          </button>
+        ))}
+      </div>
+
+      {/* Correlation tab */}
+      {tab === 'correlation' && (
+        <Suspense fallback={<div className="trend-card"><div className="body" style={{ padding: 40 }}>{t('loading.page')}</div></div>}>
+          <EventCorrelationTimeline />
+        </Suspense>
+      )}
+
+      {/* Charts tab */}
+      {tab === 'charts' && (
+      <>
       {/* Time range toggle */}
       <div className="trends-range-toggle" role="group" aria-label={t('trends.timeRangeLabel')}>
         <span className="trends-range-label mono">{t('trends.timeRangeLabel')}</span>
@@ -390,6 +430,8 @@ export default function TrendAnalysisPage() {
           ))}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

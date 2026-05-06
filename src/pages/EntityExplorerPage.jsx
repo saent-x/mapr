@@ -87,6 +87,11 @@ export default function EntityExplorerPage() {
     navigate('/');
   };
 
+  const showTimeline = () => {
+    if (!selNode) return;
+    navigate(`/trends?tab=correlation&entity=${encodeURIComponent(selNode.name)}`);
+  };
+
   /* ── Keyboard j/k navigation on entity list ── */
   const navigableEntities = useMemo(() => {
     return selNode ? connectedNodes : nodes;
@@ -238,6 +243,7 @@ export default function EntityExplorerPage() {
 
               <div style={{ padding: '14px 4px', display: 'flex', gap: 8 }}>
                 <button type="button" className="btn primary" onClick={showOnMap}>SHOW ON MAP</button>
+                <button type="button" className="btn" onClick={showTimeline}>{t('correlation.timelineButton') || 'TIMELINE'}</button>
                 <button type="button" className="btn" onClick={() => setSelected(null)}>CLEAR</button>
               </div>
             </>
@@ -330,6 +336,7 @@ export default function EntityExplorerPage() {
 
               <div style={{ padding: '14px 20px', display: 'flex', gap: 8, marginTop: 'auto' }}>
                 <button type="button" className="btn primary" onClick={showOnMap}>SHOW ON MAP</button>
+                <button type="button" className="btn" onClick={showTimeline}>{t('correlation.timelineButton') || 'TIMELINE'}</button>
                 <button type="button" className="btn" onClick={() => setSelected(null)}>CLEAR</button>
               </div>
             </>
