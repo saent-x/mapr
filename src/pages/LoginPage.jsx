@@ -43,7 +43,7 @@ export default function LoginPage() {
       await db.auth.sendMagicCode({ email: email.trim() });
       setStep('code');
     } catch (err) {
-      setError(err.body?.message || err.message || 'Failed to send code');
+      setError(err.body?.message || err.message || t('auth.sendError'));
     } finally {
       setSending(false);
     }
@@ -67,9 +67,10 @@ export default function LoginPage() {
         await db.transact(createProfileOps(db.tx, result.user.id, email.trim()));
       }
 
+      setVerifying(false);
       // Navigate handled by the useEffect above when user state updates
     } catch (err) {
-      setError(err.body?.message || err.message || 'Invalid or expired code');
+      setError(err.body?.message || err.message || t('auth.codeError'));
       setVerifying(false);
     }
   };
@@ -96,8 +97,8 @@ export default function LoginPage() {
       <div className="login-card">
         <div className="login-header">
           <Shield size={28} className="login-logo-icon" />
-          <h1 className="login-title">MAPR</h1>
-          <p className="login-subtitle">OSINT Intelligence Console</p>
+          <h1 className="login-title">{t('auth.loginTitle')}</h1>
+          <p className="login-subtitle">{t('auth.loginSubtitle')}</p>
         </div>
 
         {error && (
@@ -111,7 +112,7 @@ export default function LoginPage() {
           <form className="login-form" onSubmit={handleSendCode}>
             <label className="login-label" htmlFor="login-email">
               <Mail size={14} />
-              Email Address
+              {t('auth.emailLabel')}
             </label>
             <input
               id="login-email"
@@ -119,7 +120,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="agent@mapr.io"
+              placeholder={t('auth.emailPlaceholder')}
               required
               autoFocus
               disabled={sending}
@@ -135,11 +136,11 @@ export default function LoginPage() {
               {sending ? (
                 <>
                   <Loader2 size={16} className="spin" />
-                  Sending...
+                  {t('auth.sending')}
                 </>
               ) : (
                 <>
-                  Send Magic Code
+                  {t('auth.sendCode')}
                   <ArrowRight size={16} />
                 </>
               )}
@@ -148,10 +149,10 @@ export default function LoginPage() {
         ) : (
           <form className="login-form" onSubmit={handleVerifyCode}>
             <p className="login-code-sent">
-              Code sent to <strong>{email}</strong>
+              {t('auth.codeSent', { email })}
             </p>
             <label className="login-label" htmlFor="login-code">
-              Verification Code
+              {t('auth.codeLabel')}
             </label>
             <input
               id="login-code"
@@ -176,11 +177,11 @@ export default function LoginPage() {
               {verifying ? (
                 <>
                   <Loader2 size={16} className="spin" />
-                  Verifying...
+                  {t('auth.verifying')}
                 </>
               ) : (
                 <>
-                  Verify Code
+                  {t('auth.verifyCode')}
                   <ArrowRight size={16} />
                 </>
               )}
@@ -191,13 +192,13 @@ export default function LoginPage() {
               onClick={handleBackToEmail}
               disabled={verifying}
             >
-              ← Back to email
+              {t('auth.backToEmail')}
             </button>
           </form>
         )}
 
         <p className="login-footer-text">
-          Sign in to save views, create alerts, and bookmark stories.
+          {t('auth.loginFooter')}
         </p>
       </div>
     </div>

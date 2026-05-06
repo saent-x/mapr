@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Search, Menu, X, LogOut, LogIn } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
+import useUIStore from '../stores/uiStore';
 import useBreakpoint from '../hooks/useBreakpoint';
 import db from '../services/instantDb';
 
@@ -47,12 +48,23 @@ export default function Header() {
   const opsOk = status === 'healthy' || status === 'ok';
 
   const { user, isLoading: authLoading } = db.useAuth();
+  const clearSavedViews = useUIStore((s) => s.deleteView);
 
   const isMap = location.pathname === '/';
 
   const { isMobile, isTablet } = useBreakpoint();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  const handleSignOut = () => {
+    db.auth.signOut();
+    // Clear any user-specific UI state (saved views are user-scoped)
+    const state = useUIStore.getState();
+    if (state.savedViews?.length > 0) {
+      state.savedViews.forEach((v) => state.deleteView(v));
+    }
+    setMenuOpen(false);
+  };
 
   useEffect(() => {
     const onKey = (e) => {
@@ -140,22 +152,22 @@ export default function Header() {
               <button
                 type="button"
                 className="header-signout-btn"
-                onClick={() => db.auth.signOut()}
-                aria-label="Sign out"
-                title="Sign out"
+                onClick={handleSignOut}
+                aria-label={t('auth.signOut')}
+                title={t('auth.signOut')}
               >
                 <LogOut size={12} />
-                OUT
+                {t('auth.signOut')}
               </button>
             </div>
           ) : (
             <Link
               to={`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`}
               className="header-signin-link"
-              aria-label="Sign in"
+              aria-label={t('auth.signIn')}
             >
               <LogIn size={12} />
-              SIGN IN
+              {t('auth.signIn')}
             </Link>
           )
         )}
@@ -205,6 +217,34 @@ export default function Header() {
 
       {isMobile && menuOpen && (
         <div className="header-mobile-menu" role="menu">
+          {!authLoading && (
+            user ? (
+              <div className="header-mobile-auth">
+                <span className="header-user-email" title={user.email}>
+                  {user.email}
+                </span>
+                <button
+                  type="button"
+                  className="header-signout-btn"
+                  onClick={handleSignOut}
+                  role="menuitem"
+                >
+                  <LogOut size={12} />
+                  {t('auth.signOut')}
+                </button>
+              </div>
+            ) : (
+              <Link
+                to={`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`}
+                className="header-signin-link"
+                onClick={() => setMenuOpen(false)}
+                role="menuitem"
+              >
+                <LogIn size={12} />
+                {t('auth.signIn')}
+              </Link>
+            )
+          )}
           <button
             type="button"
             className="lang-select"

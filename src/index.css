@@ -2165,6 +2165,30 @@ a { color: inherit; text-decoration: none; }
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }
+  .header-mobile-auth {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .header-mobile-auth .header-user-email {
+    font-size: 11px;
+    color: var(--ink-1);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .header-mobile-menu .header-signin-link {
+    justify-content: center;
+    padding: 8px;
+    width: 100%;
+  }
+  .header-mobile-menu .lang-select {
+    margin-top: 4px;
+  }
   .header-mobile-search {
     position: absolute;
     top: 44px;
