@@ -305,5 +305,31 @@
     "switchDark": "Cambiar a tema oscuro",
     "light": "Claro",
     "dark": "Oscuro"
+  },
+  "shortcutHelp": {
+    "title": "ATAJOS DE TECLADO",
+    "close": "Cerrar",
+    "footer": "Presiona ? para ver esta referencia · Atajos suprimidos al escribir en campos de texto",
+    "sectionGlobal": "GLOBAL",
+    "sectionNews": "PANEL DE NOTICIAS",
+    "sectionMap": "MAPA",
+    "sectionFilters": "FILTROS",
+    "sectionEntities": "GRAFO DE ENTIDADES",
+    "openHelp": "Abrir referencia de atajos",
+    "focusSearch": "Enfocar búsqueda",
+    "saveView": "Guardar vista actual",
+    "refresh": "Actualizar datos",
+    "toggleGlobe": "Alternar plano / globo",
+    "toggleFilters": "Alternar panel de filtros",
+    "closePanels": "Cerrar paneles y cajones",
+    "commandSearch": "Enfocar búsqueda (cmd)",
+    "navDown": "Mover selección abajo",
+    "navUp": "Mover selección arriba",
+    "expandItem": "Expandir elemento",
+    "bookmark": "Marcar historia",
+    "focusCycle": "Ciclar foco (Tab / Shift+Tab)",
+    "closeOverlay": "Cerrar superposición",
+    "drawerToggle": "Alternar cajón de filtros",
+    "drawerClose": "Cerrar cajón de filtros"
   }
 }

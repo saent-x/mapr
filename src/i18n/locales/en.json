@@ -525,5 +525,31 @@
     "switchDark": "Switch to dark theme",
     "light": "Light",
     "dark": "Dark"
+  },
+  "shortcutHelp": {
+    "title": "KEYBOARD SHORTCUTS",
+    "close": "Close",
+    "footer": "Press ? to toggle this reference · Shortcuts suppressed when typing in text fields",
+    "sectionGlobal": "GLOBAL",
+    "sectionNews": "NEWS PANEL",
+    "sectionMap": "MAP",
+    "sectionFilters": "FILTERS",
+    "sectionEntities": "ENTITY GRAPH",
+    "openHelp": "Open shortcut reference",
+    "focusSearch": "Focus search input",
+    "saveView": "Save current view",
+    "refresh": "Refresh data",
+    "toggleGlobe": "Toggle flat / globe",
+    "toggleFilters": "Toggle filter drawer",
+    "closePanels": "Close panels & drawers",
+    "commandSearch": "Focus search (cmd)",
+    "navDown": "Move selection down",
+    "navUp": "Move selection up",
+    "expandItem": "Expand selected item",
+    "bookmark": "Bookmark selected story",
+    "focusCycle": "Cycle focus (Tab / Shift+Tab)",
+    "closeOverlay": "Close map overlay",
+    "drawerToggle": "Toggle filter drawer",
+    "drawerClose": "Close filter drawer"
   }
 }

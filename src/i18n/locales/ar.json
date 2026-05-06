@@ -305,5 +305,31 @@
     "switchDark": "التبديل إلى المظهر الداكن",
     "light": "فاتح",
     "dark": "داكن"
+  },
+  "shortcutHelp": {
+    "title": "اختصارات لوحة المفاتيح",
+    "close": "إغلاق",
+    "footer": "اضغط ? لعرض هذا المرجع · الاختصارات معطلة عند الكتابة في الحقول",
+    "sectionGlobal": "عام",
+    "sectionNews": "لوحة الأخبار",
+    "sectionMap": "الخريطة",
+    "sectionFilters": "عوامل التصفية",
+    "sectionEntities": "رسم الكيانات",
+    "openHelp": "فتح مرجع الاختصارات",
+    "focusSearch": "التركيز على البحث",
+    "saveView": "حفظ العرض الحالي",
+    "refresh": "تحديث البيانات",
+    "toggleGlobe": "تبديل الخريطة / الكرة",
+    "toggleFilters": "تبديل درج التصفية",
+    "closePanels": "إغلاق اللوحات",
+    "commandSearch": "التركيز على البحث (cmd)",
+    "navDown": "تحريك التحديد للأسفل",
+    "navUp": "تحريك التحديد للأعلى",
+    "expandItem": "توسيع العنصر",
+    "bookmark": "حفظ العنصر",
+    "focusCycle": "دورة التركيز (Tab / Shift+Tab)",
+    "closeOverlay": "إغلاق التراكب",
+    "drawerToggle": "تبديل درج التصفية",
+    "drawerClose": "إغلاق درج التصفية"
   }
 }

@@ -305,5 +305,31 @@
     "switchDark": "切换到深色主题",
     "light": "浅色",
     "dark": "深色"
+  },
+  "shortcutHelp": {
+    "title": "键盘快捷键",
+    "close": "关闭",
+    "footer": "按 ? 查看此参考 · 在文本字段中输入时快捷键被禁用",
+    "sectionGlobal": "全局",
+    "sectionNews": "新闻面板",
+    "sectionMap": "地图",
+    "sectionFilters": "筛选器",
+    "sectionEntities": "实体图",
+    "openHelp": "打开快捷键参考",
+    "focusSearch": "聚焦搜索栏",
+    "saveView": "保存当前视图",
+    "refresh": "刷新数据",
+    "toggleGlobe": "切换平面/地球",
+    "toggleFilters": "切换筛选面板",
+    "closePanels": "关闭面板和抽屉",
+    "commandSearch": "聚焦搜索 (cmd)",
+    "navDown": "向下移动选择",
+    "navUp": "向上移动选择",
+    "expandItem": "展开所选项目",
+    "bookmark": "收藏所选故事",
+    "focusCycle": "焦点循环 (Tab / Shift+Tab)",
+    "closeOverlay": "关闭叠加层",
+    "drawerToggle": "切换筛选抽屉",
+    "drawerClose": "关闭筛选抽屉"
   }
 }

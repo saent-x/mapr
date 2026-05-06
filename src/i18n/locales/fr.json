@@ -305,5 +305,31 @@
     "switchDark": "Passer au thème sombre",
     "light": "Clair",
     "dark": "Sombre"
+  },
+  "shortcutHelp": {
+    "title": "RACCOURCIS CLAVIER",
+    "close": "Fermer",
+    "footer": "Appuyez sur ? pour afficher cette référence · Raccourcis désactivés lors de la saisie",
+    "sectionGlobal": "GLOBAL",
+    "sectionNews": "PANNEAU ACTUALITÉS",
+    "sectionMap": "CARTE",
+    "sectionFilters": "FILTRES",
+    "sectionEntities": "GRAPHE D'ENTITÉS",
+    "openHelp": "Ouvrir la référence des raccourcis",
+    "focusSearch": "Focus sur la recherche",
+    "saveView": "Sauvegarder la vue",
+    "refresh": "Actualiser les données",
+    "toggleGlobe": "Basculer plan / globe",
+    "toggleFilters": "Basculer le tiroir des filtres",
+    "closePanels": "Fermer les panneaux",
+    "commandSearch": "Focus recherche (cmd)",
+    "navDown": "Déplacer la sélection vers le bas",
+    "navUp": "Déplacer la sélection vers le haut",
+    "expandItem": "Développer l'élément",
+    "bookmark": "Marquer l'article",
+    "focusCycle": "Cycle de focus (Tab / Shift+Tab)",
+    "closeOverlay": "Fermer la superposition",
+    "drawerToggle": "Basculer le tiroir des filtres",
+    "drawerClose": "Fermer le tiroir des filtres"
   }
 }
