@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { mergeAdminHealthPayloads } from '../utils/healthSummary.js';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
+import ShortcutHelp from '../components/ShortcutHelp.jsx';
 
 const STATUS_COLORS = {
   ok: '#00e5a0',
@@ -137,6 +138,7 @@ const HealthPage = () => {
 
   return (
     <div style={s.page}>
+      <ShortcutHelp />
       <div style={s.container}>
         {/* Header */}
         <div style={s.header}>
