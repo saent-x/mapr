@@ -515,5 +515,24 @@
     "minutesAgo": "تم التحديث منذ {{value}} دقيقة",
     "hoursAgo": "تم التحديث منذ {{value}} ساعة",
     "daysAgo": "تم التحديث منذ {{value}} يوم"
+  },
+  "regionDetail": {
+    "articles": "مقالات",
+    "avgSeverity": "متوسط الخطورة",
+    "loading": "جارٍ تحميل بيانات المنطقة…",
+    "noArticles": "لم يتم العثور على مقالات لهذه المنطقة",
+    "readMore": "اقرأ المزيد",
+    "compare": "مقارنة",
+    "compareExit": "الخروج من المقارنة",
+    "selectSecondRegion": "اختر المنطقة الثانية",
+    "sharedEntities": "الكيانات المشتركة",
+    "noSharedEntities": "لا توجد كيانات مشتركة",
+    "severityTrend": "اتجاه الخطورة",
+    "regionA": "المنطقة أ",
+    "regionB": "المنطقة ب",
+    "searchRegionPlaceholder": "ابحث عن دولة أو رمز ISO…",
+    "eventCount": "الأحداث",
+    "sourceCount": "المصادر",
+    "avgSeverityShort": "متوسط الخطورة"
   }
 }

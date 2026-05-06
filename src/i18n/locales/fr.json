@@ -515,5 +515,24 @@
     "minutesAgo": "Mis à jour il y a {{value}}m",
     "hoursAgo": "Mis à jour il y a {{value}}h",
     "daysAgo": "Mis à jour il y a {{value}}j"
+  },
+  "regionDetail": {
+    "articles": "articles",
+    "avgSeverity": "gravité moyenne",
+    "loading": "Chargement des données de la région…",
+    "noArticles": "Aucun article trouvé pour cette région",
+    "readMore": "Lire plus",
+    "compare": "Comparer",
+    "compareExit": "Quitter la comparaison",
+    "selectSecondRegion": "Sélectionner une deuxième région",
+    "sharedEntities": "Entités partagées",
+    "noSharedEntities": "Aucune entité partagée",
+    "severityTrend": "Tendance de gravité",
+    "regionA": "Région A",
+    "regionB": "Région B",
+    "searchRegionPlaceholder": "Rechercher par pays ou ISO…",
+    "eventCount": "Événements",
+    "sourceCount": "Sources",
+    "avgSeverityShort": "Sév moyenne"
   }
 }

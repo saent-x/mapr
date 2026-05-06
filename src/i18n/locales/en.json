@@ -16,7 +16,19 @@
     "avgSeverity": "avg severity",
     "loading": "Loading region data…",
     "noArticles": "No articles found for this region",
-    "readMore": "Read more"
+    "readMore": "Read more",
+    "compare": "Compare",
+    "compareExit": "Exit Compare",
+    "selectSecondRegion": "Select second region",
+    "sharedEntities": "Shared Entities",
+    "noSharedEntities": "No shared entities",
+    "severityTrend": "Severity Trend",
+    "regionA": "Region A",
+    "regionB": "Region B",
+    "searchRegionPlaceholder": "Search by country or ISO…",
+    "eventCount": "Events",
+    "sourceCount": "Sources",
+    "avgSeverityShort": "Avg Sev"
   },
   "admin": {
     "title": "Admin Dashboard",

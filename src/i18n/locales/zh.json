@@ -515,5 +515,24 @@
     "minutesAgo": "{{value}}分钟前更新",
     "hoursAgo": "{{value}}小时前更新",
     "daysAgo": "{{value}}天前更新"
+  },
+  "regionDetail": {
+    "articles": "文章",
+    "avgSeverity": "平均严重性",
+    "loading": "加载区域数据…",
+    "noArticles": "未找到该区域的文章",
+    "readMore": "阅读更多",
+    "compare": "比较",
+    "compareExit": "退出比较",
+    "selectSecondRegion": "选择第二个区域",
+    "sharedEntities": "共享实体",
+    "noSharedEntities": "无共享实体",
+    "severityTrend": "严重性趋势",
+    "regionA": "区域 A",
+    "regionB": "区域 B",
+    "searchRegionPlaceholder": "按国家或ISO搜索…",
+    "eventCount": "事件",
+    "sourceCount": "来源",
+    "avgSeverityShort": "平均严重"
   }
 }

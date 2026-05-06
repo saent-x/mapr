@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, Search, MapPin, Loader } from 'lucide-react';
+import { ExternalLink, Search, MapPin, Loader, Columns2 } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
@@ -13,6 +13,7 @@ import { getSourceHost } from '../utils/urlUtils';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 import { ArticleDetail } from '../components/NewsPanel';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
+import ComparativeRegions from '../components/ComparativeRegions';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
 
@@ -60,6 +61,8 @@ function RegionBrief({ iso }) {
   const { t } = useTranslation();
 
   const [expandedId, setExpandedId] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIso, setCompareIso] = useState(null);
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const regionBackfills = useNewsStore((s) => s.regionBackfills);
@@ -77,6 +80,15 @@ function RegionBrief({ iso }) {
     const regionName = isoToCountry(upper) || upper;
     useNewsStore.getState().fetchRegionBackfill(upper, regionName, { sortMode });
   }, [iso, sortMode]);
+
+  // Fetch data for the second region when it changes in compare mode
+  useEffect(() => {
+    if (!compareIso) return;
+    const upper = compareIso.toUpperCase();
+    useNewsStore.getState().fetchRegionCoverage(upper);
+    const regionName = isoToCountry(upper) || upper;
+    useNewsStore.getState().fetchRegionBackfill(upper, regionName, { sortMode });
+  }, [compareIso, sortMode]);
 
   const countryName = isoToCountry(iso?.toUpperCase()) || iso?.toUpperCase() || '?';
   const dateFloor = useMemo(() => resolveDateFloor(dateWindow), [dateWindow]);
@@ -171,6 +183,16 @@ function RegionBrief({ iso }) {
             <span className="val">{sources.size}</span>
             <span className="sub">distinct</span>
           </div>
+          <button
+            type="button"
+            className={`compare-toggle-btn${compareMode ? ' active' : ''}`}
+            onClick={() => setCompareMode((v) => !v)}
+            aria-pressed={compareMode}
+            aria-label={compareMode ? t('regionDetail.compareExit') : t('regionDetail.compare')}
+          >
+            <Columns2 size={14} aria-hidden />
+            <span>{compareMode ? t('regionDetail.compareExit') : t('regionDetail.compare')}</span>
+          </button>
         </div>
       </div>
 
@@ -265,30 +287,41 @@ function RegionBrief({ iso }) {
         })}
       </div>
 
-      <div className="region-minimap">
-        <div className="region-minimap-label">
-          <div className="micro">MINI-MAP · {iso?.toUpperCase()}</div>
-        </div>
-        <Suspense fallback={<MapLoadingFallback />}>
-          <FlatMap
-            newsList={regionNews}
-            regionSeverities={{}}
-            mapOverlay="severity"
-            coverageStatusByIso={{}}
-            velocitySpikes={[]}
-            trackingPoints={[]}
-            selectedRegion={iso?.toUpperCase()}
-            selectedStory={null}
-            onRegionSelect={() => {}}
-            onStorySelect={() => {}}
-            onArcSelect={() => {}}
-            compact
+      {compareMode ? (
+        <div className="region-comparative-wrap">
+          <ComparativeRegions
+            isoA={iso?.toUpperCase()}
+            isoB={compareIso}
+            onRegionBChange={setCompareIso}
+            onExit={() => setCompareMode(false)}
           />
-        </Suspense>
-        <div className="region-minimap-actions">
-          <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
         </div>
-      </div>
+      ) : (
+        <div className="region-minimap">
+          <div className="region-minimap-label">
+            <div className="micro">MINI-MAP · {iso?.toUpperCase()}</div>
+          </div>
+          <Suspense fallback={<MapLoadingFallback />}>
+            <FlatMap
+              newsList={regionNews}
+              regionSeverities={{}}
+              mapOverlay="severity"
+              coverageStatusByIso={{}}
+              velocitySpikes={[]}
+              trackingPoints={[]}
+              selectedRegion={iso?.toUpperCase()}
+              selectedStory={null}
+              onRegionSelect={() => {}}
+              onStorySelect={() => {}}
+              onArcSelect={() => {}}
+              compact
+            />
+          </Suspense>
+          <div className="region-minimap-actions">
+            <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
