@@ -52,7 +52,8 @@ describe('accessibility and UX polish', () => {
   describe('keyboard navigation', () => {
     it('App.jsx Escape closes panels, drawers, and overlays', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      assert.match(code, /case 'Escape'/, 'Should handle Escape key');
+      // Escape is handled via the useKeyboardNavigation hook's onEscape callback
+      assert.match(code, /onEscape/, 'Should pass onEscape to useKeyboardNavigation');
       assert.match(code, /handleClosePanel/, 'Escape should close news panel');
       assert.match(code, /setDrawerMode\(null\)/, 'Escape should close drawer');
     });
@@ -70,12 +71,12 @@ describe('accessibility and UX polish', () => {
     });
 
     it('Escape works even when focused on input fields', () => {
-      const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      // The Escape key should work even from inputs
+      const code = readFileSync(join(SRC, 'hooks/useKeyboardNavigation.js'), 'utf-8');
+      // The hook's input guard must allow Escape to pass through from any field
       assert.match(
         code,
-        /e\.key\s*!==\s*'Escape'\s*&&.*INPUT/,
-        'Escape should bypass the input guard so it works from any field'
+        /isEditingTarget.*e\.key\s*!==\s*'Escape'/s,
+        'Escape should bypass the input guard in useKeyboardNavigation hook'
       );
     });
 
