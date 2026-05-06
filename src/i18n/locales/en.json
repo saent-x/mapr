@@ -519,5 +519,11 @@
   "keyboard": {
     "quickSave": "Quick Save",
     "viewSaved": "View saved"
+  },
+  "theme": {
+    "switchLight": "Switch to light theme",
+    "switchDark": "Switch to dark theme",
+    "light": "Light",
+    "dark": "Dark"
   }
 }

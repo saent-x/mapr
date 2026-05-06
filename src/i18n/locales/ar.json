@@ -299,5 +299,11 @@
   "keyboard": {
     "quickSave": "حفظ سريع",
     "viewSaved": "تم حفظ العرض"
+  },
+  "theme": {
+    "switchLight": "التبديل إلى المظهر الفاتح",
+    "switchDark": "التبديل إلى المظهر الداكن",
+    "light": "فاتح",
+    "dark": "داكن"
   }
 }

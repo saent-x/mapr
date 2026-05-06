@@ -299,5 +299,11 @@
   "keyboard": {
     "quickSave": "快速保存",
     "viewSaved": "视图已保存"
+  },
+  "theme": {
+    "switchLight": "切换到浅色主题",
+    "switchDark": "切换到深色主题",
+    "light": "浅色",
+    "dark": "深色"
   }
 }

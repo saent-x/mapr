@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Menu, X, LogOut, LogIn } from 'lucide-react';
+import { Search, Menu, X, LogOut, LogIn, Sun, Moon } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 import useBreakpoint from '../hooks/useBreakpoint';
 import db from '../services/instantDb';
+import { toggleTheme as toggleAppTheme } from '../utils/theme';
 
 function BrandMark() {
   return (
@@ -55,6 +56,24 @@ export default function Header() {
   const { isMobile, isTablet } = useBreakpoint();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [appTheme, setAppTheme] = useState(() =>
+    (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
+  );
+
+  /* ── theme observer (sync with data-theme attribute) ── */
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const observer = new MutationObserver(() => {
+      setAppTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const handleToggleTheme = () => {
+    const next = toggleAppTheme();
+    setAppTheme(next);
+  };
 
   const handleSignOut = () => {
     db.auth.signOut();
@@ -172,15 +191,26 @@ export default function Header() {
           )
         )}
         {!isMobile && (
-          <button
-            type="button"
-            className="lang-select"
-            onClick={cycleLang}
-            title="Cycle language"
-            aria-label="Cycle language"
-          >
-            LANG · <b>{i18n.language.toUpperCase()}</b>
-          </button>
+          <>
+            <button
+              type="button"
+              className="theme-toggle-btn"
+              onClick={handleToggleTheme}
+              title={appTheme === 'light' ? t('theme.switchDark') : t('theme.switchLight')}
+              aria-label={appTheme === 'light' ? t('theme.switchDark') : t('theme.switchLight')}
+            >
+              {appTheme === 'light' ? <Moon size={14} aria-hidden /> : <Sun size={14} aria-hidden />}
+            </button>
+            <button
+              type="button"
+              className="lang-select"
+              onClick={cycleLang}
+              title="Cycle language"
+              aria-label="Cycle language"
+            >
+              LANG · <b>{i18n.language.toUpperCase()}</b>
+            </button>
+          </>
         )}
         <div className="op-badge" aria-live="polite">
           <span
@@ -245,6 +275,15 @@ export default function Header() {
               </Link>
             )
           )}
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={() => { handleToggleTheme(); setMenuOpen(false); }}
+            role="menuitem"
+          >
+            {appTheme === 'light' ? <Moon size={14} aria-hidden /> : <Sun size={14} aria-hidden />}
+            {' '}{appTheme === 'light' ? t('theme.dark') : t('theme.light')}
+          </button>
           <button
             type="button"
             className="lang-select"

@@ -76,6 +76,57 @@
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* ── Light theme ── */
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Backgrounds — light tactical palette */
+  --bg-0: #f5f4f0;
+  --bg-1: #eeede8;
+  --bg-2: #e6e4dc;
+  --bg-3: #dbd9d1;
+  --bg-4: #d0cdc4;
+  --line: rgba(180, 176, 166, 0.55);
+  --line-2: rgba(160, 156, 146, 0.5);
+
+  /* Text — dark ink on light surface */
+  --ink-0: #1b1d21;
+  --ink-1: #3a3d44;
+  --ink-2: #6b6e76;
+  --ink-3: #90939a;
+  --ink-4: #b0b3b8;
+
+  /* Accents — slightly deepened for contrast on light */
+  --amber: #c4821e;
+  --amber-dim: #6b4a14;
+  --cyan: #2d8a94;
+  --cyan-dim: #1a535a;
+
+  /* Severity — keep full saturation */
+  --sev-green: #2e7d55;
+  --sev-amber: #c4821e;
+  --sev-red:   #c94033;
+  --sev-black: #6b2a5c;
+
+  /* Legacy aliases */
+  --bg: var(--bg-0);
+  --text: var(--ink-0);
+  --text-secondary: var(--ink-1);
+  --text-tertiary: var(--ink-2);
+
+  --critical: var(--sev-red);
+  --elevated: #c05828;
+  --watch: var(--sev-amber);
+  --low: var(--sev-green);
+
+  --accent: var(--amber);
+  --accent-bg: rgba(196, 130, 30, 0.10);
+  --accent-border: rgba(196, 130, 30, 0.30);
+
+  /* Glass — lighter, more translucent */
+  --glass: rgba(238, 237, 232, 0.88);
+}
+
 html.density-compact {
   --row: 22px; --pad-x: 10px; --pad-y: 6px; --gap: 4px;
 }
@@ -326,6 +377,37 @@ a { color: inherit; text-decoration: none; }
   background: transparent;
 }
 .lang-select b { color: var(--ink-0); font-weight: 500; }
+
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  color: var(--ink-1);
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.theme-toggle-btn:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--bg-2);
+}
+.header-mobile-menu .theme-toggle-btn {
+  width: auto;
+  height: auto;
+  padding: 4px 8px;
+  gap: 6px;
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  letter-spacing: 0.1em;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  color: var(--ink-1);
+}
 .op-badge {
   display: inline-flex;
   align-items: center;

@@ -2,11 +2,15 @@ import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './i18n'
+import './index.css'
+import { initTheme } from './utils/theme';
 import Layout from './components/Layout.jsx'
 import App from './App.jsx'
 import RegionDetailPage from './pages/RegionDetailPage.jsx'
 import PageLoadingFallback from './components/PageLoadingFallback.jsx'
-import './index.css'
+
+// Apply theme before first paint — system preference or stored choice.
+initTheme();
 
 const HealthPage = lazy(() => import('./pages/HealthPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))

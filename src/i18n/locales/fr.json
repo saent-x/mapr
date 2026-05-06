@@ -299,5 +299,11 @@
   "keyboard": {
     "quickSave": "Sauvegarde rapide",
     "viewSaved": "Vue sauvegardée"
+  },
+  "theme": {
+    "switchLight": "Passer au thème clair",
+    "switchDark": "Passer au thème sombre",
+    "light": "Clair",
+    "dark": "Sombre"
   }
 }
