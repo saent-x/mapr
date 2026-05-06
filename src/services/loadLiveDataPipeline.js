@@ -25,13 +25,18 @@ export async function runLoadLiveDataPipeline({ forceRefresh = false } = {}) {
     const briefing = raw.data;
 
     if (raw.status === 503 && briefing && typeof briefing === 'object') {
-      let historyPayload = null;
-      try {
-        historyPayload = await fetchBackendCoverageHistory();
-      } catch {
-        historyPayload = null;
+      const warmingArticles = briefing.articles || [];
+      // Only return backend_warming if we actually have articles to show;
+      // fall through to GDELT / mock when backend returns 503 with 0 articles.
+      if (warmingArticles.length > 0) {
+        let historyPayload = null;
+        try {
+          historyPayload = await fetchBackendCoverageHistory();
+        } catch {
+          historyPayload = null;
+        }
+        return { kind: 'backend_warming', briefing, historyPayload };
       }
-      return { kind: 'backend_warming', briefing, historyPayload };
     }
 
     if (raw.ok && briefing && Array.isArray(briefing.articles)) {

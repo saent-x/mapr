@@ -92,7 +92,10 @@ const useNewsStore = create((set, get) => ({
         coverageTrends: historyPayload?.trends || briefing.coverageTrends || null,
         coverageHistory: historyPayload || null,
         velocitySpikes: Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : [],
-        dataSource: 'live',
+        // Safety net: if backend_warming returned 0 articles (shouldn't happen
+        // after pipeline fix, but guard against it), mark as mock so the UI
+        // doesn't show "NO ITEMS" under a 'live' label.
+        dataSource: isWarming && count === 0 ? 'mock' : 'live',
         dataError: isWarming ? 'Backend briefing not ready yet — ingest may still be running' : null,
       });
 
