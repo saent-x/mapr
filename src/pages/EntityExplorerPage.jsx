@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useNewsStore from '../stores/newsStore.js';
@@ -7,6 +7,7 @@ import { extractEntityGraph, getRelatedEvents } from '../utils/entityGraph.js';
 import PageLoadingFallback from '../components/PageLoadingFallback.jsx';
 import useBreakpoint from '../hooks/useBreakpoint';
 import BottomSheet from '../components/ui/BottomSheet';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
 const EntityRelationshipGraph = lazy(() => import('../components/EntityRelationshipGraph.jsx'));
 
@@ -86,6 +87,45 @@ export default function EntityExplorerPage() {
     navigate('/');
   };
 
+  /* ── Keyboard j/k navigation on entity list ── */
+  const navigableEntities = useMemo(() => {
+    return selNode ? connectedNodes : nodes;
+  }, [selNode, connectedNodes, nodes]);
+
+  const [kbEntityIdx, setKbEntityIdx] = useState(-1);
+
+  const { getSelectedIndex: getEntityIdx } = useKeyboardNavigation({
+    items: navigableEntities,
+    searchSelector: '.search-input, .header-search input',
+    onSelect: useCallback((entity) => {
+      setSelected(entity.id);
+    }, []),
+    onBookmark: useCallback(() => {}, []),
+    onSaveView: useCallback(() => {}, []),
+    onEscape: useCallback(() => {
+      if (selNode) { setSelected(null); return true; }
+      return true;
+    }, [selNode]),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const current = getEntityIdx();
+      setKbEntityIdx((prev) => (prev !== current ? current : prev));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [getEntityIdx]);
+
+  const kbHighlightedEntityId = useMemo(() => {
+    if (kbEntityIdx >= 0 && kbEntityIdx < navigableEntities.length) {
+      return navigableEntities[kbEntityIdx]?.id || null;
+    }
+    return null;
+  }, [kbEntityIdx, navigableEntities]);
+
   const orgCount = nodes.filter((n) => n.type === 'organization').length;
   const locCount = nodes.filter((n) => n.type === 'location').length;
   const perCount = nodes.filter((n) => n.type === 'person').length;
@@ -138,16 +178,29 @@ export default function EntityExplorerPage() {
 
               <div style={{ borderTop: '1px solid var(--line)', padding: '12px 4px' }}>
                 <div className="micro" style={{ marginBottom: 8 }}>CONNECTED · {connectedIds.size}</div>
-                {connectedNodes.slice(0, 12).map((n) => (
+                {connectedNodes.slice(0, 12).map((n) => {
+                  const kbHighlighted = kbHighlightedEntityId === n.id;
+                  return (
                   <div
                     key={n.id}
                     role="button"
                     tabIndex={0}
+                    data-kb-highlighted={kbHighlighted ? 'true' : undefined}
                     onClick={() => setSelected(n.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n.id); }
                     }}
-                    style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, fontSize: 13, cursor: 'pointer', minHeight: 44 }}
+                    style={{
+                      padding: '8px 0',
+                      borderBottom: '1px solid var(--line)',
+                      display: 'flex',
+                      gap: 8,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      minHeight: 44,
+                      background: kbHighlighted ? 'var(--bg-2)' : undefined,
+                      boxShadow: kbHighlighted ? 'inset 2px 0 0 var(--cyan)' : undefined,
+                    }}
                   >
                     <span style={{ width: 14, color: TYPE_STYLES[n.type]?.color, fontFamily: 'var(--ff-mono)' }}>
                       {TYPE_STYLES[n.type]?.glyph}
@@ -155,7 +208,7 @@ export default function EntityExplorerPage() {
                     <span style={{ flex: 1, color: 'var(--ink-0)' }}>{n.name}</span>
                     <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{n.mentionCount}</span>
                   </div>
-                ))}
+                )})}
                 {connectedNodes.length === 0 && (
                   <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
                     NO EDGES
@@ -217,16 +270,29 @@ export default function EntityExplorerPage() {
 
               <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px' }}>
                 <div className="micro" style={{ marginBottom: 8 }}>CONNECTED · {connectedIds.size}</div>
-                {connectedNodes.slice(0, 12).map((n) => (
+                {connectedNodes.slice(0, 12).map((n) => {
+                  const kbHighlighted = kbHighlightedEntityId === n.id;
+                  return (
                   <div
                     key={n.id}
                     role="button"
                     tabIndex={0}
+                    data-kb-highlighted={kbHighlighted ? 'true' : undefined}
                     onClick={() => setSelected(n.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n.id); }
                     }}
-                    style={{ padding: '5px 0', borderBottom: '1px solid var(--line)', display: 'flex', gap: 8, fontSize: 12, cursor: 'pointer' }}
+                    style={{
+                      padding: '5px 0',
+                      borderBottom: '1px solid var(--line)',
+                      display: 'flex',
+                      gap: 8,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      background: kbHighlighted ? 'var(--bg-2)' : undefined,
+                      boxShadow: kbHighlighted ? 'inset 2px 0 0 var(--cyan)' : undefined,
+                      paddingLeft: kbHighlighted ? '4px' : undefined,
+                    }}
                   >
                     <span style={{ width: 14, color: TYPE_STYLES[n.type]?.color, fontFamily: 'var(--ff-mono)' }}>
                       {TYPE_STYLES[n.type]?.glyph}
@@ -234,7 +300,7 @@ export default function EntityExplorerPage() {
                     <span style={{ flex: 1, color: 'var(--ink-0)' }}>{n.name}</span>
                     <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{n.mentionCount}</span>
                   </div>
-                ))}
+                )})}
                 {connectedNodes.length === 0 && (
                   <div style={{ color: 'var(--ink-3)', fontFamily: 'var(--ff-mono)', fontSize: 10, letterSpacing: '0.1em' }}>
                     NO EDGES

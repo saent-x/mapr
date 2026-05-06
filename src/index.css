@@ -551,6 +551,10 @@ a { color: inherit; text-decoration: none; }
 .news-item[data-expanded] {
   background: var(--bg-2);
 }
+.news-item[data-kb-highlighted="true"] {
+  background: var(--bg-2);
+  box-shadow: inset 2px 0 0 var(--cyan);
+}
 .news-item-detail {
   margin-top: 6px;
   padding: 8px 0 2px;

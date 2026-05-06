@@ -292,5 +292,12 @@
     "sendError": "Échec de l'envoi du code",
     "signInPrompt": "Connectez-vous pour utiliser cette fonction",
     "backToEmail": "← Retour à l'email"
+  },
+  "watchlist": {
+    "bookmarked": "Marqué: {{title}}"
+  },
+  "keyboard": {
+    "quickSave": "Sauvegarde rapide",
+    "viewSaved": "Vue sauvegardée"
   }
 }

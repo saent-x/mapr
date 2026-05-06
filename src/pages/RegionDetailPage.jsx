@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink, Search, MapPin, Loader } from 'lucide-react';
@@ -12,6 +12,7 @@ import { resolveDateFloor } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 import { ArticleDetail } from '../components/NewsPanel';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
 
@@ -104,6 +105,43 @@ function RegionBrief({ iso }) {
   const sevSub = sevTier(avgSev * 10);
   const sources = new Set(regionNews.map((a) => a.source).filter(Boolean));
 
+  /* ── Keyboard j/k navigation on region article list ── */
+  const [kbRegionIdx, setKbRegionIdx] = useState(-1);
+
+  const { getSelectedIndex: getRegionIdx } = useKeyboardNavigation({
+    items: regionNews,
+    searchSelector: '.search-input, .header-search input',
+    onSelect: useCallback((story) => {
+      setExpandedId((id) => (id === story.id ? null : story.id));
+    }, []),
+    onBookmark: useCallback((story) => {
+      // Bookmarking from region page — could wire to watchStore
+    }, []),
+    onSaveView: useCallback(() => {
+      // Save view flow from region page — could trigger save dialog
+    }, []),
+    onEscape: useCallback(() => true, []),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
+
+  // Sync keyboard index to React state
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const current = getRegionIdx();
+      setKbRegionIdx((prev) => (prev !== current ? current : prev));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [getRegionIdx]);
+
+  const kbHighlightedRegionStoryId = useMemo(() => {
+    if (kbRegionIdx >= 0 && kbRegionIdx < regionNews.length) {
+      return regionNews[kbRegionIdx]?.id || null;
+    }
+    return null;
+  }, [kbRegionIdx, regionNews]);
+
   return (
     <div className="region-page">
       <div className="region-header">
@@ -162,6 +200,7 @@ function RegionBrief({ iso }) {
           const conf = typeof story.confidence === 'number' ? story.confidence : null;
           const lMeta = lifecycleMeta(story.lifecycle);
           const expanded = expandedId === story.id;
+          const kbHighlighted = kbHighlightedRegionStoryId === story.id;
           const toggle = () =>
             setExpandedId((id) => (id === story.id ? null : story.id));
           return (
@@ -169,6 +208,7 @@ function RegionBrief({ iso }) {
               key={story.id}
               className="news-item"
               data-expanded={expanded || undefined}
+              data-kb-highlighted={kbHighlighted ? 'true' : undefined}
               role="button"
               tabIndex={0}
               aria-label={story.title}

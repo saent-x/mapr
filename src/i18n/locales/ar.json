@@ -292,5 +292,12 @@
     "sendError": "فشل إرسال الرمز",
     "signInPrompt": "سجل الدخول لاستخدام هذه الميزة",
     "backToEmail": "← العودة إلى البريد الإلكتروني"
+  },
+  "watchlist": {
+    "bookmarked": "تم وضع إشارة: {{title}}"
+  },
+  "keyboard": {
+    "quickSave": "حفظ سريع",
+    "viewSaved": "تم حفظ العرض"
   }
 }

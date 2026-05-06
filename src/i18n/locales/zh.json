@@ -292,5 +292,12 @@
     "sendError": "发送验证码失败",
     "signInPrompt": "请登录以使用此功能",
     "backToEmail": "← 返回电子邮件"
+  },
+  "watchlist": {
+    "bookmarked": "已收藏: {{title}}"
+  },
+  "keyboard": {
+    "quickSave": "快速保存",
+    "viewSaved": "视图已保存"
   }
 }

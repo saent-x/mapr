@@ -273,6 +273,7 @@ const NewsPanel = ({
   news = [],
   allEvents = [],
   selectedStoryId,
+  kbHighlightedStoryId,
   onStorySelect,
   onClose,
   variant,
@@ -313,6 +314,7 @@ const NewsPanel = ({
         const sev = ((story.severity ?? 0) / 10).toFixed(1);
         const active = selectedStoryId === story.id;
         const expanded = expandedId === story.id;
+        const kbHighlighted = kbHighlightedStoryId === story.id;
         const host = getSourceHost(story.url) || story.source || '';
         const conf = typeof story.confidence === 'number' ? story.confidence : null;
         const lMeta = lifecycleMeta(story.lifecycle);
@@ -326,6 +328,7 @@ const NewsPanel = ({
             className="news-item"
             data-active={active || undefined}
             data-expanded={expanded || undefined}
+            data-kb-highlighted={kbHighlighted ? 'true' : undefined}
             role="button"
             tabIndex={0}
             aria-label={story.title}

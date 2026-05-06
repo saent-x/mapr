@@ -474,7 +474,8 @@
     "toggleLabel": "Watchlist",
     "watchRegion": "Watch region",
     "notification": "{{count}} new articles for {{label}}",
-    "notificationMultiple": "New articles for {{count}} watched items"
+    "notificationMultiple": "New articles for {{count}} watched items",
+    "bookmarked": "Bookmarked: {{title}}"
   },
   "loading": {
     "map": "Loading map…",
@@ -514,5 +515,9 @@
     "sendError": "Failed to send code",
     "signInPrompt": "Sign in to use this feature",
     "backToEmail": "← Back to email"
+  },
+  "keyboard": {
+    "quickSave": "Quick Save",
+    "viewSaved": "View saved"
   }
 }

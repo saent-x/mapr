@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, ChevronsDownUp, ChevronsUpDown, X, Users, Building2, MapPin } from 'lucide-react';
@@ -20,6 +20,7 @@ import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
+import useKeyboardNavigation from './hooks/useKeyboardNavigation';
 import usePanelState from './hooks/usePanelState';
 import useBreakpoint from './hooks/useBreakpoint';
 import useBriefingStream from './hooks/useBriefingStream';
@@ -253,22 +254,82 @@ function App() {
   }, [addToast]);
 
   /* ── Save-dialog state (kept so Escape keyboard path matches tests) ── */
-  const [showSaveDialog, setShowSaveDialog] = React.useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
 
-  /* ── Keyboard ── */
+  /* ── Keyboard-selected story index (for j/k navigation) ── */
+  const [kbSelectedIdx, setKbSelectedIdx] = useState(-1);
+
+  /** Story ID highlighted by keyboard j/k navigation. */
+  const kbHighlightedStoryId = useMemo(() => {
+    if (kbSelectedIdx >= 0 && kbSelectedIdx < activeNews.length) {
+      return activeNews[kbSelectedIdx]?.id || null;
+    }
+    return null;
+  }, [kbSelectedIdx, activeNews]);
+
+  /* ── Keyboard: j/k navigation, Enter expand, s save, b bookmark ── */
+  const { getSelectedIndex, setSelectedIndex } = useKeyboardNavigation({
+    items: activeNews,
+    searchSelector: '.search-input, .header-search input',
+    onSelect: useCallback((story) => {
+      handleStorySelect(story);
+    }, [handleStorySelect]),
+    onBookmark: useCallback((story) => {
+      useWatchStore.getState().addWatch('entity', story.title, story.title);
+      addToast(t('watchlist.bookmarked', { title: story.title }), 'info');
+    }, [addToast, t]),
+    onSaveView: useCallback(() => {
+      const store = useUIStore.getState();
+      const filterStore = useFilterStore.getState();
+      store.saveCurrentView(
+        t('keyboard.quickSave', 'Quick Save'),
+        {
+          searchQuery: filterStore.debouncedSearch,
+          minSeverity: filterStore.minSeverity,
+          minConfidence: filterStore.minConfidence,
+          dateWindow: filterStore.dateWindow,
+          sortMode: filterStore.sortMode,
+          verificationFilter: filterStore.verificationFilter,
+          sourceTypeFilter: filterStore.sourceTypeFilter,
+          languageFilter: filterStore.languageFilter,
+          accuracyMode: filterStore.accuracyMode,
+          precisionFilter: filterStore.precisionFilter,
+          hideAmplified: filterStore.hideAmplified,
+        },
+        { mapMode: store.mapMode, mapOverlay: filterStore.mapOverlay },
+      );
+      addToast(t('keyboard.viewSaved'), 'info');
+    }, [addToast, t]),
+    onEscape: useCallback(() => {
+      if (showExport) { setShowExport(false); return true; }
+      if (showSaveDialog) { setShowSaveDialog(false); return true; }
+      if (selectedArc) { useUIStore.setState({ selectedArc: null }); return true; }
+      if (panelOpen) { handleClosePanel(); return true; }
+      if (filtersOpen) { setDrawerMode(null); return true; }
+      return true;
+    }, [showExport, showSaveDialog, selectedArc, panelOpen, filtersOpen, handleClosePanel, setDrawerMode, setShowExport]),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
+
+  // Keep selectedIndex in React state for re-renders (ref-based in hook for perf)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const current = getSelectedIndex();
+      setKbSelectedIdx((prev) => (prev !== current ? current : prev));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [getSelectedIndex]);
+
+  /* ── Keyboard: global shortcuts (r refresh, g globe, f filters) ── */
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key !== 'Escape' && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) return;
+      const target = e.target;
+      const editing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if (editing) return;
       switch (e.key) {
         case 'r': handleRefresh(); break;
-        case '/': e.preventDefault(); document.querySelector('.search-input')?.focus(); break;
-        case 'Escape':
-          if (showExport) { setShowExport(false); break; }
-          if (showSaveDialog) { setShowSaveDialog(false); break; }
-          if (selectedArc) { useUIStore.setState({ selectedArc: null }); break; }
-          if (panelOpen) { handleClosePanel(); break; }
-          if (filtersOpen) { setDrawerMode(null); break; }
-          break;
         case 'g': useUIStore.getState().toggleMapMode(); break;
         case 'f': useUIStore.getState().toggleDrawer('filters'); break;
         default: break;
@@ -276,10 +337,7 @@ function App() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [
-    panelOpen, filtersOpen, handleRefresh, handleClosePanel, setDrawerMode,
-    showExport, setShowExport, showSaveDialog, selectedArc,
-  ]);
+  }, [handleRefresh]);
 
   /* ── URL sync ── */
   useEffect(() => {
@@ -472,6 +530,7 @@ function App() {
         news={panelNews.length > 0 ? panelNews : activeNews}
         allEvents={activeNews}
         selectedStoryId={selectedStoryId}
+        kbHighlightedStoryId={kbHighlightedStoryId}
         onStorySelect={handleStorySelect}
         onClose={handleClosePanel}
         sessionDiff={sessionDiff}
