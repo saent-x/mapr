@@ -465,5 +465,20 @@
     "updated": "Regla de alerta actualizada",
     "newMatch": "Nueva coincidencia",
     "newMatches": "nuevas coincidencias"
+  },
+  "bookmarks": {
+    "sidebarTitle": "MARCADORES",
+    "emptyHint": "Marca historias con b o el icono de marcador",
+    "noFilteredBookmarks": "Ningún marcador coincide con los filtros",
+    "signInPrompt": "Inicia sesión para marcar historias",
+    "signInToBookmark": "Inicia sesión para marcar",
+    "filterRegion": "Región",
+    "filterAll": "Todas las regiones",
+    "filterSeverity": "Severidad",
+    "filterDate": "Rango de fechas",
+    "filterDateFrom": "Desde",
+    "filterDateTo": "Hasta",
+    "filterClear": "Limpiar filtros",
+    "bookmarked": "Marcado: {{title}}"
   }
 }

@@ -654,5 +654,20 @@
     "updated": "Alert rule updated",
     "newMatch": "New match",
     "newMatches": "new matches"
+  },
+  "bookmarks": {
+    "sidebarTitle": "BOOKMARKS",
+    "emptyHint": "Bookmark stories with b or the bookmark icon",
+    "noFilteredBookmarks": "No bookmarks match the current filters",
+    "signInPrompt": "Sign in to bookmark stories",
+    "signInToBookmark": "Sign in to bookmark",
+    "filterRegion": "Region",
+    "filterAll": "All regions",
+    "filterSeverity": "Severity",
+    "filterDate": "Date range",
+    "filterDateFrom": "From date",
+    "filterDateTo": "To date",
+    "filterClear": "Clear filters",
+    "bookmarked": "Bookmarked: {{title}}"
   }
 }

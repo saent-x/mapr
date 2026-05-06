@@ -445,6 +445,126 @@ a { color: inherit; text-decoration: none; }
 .alert-rules-create-btn:hover { background: var(--bg-3); color: var(--ink-0); }
 .alert-rules-create-btn:disabled { color: var(--ink-3); cursor: not-allowed; }
 
+/* ── Bookmarks Sidebar ── */
+.bookmarks-sidebar {
+  border-top: 1px solid var(--line);
+  padding: 6px 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.bookmarks-filters {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bookmarks-filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.bookmarks-filter-select {
+  width: 100%;
+  padding: 2px 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--ink-1);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.bookmarks-filter-date-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.bookmarks-filter-date {
+  flex: 1;
+  padding: 2px 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  color: var(--ink-1);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  min-width: 0;
+}
+.bookmarks-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--line-2);
+  color: var(--ink-2);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.bookmarks-filter-clear:hover { color: var(--ink-0); border-color: var(--ink-2); }
+.bookmarks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bookmarks-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+}
+.bookmarks-item:last-child { border-bottom: 0; }
+.bookmarks-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: var(--fs-0);
+  color: var(--ink-0);
+}
+.bookmarks-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 8px;
+}
+.bookmarks-item-region {
+  font-family: var(--ff-mono);
+  color: var(--ink-2);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+.bookmarks-item-ago {
+  font-family: var(--ff-mono);
+  color: var(--ink-3);
+  font-size: 8px;
+}
+.bookmarks-item .saved-views-delete { opacity: 1; }
+
+/* ── Bookmark Button (on news items) ── */
+.bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.bookmark-btn:hover { color: var(--amber); border-color: var(--line-2); }
+.bookmark-btn.is-bookmarked { color: var(--amber); }
+.bookmark-btn.is-bookmarked:hover { color: var(--amber-dim); }
+.news-bookmark-btn {
+  margin-left: 4px;
+}
+
 /* ── Save View Dialog ── */
 .save-view-overlay {
   position: fixed;

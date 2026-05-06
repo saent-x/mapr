@@ -6,6 +6,7 @@ import useProgressiveList from '../hooks/useProgressiveList.js';
 import useUIStore from '../stores/uiStore.js';
 import useBreakpoint from '../hooks/useBreakpoint.js';
 import BottomSheet from './ui/BottomSheet';
+import BookmarkButton from './BookmarkButton';
 import { getSourceHost } from '../utils/urlUtils';
 
 function ago(ts) {
@@ -347,6 +348,7 @@ const NewsPanel = ({
                   {lMeta.label}
                 </span>
               )}
+              <BookmarkButton story={story} className="news-bookmark-btn" />
               <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
               <span>·</span>
               <span>{ago(story.firstSeenAt || story.publishedAt)}</span>

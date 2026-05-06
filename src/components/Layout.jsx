@@ -7,6 +7,7 @@ import ShortcutHelp from './ShortcutHelp';
 import OnboardingOverlay from './OnboardingOverlay';
 import SavedViewsSidebar from './SavedViewsSidebar';
 import AlertRulesPanel from './AlertRulesPanel';
+import BookmarksPanel from './BookmarksPanel';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 
@@ -159,6 +160,7 @@ export default function Layout() {
 
         <SavedViewsSidebar />
         <AlertRulesPanel />
+        <BookmarksPanel />
       </aside>
 
       <main className="layout-content app-main" data-route={location.pathname}>

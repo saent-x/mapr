@@ -465,5 +465,20 @@
     "updated": "تم تحديث قاعدة التنبيه",
     "newMatch": "تطابق جديد",
     "newMatches": "تطابقات جديدة"
+  },
+  "bookmarks": {
+    "sidebarTitle": "الإشارات المرجعية",
+    "emptyHint": "أضف إشارات مرجعية باستخدام b أو أيقونة الإشارة",
+    "noFilteredBookmarks": "لا توجد إشارات مرجعية تطابق الفلاتر",
+    "signInPrompt": "سجل الدخول لإضافة إشارات مرجعية",
+    "signInToBookmark": "سجل الدخول للإشارة المرجعية",
+    "filterRegion": "المنطقة",
+    "filterAll": "جميع المناطق",
+    "filterSeverity": "الخطورة",
+    "filterDate": "نطاق التاريخ",
+    "filterDateFrom": "من تاريخ",
+    "filterDateTo": "إلى تاريخ",
+    "filterClear": "مسح الفلاتر",
+    "bookmarked": "تمت الإشارة: {{title}}"
   }
 }

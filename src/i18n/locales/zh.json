@@ -465,5 +465,20 @@
     "updated": "警报规则已更新",
     "newMatch": "新匹配",
     "newMatches": "个新匹配"
+  },
+  "bookmarks": {
+    "sidebarTitle": "书签",
+    "emptyHint": "使用 b 或书签图标添加书签",
+    "noFilteredBookmarks": "没有匹配当前筛选条件的书签",
+    "signInPrompt": "登录以添加书签",
+    "signInToBookmark": "登录以添加书签",
+    "filterRegion": "地区",
+    "filterAll": "所有地区",
+    "filterSeverity": "严重程度",
+    "filterDate": "日期范围",
+    "filterDateFrom": "开始日期",
+    "filterDateTo": "结束日期",
+    "filterClear": "清除筛选",
+    "bookmarked": "已添加书签: {{title}}"
   }
 }

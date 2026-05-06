@@ -465,5 +465,20 @@
     "updated": "Règle d'alerte mise à jour",
     "newMatch": "Nouvelle correspondance",
     "newMatches": "nouvelles correspondances"
+  },
+  "bookmarks": {
+    "sidebarTitle": "FAVORIS",
+    "emptyHint": "Ajoutez des favoris avec b ou l'icône de favori",
+    "noFilteredBookmarks": "Aucun favori ne correspond aux filtres",
+    "signInPrompt": "Connectez-vous pour ajouter des favoris",
+    "signInToBookmark": "Connectez-vous pour ajouter aux favoris",
+    "filterRegion": "Région",
+    "filterAll": "Toutes les régions",
+    "filterSeverity": "Gravité",
+    "filterDate": "Période",
+    "filterDateFrom": "Du",
+    "filterDateTo": "Au",
+    "filterClear": "Effacer les filtres",
+    "bookmarked": "Favori : {{title}}"
   }
 }
