@@ -15,6 +15,8 @@ const CADENCE_BY_CLASS = {
   default: 75
 };
 
+export { CADENCE_BY_CLASS };
+
 function getCoverageCountries(feed) {
   const coverageCountries = Array.isArray(feed?.coverageCountries)
     ? feed.coverageCountries.filter(Boolean)

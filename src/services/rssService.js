@@ -241,6 +241,9 @@ export const RSS_FEEDS = [
   { name: 'Chronicles of Turkmenistan', url: 'https://en.hronikatm.com/feed/', id: 'chronicles-tm', country: 'Turkmenistan' },
   { name: '24.kg English', url: 'https://24.kg/english/rss/', id: '24kg-kg', country: 'Kyrgyzstan' },
   { name: 'UB Post Mongolia', url: 'https://theubpost.mn/feed/', id: 'ubpost-mn', country: 'Mongolia' },
+  { name: 'Eurasianet', url: 'https://eurasianet.org/feed/', id: 'eurasianet', country: null, sourceType: 'regional', coverageCountries: ['Kazakhstan', 'Kyrgyzstan', 'Tajikistan', 'Turkmenistan', 'Uzbekistan'] },
+  { name: 'Times of Central Asia', url: 'https://timesca.com/feed/', id: 'timesca', country: null, sourceType: 'regional', coverageCountries: ['Kazakhstan', 'Kyrgyzstan', 'Tajikistan', 'Turkmenistan', 'Uzbekistan'] },
+  { name: 'AKIpress Kyrgyzstan', url: 'https://akipress.com/feed/', id: 'akipress-kg', country: 'Kyrgyzstan' },
   // South Asia — underrepresented countries
   { name: 'The Edition Maldives', url: 'https://edition.mv/feed', id: 'edition-mv', country: 'Maldives' },
   { name: 'Sun Online Maldives', url: 'https://en.sun.mv/feed', id: 'sun-mv', country: 'Maldives' },
@@ -321,6 +324,9 @@ export const RSS_FEEDS = [
   { name: 'Kaieteur News Guyana', url: 'https://www.kaieteurnewsonline.com/feed/', id: 'kaieteur-gy', country: 'Guyana' },
   { name: 'Starnieuws Suriname', url: 'https://www.starnieuws.com/rss/index.rss', id: 'starnieuws-sr', country: 'Suriname' },
   { name: 'Breaking Belize News', url: 'https://www.breakingbelizenews.com/feed/', id: 'bbn-bz', country: 'Belize' },
+  { name: 'Jamaica Observer', url: 'https://www.jamaicaobserver.com/feed/', id: 'jamaicaobserver-jm', country: 'Jamaica' },
+  { name: 'Caribbean National Weekly', url: 'https://www.caribbeannationalweekly.com/feed/', id: 'cnw', country: null, sourceType: 'regional', coverageCountries: ['Jamaica', 'Trinidad and Tobago', 'Barbados', 'Haiti', 'Bahamas', 'Guyana', 'Suriname', 'Belize', 'Cuba'] },
+  { name: 'Antigua Observer', url: 'https://antiguaobserver.com/feed/', id: 'antiguaobserver-ag', country: 'Antigua and Barbuda' },
   // Central America — underrepresented countries
   { name: 'Prensa Libre Guatemala', url: 'https://www.prensalibre.com/feed/', id: 'prensalibre-gt', country: 'Guatemala' },
   { name: 'La Prensa Honduras', url: 'https://www.laprensa.hn/feed/', id: 'laprensa-hn', country: 'Honduras' },
@@ -348,6 +354,9 @@ export const RSS_FEEDS = [
   { name: 'Solomon Star', url: 'https://www.solomonstarnews.com/feed/', id: 'solomonstar-sb', country: 'Solomon Islands' },
   { name: 'Solomon Times', url: 'https://www.solomontimes.com/rss', id: 'solomontimes-sb', country: 'Solomon Islands' },
   { name: 'Vanuatu Daily Post', url: 'https://www.dailypost.vu/feed/', id: 'dailypost-vu', country: 'Vanuatu' },
+  { name: 'Fiji Times', url: 'https://www.fijitimes.com.fj/feed/', id: 'fijitimes-fj', country: 'Fiji' },
+  { name: 'PNG Post-Courier', url: 'https://www.postcourier.com.pg/feed/', id: 'postcourier-pg', country: 'Papua New Guinea' },
+  { name: 'Cook Islands News', url: 'https://www.cookislandsnews.com/feed/', id: 'cookislands-ck', country: 'Cook Islands' },
 ];
 
 // Cache + fetch lock (prevents StrictMode double-fetch)

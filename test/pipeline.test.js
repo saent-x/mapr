@@ -102,7 +102,7 @@ test('retainPreviousGdeltArticles handles empty/null input', () => {
 
 // ── normalizeArticles stage tests ────────────────────────────────────────────
 
-import { mergeAndDeduplicateArticles } from '../server/pipeline/normalizeArticles.js';
+import { mergeAndDeduplicateArticles, mergeSourceMetadata } from '../server/pipeline/normalizeArticles.js';
 
 test('mergeAndDeduplicateArticles combines GDELT and RSS articles', () => {
   const gdelt = [
@@ -142,6 +142,32 @@ test('mergeAndDeduplicateArticles removes URL duplicates across sources', () => 
   assert.equal(merged.length, 1, 'duplicate URL should be deduplicated');
 });
 
+test('mergeAndDeduplicateArticles merges source metadata when same URL from multiple feeds', () => {
+  const gdelt = [
+    { id: 'gdelt-1', url: 'https://same.com/article', title: 'Crisis in Region X', source: 'GDELT', sourceType: 'wire' },
+  ];
+  const rssResult = {
+    articles: [
+      { id: 'rss-1', url: 'https://same.com/article', title: 'Crisis in Region X', source: 'BBC', feedId: 'bbc', sourceType: 'wire' },
+      { id: 'rss-2', url: 'https://same.com/article', title: 'Crisis in Region X', source: 'Reuters', feedId: 'reuters', sourceType: 'wire' },
+    ],
+    checkedFeedIds: ['bbc', 'reuters'],
+  };
+  const merged = mergeAndDeduplicateArticles({
+    gdeltArticles: gdelt,
+    rssResult,
+    previousArticles: [],
+    catalog: [{ id: 'bbc', name: 'BBC World' }, { id: 'reuters', name: 'Reuters World' }],
+  });
+
+  assert.equal(merged.length, 1, 'duplicate URLs should produce single entry');
+  assert.ok(merged[0].sources, 'should have sources array');
+  assert.ok(merged[0].sources.length >= 2, 'should merge at least 2 sources');
+  assert.ok(merged[0].sources.some(s => s.source === 'BBC'), 'should include BBC source');
+  assert.ok(merged[0].sources.some(s => s.source === 'Reuters'), 'should include Reuters source');
+  assert.equal(merged[0].sourceDiversity, merged[0].sources.length, 'sourceDiversity should match sources count');
+});
+
 test('mergeAndDeduplicateArticles falls back to previous GDELT articles when current is empty', () => {
   const previousArticles = [
     { id: 'gdelt-old-1', url: 'https://old.com/1', title: 'Old GDELT', source: 'old-src' },
@@ -161,6 +187,69 @@ test('mergeAndDeduplicateArticles falls back to previous GDELT articles when cur
   });
   assert.ok(merged.some(a => a.id === 'gdelt-old-1'), 'should retain old GDELT articles as fallback');
   assert.ok(merged.some(a => a.id === 'rss-new-1'), 'should include new RSS articles');
+});
+
+test('mergeSourceMetadata enriches articles with source information from all candidates', () => {
+  const deduped = [
+    { id: 'r-1', url: 'https://same.com/article', title: 'Crisis', source: 'BBC' },
+    { id: 'r-2', url: 'https://other.com/news', title: 'Other Story', source: 'Reuters' },
+  ];
+  const allCandidates = [
+    { id: 'gdelt-1', url: 'https://same.com/article', title: 'Crisis', source: 'GDELT', feedId: 'gdelt-feed' },
+    { id: 'rss-1', url: 'https://same.com/article', title: 'Crisis', source: 'BBC', feedId: 'bbc' },
+    { id: 'rss-2', url: 'https://same.com/article', title: 'Crisis in Region X', source: 'Al Jazeera', feedId: 'aljazeera' },
+    { id: 'rss-3', url: 'https://other.com/news', title: 'Other Story', source: 'Reuters', feedId: 'reuters' },
+  ];
+
+  const enriched = mergeSourceMetadata(deduped, allCandidates, [
+    { id: 'bbc', name: 'BBC World' },
+    { id: 'aljazeera', name: 'Al Jazeera' },
+  ]);
+
+  assert.equal(enriched.length, 2);
+  // First article should have 3 sources (GDELT + BBC + Al Jazeera)
+  const crisisArticle = enriched.find(a => a.id === 'r-1');
+  assert.ok(crisisArticle, 'should find crisis article');
+  assert.ok(crisisArticle.sources.length >= 3, 'should merge all sources for same URL');
+  assert.equal(crisisArticle.sourceDiversity, crisisArticle.sources.length);
+
+  // Second article should have 1 source (Reuters)
+  const otherArticle = enriched.find(a => a.id === 'r-2');
+  assert.ok(otherArticle, 'should find other article');
+  assert.equal(otherArticle.sources.length, 1);
+});
+
+test('mergeSourceMetadata handles empty input gracefully', () => {
+  assert.deepEqual(mergeSourceMetadata([], []), []);
+  assert.deepEqual(mergeSourceMetadata(null, null), []);
+  assert.deepEqual(mergeSourceMetadata(undefined, undefined), []);
+});
+
+test('mergeSourceMetadata resolves feed names from catalog', () => {
+  const deduped = [
+    { id: 'a1', url: 'https://example.com/story', title: 'Story', source: 'src' },
+  ];
+  const allCandidates = [
+    { id: 'r1', url: 'https://example.com/story', title: 'Story', source: 'Raw Source', feedId: 'feed-x' },
+  ];
+  const catalog = [{ id: 'feed-x', name: 'Example Feed' }];
+
+  const enriched = mergeSourceMetadata(deduped, allCandidates, catalog);
+  assert.equal(enriched[0].sources[0].feedName, 'Example Feed');
+});
+
+// ── Cadence / per-tier scraping interval tests ────────────────────────────────
+
+import { CADENCE_BY_CLASS } from '../server/sourceCatalog.js';
+
+test('source catalog CADENCE_BY_CLASS defines distinct intervals for all tiers', () => {
+  assert.ok(CADENCE_BY_CLASS, 'CADENCE_BY_CLASS should exist');
+  assert.equal(CADENCE_BY_CLASS.official, 20, 'official cadence should be 20 minutes');
+  assert.equal(CADENCE_BY_CLASS.wire, 30, 'wire cadence should be 30 minutes');
+  assert.equal(CADENCE_BY_CLASS.global, 45, 'global cadence should be 45 minutes');
+  assert.equal(CADENCE_BY_CLASS.regional, 60, 'regional cadence should be 60 minutes');
+  assert.equal(CADENCE_BY_CLASS.local, 90, 'local cadence should be 90 minutes');
+  assert.ok(CADENCE_BY_CLASS.default, 'default cadence should be defined');
 });
 
 // ── enrichEntities stage tests ───────────────────────────────────────────────
