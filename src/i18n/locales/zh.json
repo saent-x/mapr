@@ -297,7 +297,18 @@
     "timeRangeLabel": "时间范围",
     "timeRange7d": "7天",
     "timeRange30d": "30天",
-    "timeRange90d": "90天"
+    "timeRange90d": "90天",
+    "eventsLabel": "事件",
+    "nowLabel": "现在",
+    "daysUnit": "天",
+    "hoursUnit": "时",
+    "sourceVelocityHeading": "来源速度 · 每 {{bucket}} 窗口事件数",
+    "severityTierBreakdown": "严重性分级明细",
+    "rolling24h": "24小时滚动",
+    "rolling7d": "7天滚动",
+    "buckets3d": "3天分组",
+    "noVelocityData": "无速度数据",
+    "noSeverityData": "无严重性数据"
   },
   "watchlist": {
     "bookmarked": "已收藏: {{title}}"

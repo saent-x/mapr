@@ -429,7 +429,18 @@
     "timeRangeLabel": "Time range",
     "timeRange7d": "7D",
     "timeRange30d": "30D",
-    "timeRange90d": "90D"
+    "timeRange90d": "90D",
+    "eventsLabel": "EVENTS",
+    "nowLabel": "NOW",
+    "daysUnit": "d",
+    "hoursUnit": "h",
+    "sourceVelocityHeading": "Source velocity · events per {{bucket}} window",
+    "severityTierBreakdown": "Severity tier breakdown",
+    "rolling24h": "24H ROLLING",
+    "rolling7d": "7D ROLLING",
+    "buckets3d": "3D BUCKETS",
+    "noVelocityData": "NO VELOCITY DATA",
+    "noSeverityData": "NO SEVERITY DATA"
   },
   "sourceType": {
     "official": "official",

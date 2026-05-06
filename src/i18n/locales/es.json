@@ -297,7 +297,18 @@
     "timeRangeLabel": "Periodo",
     "timeRange7d": "7D",
     "timeRange30d": "30D",
-    "timeRange90d": "90D"
+    "timeRange90d": "90D",
+    "eventsLabel": "EVENTOS",
+    "nowLabel": "AHORA",
+    "daysUnit": "d",
+    "hoursUnit": "h",
+    "sourceVelocityHeading": "Velocidad de fuentes · eventos por ventana de {{bucket}}",
+    "severityTierBreakdown": "Desglose por nivel de severidad",
+    "rolling24h": "24H CONTINUO",
+    "rolling7d": "7D CONTINUO",
+    "buckets3d": "CUBOS 3D",
+    "noVelocityData": "SIN DATOS DE VELOCIDAD",
+    "noSeverityData": "SIN DATOS DE SEVERIDAD"
   },
   "watchlist": {
     "bookmarked": "Marcado: {{title}}"

@@ -297,7 +297,18 @@
     "timeRangeLabel": "Période",
     "timeRange7d": "7J",
     "timeRange30d": "30J",
-    "timeRange90d": "90J"
+    "timeRange90d": "90J",
+    "eventsLabel": "ÉVÉNEMENTS",
+    "nowLabel": "MAINT",
+    "daysUnit": "j",
+    "hoursUnit": "h",
+    "sourceVelocityHeading": "Vélocité des sources · événements par fenêtre de {{bucket}}",
+    "severityTierBreakdown": "Répartition par niveau de sévérité",
+    "rolling24h": "24H DÉFILANT",
+    "rolling7d": "7J DÉFILANT",
+    "buckets3d": "SEGMENTS 3J",
+    "noVelocityData": "AUCUNE DONNÉE DE VÉLOCITÉ",
+    "noSeverityData": "AUCUNE DONNÉE DE SÉVÉRITÉ"
   },
   "watchlist": {
     "bookmarked": "Marqué: {{title}}"

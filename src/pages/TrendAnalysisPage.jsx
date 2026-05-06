@@ -86,7 +86,7 @@ function HorizonChart({ series, w = 640, h = 200 }) {
   );
 }
 
-function DonutChart({ data, size = 160 }) {
+function DonutChart({ data, size = 160, eventsLabel = 'EVENTS' }) {
   if (!data.length) return null;
   const total = data.reduce((a, d) => a + d.count, 0) || 1;
   const cx = size / 2, cy = size / 2, r = size / 2 - 8, inner = r * 0.55;
@@ -112,7 +112,7 @@ function DonutChart({ data, size = 160 }) {
           <path key={i} d={a.path} fill={a.color} opacity="0.85" stroke="var(--bg-1)" strokeWidth="1.5" />
         ))}
         <text x={cx} y={cy - 6} textAnchor="middle" fontSize="16" fontFamily="var(--ff-mono)" fontWeight="600" fill="var(--ink-0)">{total}</text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="9" fontFamily="var(--ff-mono)" letterSpacing="0.1em" fill="var(--ink-2)">EVENTS</text>
+        <text x={cx} y={cy + 10} textAnchor="middle" fontSize="9" fontFamily="var(--ff-mono)" letterSpacing="0.1em" fill="var(--ink-2)">{eventsLabel}</text>
       </svg>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {data.map((d) => (
@@ -128,7 +128,7 @@ function DonutChart({ data, size = 160 }) {
   );
 }
 
-function VelocityChart({ data, w = 320, h = 160, bucketHrs = 2 }) {
+function VelocityChart({ data, w = 320, h = 160, bucketHrs = 2, nowLabel = 'NOW', daysUnit = 'd', hoursUnit = 'h' }) {
   const max = Math.max(1, ...data);
   const pad = { l: 32, r: 12, t: 16, b: 24 };
   const iw = w - pad.l - pad.r;
@@ -151,7 +151,7 @@ function VelocityChart({ data, w = 320, h = 160, bucketHrs = 2 }) {
         const x = xAt(i) + 1;
         const bh = (v / max) * ih;
         const hrsAgo = (data.length - 1 - i) * bucketHrs;
-        const label = hrsAgo === 0 ? 'NOW' : hrsAgo >= 24 ? `${Math.round(hrsAgo / 24)}d` : `${hrsAgo}h`;
+        const label = hrsAgo === 0 ? nowLabel : hrsAgo >= 24 ? `${Math.round(hrsAgo / 24)}${daysUnit}` : `${hrsAgo}${hoursUnit}`;
         const isRecent = i >= data.length - 3;
         return (
           <g key={i}>
@@ -299,28 +299,34 @@ export default function TrendAnalysisPage() {
 
       <div className="trend-card">
         <div className="head">
-          <h3>Source velocity · events per {rangeDays <= 1 ? '2h' : rangeDays <= 7 ? '14h' : '72h'} window</h3>
-          <div className="mono">{rangeDays <= 1 ? '24H ROLLING' : rangeDays <= 7 ? '7D ROLLING' : '3D BUCKETS'}</div>
+          <h3>{t('trends.sourceVelocityHeading', { bucket: rangeDays <= 1 ? '2h' : rangeDays <= 7 ? '14h' : '72h' })}</h3>
+          <div className="mono">{rangeDays <= 1 ? t('trends.rolling24h') : rangeDays <= 7 ? t('trends.rolling7d') : t('trends.buckets3d')}</div>
         </div>
         <div className="body">
           {velocity.length === 0 ? (
-            <div className="mini-panel-empty" style={{ padding: 40 }}>NO VELOCITY DATA</div>
+            <div className="mini-panel-empty" style={{ padding: 40 }}>{t('trends.noVelocityData')}</div>
           ) : (
-            <VelocityChart data={velocity} bucketHrs={rangeDays <= 1 ? 2 : rangeDays <= 7 ? 14 : 72} />
+            <VelocityChart
+              data={velocity}
+              bucketHrs={rangeDays <= 1 ? 2 : rangeDays <= 7 ? 14 : 72}
+              nowLabel={t('trends.nowLabel')}
+              daysUnit={t('trends.daysUnit')}
+              hoursUnit={t('trends.hoursUnit')}
+            />
           )}
         </div>
       </div>
 
       <div className="trend-card">
         <div className="head">
-          <h3>Severity tier breakdown</h3>
+          <h3>{t('trends.severityTierBreakdown')}</h3>
           <div className="mono">CURRENT</div>
         </div>
         <div className="body">
           {severityDist.every((d) => d.count === 0) ? (
-            <div className="mini-panel-empty" style={{ padding: 40 }}>NO SEVERITY DATA</div>
+            <div className="mini-panel-empty" style={{ padding: 40 }}>{t('trends.noSeverityData')}</div>
           ) : (
-            <DonutChart data={severityDist} />
+            <DonutChart data={severityDist} eventsLabel={t('trends.eventsLabel')} />
           )}
         </div>
       </div>

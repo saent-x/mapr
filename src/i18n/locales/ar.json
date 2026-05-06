@@ -297,7 +297,18 @@
     "timeRangeLabel": "الفترة",
     "timeRange7d": "٧ي",
     "timeRange30d": "٣٠ي",
-    "timeRange90d": "٩٠ي"
+    "timeRange90d": "٩٠ي",
+    "eventsLabel": "أحداث",
+    "nowLabel": "الآن",
+    "daysUnit": "ي",
+    "hoursUnit": "س",
+    "sourceVelocityHeading": "سرعة المصادر · الأحداث لكل نافذة {{bucket}}",
+    "severityTierBreakdown": "توزيع مستويات الخطورة",
+    "rolling24h": "آخر ٢٤ ساعة",
+    "rolling7d": "آخر ٧ أيام",
+    "buckets3d": "مجموعات ٣ أيام",
+    "noVelocityData": "لا توجد بيانات سرعة",
+    "noSeverityData": "لا توجد بيانات خطورة"
   },
   "watchlist": {
     "bookmarked": "تم وضع إشارة: {{title}}"
