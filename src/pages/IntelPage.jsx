@@ -7,6 +7,7 @@ import WatchlistPanel from '../components/WatchlistPanel';
 import NarrativePanel from '../components/NarrativePanel';
 import NewsPanel from '../components/NewsPanel';
 import useDerivedIntel from '../hooks/useDerivedIntel';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 
@@ -45,6 +46,19 @@ export default function IntelPage() {
   const handleStorySelect = useCallback((story) => {
     selectStory(story);
   }, [selectStory]);
+
+  /* ── Keyboard navigation (basic: ? for help, Escape to go back, / for search) ── */
+  useKeyboardNavigation({
+    items: [],
+    searchSelector: '.search-input, .header-search input',
+    onEscape: useCallback(() => {
+      navigate('/');
+      return true;
+    }, [navigate]),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
 
   const isLoading = !liveNews && dataSource === 'loading';
 

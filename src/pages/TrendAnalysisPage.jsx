@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useNewsStore from '../stores/newsStore.js';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { canonicalizeArticles } from '../utils/newsPipeline.js';
 import { buildRegionalSeries, buildByCategory, buildSourceVelocity, buildSeverityDistribution, buildLangMix } from '../utils/trendBuilders.js';
 
@@ -200,6 +201,21 @@ export default function TrendAnalysisPage() {
     next.set('range', newRange);
     setSearchParams(next, { replace: true });
   };
+
+  /* ── Keyboard navigation (basic: ? for help, Escape to go back, / for search) ── */
+  const navigate = useNavigate();
+
+  useKeyboardNavigation({
+    items: [],
+    searchSelector: '.search-input, .header-search input',
+    onEscape: useCallback(() => {
+      navigate('/');
+      return true;
+    }, [navigate]),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
 
   // Filter news to only include articles within the selected time range.
   const cutoff = Date.now() - rangeDays * 24 * 3600 * 1000;

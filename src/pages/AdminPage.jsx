@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Shield, RefreshCw, Activity, Database, AlertTriangle,
@@ -6,6 +7,7 @@ import {
   FileText, ChevronDown, ChevronUp, Loader, Lock,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
 /* ── Status helpers ── */
 
@@ -151,6 +153,7 @@ function PasswordGate({ onAuth }) {
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetch('/api/admin/session', { credentials: 'include' })
@@ -160,6 +163,19 @@ export default function AdminPage() {
       })
       .catch(() => {});
   }, []);
+
+  /* ── Keyboard navigation (basic: ? for help, Escape to go back, / for search) ── */
+  useKeyboardNavigation({
+    items: [],
+    searchSelector: '.search-input, .header-search input',
+    onEscape: useCallback(() => {
+      navigate('/');
+      return true;
+    }, [navigate]),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
 
   if (!authed) {
     return <PasswordGate onAuth={() => setAuthed(true)} />;

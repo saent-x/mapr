@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { mergeAdminHealthPayloads } from '../utils/healthSummary.js';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
 const STATUS_COLORS = {
   ok: '#00e5a0',
@@ -95,6 +97,21 @@ const HealthPage = () => {
   }, [authed, fetchHealth]);
 
   const s = styles;
+
+  const navigate = useNavigate();
+
+  /* ── Keyboard navigation (basic: ? for help, Escape to go back, / for search) ── */
+  useKeyboardNavigation({
+    items: [],
+    searchSelector: '.search-input, .header-search input',
+    onEscape: useCallback(() => {
+      navigate('/');
+      return true;
+    }, [navigate]),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
 
   if (!authed) {
     return (
