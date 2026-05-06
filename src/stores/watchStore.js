@@ -4,28 +4,32 @@ import {
   saveWatchlist,
   loadWatchCounts,
   saveWatchCounts,
+  loadWatchTimestamps,
+  saveWatchTimestamps,
   countMatchesForWatchItems,
   computeNewMatches,
 } from '../utils/watchUtils.js';
 
 /**
- * Watch store — manages the watchlist (regions, topics, entities),
- * article match counts, and new-match notifications.
+ * Watch store — manages the watchlist (regions, topics, entities,
+ * categories, severity thresholds, source types, verification statuses),
+ * article match counts, last-match timestamps, and new-match notifications.
  *
- * Watchlist items and counts persist in localStorage across sessions.
+ * Watchlist items, counts, and timestamps persist in localStorage across sessions.
  */
 const useWatchStore = create((set, get) => ({
   /* ── state ── */
   watchItems: typeof window !== 'undefined' ? loadWatchlist() : [],
   matchCounts: typeof window !== 'undefined' ? loadWatchCounts() : {},
+  lastMatchTimestamps: typeof window !== 'undefined' ? loadWatchTimestamps() : {},
   notifications: [], // Array of { watchId, label, type, newCount, totalCount, timestamp }
 
   /* ────────── actions ────────── */
 
   /**
    * Add a new watch item. Store mints the id — callers must not pass one.
-   * @param {'region'|'topic'|'entity'} type
-   * @param {string} value - ISO code, keyword, or entity name
+   * @param {'region'|'topic'|'entity'|'category'|'severity'|'sourceType'|'verificationStatus'} type
+   * @param {string} value - ISO code, keyword, category name, severity tier, source type, or verification status
    * @param {string} [label] - Human-readable label (defaults to value)
    */
   addWatch: (type, value, label) => {
@@ -64,11 +68,18 @@ const useWatchStore = create((set, get) => ({
     set((s) => {
       const next = s.watchItems.filter((item) => item.id !== id);
       saveWatchlist(next);
-      // Also clean up counts
+      // Also clean up counts and timestamps
       const nextCounts = { ...s.matchCounts };
       delete nextCounts[id];
       saveWatchCounts(nextCounts);
-      return { watchItems: next, matchCounts: nextCounts };
+      const nextTimestamps = { ...s.lastMatchTimestamps };
+      delete nextTimestamps[id];
+      saveWatchTimestamps(nextTimestamps);
+      return {
+        watchItems: next,
+        matchCounts: nextCounts,
+        lastMatchTimestamps: nextTimestamps,
+      };
     });
   },
 
@@ -78,7 +89,8 @@ const useWatchStore = create((set, get) => ({
   clearAll: () => {
     saveWatchlist([]);
     saveWatchCounts({});
-    set({ watchItems: [], matchCounts: {}, notifications: [] });
+    saveWatchTimestamps({});
+    set({ watchItems: [], matchCounts: {}, lastMatchTimestamps: {}, notifications: [] });
   },
 
   /**
@@ -92,7 +104,9 @@ const useWatchStore = create((set, get) => ({
     const { watchItems, matchCounts: prevCounts } = get();
     if (!watchItems.length || !articles?.length) return;
 
-    const currentCounts = countMatchesForWatchItems(articles, watchItems);
+    const result = countMatchesForWatchItems(articles, watchItems);
+    const currentCounts = result.counts;
+    const currentTimestamps = result.timestamps;
     const newMatches = computeNewMatches(currentCounts, prevCounts, watchItems);
 
     const notifications = newMatches.map((match) => ({
@@ -101,7 +115,12 @@ const useWatchStore = create((set, get) => ({
     }));
 
     saveWatchCounts(currentCounts);
-    set({ matchCounts: currentCounts, notifications });
+    saveWatchTimestamps(currentTimestamps);
+    set({
+      matchCounts: currentCounts,
+      lastMatchTimestamps: currentTimestamps,
+      notifications,
+    });
   },
 
   /**

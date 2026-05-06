@@ -1228,6 +1228,20 @@ a { color: inherit; text-decoration: none; }
 .watchlist-row .code { font-family: var(--ff-mono); font-size: var(--fs-0); color: var(--ink-2); width: 32px; }
 .watchlist-row .name { flex: 1; font-size: var(--fs-2); color: var(--ink-0); }
 .watchlist-row .ct { font-family: var(--ff-mono); font-size: var(--fs-0); color: var(--ink-1); }
+.watchlist-last-match {
+  font-family: var(--ff-mono);
+  font-size: 8px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.watchlist-add-form {
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-1);
+  z-index: 1;
+}
 .narrative-row { flex-direction: column; align-items: stretch; padding: 6px 8px; gap: 2px; }
 .narrative-row .title { font-size: var(--fs-2); color: var(--ink-0); }
 .narrative-row .sub {

@@ -102,13 +102,15 @@ test('watchStore.checkNewArticles still works with full unfiltered data', async 
   ];
 
   // Using full unfiltered data → should find matches for NG, IN, and UA
-  const fullCounts = countMatchesForWatchItems(allArticles, watchItems);
+  const fullResult = countMatchesForWatchItems(allArticles, watchItems);
+  const fullCounts = fullResult.counts;
   assert.equal(fullCounts['w-ng'], 1, 'Nigeria should match 1 article in unfiltered data');
   assert.equal(fullCounts['w-in'], 1, 'India should match 1 article in unfiltered data');
   assert.equal(fullCounts['w-ua'], 2, 'Ukraine should match 2 articles in unfiltered data');
 
   // Using filtered data → Nigeria and India matches are LOST (the bug)
-  const filteredCounts = countMatchesForWatchItems(filteredArticles, watchItems);
+  const filteredResult = countMatchesForWatchItems(filteredArticles, watchItems);
+  const filteredCounts = filteredResult.counts;
   assert.equal(filteredCounts['w-ng'], 0, 'Nigeria match is lost when using filtered data');
   assert.equal(filteredCounts['w-in'], 0, 'India match is lost when using filtered data');
   assert.equal(filteredCounts['w-ua'], 1, 'Ukraine match count reduced when using filtered data');
