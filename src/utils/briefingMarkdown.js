@@ -11,7 +11,7 @@
 const SEVERITY_TIERS = [
   { label: 'Critical', min: 85 },
   { label: 'Elevated', min: 60 },
-  { label: 'Watch', min: 30 },
+  { label: 'Watch', min: 35 },
   { label: 'Low', min: 0 },
 ];
 
@@ -23,7 +23,7 @@ const SEVERITY_TIERS = [
 function severityLabel(severity) {
   if (severity >= 85) return 'Critical';
   if (severity >= 60) return 'Elevated';
-  if (severity >= 30) return 'Watch';
+  if (severity >= 35) return 'Watch';
   return 'Low';
 }
 

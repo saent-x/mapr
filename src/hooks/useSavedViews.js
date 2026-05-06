@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import db from '../services/instantDb';
 import { storyMatchesFilters } from '../utils/storyFilters';
 import { resolveDateFloor } from '../utils/mockData';
+import { getRelatedEvents } from '../utils/entityGraph';
 
 /**
  * Hook for managing saved filter views via InstantDB.
@@ -51,9 +52,15 @@ export default function useSavedViews(activeNews = []) {
         hideAmplified: filters.hideAmplified ?? false,
       };
 
-      const matchCount = activeNews.filter((s) =>
-        storyMatchesFilters(s, filterParams),
-      ).length;
+      // Filter by filterParams first, then further narrow by entityFilter if present
+      let matched = activeNews.filter((s) => storyMatchesFilters(s, filterParams));
+      if (filters.entityFilter) {
+        const entityMatchedIds = new Set(
+          getRelatedEvents(matched, filters.entityFilter.name, filters.entityFilter.type).map((e) => e.id),
+        );
+        matched = matched.filter((s) => entityMatchedIds.has(s.id));
+      }
+      const matchCount = matched.length;
 
       return {
         id: v.id,

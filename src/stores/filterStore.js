@@ -88,6 +88,7 @@ const useFilterStore = create((set, get) => ({
     if (filters.accuracyMode !== undefined) updates.accuracyMode = filters.accuracyMode;
     if (filters.precisionFilter !== undefined) updates.precisionFilter = filters.precisionFilter;
     if (filters.hideAmplified !== undefined) updates.hideAmplified = filters.hideAmplified;
+    if (filters.entityFilter !== undefined) updates.entityFilter = filters.entityFilter;
     if (mapState.mapOverlay !== undefined) updates.mapOverlay = mapState.mapOverlay;
     set(updates);
   },

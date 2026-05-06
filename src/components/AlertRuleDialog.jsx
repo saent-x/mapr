@@ -5,9 +5,9 @@ import { SignedIn, SignedOut } from './auth';
 import useAlertRules from '../hooks/useAlertRules';
 
 const SEVERITY_TIERS = [
-  { value: 70, key: 'critical' },
-  { value: 40, key: 'elevated' },
-  { value: 20, key: 'watch' },
+  { value: 85, key: 'critical' },
+  { value: 60, key: 'elevated' },
+  { value: 35, key: 'watch' },
   { value: 0, key: 'low' },
 ];
 
@@ -25,7 +25,7 @@ export default function AlertRuleDialog({ isOpen, onClose, savedViews = [], edit
   const { needsAuth, createRule, editRule: updateRule } = useAlertRules();
 
   const [name, setName] = useState(editRule?.name || '');
-  const [severityThreshold, setSeverityThreshold] = useState(editRule?.severityThreshold ?? 70);
+  const [severityThreshold, setSeverityThreshold] = useState(editRule?.severityThreshold ?? 85);
   const [savedViewId, setSavedViewId] = useState(editRule?.savedViewId || (savedViews[0]?.id || ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

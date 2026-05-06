@@ -646,6 +646,7 @@ function App() {
           accuracyMode,
           precisionFilter,
           hideAmplified,
+          entityFilter,
         }}
         mapState={{ mapMode, mapOverlay }}
       />
