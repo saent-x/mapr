@@ -5,6 +5,7 @@ import Header from './Header';
 import MobileBottomNav from './MobileBottomNav';
 import ShortcutHelp from './ShortcutHelp';
 import OnboardingOverlay from './OnboardingOverlay';
+import SavedViewsSidebar from './SavedViewsSidebar';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 
@@ -154,6 +155,8 @@ export default function Layout() {
             <span className="side-label">{t('nav.trends')}</span>
           </NavLink>
         </nav>
+
+        <SavedViewsSidebar />
       </aside>
 
       <main className="layout-content app-main" data-route={location.pathname}>

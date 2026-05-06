@@ -313,6 +313,27 @@
   "watchlist": {
     "bookmarked": "تم وضع إشارة: {{title}}"
   },
+  "savedViews": {
+    "saveDialogTitle": "حفظ العرض",
+    "nameLabel": "اسم العرض",
+    "namePlaceholder": "مثال: مراقبة الساحل، الحرجة فقط…",
+    "hint": "يحفظ عوامل التصفية وإعدادات الخريطة الحالية. تستمر العروض عبر الجلسات.",
+    "cancel": "إلغاء",
+    "save": "حفظ",
+    "sidebarTitle": "العروض المحفوظة",
+    "emptyHint": "اضغط s لحفظ عرض",
+    "matches": "تطابقات",
+    "applyAriaLabel": "تطبيق العرض المحفوظ {{name}} ({{count}} تطابقات)",
+    "deleteTitle": "حذف العرض",
+    "deleteAriaLabel": "حذف العرض المحفوظ {{name}}",
+    "signInPrompt": "سجل الدخول لحفظ العروض",
+    "loginToSave": "سجل الدخول لحفظ عرض التصفية الحالي",
+    "saving": "جاري الحفظ…",
+    "saveError": "فشل حفظ العرض",
+    "viewSaved": "تم حفظ العرض",
+    "viewNotFound": "العرض غير موجود — عرض الحالة الافتراضية",
+    "dismiss": "تجاهل"
+  },
   "keyboard": {
     "quickSave": "حفظ سريع",
     "viewSaved": "تم حفظ العرض"

@@ -313,6 +313,27 @@
   "watchlist": {
     "bookmarked": "Marqué: {{title}}"
   },
+  "savedViews": {
+    "saveDialogTitle": "Enregistrer la Vue",
+    "nameLabel": "Nom de la vue",
+    "namePlaceholder": "ex. Surveillance Sahel, Critiques Seulement…",
+    "hint": "Enregistre les filtres et paramètres de carte actuels. Les vues persistent entre les sessions.",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "sidebarTitle": "VUES ENREGISTRÉES",
+    "emptyHint": "Appuyez sur s pour enregistrer une vue",
+    "matches": "correspondances",
+    "applyAriaLabel": "Appliquer la vue enregistrée {{name}} ({{count}} correspondances)",
+    "deleteTitle": "Supprimer la vue",
+    "deleteAriaLabel": "Supprimer la vue enregistrée {{name}}",
+    "signInPrompt": "Connectez-vous pour enregistrer des vues",
+    "loginToSave": "Connectez-vous pour enregistrer votre vue de filtres actuelle",
+    "saving": "Enregistrement…",
+    "saveError": "Échec de l'enregistrement de la vue",
+    "viewSaved": "Vue enregistrée",
+    "viewNotFound": "Vue introuvable — affichage de l'état par défaut",
+    "dismiss": "Ignorer"
+  },
   "keyboard": {
     "quickSave": "Sauvegarde rapide",
     "viewSaved": "Vue sauvegardée"

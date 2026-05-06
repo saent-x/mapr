@@ -36,6 +36,8 @@ import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import { encodeViewToURL } from './utils/viewManager';
 import { computeSilenceEntries } from './utils/anomalyUtils';
 import { getMockNews, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
+import SaveViewDialog from './components/SaveViewDialog';
+import db from './services/instantDb';
 
 const Globe = lazy(() => import('./components/Globe'));
 const FlatMap = lazy(() => import('./components/FlatMap'));
@@ -57,7 +59,7 @@ function App() {
   } = useFilterStore();
   const {
     mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
-    showExport, scrubTime, toasts,
+    showExport, scrubTime, toasts, activeViewId, viewNotFound,
   } = useUIStore();
 
   const filtersOpen = drawerMode !== null;
@@ -106,12 +108,37 @@ function App() {
 
   /* ── URL hydration ── */
   const urlInitRef = useRef(false);
+  const viewUrlHandledRef = useRef(false);
   useEffect(() => {
     if (urlInitRef.current) return;
     urlInitRef.current = true;
     const { filters, mapState } = useFilterStore.getState().initFromURL(searchParams);
     useUIStore.getState().initFromURL(searchParams, mapState);
     if (filters.selectedRegion) useUIStore.setState({ selectedRegion: filters.selectedRegion });
+
+    // Handle shared view URL param
+    const viewId = searchParams.get('view');
+    if (viewId && !viewUrlHandledRef.current) {
+      viewUrlHandledRef.current = true;
+      // Try to load the view from InstantDB
+      db.queryOnce({ savedViews: { $: { where: { id: viewId } } } })
+        .then((resp) => {
+          const view = resp?.data?.savedViews?.[0];
+          if (view) {
+            useFilterStore.getState().applyView({
+              filters: view.filterState || {},
+              mapState: view.mapState || {},
+            });
+            useUIStore.getState().setActiveViewId(view.id);
+          } else {
+            useUIStore.getState().setViewNotFound(true);
+          }
+        })
+        .catch(() => {
+          // Silently ignore — view may not exist or user may not have access
+          useUIStore.getState().setViewNotFound(true);
+        });
+    }
   }, [searchParams]);
 
   /* ── Computed data ── */
@@ -279,27 +306,8 @@ function App() {
       addToast(t('watchlist.bookmarked', { title: story.title }), 'info');
     }, [addToast, t]),
     onSaveView: useCallback(() => {
-      const store = useUIStore.getState();
-      const filterStore = useFilterStore.getState();
-      store.saveCurrentView(
-        t('keyboard.quickSave', 'Quick Save'),
-        {
-          searchQuery: filterStore.debouncedSearch,
-          minSeverity: filterStore.minSeverity,
-          minConfidence: filterStore.minConfidence,
-          dateWindow: filterStore.dateWindow,
-          sortMode: filterStore.sortMode,
-          verificationFilter: filterStore.verificationFilter,
-          sourceTypeFilter: filterStore.sourceTypeFilter,
-          languageFilter: filterStore.languageFilter,
-          accuracyMode: filterStore.accuracyMode,
-          precisionFilter: filterStore.precisionFilter,
-          hideAmplified: filterStore.hideAmplified,
-        },
-        { mapMode: store.mapMode, mapOverlay: filterStore.mapOverlay },
-      );
-      addToast(t('keyboard.viewSaved'), 'info');
-    }, [addToast, t]),
+      setShowSaveDialog(true);
+    }, []),
     onEscape: useCallback(() => {
       if (showExport) { setShowExport(false); return true; }
       if (showSaveDialog) { setShowSaveDialog(false); return true; }
@@ -349,8 +357,10 @@ function App() {
     const params = new URLSearchParams(qs);
     if (selectedStoryId) params.set('story', selectedStoryId);
     else params.delete('story');
+    if (activeViewId) params.set('view', activeViewId);
+    else params.delete('view');
     setSearchParams(params, { replace: true });
-  }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, setSearchParams]);
+  }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, activeViewId, setSearchParams]);
 
   const handleGlobeFallback = useCallback(() => {
     useUIStore.getState().setMapMode('flat');
@@ -601,6 +611,44 @@ function App() {
           ))}
         </div>
       )}
+
+      {/* Saved view not found banner */}
+      {viewNotFound && (
+        <div className="view-not-found-banner" role="alert">
+          <span>{t('savedViews.viewNotFound', 'View not found — showing default state')}</span>
+          <button
+            type="button"
+            className="view-not-found-dismiss"
+            onClick={() => useUIStore.getState().setViewNotFound(false)}
+            aria-label={t('savedViews.dismiss', 'Dismiss')}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Save view dialog */}
+      <SaveViewDialog
+        isOpen={showSaveDialog}
+        onClose={(saved) => {
+          setShowSaveDialog(false);
+          if (saved) addToast(t('savedViews.viewSaved', 'View saved'), 'info');
+        }}
+        filterState={{
+          searchQuery: debouncedSearch,
+          minSeverity,
+          minConfidence,
+          dateWindow,
+          sortMode,
+          verificationFilter,
+          sourceTypeFilter,
+          languageFilter,
+          accuracyMode,
+          precisionFilter,
+          hideAmplified,
+        }}
+        mapState={{ mapMode, mapOverlay }}
+      />
 
       {/*
         Coverage legend (mapped onto the current overlay). Rendered hidden when no

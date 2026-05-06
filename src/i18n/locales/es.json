@@ -313,6 +313,27 @@
   "watchlist": {
     "bookmarked": "Marcado: {{title}}"
   },
+  "savedViews": {
+    "saveDialogTitle": "Guardar Vista",
+    "nameLabel": "Nombre de la vista",
+    "namePlaceholder": "ej. Vigilancia Sahel, Solo Críticos…",
+    "hint": "Guarda los filtros y configuración del mapa actuales. Las vistas persisten entre sesiones.",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "sidebarTitle": "VISTAS GUARDADAS",
+    "emptyHint": "Presiona s para guardar una vista",
+    "matches": "coincidencias",
+    "applyAriaLabel": "Aplicar vista guardada {{name}} ({{count}} coincidencias)",
+    "deleteTitle": "Eliminar vista",
+    "deleteAriaLabel": "Eliminar vista guardada {{name}}",
+    "signInPrompt": "Inicia sesión para guardar vistas",
+    "loginToSave": "Inicia sesión para guardar tu vista de filtros actual",
+    "saving": "Guardando…",
+    "saveError": "Error al guardar la vista",
+    "viewSaved": "Vista guardada",
+    "viewNotFound": "Vista no encontrada — mostrando estado predeterminado",
+    "dismiss": "Descartar"
+  },
   "keyboard": {
     "quickSave": "Guardado rápido",
     "viewSaved": "Vista guardada"

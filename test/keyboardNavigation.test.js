@@ -133,11 +133,11 @@ describe('VAL-M2-004: / focuses search input', () => {
  *  VAL-M2-005: s triggers save view flow
  * ─────────────────────────────────────────────────────────── */
 describe('VAL-M2-005: s saves current view', () => {
-  it('App.jsx onSaveView calls saveCurrentView', () => {
+  it('App.jsx onSaveView opens save dialog', () => {
     const appPath = path.join(srcDir, 'App.jsx');
     const code = readFileSync(appPath, 'utf-8');
-    assert.match(code, /saveCurrentView/, 'onSaveView should call saveCurrentView');
-    assert.match(code, /addToast.*viewSaved/, 'should show viewSaved toast');
+    assert.match(code, /setShowSaveDialog\(true\)/, 'onSaveView should open save dialog');
+    assert.match(code, /SaveViewDialog/, 'App should render SaveViewDialog');
   });
 });
 

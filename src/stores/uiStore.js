@@ -85,6 +85,7 @@ const useUIStore = create((set, get) => ({
   /* ── saved views ── */
   savedViews: typeof window !== 'undefined' ? loadViews() : [],
   activeViewId: null,
+  viewNotFound: false, // true when shared view URL references a deleted view
 
   /* ────────── actions ────────── */
 
@@ -172,6 +173,10 @@ const useUIStore = create((set, get) => ({
   },
 
   selectView: (view) => set({ activeViewId: view.id }),
+
+  setActiveViewId: (id) => set({ activeViewId: id, viewNotFound: false }),
+
+  setViewNotFound: (v) => set({ viewNotFound: v }),
 
   deleteView: (view) => set((s) => {
     const next = s.savedViews.filter((v) => v.id !== view.id);

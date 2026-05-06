@@ -388,7 +388,20 @@
     "namePlaceholder": "e.g. Sahel Watch, Critical Only…",
     "hint": "Saves current filter and map settings. Views persist across sessions.",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "sidebarTitle": "SAVED VIEWS",
+    "emptyHint": "Press s to save a view",
+    "matches": "matches",
+    "applyAriaLabel": "Apply saved view {{name}} ({{count}} matches)",
+    "deleteTitle": "Delete view",
+    "deleteAriaLabel": "Delete saved view {{name}}",
+    "signInPrompt": "Sign in to save views",
+    "loginToSave": "Sign in to save your current filter view",
+    "saving": "Saving…",
+    "saveError": "Failed to save view",
+    "viewSaved": "View saved",
+    "viewNotFound": "View not found — showing default state",
+    "dismiss": "Dismiss"
   },
   "export": {
     "title": "Export Briefing",

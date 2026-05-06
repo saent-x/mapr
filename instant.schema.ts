@@ -20,6 +20,12 @@ const _schema = i.schema({
       subscriptionStatus: i.string(),
       /** Stripe customer ID for payment processing */
       stripeCustomerId: i.string(),
+      /** User's saved filter views */
+      savedViews: i.hasMany('savedViews'),
+      /** User's alert rules */
+      alertRules: i.hasMany('alertRules'),
+      /** User's bookmarks */
+      bookmarks: i.hasMany('bookmarks'),
     }),
 
     /**
@@ -36,6 +42,7 @@ const _schema = i.schema({
     /**
      * Saved filter views — named filter presets.
      * Each view captures the full filter state for one-click recall.
+     * Linked to a $user via the `owner` relationship.
      */
     savedViews: i.entity({
       name: i.string(),
@@ -43,12 +50,14 @@ const _schema = i.schema({
       mapState: i.json(),
       createdAt: i.number(),
       updatedAt: i.number(),
+      owner: i.belongsTo('$users'),
     }),
 
     /**
      * Alert rules — notification triggers based on saved views.
      * When a new event matches the view's filters and meets the severity threshold,
      * a toast notification fires.
+     * Linked to a $user via the `owner` relationship.
      */
     alertRules: i.entity({
       name: i.string(),
@@ -56,11 +65,13 @@ const _schema = i.schema({
       savedViewId: i.string(),
       active: i.boolean(),
       createdAt: i.number(),
+      owner: i.belongsTo('$users'),
     }),
 
     /**
      * Story bookmarks — individual story saves.
      * Each bookmark links a user to a specific story/article.
+     * Linked to a $user via the `owner` relationship.
      */
     bookmarks: i.entity({
       storyId: i.string(),
@@ -68,6 +79,7 @@ const _schema = i.schema({
       region: i.string(),
       severity: i.number(),
       bookmarkedAt: i.number(),
+      owner: i.belongsTo('$users'),
     }),
 
     /**

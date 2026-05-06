@@ -313,6 +313,27 @@
   "watchlist": {
     "bookmarked": "已收藏: {{title}}"
   },
+  "savedViews": {
+    "saveDialogTitle": "保存视图",
+    "nameLabel": "视图名称",
+    "namePlaceholder": "例如：萨赫勒观察、仅关键事件…",
+    "hint": "保存当前的筛选器和地图设置。视图在会话之间持久保留。",
+    "cancel": "取消",
+    "save": "保存",
+    "sidebarTitle": "已保存视图",
+    "emptyHint": "按 s 保存视图",
+    "matches": "匹配",
+    "applyAriaLabel": "应用已保存视图 {{name}}（{{count}} 个匹配）",
+    "deleteTitle": "删除视图",
+    "deleteAriaLabel": "删除已保存视图 {{name}}",
+    "signInPrompt": "登录以保存视图",
+    "loginToSave": "登录以保存您当前的筛选器视图",
+    "saving": "保存中…",
+    "saveError": "保存视图失败",
+    "viewSaved": "视图已保存",
+    "viewNotFound": "未找到视图 — 显示默认状态",
+    "dismiss": "关闭"
+  },
   "keyboard": {
     "quickSave": "快速保存",
     "viewSaved": "视图已保存"
