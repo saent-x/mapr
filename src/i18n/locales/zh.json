@@ -480,5 +480,11 @@
     "filterDateTo": "结束日期",
     "filterClear": "清除筛选",
     "bookmarked": "已添加书签: {{title}}"
+  },
+  "freshness": {
+    "secondsAgo": "{{value}}秒前更新",
+    "minutesAgo": "{{value}}分钟前更新",
+    "hoursAgo": "{{value}}小时前更新",
+    "daysAgo": "{{value}}天前更新"
   }
 }

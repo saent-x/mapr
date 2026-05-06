@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Menu, X, LogOut, LogIn, Sun, Moon } from 'lucide-react';
+import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
 import useBreakpoint from '../hooks/useBreakpoint';
+import useDataFreshness from '../hooks/useDataFreshness';
 import db from '../services/instantDb';
 import { toggleTheme as toggleAppTheme } from '../utils/theme';
 
@@ -59,6 +60,22 @@ export default function Header() {
   const [appTheme, setAppTheme] = useState(() =>
     (typeof document !== 'undefined' ? document.documentElement.getAttribute('data-theme') : null) || 'dark',
   );
+
+  /* ── Data freshness for refresh button tooltip ── */
+  const { ageValue, ageUnit, ageColor, lastLoadTime } = useDataFreshness();
+  const [refreshing, setRefreshing] = useState(false);
+  const addToast = useUIStore((s) => s.addToast);
+
+  const freshnessTooltip = ageValue != null && ageUnit
+    ? t(`freshness.${ageUnit === 's' ? 'secondsAgo' : ageUnit === 'm' ? 'minutesAgo' : ageUnit === 'h' ? 'hoursAgo' : 'daysAgo'}`, { value: ageValue })
+    : null;
+
+  const handleRefreshClick = () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    useNewsStore.getState().refresh(addToast);
+    setTimeout(() => setRefreshing(false), 1500);
+  };
 
   /* ── theme observer (sync with data-theme attribute) ── */
   useEffect(() => {
@@ -192,6 +209,24 @@ export default function Header() {
         )}
         {!isMobile && (
           <>
+            <div className="header-refresh-wrap">
+              <button
+                type="button"
+                className={`header-refresh-btn ${refreshing ? 'is-spinning' : ''}`}
+                onClick={handleRefreshClick}
+                disabled={refreshing}
+                title={freshnessTooltip || t('header.refreshLabel')}
+                aria-label={t('header.refreshLabel')}
+              >
+                <RefreshCw size={14} aria-hidden />
+              </button>
+              {freshnessTooltip && (
+                <div className={`header-refresh-tooltip freshness-${ageColor}`}>
+                  <span className="freshness-dot" />
+                  {freshnessTooltip}
+                </div>
+              )}
+            </div>
             <button
               type="button"
               className="theme-toggle-btn"

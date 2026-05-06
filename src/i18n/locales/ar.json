@@ -480,5 +480,11 @@
     "filterDateTo": "إلى تاريخ",
     "filterClear": "مسح الفلاتر",
     "bookmarked": "تمت الإشارة: {{title}}"
+  },
+  "freshness": {
+    "secondsAgo": "تم التحديث منذ {{value}} ثانية",
+    "minutesAgo": "تم التحديث منذ {{value}} دقيقة",
+    "hoursAgo": "تم التحديث منذ {{value}} ساعة",
+    "daysAgo": "تم التحديث منذ {{value}} يوم"
   }
 }

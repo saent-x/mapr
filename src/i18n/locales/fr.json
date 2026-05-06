@@ -480,5 +480,11 @@
     "filterDateTo": "Au",
     "filterClear": "Effacer les filtres",
     "bookmarked": "Favori : {{title}}"
+  },
+  "freshness": {
+    "secondsAgo": "Mis à jour il y a {{value}}s",
+    "minutesAgo": "Mis à jour il y a {{value}}m",
+    "hoursAgo": "Mis à jour il y a {{value}}h",
+    "daysAgo": "Mis à jour il y a {{value}}j"
   }
 }

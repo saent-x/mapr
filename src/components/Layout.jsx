@@ -10,6 +10,7 @@ import AlertRulesPanel from './AlertRulesPanel';
 import BookmarksPanel from './BookmarksPanel';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
+import useDataFreshness from '../hooks/useDataFreshness';
 
 let _layoutAutoRefreshActive = false;
 
@@ -48,11 +49,16 @@ function StatusBar() {
   const liveNews = useNewsStore((s) => s.liveNews) || [];
   const sourceHealth = useNewsStore((s) => s.sourceHealth);
   const opsHealth = useNewsStore((s) => s.opsHealth);
+  const { ageValue, ageUnit, ageColor } = useDataFreshness();
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const freshnessText = ageValue != null && ageUnit
+    ? t(`freshness.${ageUnit === 's' ? 'secondsAgo' : ageUnit === 'm' ? 'minutesAgo' : ageUnit === 'h' ? 'hoursAgo' : 'daysAgo'}`, { value: ageValue })
+    : null;
 
   const red = liveNews.filter((e) => (e.severity ?? 0) >= 70).length;
   const amber = liveNews.filter((e) => {
@@ -69,10 +75,27 @@ function StatusBar() {
     ? opsHealth.status.toUpperCase()
     : 'NOMINAL';
 
+  const freshnessColorVar = ageColor === 'green'
+    ? 'var(--sev-green)'
+    : ageColor === 'amber'
+      ? 'var(--sev-amber)'
+      : 'var(--sev-red)';
+
   return (
     <div className="app-status" role="status" aria-live="polite">
       <div className="status-item">● <b>{formatClock(now)}</b></div>
       <div className="status-sep" />
+      {freshnessText && (
+        <>
+          <div
+            className="status-item status-freshness"
+            style={{ color: freshnessColorVar }}
+          >
+            {freshnessText}
+          </div>
+          <div className="status-sep" />
+        </>
+      )}
       <div className="status-item">FEED · <b>{liveNews.length}</b> evt</div>
       <div className="status-item">RED <b style={{ color: 'var(--sev-red)' }}>{red}</b></div>
       <div className="status-item">AMBER <b style={{ color: 'var(--sev-amber)' }}>{amber}</b></div>

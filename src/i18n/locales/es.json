@@ -480,5 +480,11 @@
     "filterDateTo": "Hasta",
     "filterClear": "Limpiar filtros",
     "bookmarked": "Marcado: {{title}}"
+  },
+  "freshness": {
+    "secondsAgo": "Actualizado hace {{value}}s",
+    "minutesAgo": "Actualizado hace {{value}}m",
+    "hoursAgo": "Actualizado hace {{value}}h",
+    "daysAgo": "Actualizado hace {{value}}d"
   }
 }

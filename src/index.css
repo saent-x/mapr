@@ -751,6 +751,104 @@ a { color: inherit; text-decoration: none; }
 .status-sep { width: 1px; height: 10px; background: var(--line-2); }
 .status-right { margin-left: auto; display: flex; gap: 16px; }
 
+/* ── Data freshness indicator ── */
+.status-freshness {
+  color: var(--sev-green);
+  white-space: nowrap;
+}
+
+.freshness-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Header refresh button + tooltip ── */
+.header-refresh-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.header-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.header-refresh-btn:hover {
+  color: var(--amber);
+  border-color: var(--amber-dim);
+}
+.header-refresh-btn.is-spinning svg {
+  animation: spin 1s linear infinite;
+}
+.header-refresh-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.header-refresh-tooltip {
+  pointer-events: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  font-family: var(--ff-mono);
+  font-size: var(--fs-0);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s var(--ease), transform 0.15s var(--ease);
+  z-index: 50;
+}
+.header-refresh-btn:hover + .header-refresh-tooltip,
+.header-refresh-wrap:hover .header-refresh-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+.header-refresh-tooltip.freshness-green {
+  color: var(--sev-green);
+}
+.header-refresh-tooltip.freshness-green .freshness-dot {
+  background: var(--sev-green);
+  box-shadow: 0 0 6px var(--sev-green);
+}
+.header-refresh-tooltip.freshness-amber {
+  color: var(--sev-amber);
+}
+.header-refresh-tooltip.freshness-amber .freshness-dot {
+  background: var(--sev-amber);
+  box-shadow: 0 0 6px var(--sev-amber);
+}
+.header-refresh-tooltip.freshness-red {
+  color: var(--sev-red);
+}
+.header-refresh-tooltip.freshness-red .freshness-dot {
+  background: var(--sev-red);
+  box-shadow: 0 0 6px var(--sev-red);
+}
+
 /* ——— Header ——— */
 .header-brand {
   display: flex;

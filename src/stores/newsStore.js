@@ -55,6 +55,7 @@ const useNewsStore = create((set, get) => ({
   backendEvents: [],
   dataSource: 'loading',
   dataError: null,
+  lastDataLoadTime: null,
   sourceHealth: { gdelt: null, rss: null, backend: null },
   coverageTrends: null,
   coverageHistory: null,
@@ -92,6 +93,7 @@ const useNewsStore = create((set, get) => ({
         coverageTrends: historyPayload?.trends || briefing.coverageTrends || null,
         coverageHistory: historyPayload || null,
         velocitySpikes: Array.isArray(briefing.velocitySpikes) ? briefing.velocitySpikes : [],
+        lastDataLoadTime: Date.now(),
         // Safety net: if backend_warming returned 0 articles (shouldn't happen
         // after pipeline fix, but guard against it), mark as mock so the UI
         // doesn't show "NO ITEMS" under a 'live' label.
@@ -138,6 +140,7 @@ const useNewsStore = create((set, get) => ({
         opsHealth: null,
         dataSource: 'live',
         dataError: null,
+        lastDataLoadTime: Date.now(),
       });
 
       if (_prevLiveNewsRef !== articles) {

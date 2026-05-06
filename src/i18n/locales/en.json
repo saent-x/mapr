@@ -669,5 +669,11 @@
     "filterDateTo": "To date",
     "filterClear": "Clear filters",
     "bookmarked": "Bookmarked: {{title}}"
+  },
+  "freshness": {
+    "secondsAgo": "Updated {{value}}s ago",
+    "minutesAgo": "Updated {{value}}m ago",
+    "hoursAgo": "Updated {{value}}h ago",
+    "daysAgo": "Updated {{value}}d ago"
   }
 }
