@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 /**
  * Tests for the entity graph data transformation utilities.
@@ -12,6 +13,8 @@ import {
   filterGraphByType,
   getRelatedEvents,
   entityKey,
+  findShortestPath,
+  searchEntitiesByName,
 } from '../src/utils/entityGraph.js';
 
 /* ── Test fixtures ── */
@@ -401,5 +404,219 @@ describe('entityKey', () => {
 
   it('normalizes case', () => {
     assert.equal(entityKey('person', 'JOHN'), entityKey('person', 'john'));
+  });
+});
+
+/* ── findShortestPath ── */
+
+describe('findShortestPath', () => {
+  // Build a simple graph: A—B—C—D, plus A—C (shortcut)
+  const SAMPLE_EDGES = [
+    { source: 'person:a', target: 'person:b', weight: 1 },
+    { source: 'person:b', target: 'person:c', weight: 1 },
+    { source: 'person:c', target: 'person:d', weight: 1 },
+    { source: 'person:a', target: 'person:c', weight: 2 }, // shortcut A-C
+    { source: 'org:x', target: 'loc:y', weight: 1 },        // disconnected component
+  ];
+
+  it('returns single-node path when source equals target', () => {
+    const path = findShortestPath('person:a', 'person:a', SAMPLE_EDGES);
+    assert.deepEqual(path, ['person:a']);
+  });
+
+  it('finds shortest path (takes the shortcut)', () => {
+    // A→D: going A→B→C→D is 3 hops, A→C→D is 2 hops — should take shortcut
+    const path = findShortestPath('person:a', 'person:d', SAMPLE_EDGES);
+    assert.equal(path.length, 3); // A → C → D
+    assert.equal(path[0], 'person:a');
+    assert.equal(path[path.length - 1], 'person:d');
+  });
+
+  it('finds path between directly connected nodes', () => {
+    const path = findShortestPath('person:a', 'person:b', SAMPLE_EDGES);
+    assert.deepEqual(path, ['person:a', 'person:b']);
+  });
+
+  it('returns null when no path exists', () => {
+    // 'person:a' and 'org:x' are in disconnected components
+    const path = findShortestPath('person:a', 'org:x', SAMPLE_EDGES);
+    assert.equal(path, null);
+  });
+
+  it('returns null when source node does not exist in edges', () => {
+    const path = findShortestPath('person:ghost', 'person:a', SAMPLE_EDGES);
+    assert.equal(path, null);
+  });
+
+  it('returns null when target node does not exist in edges', () => {
+    const path = findShortestPath('person:a', 'person:ghost', SAMPLE_EDGES);
+    assert.equal(path, null);
+  });
+
+  it('handles empty edges array', () => {
+    const path = findShortestPath('person:a', 'person:b', []);
+    assert.equal(path, null);
+  });
+
+  it('handles null/undefined edges', () => {
+    assert.equal(findShortestPath('person:a', 'person:b', null), null);
+    assert.equal(findShortestPath('person:a', 'person:b', undefined), null);
+  });
+
+  it('finds path through real entity graph data', () => {
+    const graph = extractEntityGraph(EVENTS);
+    const guterresId = entityKey('person', 'Antonio Guterres');
+    const ukraineId = entityKey('location', 'Ukraine');
+    const path = findShortestPath(guterresId, ukraineId, graph.edges);
+    assert.ok(path !== null, 'should find a path between Guterres and Ukraine');
+    assert.equal(path[0], guterresId);
+    assert.equal(path[path.length - 1], ukraineId);
+  });
+
+  it('finds path between disconnected entity in full graph', () => {
+    const graph = extractEntityGraph(EVENTS);
+    const genevaId = entityKey('location', 'Geneva');
+    const natoId = entityKey('organization', 'NATO');
+    const path = findShortestPath(genevaId, natoId, graph.edges);
+    // Geneva (evt-4) has no co-occurring entities → disconnected
+    assert.equal(path, null);
+  });
+});
+
+/* ── searchEntitiesByName ── */
+
+describe('searchEntitiesByName', () => {
+  const SAMPLE_NODES = [
+    { id: 'person:antonio guterres', name: 'Antonio Guterres', type: 'person', mentionCount: 3 },
+    { id: 'organization:united nations', name: 'United Nations', type: 'organization', mentionCount: 4 },
+    { id: 'location:ukraine', name: 'Ukraine', type: 'location', mentionCount: 3 },
+    { id: 'organization:nato', name: 'NATO', type: 'organization', mentionCount: 2 },
+    { id: 'person:jens stoltenberg', name: 'Jens Stoltenberg', type: 'person', mentionCount: 1 },
+    { id: 'location:syria', name: 'Syria', type: 'location', mentionCount: 2 },
+  ];
+
+  it('returns all nodes for empty query', () => {
+    const result = searchEntitiesByName(SAMPLE_NODES, '');
+    assert.equal(result.length, SAMPLE_NODES.length);
+  });
+
+  it('searches by partial name substring (case-insensitive)', () => {
+    const result = searchEntitiesByName(SAMPLE_NODES, 'united');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].name, 'United Nations');
+  });
+
+  it('matches case-insensitively', () => {
+    const r1 = searchEntitiesByName(SAMPLE_NODES, 'NATO');
+    const r2 = searchEntitiesByName(SAMPLE_NODES, 'nato');
+    assert.equal(r1.length, r2.length);
+    assert.equal(r1[0].name, 'NATO');
+  });
+
+  it('returns empty array when no match', () => {
+    const result = searchEntitiesByName(SAMPLE_NODES, 'zzznotfound');
+    assert.deepEqual(result, []);
+  });
+
+  it('handles null/undefined nodes array', () => {
+    assert.deepEqual(searchEntitiesByName(null, 'test'), []);
+    assert.deepEqual(searchEntitiesByName(undefined, 'test'), []);
+  });
+
+  it('trims whitespace in query', () => {
+    const result = searchEntitiesByName(SAMPLE_NODES, '  ukraine  ');
+    assert.equal(result.length, 1);
+    assert.equal(result[0].name, 'Ukraine');
+  });
+});
+
+/* ── EntityExplorerPage structure tests ── */
+
+describe('EntityExplorerPage structure', () => {
+  const path = 'src/pages/EntityExplorerPage.jsx';
+  const source = fs.readFileSync(path, 'utf-8');
+
+  it('file exists', () => {
+    assert.ok(fs.existsSync(path), 'EntityExplorerPage.jsx should exist');
+  });
+
+  it('has search input with entity-search-input class', () => {
+    assert.ok(source.includes('entity-search-input'), 'should have entity search input');
+  });
+
+  it('has type filter chips for PER/ORG/LOC', () => {
+    assert.ok(source.includes('entity-type-chip'), 'should have type filter chips');
+    assert.ok(source.includes('toggleTypeFilter'), 'should have toggle function');
+    assert.ok(source.includes("'people'"), 'should filter by people');
+    assert.ok(source.includes("'organizations'"), 'should filter by organizations');
+    assert.ok(source.includes("'locations'"), 'should filter by locations');
+  });
+
+  it('imports filterGraphByType from entityGraph', () => {
+    assert.ok(source.includes('filterGraphByType'), 'should import filterGraphByType');
+  });
+
+  it('imports findShortestPath from entityGraph', () => {
+    assert.ok(source.includes('findShortestPath'), 'should import findShortestPath');
+  });
+
+  it('imports searchEntitiesByName from entityGraph', () => {
+    assert.ok(source.includes('searchEntitiesByName'), 'should import searchEntitiesByName');
+  });
+
+  it('handles Shift+click for second entity selection', () => {
+    assert.ok(source.includes('isShiftClick'), 'should check for Shift key on select');
+    assert.ok(source.includes('selectedB'), 'should have second entity state');
+  });
+
+  it('computes shortest path between two selected entities', () => {
+    assert.ok(source.includes('shortestPath'), 'should compute shortestPath');
+    assert.ok(source.includes('findShortestPath('), 'should call findShortestPath');
+  });
+
+  it('shows full mention history label', () => {
+    assert.ok(source.includes('mentionHistory'), 'should have mention history section');
+    assert.ok(source.includes('allRelatedEvents'), 'should compute allRelatedEvents');
+  });
+
+  it('has Show on Map button with navigation', () => {
+    assert.ok(source.includes('setEntityFilter'), 'should set entity filter');
+    assert.ok(source.includes("navigate('/')"), 'should navigate to map');
+  });
+
+  it('passes pathHighlight prop to EntityRelationshipGraph', () => {
+    assert.ok(source.includes('pathHighlight'), 'should pass pathHighlight prop');
+  });
+});
+
+/* ── EntityRelationshipGraph structure tests ── */
+
+describe('EntityRelationshipGraph structure', () => {
+  const path = 'src/components/EntityRelationshipGraph.jsx';
+  const source = fs.readFileSync(path, 'utf-8');
+
+  it('file exists', () => {
+    assert.ok(fs.existsSync(path), 'EntityRelationshipGraph.jsx should exist');
+  });
+
+  it('accepts selectedEntityB prop for second selection', () => {
+    assert.ok(source.includes('selectedEntityB'), 'should accept selectedEntityB prop');
+  });
+
+  it('accepts pathHighlight prop for path array', () => {
+    assert.ok(source.includes('pathHighlight'), 'should accept pathHighlight prop');
+  });
+
+  it('renders edge width based on weight for co-occurrence strength', () => {
+    assert.ok(source.includes('weightRatio'), 'should compute weight ratio');
+    assert.ok(source.includes('maxEdgeWeight'), 'should compute max edge weight');
+  });
+
+  it('uses cyan color for path edges and nodes', () => {
+    assert.ok(source.includes('rgba(94, 199, 212'), 'should use cyan for path highlights');
+  });
+
+  it('supports Shift+click on nodes via onEntitySelect callback', () => {
+    assert.ok(source.includes('shiftKey'), 'should check shiftKey in pointer events');
   });
 });

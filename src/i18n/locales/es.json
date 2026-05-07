@@ -570,5 +570,27 @@
     "eventCount": "Eventos",
     "sourceCount": "Fuentes",
     "avgSeverityShort": "Sev media"
+  },
+  "entities": {
+    "title": "Explorador de Entidades",
+    "subtitle": "Mapeo de conexiones entre personas, organizaciones y ubicaciones en eventos actuales.",
+    "showOnMap": "Mostrar en Mapa",
+    "searchPlaceholder": "Buscar entidades…",
+    "searchAriaLabel": "Buscar entidades por nombre",
+    "typeFilterAriaLabel": "Filtrar por tipo de entidad",
+    "typePerson": "PER",
+    "typeOrg": "ORG",
+    "typeLoc": "LOC",
+    "noSelection": "NINGUNA ENTIDAD SELECCIONADA",
+    "noSelectionHint": "Haz clic en un nodo para inspeccionarlo. Shift+clic en un segundo nodo para encontrar la ruta más corta.",
+    "mentionHistory": "HISTORIAL DE MENCIONES",
+    "showMore": "MOSTRAR MÁS",
+    "remaining": "RESTANTES",
+    "clear": "LIMPIAR",
+    "pathMode": "RUTA MÁS CORTA",
+    "noPathFound": "RUTA NO ENCONTRADA",
+    "hopCount": "{{count}} SALTO",
+    "hopCount_plural": "{{count}} SALTOS",
+    "nodesInPath": "NODOS"
   }
 }

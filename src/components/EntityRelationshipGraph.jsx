@@ -294,7 +294,7 @@ function drawNodeGlyph(ctx, node, color, isActive, view) {
   }
 }
 
-function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewport, view, worldW, worldH) {
+function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selectedEntityB, pathHighlight, viewport, view, worldW, worldH) {
   const { width, height } = viewport;
   ctx.clearRect(0, 0, width, height);
 
@@ -314,39 +314,83 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
       if (edge.target === selectedEntity) connectedIds.add(edge.source);
     }
   }
+  // Also include second selected entity's connections
+  if (selectedEntityB) {
+    connectedIds.add(selectedEntityB);
+    for (const edge of simEdges) {
+      if (edge.source === selectedEntityB) connectedIds.add(edge.target);
+      if (edge.target === selectedEntityB) connectedIds.add(edge.source);
+    }
+  }
 
-  // 3. Edges
+  const pathSet = new Set(pathHighlight || []);
+  const pathEdges = new Set();
+  if (pathHighlight && pathHighlight.length > 1) {
+    for (let i = 0; i < pathHighlight.length - 1; i++) {
+      const a = pathHighlight[i];
+      const b = pathHighlight[i + 1];
+      pathEdges.add(`${a}|${b}`);
+      pathEdges.add(`${b}|${a}`);
+    }
+  }
+
+  // Compute max edge weight for visual scaling
+  let maxEdgeWeight = 1;
+  for (const edge of simEdges) {
+    if ((edge.weight || 1) > maxEdgeWeight) maxEdgeWeight = edge.weight;
+  }
+
+  // 3. Edges — with weight-proportional visual
   for (const edge of simEdges) {
     const a = edge.sourceNode;
     const b = edge.targetNode;
-    const isHighlighted = selectedEntity
+    const edgeKeyAB = `${edge.source}|${edge.target}`;
+    const isPathEdge = pathEdges.has(edgeKeyAB);
+    const isHighlighted = !isPathEdge && selectedEntity
       ? connectedIds.has(edge.source) && connectedIds.has(edge.target)
       : false;
+    const weight = edge.weight || 1;
+    // Weight ratio: 0.3–1.0 based on weight relative to max
+    const weightRatio = 0.3 + 0.7 * (weight / maxEdgeWeight);
+
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    if (isHighlighted) {
+    if (isPathEdge) {
+      // Shortest path edges: bright cyan with thicker line
+      ctx.strokeStyle = 'rgba(94, 199, 212, 0.9)';
+      ctx.lineWidth = (2.0 * weightRatio) / view.scale;
+    } else if (isHighlighted) {
       ctx.strokeStyle = EDGE_HIGH;
-      ctx.lineWidth = 1.4 / view.scale;
+      ctx.lineWidth = (1.4 * weightRatio) / view.scale;
     } else {
       ctx.strokeStyle = selectedEntity ? EDGE_DIM : EDGE_BASE;
-      ctx.lineWidth = 0.8 / view.scale;
+      ctx.lineWidth = (0.8 * weightRatio) / view.scale;
     }
     ctx.stroke();
   }
 
   // 4. Nodes — outlined rings with inner glyph, solid disc when active
   for (const node of simNodes) {
-    const isSelected = node.id === selectedEntity;
+    const isSelectedA = node.id === selectedEntity;
+    const isSelectedB = node.id === selectedEntityB;
+    const isInPath = pathSet.has(node.id);
     const isHovered  = node.id === hoveredEntity;
     const isConnected = connectedIds.has(node.id);
-    const isActive = isSelected || isConnected;
-    const dimmed = selectedEntity && !isActive;
+    const isActive = isSelectedA || isSelectedB || isInPath || isConnected;
+    const dimmed = (selectedEntity || selectedEntityB) && !isActive;
     const color = TYPE_COLORS[node.type] || '#999';
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-    if (isActive) {
+    if (isInPath) {
+      // Path nodes: cyan fill
+      ctx.fillStyle = 'rgba(94, 199, 212, 0.35)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(94, 199, 212, 0.7)';
+      ctx.lineWidth = 1.8 / view.scale;
+      ctx.stroke();
+    } else if (isActive) {
       ctx.fillStyle = color;
       ctx.fill();
     } else {
@@ -357,14 +401,17 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
       ctx.stroke();
     }
 
-    drawNodeGlyph(ctx, node, color, isActive, view);
+    drawNodeGlyph(ctx, node, isInPath ? 'rgba(94, 199, 212, 0.9)' : color, isActive && !isInPath, view);
 
-    if (isSelected) {
-      // Outer halo ring
+    if (isSelectedA || isSelectedB) {
+      // Outer halo ring — amber for first, cyan for second
+      const haloColor = isSelectedA
+        ? 'rgba(232, 163, 61, 0.45)'
+        : 'rgba(94, 199, 212, 0.45)';
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius + 5, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(232, 163, 61, 0.35)';
-      ctx.lineWidth = 1 / view.scale;
+      ctx.strokeStyle = haloColor;
+      ctx.lineWidth = 1.5 / view.scale;
       ctx.stroke();
     } else if (isHovered) {
       ctx.beginPath();
@@ -379,16 +426,24 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
 
   // 5. Labels in screen space (crisp at any zoom)
   for (const node of simNodes) {
-    const isSelected = node.id === selectedEntity;
+    const isSelectedA = node.id === selectedEntity;
+    const isSelectedB = node.id === selectedEntityB;
+    const isInPath = pathSet.has(node.id);
     const isHovered  = node.id === hoveredEntity;
     const isConnected = connectedIds.has(node.id);
-    const dimmed = selectedEntity && !(isSelected || isConnected);
+    const dimmed = (selectedEntity || selectedEntityB) && !(isSelectedA || isSelectedB || isInPath || isConnected);
     const sx = node.x * view.scale + view.tx;
     const sy = (node.y + node.radius) * view.scale + view.ty + 6;
     ctx.font = LABEL_FONT;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = dimmed ? INK_3 : (isSelected || isHovered ? INK_0 : 'rgba(232, 230, 223, 0.7)');
+    if (isInPath) {
+      ctx.fillStyle = 'rgba(94, 199, 212, 0.9)';
+    } else if (dimmed) {
+      ctx.fillStyle = INK_3;
+    } else {
+      ctx.fillStyle = (isSelectedA || isSelectedB || isHovered) ? INK_0 : 'rgba(232, 230, 223, 0.7)';
+    }
     ctx.fillText(node.name, sx, sy);
   }
 }
@@ -446,6 +501,8 @@ export default function EntityRelationshipGraph({
   edges = [],
   events = [],
   selectedEntity,
+  selectedEntityB = null,   // second entity for shortest-path mode
+  pathHighlight = [],       // array of node IDs forming highlighted path
   onEntitySelect,
   width = 800,
   height = 600,
@@ -458,6 +515,8 @@ export default function EntityRelationshipGraph({
   const alphaRef = useRef(1);
   const hoveredRef = useRef(null);
   const selectedRef = useRef(null);
+  const selectedBRef = useRef(null);
+  const pathRef = useRef([]);
   const connectedRef = useRef(new Set());
   const viewRef = useRef({ scale: 1, tx: 0, ty: 0 });
   const dragRef = useRef(null); // { kind: 'pan' | 'node', ... }
@@ -499,6 +558,8 @@ export default function EntityRelationshipGraph({
 
   useEffect(() => {
     selectedRef.current = selectedEntity || null;
+    selectedBRef.current = selectedEntityB || null;
+    pathRef.current = pathHighlight || [];
     const set = new Set();
     if (selectedEntity && simRef.current) {
       set.add(selectedEntity);
@@ -507,9 +568,16 @@ export default function EntityRelationshipGraph({
         if (edge.target === selectedEntity) set.add(edge.source);
       }
     }
+    if (selectedEntityB && simRef.current) {
+      set.add(selectedEntityB);
+      for (const edge of simRef.current.simEdges) {
+        if (edge.source === selectedEntityB) set.add(edge.target);
+        if (edge.target === selectedEntityB) set.add(edge.source);
+      }
+    }
     connectedRef.current = set;
     alphaRef.current = Math.max(alphaRef.current, REHEAT_ALPHA);
-  }, [selectedEntity]);
+  }, [selectedEntity, selectedEntityB, pathHighlight]);
 
   useEffect(() => {
     if (!nodes || nodes.length === 0) {
@@ -591,6 +659,7 @@ export default function EntityRelationshipGraph({
       if (canvas) {
         const ctx = canvas.getContext('2d');
         drawGraph(ctx, simNodes, simEdges, selectedRef.current, hoveredRef.current,
+          selectedBRef.current, pathRef.current,
           { width, height }, viewRef.current, worldW, worldH);
       }
       animRef.current = requestAnimationFrame(animate);
@@ -634,8 +703,8 @@ export default function EntityRelationshipGraph({
     const node = findNodeAt(e.clientX, e.clientY);
     if (isMobile) {
       // Mobile: tap-select only. Pan/pinch handled by touch listeners.
-      if (node) onEntitySelect?.(node.id === selectedEntity ? null : node.id);
-      else onEntitySelect?.(null);
+      if (node) onEntitySelect?.(node.id === selectedEntity ? null : node.id, e.shiftKey);
+      else onEntitySelect?.(null, false);
       return;
     }
     if (node) {
@@ -649,6 +718,7 @@ export default function EntityRelationshipGraph({
         startX: e.clientX,
         startY: e.clientY,
         moved: false,
+        shiftKey: e.shiftKey,
       };
       alphaRef.current = Math.max(alphaRef.current, 0.5);
     } else {
@@ -724,11 +794,11 @@ export default function EntityRelationshipGraph({
       // unpin is the expected "nudge it then let physics take over" feel.
       d.node.fixed = false;
       if (!d.moved) {
-        onEntitySelect?.(d.node.id === selectedEntity ? null : d.node.id);
+        onEntitySelect?.(d.node.id === selectedEntity ? null : d.node.id, d.shiftKey);
         alphaRef.current = REHEAT_ALPHA;
       }
     } else if (d.kind === 'pan' && !d.moved) {
-      onEntitySelect?.(null);
+      onEntitySelect?.(null, false);
     }
   }, [onEntitySelect, selectedEntity]);
 

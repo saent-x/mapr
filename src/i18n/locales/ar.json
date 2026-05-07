@@ -570,5 +570,27 @@
     "eventCount": "الأحداث",
     "sourceCount": "المصادر",
     "avgSeverityShort": "متوسط الخطورة"
+  },
+  "entities": {
+    "title": "مستكشف الكيانات",
+    "subtitle": "رسم خرائط الروابط بين الأشخاص والمنظمات والمواقع في الأحداث الحالية.",
+    "showOnMap": "عرض على الخريطة",
+    "searchPlaceholder": "بحث عن كيانات…",
+    "searchAriaLabel": "بحث عن كيانات بالاسم",
+    "typeFilterAriaLabel": "تصفية حسب نوع الكيان",
+    "typePerson": "شخص",
+    "typeOrg": "منظمة",
+    "typeLoc": "موقع",
+    "noSelection": "لم يتم تحديد أي كيان",
+    "noSelectionHint": "انقر على عقدة لفحصها. Shift+نقرة على عقدة ثانية لإيجاد أقصر مسار.",
+    "mentionHistory": "سجل الإشارات",
+    "showMore": "عرض المزيد",
+    "remaining": "متبقي",
+    "clear": "مسح",
+    "pathMode": "أقصر مسار",
+    "noPathFound": "لم يتم العثور على مسار",
+    "hopCount": "{{count}} قفزة",
+    "hopCount_plural": "{{count}} قفزات",
+    "nodesInPath": "عقد"
   }
 }

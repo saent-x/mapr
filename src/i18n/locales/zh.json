@@ -570,5 +570,26 @@
     "eventCount": "事件",
     "sourceCount": "来源",
     "avgSeverityShort": "平均严重"
+  },
+  "entities": {
+    "title": "实体浏览器",
+    "subtitle": "映射当前事件中人物、组织和地点之间的连接。",
+    "showOnMap": "在地图上显示",
+    "searchPlaceholder": "搜索实体…",
+    "searchAriaLabel": "按名称搜索实体",
+    "typeFilterAriaLabel": "按实体类型筛选",
+    "typePerson": "人物",
+    "typeOrg": "组织",
+    "typeLoc": "地点",
+    "noSelection": "未选择实体",
+    "noSelectionHint": "点击节点查看详情。Shift+点击第二个节点查找最短路径。",
+    "mentionHistory": "提及历史",
+    "showMore": "显示更多",
+    "remaining": "剩余",
+    "clear": "清除",
+    "pathMode": "最短路径",
+    "noPathFound": "未找到路径",
+    "hopCount": "{{count}} 跳",
+    "nodesInPath": "节点"
   }
 }
