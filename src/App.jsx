@@ -684,7 +684,7 @@ function App() {
         events={activeNews}
         scrubTime={scrubTime}
         onScrub={useUIStore.getState().setScrubTime}
-        onEventSelect={(story) => { handleStorySelect(story); navigate('/event/' + story.id); }}
+        onEventSelect={(story) => { navigate('/event/' + story.id); }}
         selectedStoryId={selectedStoryId}
       />
 
@@ -693,7 +693,7 @@ function App() {
         events={activeNews}
         scrubTime={scrubTime}
         onScrub={useUIStore.getState().setScrubTime}
-        onEventSelect={(story) => { handleStorySelect(story); navigate('/event/' + story.id); }}
+        onEventSelect={(story) => { navigate('/event/' + story.id); }}
         selectedStoryId={selectedStoryId}
       />
 
@@ -718,7 +718,7 @@ function App() {
                   key={story.id}
                   type="button"
                   className={`intel-ticker-item ${selectedStoryId === story.id ? 'is-active' : ''}`}
-                  onClick={() => { handleStorySelect(story); navigate('/event/' + story.id); }}
+                  onClick={() => { navigate('/event/' + story.id); }}
                 >
                   <span className="intel-ticker-dot" style={{ background: m.accent }} />
                   <span className="intel-ticker-severity" style={{ color: m.accent }}>{m.label}</span>
