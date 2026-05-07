@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { mergeAdminHealthPayloads } from '../utils/healthSummary.js';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import ShortcutHelp from '../components/ShortcutHelp.jsx';
-import { getLocale } from '../utils/formatDate.js';
+import { formatTime } from '../utils/formatDate.js';
 
 const STATUS_COLORS = {
   ok: '#00e5a0',
@@ -146,7 +146,7 @@ const HealthPage = () => {
         <div style={s.header}>
           <span style={s.headerTitle}>SYSTEM HEALTH</span>
           <div style={s.headerRight}>
-            {lastRefresh && <span style={s.dim}>Updated {new Date(lastRefresh).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
+            {lastRefresh && <span style={s.dim}>Updated {formatTime(lastRefresh, null, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
             <button onClick={fetchHealth} style={s.btnSmall} disabled={loading}>
               {loading ? 'LOADING...' : 'REFRESH'}
             </button>
@@ -171,7 +171,7 @@ const HealthPage = () => {
             <Section title="DATA PIPELINE">
               <Grid>
                 <Stat label="Source" value={data.pipeline.source} />
-                <Stat label="Fetched" value={data.pipeline.fetchedAt ? new Date(data.pipeline.fetchedAt).toLocaleTimeString() : '—'} />
+                <Stat label="Fetched" value={data.pipeline.fetchedAt ? formatTime(data.pipeline.fetchedAt) : '—'} />
                 <Stat label="GDELT Articles" value={data.pipeline.gdeltArticles} color={data.pipeline.gdeltArticles > 0 ? '#00e5a0' : '#ff3b5c'} />
                 <Stat label="Feed Articles" value={data.pipeline.rssArticles} color={data.pipeline.rssArticles > 0 ? '#00e5a0' : '#ff8a3d'} />
                 <Stat label="Total Articles" value={data.pipeline.totalArticles} />

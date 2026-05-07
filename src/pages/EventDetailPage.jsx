@@ -78,12 +78,31 @@ export default function EventDetailPage() {
     return liveNews || [];
   }, [backendEvents, liveNews]);
 
-  // Related events — events that share entities with this event
+  // Related events — events that share entities with this event.
+  // Iterate all entity names (people, organizations, locations), call
+  // getRelatedEvents per name, flatten, deduplicate by id, filter out self.
   const relatedEvents = useMemo(() => {
     if (!event || !event.entities) return [];
-    const related = getRelatedEvents(allEvents, event.title, null);
-    // Filter out the current event and limit to 8
-    return related.filter((ev) => ev.id !== event.id).slice(0, 8);
+    const entities = event.entities;
+    const entityNames = [
+      ...((entities.people || []).map((p) => (typeof p === 'string' ? p : p.name || ''))),
+      ...((entities.organizations || []).map((o) => (typeof o === 'string' ? o : o.name || ''))),
+      ...((entities.locations || []).map((l) => (typeof l === 'string' ? l : l.name || ''))),
+    ].filter(Boolean);
+
+    const seen = new Set();
+    seen.add(event.id);
+    const results = [];
+    for (const name of entityNames) {
+      const related = getRelatedEvents(allEvents, name, null);
+      for (const rel of related) {
+        if (!seen.has(rel.id)) {
+          seen.add(rel.id);
+          results.push(rel);
+        }
+      }
+    }
+    return results.slice(0, 8);
   }, [event, allEvents]);
 
   // Back button handler

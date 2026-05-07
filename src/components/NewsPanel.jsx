@@ -292,7 +292,7 @@ export function ArticleDetail({ story }) {
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
         >
           <Maximize2 size={11} aria-hidden />
-          VIEW FULL DETAIL
+          {t('eventDetail.viewDetail', 'View event detail')}
         </Link>
       </div>
     </>
