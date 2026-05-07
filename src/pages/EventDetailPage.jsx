@@ -7,6 +7,7 @@ import { getRelatedEvents } from '../utils/entityGraph';
 import { getSourceHost } from '../utils/urlUtils';
 import { getReliabilityTier, getReliabilityMeta, getReliabilityLabel } from '../utils/credibilityMeta';
 import MapLoadingFallback from '../components/MapLoadingFallback';
+import MapErrorBoundary from '../components/MapErrorBoundary';
 import { ArticleDetail } from '../components/NewsPanel';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
@@ -160,23 +161,25 @@ export default function EventDetailPage() {
       {/* Map section */}
       {hasCoords && (
         <div className="event-detail-map">
-          <Suspense fallback={<MapLoadingFallback />}>
-            <FlatMap
-              newsList={[event]}
-              regionSeverities={{}}
-              mapOverlay="severity"
-              coverageStatusByIso={{}}
-              perCountryReliability={{}}
-              velocitySpikes={[]}
-              trackingPoints={[]}
-              selectedRegion={null}
-              selectedStory={null}
-              onRegionSelect={() => {}}
-              onStorySelect={() => {}}
-              onArcSelect={() => {}}
-              onCoverageCountryClick={() => {}}
-            />
-          </Suspense>
+          <MapErrorBoundary>
+            <Suspense fallback={<MapLoadingFallback />}>
+              <FlatMap
+                newsList={[event]}
+                regionSeverities={{}}
+                mapOverlay="severity"
+                coverageStatusByIso={{}}
+                perCountryReliability={{}}
+                velocitySpikes={[]}
+                trackingPoints={[]}
+                selectedRegion={null}
+                selectedStory={null}
+                onRegionSelect={() => {}}
+                onStorySelect={() => {}}
+                onArcSelect={() => {}}
+                onCoverageCountryClick={() => {}}
+              />
+            </Suspense>
+          </MapErrorBoundary>
         </div>
       )}
 
