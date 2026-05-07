@@ -150,6 +150,18 @@
     "sourceSparse": "مصادر قليلة",
     "uncovered": "غير مغطاة"
   },
+  "coverageDrill": {
+    "title": "تفاصيل التغطية",
+    "active": "نشط",
+    "failed": "فشل",
+    "empty": "فارغ",
+    "totalEvents": "إجمالي الأحداث",
+    "verifiedEvents": "موثقة",
+    "recentHistory": "التغطية الأخيرة",
+    "statusChanges": "تغييرات حديثة",
+    "noFeeds": "لا توجد مصادر مكونة لهذا البلد",
+    "clickCountryHint": "انقر على بلد لرؤية تفاصيل المصادر"
+  },
   "map": {
     "severity": "الخطورة",
     "reports": "التقارير",

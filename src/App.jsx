@@ -40,6 +40,7 @@ import { computeSilenceEntries } from './utils/anomalyUtils';
 import { getMockNews, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
 import SaveViewDialog from './components/SaveViewDialog';
 import BriefingExportModal from './components/BriefingExportModal';
+import CoverageDrilldown from './components/CoverageDrilldown';
 import db from './services/instantDb';
 
 const Globe = lazy(() => import('./components/Globe'));
@@ -349,6 +350,22 @@ function App() {
     selectRegionAction(iso);
     if (iso) setLastRegionIso(iso);
   }, [selectRegionAction, setLastRegionIso]);
+
+  // Coverage drill-down state
+  const [coverageDrillIso, setCoverageDrillIso] = useState(null);
+  const handleCoverageCountryClick = useCallback((iso) => {
+    setCoverageDrillIso((prev) => (prev === iso ? null : iso));
+  }, []);
+  const handleCloseCoverageDrill = useCallback(() => {
+    setCoverageDrillIso(null);
+  }, []);
+
+  // Clear coverage drill when overlay changes away from coverage
+  useEffect(() => {
+    if (mapOverlay !== 'coverage') {
+      setCoverageDrillIso(null);
+    }
+  }, [mapOverlay]);
   const handleStorySelect = useUIStore((s) => s.selectStory);
   const handleArcSelect = useUIStore((s) => s.selectArc);
   const handleClosePanel = useUIStore((s) => s.closePanel);
@@ -476,6 +493,7 @@ function App() {
                 onRegionSelect={handleRegionSelect}
                 onStorySelect={handleStorySelect}
                 onArcSelect={handleArcSelect}
+                onCoverageCountryClick={handleCoverageCountryClick}
               />
             ) : (
               <FlatMap
@@ -491,6 +509,7 @@ function App() {
                 onRegionSelect={handleRegionSelect}
                 onStorySelect={handleStorySelect}
                 onArcSelect={handleArcSelect}
+                onCoverageCountryClick={handleCoverageCountryClick}
               />
             )}
           </MapErrorBoundary>
@@ -779,41 +798,51 @@ function App() {
       {/*
         Coverage legend (mapped onto the current overlay). Rendered hidden when no
         overlay-specific chip set would apply, so the main canvas stays clean.
+        For coverage overlay: shows static legend OR interactive drill-down.
       */}
       {mapOverlay && (
-        <div className="map-corner br" aria-hidden>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span className="micro">{t(`legend.${mapOverlay}`)}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {mapOverlay === 'severity'
-                ? ['critical', 'elevated', 'watch', 'low'].map((key) => (
-                    <span key={key} className="legend-item">
-                      <span className="legend-dot" style={{ background: `var(--${key})` }} />
-                      {t(`legend.${key}`)}
-                    </span>
-                  ))
-                : mapOverlay === 'geopolitical'
-                  ? [
-                      { key: 'low', color: 'rgba(0, 212, 255, 0.8)', label: t('legend.geoLow') },
-                      { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', label: t('legend.geoMedium') },
-                      { key: 'high', color: 'rgba(255, 85, 85, 0.8)', label: t('legend.geoHigh') },
-                    ].map(({ key, color, label }) => (
+        <div className={`map-corner br${mapOverlay === 'coverage' && coverageDrillIso ? ' map-corner-drill' : ''}`} aria-hidden={mapOverlay !== 'coverage' || !coverageDrillIso}>
+          {mapOverlay === 'coverage' && coverageDrillIso ? (
+            <CoverageDrilldown
+              iso={coverageDrillIso}
+              coverageEntry={coverageStatusByIso[coverageDrillIso] || null}
+              coverageHistory={coverageHistory}
+              sourceHealth={sourceHealth}
+              onClose={handleCloseCoverageDrill}
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span className="micro">{t(`legend.${mapOverlay}`)}</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {mapOverlay === 'severity'
+                  ? ['critical', 'elevated', 'watch', 'low'].map((key) => (
                       <span key={key} className="legend-item">
-                        <span className="legend-dot" style={{ background: color }} />
-                        {label}
+                        <span className="legend-dot" style={{ background: `var(--${key})` }} />
+                        {t(`legend.${key}`)}
                       </span>
                     ))
-                : mapOverlay === 'reliability'
-                  ? [
-                      { key: 'high', label: t('legend.reliabilityHigh'), accent: getReliabilityMeta('high').dotColor },
-                      { key: 'medium', label: t('legend.reliabilityMedium'), accent: getReliabilityMeta('medium').dotColor },
-                      { key: 'low', label: t('legend.reliabilityLow'), accent: getReliabilityMeta('low').dotColor },
-                    ].map(({ key, label, accent }) => (
-                      <span key={key} className="legend-item">
-                        <span className="legend-dot" style={{ background: accent }} />
-                        {label}
-                      </span>
-                    ))
+                  : mapOverlay === 'geopolitical'
+                    ? [
+                        { key: 'low', color: 'rgba(0, 212, 255, 0.8)', label: t('legend.geoLow') },
+                        { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', label: t('legend.geoMedium') },
+                        { key: 'high', color: 'rgba(255, 85, 85, 0.8)', label: t('legend.geoHigh') },
+                      ].map(({ key, color, label }) => (
+                        <span key={key} className="legend-item">
+                          <span className="legend-dot" style={{ background: color }} />
+                          {label}
+                        </span>
+                      ))
+                  : mapOverlay === 'reliability'
+                    ? [
+                        { key: 'high', label: t('legend.reliabilityHigh'), accent: getReliabilityMeta('high').dotColor },
+                        { key: 'medium', label: t('legend.reliabilityMedium'), accent: getReliabilityMeta('medium').dotColor },
+                        { key: 'low', label: t('legend.reliabilityLow'), accent: getReliabilityMeta('low').dotColor },
+                      ].map(({ key, label, accent }) => (
+                        <span key={key} className="legend-item">
+                          <span className="legend-dot" style={{ background: accent }} />
+                          {label}
+                        </span>
+                      ))
                   : COVERAGE_STATUS_ORDER.map((status) => {
                       const meta = getCoverageMeta(status);
                       return (
@@ -823,8 +852,14 @@ function App() {
                         </span>
                       );
                     })}
+              </div>
+              {mapOverlay === 'coverage' && !coverageDrillIso && (
+                <span className="coverage-drill-hint micro" style={{ opacity: 0.5, marginTop: 2 }}>
+                  {t('coverageDrill.clickCountryHint', 'Click a country to see source details')}
+                </span>
+              )}
             </div>
-          </div>
+          )}
         </div>
       )}
     </ErrorBoundary>

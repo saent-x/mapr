@@ -111,6 +111,7 @@ const FlatMap = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  onCoverageCountryClick,
   compact = false,
 }) => {
   const { t } = useTranslation();
@@ -316,6 +317,7 @@ const FlatMap = ({
           onRegionSelect={onRegionSelect}
           onStorySelect={onStorySelect}
           onArcSelect={onArcSelect}
+          onCoverageCountryClick={onCoverageCountryClick}
           drillIsos={drillIsos}
         />
         {compact && selectedRegion && <CompactRegionLock iso={selectedRegion} />}

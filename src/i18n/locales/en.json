@@ -295,6 +295,18 @@
     "sourceSparse": "Source sparse",
     "uncovered": "Uncovered"
   },
+  "coverageDrill": {
+    "title": "Coverage Details",
+    "active": "Active",
+    "failed": "Failed",
+    "empty": "Empty",
+    "totalEvents": "Total events",
+    "verifiedEvents": "Verified",
+    "recentHistory": "Recent coverage",
+    "statusChanges": "Recent changes",
+    "noFeeds": "No source feeds configured for this country",
+    "clickCountryHint": "Click a country to see source details"
+  },
   "map": {
     "severity": "Severity",
     "reports": "Reports",

@@ -150,6 +150,18 @@
     "sourceSparse": "Sources limitées",
     "uncovered": "Non couverte"
   },
+  "coverageDrill": {
+    "title": "Détails de Couverture",
+    "active": "Actif",
+    "failed": "Échoué",
+    "empty": "Vide",
+    "totalEvents": "Total événements",
+    "verifiedEvents": "Vérifiés",
+    "recentHistory": "Couverture récente",
+    "statusChanges": "Changements récents",
+    "noFeeds": "Aucune source configurée pour ce pays",
+    "clickCountryHint": "Cliquez sur un pays pour voir les détails des sources"
+  },
   "map": {
     "severity": "Sévérité",
     "reports": "Rapports",

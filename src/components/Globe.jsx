@@ -40,6 +40,7 @@ const Globe = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  onCoverageCountryClick,
 }) => {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
@@ -283,6 +284,7 @@ const Globe = ({
           onRegionSelect={onRegionSelect}
           onStorySelect={onStorySelect}
           onArcSelect={onArcSelect}
+          onCoverageCountryClick={onCoverageCountryClick}
         />
       </AppMap>
     </div>

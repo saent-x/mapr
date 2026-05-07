@@ -24,6 +24,7 @@ const MapGLOverlay = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  onCoverageCountryClick,
   surface = 'flat',
   drillIsos = null,
 }) => {
@@ -50,11 +51,14 @@ const MapGLOverlay = ({
 
   /* ──────────────────────────── event handlers ──────────────────────────── */
 
-  const latestHandlers = useRef({ onStorySelect, onRegionSelect, onArcSelect });
-  latestHandlers.current = { onStorySelect, onRegionSelect, onArcSelect };
+  const latestHandlers = useRef({ onStorySelect, onRegionSelect, onArcSelect, onCoverageCountryClick });
+  latestHandlers.current = { onStorySelect, onRegionSelect, onArcSelect, onCoverageCountryClick };
 
   const latestData = useRef({ newsList, trackingPoints, regionSeverities, coverageStatusByIso });
   latestData.current = { newsList, trackingPoints, regionSeverities, coverageStatusByIso };
+
+  const latestOverlay = useRef(mapOverlay);
+  latestOverlay.current = mapOverlay;
 
   useEffect(() => {
     if (!isLoaded || !map) return undefined;
@@ -239,7 +243,11 @@ const MapGLOverlay = ({
       if (countryFeatures.length > 0) {
         const iso = countryFeatures[0].properties._iso;
         if (iso) {
-          latestHandlers.current.onRegionSelect?.(iso);
+          if (latestOverlay.current === 'coverage' && latestHandlers.current.onCoverageCountryClick) {
+            latestHandlers.current.onCoverageCountryClick(iso);
+          } else {
+            latestHandlers.current.onRegionSelect?.(iso);
+          }
           setPopupInfo(null);
         }
       }

@@ -150,6 +150,18 @@
     "sourceSparse": "Fuentes escasas",
     "uncovered": "Sin cobertura"
   },
+  "coverageDrill": {
+    "title": "Detalles de Cobertura",
+    "active": "Activo",
+    "failed": "Fallido",
+    "empty": "Vacío",
+    "totalEvents": "Total eventos",
+    "verifiedEvents": "Verificados",
+    "recentHistory": "Cobertura reciente",
+    "statusChanges": "Cambios recientes",
+    "noFeeds": "Sin fuentes configuradas para este país",
+    "clickCountryHint": "Haz clic en un país para ver detalles de fuentes"
+  },
   "map": {
     "severity": "Severidad",
     "reports": "Reportes",

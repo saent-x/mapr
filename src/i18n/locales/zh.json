@@ -150,6 +150,18 @@
     "sourceSparse": "来源稀疏",
     "uncovered": "未覆盖"
   },
+  "coverageDrill": {
+    "title": "覆盖详情",
+    "active": "活跃",
+    "failed": "失败",
+    "empty": "空",
+    "totalEvents": "事件总数",
+    "verifiedEvents": "已验证",
+    "recentHistory": "近期覆盖",
+    "statusChanges": "近期变化",
+    "noFeeds": "此国家未配置来源",
+    "clickCountryHint": "点击国家查看来源详情"
+  },
   "map": {
     "severity": "严重性",
     "reports": "事件数",
