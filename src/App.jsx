@@ -20,6 +20,7 @@ import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
+import useSubscriptionStore from './stores/subscriptionStore';
 import useKeyboardNavigation from './hooks/useKeyboardNavigation';
 import usePanelState from './hooks/usePanelState';
 import useBreakpoint from './hooks/useBreakpoint';
@@ -41,6 +42,7 @@ import { getMockNews, calculateRegionSeverity, getSeverityMeta, resolveDateFloor
 import SaveViewDialog from './components/SaveViewDialog';
 import BriefingExportModal from './components/BriefingExportModal';
 import CoverageDrilldown from './components/CoverageDrilldown';
+import UpgradePrompt from './components/UpgradePrompt';
 import db from './services/instantDb';
 
 const Globe = lazy(() => import('./components/Globe'));
@@ -65,6 +67,9 @@ function App() {
     mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
     showExport, scrubTime, toasts, activeViewId, viewNotFound,
   } = useUIStore();
+
+  const subscriptionStatus = useSubscriptionStore((s) => s.status);
+  const isPro = subscriptionStatus === 'pro';
 
   const filtersOpen = drawerMode !== null;
   const addToast = useUIStore((s) => s.addToast);
@@ -778,24 +783,30 @@ function App() {
         mapState={{ mapMode, mapOverlay }}
       />
 
-      {/* Briefing export modal */}
-      <BriefingExportModal
-        events={activeNews}
-        filters={{
-          dateWindow,
-          minSeverity,
-          minConfidence,
-          sortMode,
-          verificationFilter,
-          sourceTypeFilter,
-          languageFilter,
-          entityFilter,
-          hideAmplified,
-          searchQuery: debouncedSearch,
-          region: selectedRegion,
-        }}
-        mapContainerRef={mapStageRef}
-      />
+      {/* Briefing export modal — Pro gated */}
+      {showExport && !isPro ? (
+        <div className="mapr-export-gate" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--bg-0) 85%, transparent)', backdropFilter: 'blur(4px)' }}>
+          <UpgradePrompt feature="export" />
+        </div>
+      ) : (
+        <BriefingExportModal
+          events={activeNews}
+          filters={{
+            dateWindow,
+            minSeverity,
+            minConfidence,
+            sortMode,
+            verificationFilter,
+            sourceTypeFilter,
+            languageFilter,
+            entityFilter,
+            hideAmplified,
+            searchQuery: debouncedSearch,
+            region: selectedRegion,
+          }}
+          mapContainerRef={mapStageRef}
+        />
+      )}
 
       {/*
         Coverage legend (mapped onto the current overlay). Rendered hidden when no

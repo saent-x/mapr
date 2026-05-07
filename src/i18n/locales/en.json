@@ -9,7 +9,8 @@
     "region": "Region",
     "expand": "Expand navigation",
     "collapse": "Collapse navigation",
-    "backToMap": "Back to map"
+    "backToMap": "Back to map",
+    "billing": "Billing"
   },
   "regionDetail": {
     "articles": "articles",
@@ -829,5 +830,65 @@
     "shareButton": "Share view",
     "linkCopied": "Link copied to clipboard",
     "copyFailed": "Failed to copy link"
+  },
+  "subscription": {
+    "title": "Subscription Plans",
+    "subtitle": "Choose the plan that fits your intelligence workflow.",
+    "loading": "Loading subscription…",
+    "current": "CURRENT PLAN",
+    "currentPlan": "You are on the {{plan}} plan",
+    "proRequired": "Pro Subscription Required",
+    "featureLocked": "{{feature}} is a Pro feature",
+    "upgradeBody": "Upgrade to Pro to unlock alerts, PDF export, historical queries, and advanced filters.",
+    "upgradeToPro": "Upgrade to Pro",
+    "upgradeError": "Failed to start checkout. Please try again.",
+    "redirecting": "Redirecting to checkout…",
+    "manageSubscription": "Manage Subscription",
+    "portalError": "Failed to open billing portal. Please try again.",
+    "backToApp": "Back to App",
+    "features": {
+      "alerts": "Alerts",
+      "export": "PDF Export",
+      "historical": "Historical Queries",
+      "advancedFilters": "Advanced Filters",
+      "savedViews": "Saved Views",
+      "bookmarks": "Bookmarks"
+    },
+    "benefits": {
+      "alerts": "Custom Alerts",
+      "export": "PDF Export",
+      "historical": "Historical Queries",
+      "advancedFilters": "Advanced Filters"
+    },
+    "tiers": {
+      "free": {
+        "name": "Free",
+        "price": "$0",
+        "desc": "Essential OSINT monitoring for individual analysts.",
+        "feature1": "Interactive map with live events",
+        "feature2": "Basic filtering and search",
+        "feature3": "News feed and severity tracking"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$29/mo",
+        "desc": "Full intelligence platform for professional analysts.",
+        "feature1": "Everything in Free",
+        "feature2": "Custom alerts and notifications",
+        "feature3": "PDF and clipboard export",
+        "feature4": "Historical time-range queries",
+        "feature5": "Advanced entity filters"
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "price": "Contact us",
+        "desc": "For organizations with teams, API access, and dedicated support.",
+        "feature1": "Everything in Pro",
+        "feature2": "Team sharing and collaboration",
+        "feature3": "Priority data pipeline access",
+        "toggleLabel": "Enable Enterprise features",
+        "comingSoon": "Coming soon — contact sales"
+      }
+    }
   }
 }

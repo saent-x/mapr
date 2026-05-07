@@ -5345,3 +5345,323 @@ a { color: inherit; text-decoration: none; }
     font-size: 16px;
   }
 }
+
+/* ── Billing Page ── */
+
+.mapr-billing {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.mapr-billing-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink-0);
+  margin: 0 0 4px;
+}
+
+.mapr-billing-subtitle {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin: 0 0 28px;
+}
+
+.mapr-billing-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.mapr-billing-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  color: var(--amber);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.mapr-billing-tiers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.mapr-billing-tier {
+  position: relative;
+  background: var(--bg-1);
+  border: 1px solid var(--bg-3);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.mapr-billing-tier--current {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber);
+}
+
+.mapr-billing-tier--pro {
+  border-color: var(--amber);
+}
+
+.mapr-billing-tier--enterprise {
+  border-color: var(--bg-3);
+  opacity: 0.85;
+}
+
+.mapr-billing-tier-header {
+  margin-bottom: 8px;
+}
+
+.mapr-billing-tier-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink-0);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mapr-billing-tier-price {
+  display: block;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--ink-0);
+  margin: 8px 0 0;
+}
+
+.mapr-billing-tier-desc {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 8px 0 16px;
+  line-height: 1.5;
+}
+
+.mapr-billing-tier-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 auto;
+  flex: 1;
+}
+
+.mapr-billing-tier-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-1);
+  padding: 5px 0;
+}
+
+.mapr-billing-tier-features li svg {
+  color: var(--sev-green);
+  flex-shrink: 0;
+}
+
+.mapr-billing-tier-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.mapr-billing-tier-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bg-0);
+  background: var(--amber);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mapr-billing-tier-btn:hover {
+  background: var(--amber-hover, #d97706);
+}
+
+.mapr-billing-tier-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mapr-billing-tier-btn--manage {
+  background: var(--bg-3);
+  color: var(--ink-0);
+}
+
+.mapr-billing-tier-btn--manage:hover {
+  background: var(--bg-4);
+}
+
+.mapr-billing-tier-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bg-3);
+  cursor: pointer;
+}
+
+.mapr-billing-tier-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--amber);
+  cursor: pointer;
+}
+
+.mapr-billing-tier-toggle-label {
+  font-size: 13px;
+  color: var(--ink-2);
+  user-select: none;
+}
+
+.mapr-billing-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--sev-red);
+  background: color-mix(in srgb, var(--sev-red) 10%, transparent);
+  border-radius: 8px;
+}
+
+/* ── Upgrade Prompt ── */
+
+.mapr-upgrade-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 24px;
+  max-width: 400px;
+  margin: 0 auto;
+  background: var(--bg-1);
+  border: 1px solid var(--bg-3);
+  border-radius: 12px;
+}
+
+.mapr-upgrade-prompt-icon {
+  color: var(--amber);
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+
+.mapr-upgrade-prompt-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink-0);
+  margin: 0 0 8px;
+}
+
+.mapr-upgrade-prompt-feature {
+  font-size: 14px;
+  color: var(--amber);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.mapr-upgrade-prompt-desc {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.mapr-upgrade-prompt-body {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.mapr-upgrade-prompt-benefits {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.mapr-upgrade-prompt-benefit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-1);
+  background: var(--bg-2);
+  padding: 4px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.mapr-upgrade-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bg-0);
+  background: var(--amber);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mapr-upgrade-prompt-btn:hover {
+  background: var(--amber-hover, #d97706);
+}
+
+.mapr-upgrade-prompt-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mapr-upgrade-prompt-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--sev-red);
+}
+
+/* ── Shared Spinner ── */
+
+.mapr-spin {
+  animation: mapr-spin 0.8s linear infinite;
+}
+
+@keyframes mapr-spin {
+  to { transform: rotate(360deg); }
+}

@@ -696,5 +696,68 @@
     "shareButton": "分享视图",
     "linkCopied": "链接已复制到剪贴板",
     "copyFailed": "复制链接失败"
+  },
+  "subscription": {
+    "title": "订阅计划",
+    "subtitle": "选择适合您情报工作流程的计划。",
+    "loading": "正在加载订阅…",
+    "current": "当前计划",
+    "currentPlan": "您当前使用的是 {{plan}} 计划",
+    "proRequired": "需要 Pro 订阅",
+    "featureLocked": "{{feature}} 是 Pro 功能",
+    "upgradeBody": "升级到 Pro 以解锁警报、PDF 导出、历史查询和高级过滤器。",
+    "upgradeToPro": "升级到 Pro",
+    "upgradeError": "启动结账失败。请重试。",
+    "redirecting": "正在重定向到结账…",
+    "manageSubscription": "管理订阅",
+    "portalError": "打开账单门户失败。请重试。",
+    "backToApp": "返回应用",
+    "features": {
+      "alerts": "警报",
+      "export": "PDF 导出",
+      "historical": "历史查询",
+      "advancedFilters": "高级过滤器",
+      "savedViews": "已保存视图",
+      "bookmarks": "书签"
+    },
+    "benefits": {
+      "alerts": "自定义警报",
+      "export": "PDF 导出",
+      "historical": "历史查询",
+      "advancedFilters": "高级过滤器"
+    },
+    "tiers": {
+      "free": {
+        "name": "免费",
+        "price": "$0",
+        "desc": "面向个人分析师的基础 OSINT 监控。",
+        "feature1": "带实时事件的交互式地图",
+        "feature2": "基本过滤和搜索",
+        "feature3": "新闻推送和严重性跟踪"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$29/月",
+        "desc": "面向专业分析师的全功能情报平台。",
+        "feature1": "免费版所有功能",
+        "feature2": "自定义警报和通知",
+        "feature3": "PDF 和剪贴板导出",
+        "feature4": "历史时间范围查询",
+        "feature5": "高级实体过滤器"
+      },
+      "enterprise": {
+        "name": "企业",
+        "price": "联系我们",
+        "desc": "适用于拥有团队、API 访问和专属支持的组织。",
+        "feature1": "Pro 版所有功能",
+        "feature2": "团队共享与协作",
+        "feature3": "优先数据管道访问",
+        "toggleLabel": "启用企业功能",
+        "comingSoon": "即将推出 — 联系销售"
+      }
+    }
+  },
+  "nav": {
+    "billing": "账单"
   }
 }

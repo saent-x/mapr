@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Crown } from 'lucide-react';
 import Header from './Header';
 import MobileBottomNav from './MobileBottomNav';
 import OfflineBanner from './OfflineBanner';
@@ -11,7 +12,9 @@ import AlertRulesPanel from './AlertRulesPanel';
 import BookmarksPanel from './BookmarksPanel';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
+import useSubscriptionStore from '../stores/subscriptionStore';
 import useDataFreshness from '../hooks/useDataFreshness';
+import useAuth from '../hooks/useAuth';
 
 let _layoutAutoRefreshActive = false;
 
@@ -125,6 +128,13 @@ export default function Layout() {
   const lastRegionIso = useUIStore((s) => s.lastRegionIso);
   const addToast = useUIStore((s) => s.addToast);
   const regionTarget = lastRegionIso ? `/region/${lastRegionIso}` : '/region';
+  const { user } = useAuth();
+  const initFromUser = useSubscriptionStore((s) => s.initFromUser);
+
+  // Initialize subscription status from InstantDB when auth state changes
+  useEffect(() => {
+    initFromUser(user);
+  }, [user, initFromUser]);
 
   useEffect(() => {
     if (_layoutAutoRefreshActive) return undefined;
@@ -180,6 +190,14 @@ export default function Layout() {
           >
             {Ico.trends}
             <span className="side-label">{t('nav.trends')}</span>
+          </NavLink>
+          <NavLink
+            to="/billing"
+            className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
+            title={t('nav.billing', 'Billing')}
+          >
+            <Crown size={18} />
+            <span className="side-label">{t('nav.billing', 'Billing')}</span>
           </NavLink>
         </nav>
 

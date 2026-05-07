@@ -697,5 +697,68 @@
     "shareButton": "Partager la vue",
     "linkCopied": "Lien copié dans le presse-papiers",
     "copyFailed": "Échec de la copie du lien"
+  },
+  "subscription": {
+    "title": "Plans d'Abonnement",
+    "subtitle": "Choisissez le plan adapté à votre flux de travail.",
+    "loading": "Chargement de l'abonnement…",
+    "current": "PLAN ACTUEL",
+    "currentPlan": "Vous êtes sur le plan {{plan}}",
+    "proRequired": "Abonnement Pro Requis",
+    "featureLocked": "{{feature}} est une fonctionnalité Pro",
+    "upgradeBody": "Passez à Pro pour débloquer les alertes, l'export PDF, les requêtes historiques et les filtres avancés.",
+    "upgradeToPro": "Passer à Pro",
+    "upgradeError": "Échec du démarrage du paiement. Veuillez réessayer.",
+    "redirecting": "Redirection vers le paiement…",
+    "manageSubscription": "Gérer l'Abonnement",
+    "portalError": "Échec de l'ouverture du portail de facturation.",
+    "backToApp": "Retour à l'App",
+    "features": {
+      "alerts": "Alertes",
+      "export": "Export PDF",
+      "historical": "Requêtes Historiques",
+      "advancedFilters": "Filtres Avancés",
+      "savedViews": "Vues Enregistrées",
+      "bookmarks": "Signets"
+    },
+    "benefits": {
+      "alerts": "Alertes Personnalisées",
+      "export": "Export PDF",
+      "historical": "Requêtes Historiques",
+      "advancedFilters": "Filtres Avancés"
+    },
+    "tiers": {
+      "free": {
+        "name": "Gratuit",
+        "price": "$0",
+        "desc": "Surveillance OSINT essentielle pour les analystes individuels.",
+        "feature1": "Carte interactive avec événements en direct",
+        "feature2": "Filtrage et recherche de base",
+        "feature3": "Fil d'actualité et suivi de gravité"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "29$/mois",
+        "desc": "Plateforme d'intelligence complète pour analystes professionnels.",
+        "feature1": "Tout ce qui est dans Gratuit",
+        "feature2": "Alertes et notifications personnalisées",
+        "feature3": "Export PDF et presse-papiers",
+        "feature4": "Requêtes de plage temporelle historique",
+        "feature5": "Filtres d'entité avancés"
+      },
+      "enterprise": {
+        "name": "Entreprise",
+        "price": "Contactez-nous",
+        "desc": "Pour les organisations avec équipes, accès API et support dédié.",
+        "feature1": "Tout ce qui est dans Pro",
+        "feature2": "Partage et collaboration d'équipe",
+        "feature3": "Accès prioritaire au pipeline de données",
+        "toggleLabel": "Activer les fonctionnalités Enterprise",
+        "comingSoon": "Bientôt disponible — contactez les ventes"
+      }
+    }
+  },
+  "nav": {
+    "billing": "Facturation"
   }
 }

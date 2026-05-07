@@ -697,5 +697,68 @@
     "shareButton": "Compartir vista",
     "linkCopied": "Enlace copiado al portapapeles",
     "copyFailed": "Error al copiar enlace"
+  },
+  "subscription": {
+    "title": "Planes de Suscripción",
+    "subtitle": "Elige el plan que se ajuste a tu flujo de trabajo de inteligencia.",
+    "loading": "Cargando suscripción…",
+    "current": "PLAN ACTUAL",
+    "currentPlan": "Estás en el plan {{plan}}",
+    "proRequired": "Suscripción Pro Requerida",
+    "featureLocked": "{{feature}} es una función Pro",
+    "upgradeBody": "Actualiza a Pro para desbloquear alertas, exportación PDF, consultas históricas y filtros avanzados.",
+    "upgradeToPro": "Actualizar a Pro",
+    "upgradeError": "Error al iniciar el pago. Inténtalo de nuevo.",
+    "redirecting": "Redirigiendo al pago…",
+    "manageSubscription": "Gestionar Suscripción",
+    "portalError": "Error al abrir el portal de facturación. Inténtalo de nuevo.",
+    "backToApp": "Volver a la App",
+    "features": {
+      "alerts": "Alertas",
+      "export": "Exportación PDF",
+      "historical": "Consultas Históricas",
+      "advancedFilters": "Filtros Avanzados",
+      "savedViews": "Vistas Guardadas",
+      "bookmarks": "Marcadores"
+    },
+    "benefits": {
+      "alerts": "Alertas Personalizadas",
+      "export": "Exportación PDF",
+      "historical": "Consultas Históricas",
+      "advancedFilters": "Filtros Avanzados"
+    },
+    "tiers": {
+      "free": {
+        "name": "Gratis",
+        "price": "$0",
+        "desc": "Monitoreo OSINT esencial para analistas individuales.",
+        "feature1": "Mapa interactivo con eventos en vivo",
+        "feature2": "Filtrado y búsqueda básicos",
+        "feature3": "Fuente de noticias y seguimiento de severidad"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "$29/mes",
+        "desc": "Plataforma de inteligencia completa para analistas profesionales.",
+        "feature1": "Todo lo de Gratis",
+        "feature2": "Alertas y notificaciones personalizadas",
+        "feature3": "Exportación PDF y portapapeles",
+        "feature4": "Consultas de rango de tiempo histórico",
+        "feature5": "Filtros de entidad avanzados"
+      },
+      "enterprise": {
+        "name": "Empresa",
+        "price": "Contáctanos",
+        "desc": "Para organizaciones con equipos, acceso API y soporte dedicado.",
+        "feature1": "Todo lo de Pro",
+        "feature2": "Compartir y colaborar en equipo",
+        "feature3": "Acceso prioritario al pipeline de datos",
+        "toggleLabel": "Activar funciones Enterprise",
+        "comingSoon": "Próximamente — contacta a ventas"
+      }
+    }
+  },
+  "nav": {
+    "billing": "Facturación"
   }
 }

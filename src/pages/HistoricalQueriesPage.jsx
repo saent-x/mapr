@@ -3,18 +3,44 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import HistoricalQueriesPanel from '../components/HistoricalQueriesPanel';
+import UpgradePrompt from '../components/UpgradePrompt';
+import useSubscriptionStore from '../stores/subscriptionStore';
 
 /**
  * HistoricalQueriesPage — dedicated page for historical time-range queries,
  * date range selection, period comparison, and time travel.
+ * Gated: requires Pro subscription.
  */
 export default function HistoricalQueriesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const subscriptionStatus = useSubscriptionStore((s) => s.status);
+  const isPro = subscriptionStatus === 'pro';
 
   const handleClose = () => {
     navigate('/');
   };
+
+  if (!isPro) {
+    return (
+      <div className="mapr-historical-page">
+        <div className="mapr-historical-page-header">
+          <button
+            className="mapr-back-btn"
+            onClick={() => navigate(-1)}
+            type="button"
+          >
+            <ArrowLeft size={18} />
+            <span>{t('nav.backToMap')}</span>
+          </button>
+          <h2 className="mapr-historical-page-title">{t('historicalQueries.title', 'Historical Queries')}</h2>
+        </div>
+        <div style={{ padding: '40px 20px', display: 'flex', justifyContent: 'center' }}>
+          <UpgradePrompt feature="historical" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mapr-historical-page">

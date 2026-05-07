@@ -1,11 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellOff, Pencil, Trash2, Plus, Loader2, LogIn } from 'lucide-react';
+import { Bell, BellOff, Pencil, Trash2, Plus, Loader2, LogIn, Crown } from 'lucide-react';
 import { SignedIn, SignedOut } from './auth';
 import useAlertRules from '../hooks/useAlertRules';
 import useSavedViews from '../hooks/useSavedViews';
 import useUIStore from '../stores/uiStore';
 import useNewsStore from '../stores/newsStore';
+import useSubscriptionStore from '../stores/subscriptionStore';
+import useSubscription from '../hooks/useSubscription';
 import AlertRuleDialog from './AlertRuleDialog';
 
 /**
@@ -18,6 +20,9 @@ export default function AlertRulesPanel() {
   const liveNews = useNewsStore((s) => s.liveNews) || [];
   const { views: savedViews } = useSavedViews(liveNews);
   const { rules, isLoading, needsAuth, deleteRule, toggleActive } = useAlertRules(savedViews, liveNews);
+  const subscriptionStatus = useSubscriptionStore((s) => s.status);
+  const { upgradeToPro } = useSubscription();
+  const isPro = subscriptionStatus === 'pro';
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
@@ -107,6 +112,19 @@ export default function AlertRulesPanel() {
     <>
       <div className="alert-rules-sidebar" role="region" aria-label={t('alertRules.panelLabel', 'Alert Rules')}>
         <SignedIn>
+          {!isPro && rules.length === 0 ? (
+            <>
+              <div className="saved-views-header micro">
+                <Bell size={12} aria-hidden />
+                <span>{t('alertRules.panelLabel', 'ALERT RULES')}</span>
+              </div>
+              <div className="saved-views-login-prompt" style={{ cursor: 'pointer' }} onClick={() => upgradeToPro().catch(() => {})}>
+                <Crown size={10} aria-hidden />
+                <span>{t('subscription.upgradeToPro', 'Upgrade to Pro')}</span>
+              </div>
+            </>
+          ) : (
+            <>
           <div className="saved-views-header micro">
             <Bell size={12} aria-hidden />
             <span>{t('alertRules.panelLabel', 'ALERT RULES')}</span>
@@ -193,6 +211,8 @@ export default function AlertRulesPanel() {
             <Plus size={11} aria-hidden />
             {t('alertRules.newRule', 'New Alert Rule')}
           </button>
+          </>
+          )}
         </SignedIn>
 
         <SignedOut>

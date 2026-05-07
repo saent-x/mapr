@@ -74,6 +74,7 @@ import { log } from './logger.js';
 // Shared route handlers (originally written for serverless; invoked from this Node server)
 import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
+import { createCheckoutSession, createPortalSession, handleStripeWebhook } from './stripe.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
@@ -149,6 +150,20 @@ async function readJsonBody(request, maxBytes = 32_768) {
   } catch {
     throw Object.assign(new Error('Invalid JSON body'), { code: 'BAD_REQUEST', statusCode: 400 });
   }
+}
+
+/** Read the raw request body as a UTF-8 string (for webhook signatures). */
+async function readRawBody(request, maxBytes = 256_000) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of request) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      throw Object.assign(new Error('Request body too large'), { code: 'PAYLOAD_TOO_LARGE', statusCode: 413 });
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 function sendText(response, statusCode, text) {
@@ -537,6 +552,68 @@ const server = http.createServer(async (request, response) => {
         return sendJson(response, 200, { ok: true });
       }
       return sendJson(response, 401, { error: 'Invalid password' });
+    }
+
+    // ── Stripe Integration ──
+
+    if (request.method === 'POST' && url.pathname === '/api/stripe/create-checkout-session') {
+      let body;
+      try { body = await readJsonBody(request); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      const userId = String(body.userId || '').trim();
+      const email = String(body.email || '').trim();
+      const successUrl = String(body.successUrl || '').trim();
+      const cancelUrl = String(body.cancelUrl || '').trim();
+      if (!userId) { sendJson(response, 400, { error: 'Missing userId' }); return; }
+      if (!email) { sendJson(response, 400, { error: 'Missing email' }); return; }
+      try {
+        const result = await withTimeout(() => createCheckoutSession({ userId, email, successUrl, cancelUrl }));
+        sendJson(response, 200, result);
+      } catch (err) {
+        console.error('[api] stripe create-checkout-session error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/stripe/create-portal-session') {
+      let body;
+      try { body = await readJsonBody(request); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      const customerId = String(body.customerId || '').trim();
+      const returnUrl = String(body.returnUrl || '').trim();
+      if (!customerId) { sendJson(response, 400, { error: 'Missing customerId' }); return; }
+      try {
+        const result = await withTimeout(() => createPortalSession({ customerId, returnUrl }));
+        sendJson(response, 200, result);
+      } catch (err) {
+        console.error('[api] stripe create-portal-session error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/stripe/webhook') {
+      let rawBody;
+      try { rawBody = await readRawBody(request); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      const signature = String(request.headers['stripe-signature'] || '').trim();
+      if (!signature) { sendJson(response, 400, { error: 'Missing Stripe-Signature header' }); return; }
+      try {
+        const result = await withTimeout(() => handleStripeWebhook(rawBody, signature));
+        sendJson(response, 200, result);
+      } catch (err) {
+        console.error('[api] stripe webhook error:', err.message);
+        if (err.code === 'INVALID_SIGNATURE') {
+          sendJson(response, 400, { error: 'Invalid webhook signature' });
+        } else {
+          const { status, body: b } = classifyError(err);
+          sendJson(response, status, b);
+        }
+      }
+      return;
     }
 
     if (url.pathname === '/api/gdelt-proxy') {
