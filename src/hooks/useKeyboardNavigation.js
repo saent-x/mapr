@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 /**
  * Checks whether the currently focused element is a text-editing field
@@ -12,6 +12,37 @@ function isEditingTarget(el) {
   // Also check for contenteditable="true" on parent
   if (el.getAttribute('contenteditable') === 'true') return true;
   return false;
+}
+
+/**
+ * Detects if the current device is a touch device or a small viewport
+ * where keyboard shortcuts should be disabled automatically.
+ * Returns true on:
+ *   - touch-capable devices (ontouchstart or maxTouchPoints > 0)
+ *   - viewports ≤ 1023px (mobile + tablet)
+ */
+function useIsTouchOrMobile() {
+  const [isTouchOrMobile, setIsTouchOrMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isNarrow = window.matchMedia('(max-width: 1023px)').matches;
+    return isTouch || isNarrow;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const update = () => {
+      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      setIsTouchOrMobile(isTouch || mq.matches);
+    };
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  return isTouchOrMobile;
 }
 
 /**
@@ -39,6 +70,8 @@ export default function useKeyboardNavigation({
   disabled = false,
   searchSelector = '.search-input, .header-search input',
 } = {}) {
+  const isTouchOrMobile = useIsTouchOrMobile();
+
   const selectedIndexRef = useRef(-1);
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -51,8 +84,11 @@ export default function useKeyboardNavigation({
     selectedIndexRef.current = idx;
   }, []);
 
+  // Auto-disable keyboard shortcuts on touch devices and small viewports
+  const effectiveDisabled = disabled || isTouchOrMobile;
+
   useEffect(() => {
-    if (disabled) return;
+    if (effectiveDisabled) return;
 
     const handleKeyDown = (e) => {
       const target = e.target;
@@ -162,7 +198,7 @@ export default function useKeyboardNavigation({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [disabled, searchSelector]);
+  }, [effectiveDisabled, searchSelector]);
 
   return { getSelectedIndex, setSelectedIndex };
 }
