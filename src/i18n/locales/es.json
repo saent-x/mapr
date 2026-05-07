@@ -754,6 +754,10 @@
     "linkCopied": "Enlace copiado al portapapeles",
     "copyFailed": "Error al copiar enlace"
   },
+  "print": {
+    "printButton": "Imprimir vista",
+    "printing": "Preparando impresión…"
+  },
   "subscription": {
     "title": "Planes de Suscripción",
     "subtitle": "Elige el plan que se ajuste a tu flujo de trabajo de inteligencia.",

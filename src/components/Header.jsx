@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw, Share2 } from 'lucide-react';
+import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw, Share2, Printer } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
@@ -247,6 +247,15 @@ export default function Header() {
             </button>
             <button
               type="button"
+              className="header-print-btn"
+              onClick={() => window.print()}
+              title={t('print.printButton', 'Print view')}
+              aria-label={t('print.printButton', 'Print view')}
+            >
+              <Printer size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
               className="theme-toggle-btn"
               onClick={handleToggleTheme}
               title={appTheme === 'light' ? t('theme.switchDark') : t('theme.switchLight')}
@@ -345,6 +354,15 @@ export default function Header() {
           >
             <Share2 size={14} aria-hidden />
             {' '}{t('share.shareButton', 'Share')}
+          </button>
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={() => { window.print(); setMenuOpen(false); }}
+            role="menuitem"
+          >
+            <Printer size={14} aria-hidden />
+            {' '}{t('print.printButton', 'Print')}
           </button>
           <button
             type="button"

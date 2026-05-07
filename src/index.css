@@ -897,6 +897,27 @@ a { color: inherit; text-decoration: none; }
   color: var(--amber);
   border-color: var(--amber-dim);
 }
+.header-print-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--bg-3);
+  border-radius: var(--radius);
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.header-print-btn:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: var(--bg-2);
+}
 
 @keyframes spin {
   from { transform: rotate(0deg); }
@@ -6178,4 +6199,268 @@ a { color: inherit; text-decoration: none; }
 .news-detail-link-btn:hover {
   color: var(--amber);
   border-color: var(--amber);
+}
+
+/* ========================================================================
+   PRINT STYLES — clean, light, readable output for all key pages
+   ======================================================================== */
+
+@media print {
+  /* ── Force light theme regardless of current app theme ── */
+  *,
+  [data-theme="dark"],
+  [data-theme="light"] {
+    --bg-0: #ffffff !important;
+    --bg-1: #ffffff !important;
+    --bg-2: #f5f5f5 !important;
+    --bg-3: #e8e8e8 !important;
+    --bg-4: #dcdcdc !important;
+    --line: rgba(0, 0, 0, 0.12) !important;
+    --line-2: rgba(0, 0, 0, 0.08) !important;
+    --ink-0: #111111 !important;
+    --ink-1: #333333 !important;
+    --ink-2: #555555 !important;
+    --ink-3: #777777 !important;
+    --ink-4: #999999 !important;
+    --amber: #b8730e !important;
+    --amber-dim: #8a6524 !important;
+    --cyan: #1a7a85 !important;
+    --cyan-dim: #2f6a72 !important;
+    --sev-green: #2d7a55 !important;
+    --sev-amber: #b8730e !important;
+    --sev-red: #c0392b !important;
+    --sev-black: #6b2a5c !important;
+    --accent: var(--amber) !important;
+    --accent-bg: rgba(184, 115, 14, 0.08) !important;
+    --accent-border: rgba(184, 115, 14, 0.25) !important;
+    --glass: rgba(255, 255, 255, 0.95) !important;
+    --text: var(--ink-0) !important;
+    --bg: var(--bg-0) !important;
+
+    color-scheme: light !important;
+    color: #111111 !important;
+    background: #ffffff !important;
+  }
+
+  /* ── Global reset ── */
+  html, body, #root {
+    background: #ffffff !important;
+    color: #111111 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+
+  /* ── Hide chrome / navigation / non-print UI ── */
+  .app-sidebar,
+  .app-status,
+  .header-right,
+  .op-badge,
+  .brand-build,
+  .header-overlays,
+  .header-mobile-menu,
+  .header-mobile-search,
+  .mobile-bottom-nav,
+  .header-icon-btn,
+  .search-kbd,
+  .header-refresh-wrap,
+  .map-zoom-controls,
+  .map-attribution,
+  button:not(.header-print-btn),
+  .keyboard-shortcut-overlay,
+  .onboarding-overlay,
+  .export-modal,
+  .toast-container,
+  .freshness-indicator,
+  .saved-views-sidebar,
+  .alert-rules-sidebar,
+  .bookmarks-sidebar,
+  .billing-badge,
+  .subscription-banner {
+    display: none !important;
+  }
+
+  /* ── Header: show brand only, hide everything else ── */
+  .app-header {
+    border: none !important;
+    background: #ffffff !important;
+    padding: 8px 0 !important;
+    min-height: auto !important;
+  }
+
+  .app-header .header-brand {
+    display: flex;
+  }
+
+  .header-print-btn {
+    display: none !important;
+  }
+
+  /* ── Layout: full width, no sidebar gap ── */
+  .app-main,
+  .layout-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* ── Map: constrain and make visible ── */
+  .map-container {
+    max-height: 400px !important;
+    overflow: hidden !important;
+    border: 1px solid #ccc !important;
+    page-break-inside: avoid;
+  }
+
+  /* ── Cards / panels: clean white with subtle borders ── */
+  .news-card,
+  .event-card,
+  .entity-card,
+  .region-card,
+  .stat-card,
+  .article-card,
+  .card {
+    background: #ffffff !important;
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    color: #111111 !important;
+    page-break-inside: avoid;
+  }
+
+  /* ── Typography overrides ── */
+  h1, h2, h3, h4, h5, h6 {
+    color: #111111 !important;
+  }
+
+  p, span, div, li, td, th, a {
+    color: #111111 !important;
+  }
+
+  a {
+    text-decoration: underline;
+    color: #1a6b9e !important;
+  }
+
+  /* ── Tables ── */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid #ccc !important;
+    padding: 4px 8px;
+    text-align: left;
+    background: #ffffff !important;
+  }
+
+  th {
+    background: #f0f0f0 !important;
+    font-weight: 600;
+  }
+
+  /* ── Severity badges / chips ── */
+  .severity-chip,
+  .severity-badge {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* ── Charts / SVGs ── */
+  svg {
+    max-width: 100%;
+  }
+
+  .chart-container,
+  .trend-chart,
+  .donut-chart,
+  .horizon-chart,
+  .velocity-chart {
+    page-break-inside: avoid;
+    background: #ffffff !important;
+  }
+
+  /* ── Event detail page ── */
+  .event-detail-page,
+  .event-detail-page * {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  .event-detail-sidebar {
+    border-left-color: #ccc !important;
+    page-break-inside: avoid;
+  }
+
+  .event-detail-main {
+    max-width: 100% !important;
+  }
+
+  .event-detail-header {
+    border-bottom: 2px solid #333 !important;
+    padding-bottom: 12px !important;
+  }
+
+  /* ── Region page ── */
+  .region-detail-page {
+    background: #ffffff !important;
+  }
+
+  .region-stats {
+    page-break-inside: avoid;
+  }
+
+  .region-event-list {
+    page-break-before: auto;
+  }
+
+  /* ── Trends page ── */
+  .trends-page {
+    background: #ffffff !important;
+  }
+
+  .trend-chart-row {
+    page-break-inside: avoid;
+  }
+
+  /* ── Related events / entity sections ── */
+  .related-events-list,
+  .entity-list {
+    page-break-inside: avoid;
+  }
+
+  /* ── Sources / metadata ── */
+  .source-list,
+  .metadata-grid {
+    background: #ffffff !important;
+  }
+
+  /* ── Avoid page breaks in the middle of important sections ── */
+  h2, h3, h4 {
+    page-break-after: avoid;
+  }
+
+  /* ── Print-specific helpers ── */
+  .print-only {
+    display: block !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  /* ── Link URLs visible after text when printing ── */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #555 !important;
+  }
 }

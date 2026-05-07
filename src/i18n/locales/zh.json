@@ -753,6 +753,10 @@
     "linkCopied": "链接已复制到剪贴板",
     "copyFailed": "复制链接失败"
   },
+  "print": {
+    "printButton": "打印视图",
+    "printing": "正在准备打印…"
+  },
   "subscription": {
     "title": "订阅计划",
     "subtitle": "选择适合您情报工作流程的计划。",

@@ -754,6 +754,10 @@
     "linkCopied": "Lien copié dans le presse-papiers",
     "copyFailed": "Échec de la copie du lien"
   },
+  "print": {
+    "printButton": "Imprimer la vue",
+    "printing": "Préparation de l'impression…"
+  },
   "subscription": {
     "title": "Plans d'Abonnement",
     "subtitle": "Choisissez le plan adapté à votre flux de travail.",

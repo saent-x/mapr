@@ -887,6 +887,10 @@
     "linkCopied": "Link copied to clipboard",
     "copyFailed": "Failed to copy link"
   },
+  "print": {
+    "printButton": "Print view",
+    "printing": "Preparing print…"
+  },
   "subscription": {
     "title": "Subscription Plans",
     "subtitle": "Choose the plan that fits your intelligence workflow.",
