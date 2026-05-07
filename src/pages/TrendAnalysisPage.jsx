@@ -195,6 +195,9 @@ export default function TrendAnalysisPage() {
   const tabParam = searchParams.get('tab');
   const tab = VALID_TABS.includes(tabParam) ? tabParam : DEFAULT_TAB;
 
+  // Entity prefilter from URL params (set by EntityExplorerPage's "Show Timeline" button).
+  const entityParam = searchParams.get('entity') || '';
+
   // Sync URL if range param is missing or invalid.
   useEffect(() => {
     if (!VALID_RANGES.includes(rangeParam)) {
@@ -292,7 +295,7 @@ export default function TrendAnalysisPage() {
       {/* Correlation tab */}
       {tab === 'correlation' && (
         <Suspense fallback={<div className="trend-card"><div className="body" style={{ padding: 40 }}>{t('loading.page')}</div></div>}>
-          <EventCorrelationTimeline />
+          <EventCorrelationTimeline prefilterEntity={entityParam} />
         </Suspense>
       )}
 

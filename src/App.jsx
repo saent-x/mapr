@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, ChevronsDownUp, ChevronsUpDown, X, Users, Building2, MapPin } from 'lucide-react';
+import { SlidersHorizontal, ChevronsDownUp, ChevronsUpDown, X, Users, Building2, MapPin, Clock } from 'lucide-react';
 import ErrorBoundary from './components/ErrorBoundary';
 import MapErrorBoundary from './components/MapErrorBoundary';
 import MapLoadingFallback from './components/MapLoadingFallback';
@@ -52,7 +52,7 @@ function App() {
   const {
     liveNews, dataSource, dataError, sourceHealth, coverageTrends, coverageHistory,
     opsHealth, velocitySpikes: hookVelocitySpikes, regionCoverageHistory,
-    sessionDiff,
+    sessionDiff, historicalState, isTimeTravel,
   } = useNewsStore();
   const {
     searchQuery, debouncedSearch, dateWindow, minSeverity, minConfidence, sortMode,
@@ -144,10 +144,38 @@ function App() {
   }, [searchParams]);
 
   /* ── Computed data ── */
+  /* ── Historical time travel data ── */
+  const historicalArticles = useMemo(() => {
+    if (!isTimeTravel || !historicalState?.snapshots) return null;
+    // Flatten all snapshot event summaries into article-like objects
+    const articles = [];
+    for (const snap of historicalState.snapshots) {
+      if (!snap.eventSummaries) continue;
+      for (const ev of snap.eventSummaries) {
+        articles.push({
+          id: ev.id,
+          title: ev.title || 'Untitled',
+          severity: ev.severity ?? 0,
+          primaryCountry: ev.primaryCountry || '',
+          isoA2: ev.primaryCountry || '',
+          category: ev.category || '',
+          lifecycle: ev.lifecycle || '',
+          summary: ev.title || '',
+          firstSeenAt: snap.at || null,
+          entities: { organizations: [], people: [], locations: [] },
+          source: '',
+          url: '',
+        });
+      }
+    }
+    return articles;
+  }, [isTimeTravel, historicalState]);
+
   const baseArticles = useMemo(() => {
+    if (isTimeTravel && historicalArticles) return historicalArticles;
     if (dataSource !== 'live') return liveNews || getMockNews();
     return liveNews || [];
-  }, [dataSource, liveNews]);
+  }, [dataSource, liveNews, isTimeTravel, historicalArticles]);
 
   const canonicalNews = useMemo(() => canonicalizeArticles(baseArticles), [baseArticles]);
   const dateFloor = useMemo(() => resolveDateFloor(dateWindow), [dateWindow]);
@@ -558,6 +586,29 @@ function App() {
             >
               <X size={14} aria-hidden />
               <span>{t('entities.clearFilter')}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Time travel mode indicator */}
+      {isTimeTravel && historicalState && (
+        <div className="entity-filter-breadcrumb time-travel-banner" role="status" aria-live="polite" style={{ borderColor: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 8%, var(--bg-0))' }}>
+          <div className="entity-filter-breadcrumb-inner">
+            <Clock size={14} aria-hidden style={{ color: 'var(--amber)' }} />
+            <span className="entity-filter-breadcrumb-label" style={{ color: 'var(--amber)' }}>
+              {t('historicalQueries.timeTravelActive', 'TIME TRAVEL ACTIVE')}
+            </span>
+            <span className="entity-filter-breadcrumb-count mono" style={{ color: 'var(--ink-1)' }}>
+              {activeNews.length || 0} {t('historicalQueries.eventsLoaded', 'events loaded')}
+            </span>
+            <button
+              className="entity-filter-breadcrumb-clear"
+              onClick={() => { useNewsStore.getState().exitHistoricalMode(); }}
+              aria-label={t('historicalQueries.returnToLive')}
+            >
+              <X size={14} aria-hidden />
+              <span>{t('historicalQueries.returnToLive')}</span>
             </button>
           </div>
         </div>

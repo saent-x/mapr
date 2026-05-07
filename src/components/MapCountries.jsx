@@ -131,7 +131,7 @@ const MapCountries = ({
         0.03,
       ],
     };
-  }, [regionSeverities, mapOverlay, coverageStatusByIso, drillIsos]);
+  }, [regionSeverities, mapOverlay, coverageStatusByIso, perCountryReliability, drillIsos]);
 
   /* ── country line paint ── */
   const countryLinePaint = useMemo(() => {
