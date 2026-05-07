@@ -271,6 +271,16 @@ function App() {
     });
   }, [activeNews, sourceCredibilityMap]);
 
+  /* ── Derived map/panel state ── */
+  const {
+    selectedStory, panelRegion, panelOpen, panelBackfillEntry, panelNews,
+    panelRegionData, panelRegionName, panelRegionStatus, panelCoverageEntry,
+    panelBackfillStatus, panelCoverageTransitions, mapNewsList, mapRegionSeverities,
+  } = usePanelState({
+    activeNews, filterParams, sortMode, regionSeverities, coverageStatusByIso,
+    coverageHistory, dataSource, coverageDiagnostics,
+  });
+
   // Enrich map news list with source credibility score
   const enrichedMapNews = useMemo(() => {
     if (Object.keys(sourceCredibilityMap).length === 0) return mapNewsList;
@@ -331,16 +341,6 @@ function App() {
     if (msgs.length > 0) setLifecycleMessages(msgs);
     prevEventsRef.current = activeNews;
   }, [activeNews]);
-
-  /* ── Derived map/panel state ── */
-  const {
-    selectedStory, panelRegion, panelOpen, panelBackfillEntry, panelNews,
-    panelRegionData, panelRegionName, panelRegionStatus, panelCoverageEntry,
-    panelBackfillStatus, panelCoverageTransitions, mapNewsList, mapRegionSeverities,
-  } = usePanelState({
-    activeNews, filterParams, sortMode, regionSeverities, coverageStatusByIso,
-    coverageHistory, dataSource, coverageDiagnostics,
-  });
 
   const selectRegionAction = useUIStore((s) => s.selectRegion);
   const setLastRegionIso = useUIStore((s) => s.setLastRegionIso);
