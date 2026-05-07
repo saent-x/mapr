@@ -697,6 +697,10 @@
     "drawerToggle": "Toggle filter drawer",
     "drawerClose": "Close filter drawer"
   },
+  "offline": {
+    "title": "Offline",
+    "lastUpdated": "Last updated"
+  },
   "onboarding": {
     "title": "Welcome to MAPR",
     "close": "Close onboarding",

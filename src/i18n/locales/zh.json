@@ -444,6 +444,10 @@
     "drawerToggle": "切换筛选抽屉",
     "drawerClose": "关闭筛选抽屉"
   },
+  "offline": {
+    "title": "离线",
+    "lastUpdated": "最后更新"
+  },
   "onboarding": {
     "title": "欢迎使用 MAPR",
     "close": "关闭引导",

@@ -444,6 +444,10 @@
     "drawerToggle": "تبديل درج التصفية",
     "drawerClose": "إغلاق درج التصفية"
   },
+  "offline": {
+    "title": "غير متصل",
+    "lastUpdated": "آخر تحديث"
+  },
   "onboarding": {
     "title": "مرحباً بك في MAPR",
     "close": "إغلاق الدليل",

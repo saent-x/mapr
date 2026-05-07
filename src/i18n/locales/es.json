@@ -444,6 +444,10 @@
     "drawerToggle": "Alternar cajón de filtros",
     "drawerClose": "Cerrar cajón de filtros"
   },
+  "offline": {
+    "title": "Sin conexión",
+    "lastUpdated": "Última actualización"
+  },
   "onboarding": {
     "title": "Bienvenido a MAPR",
     "close": "Cerrar tutorial",

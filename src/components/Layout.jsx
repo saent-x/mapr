@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Header from './Header';
 import MobileBottomNav from './MobileBottomNav';
+import OfflineBanner from './OfflineBanner';
 import ShortcutHelp from './ShortcutHelp';
 import OnboardingOverlay from './OnboardingOverlay';
 import SavedViewsSidebar from './SavedViewsSidebar';
@@ -139,6 +140,7 @@ export default function Layout() {
   return (
     <div className="layout">
       <Header />
+      <OfflineBanner />
 
       <aside className="app-sidebar" aria-label={t('nav.ariaLabel')}>
         <nav className="layout-nav-links">

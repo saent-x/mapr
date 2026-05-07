@@ -231,6 +231,43 @@ a { color: inherit; text-decoration: none; }
   min-width: 0;
 }
 
+/* ── Offline Banner ── */
+.offline-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--sev-red);
+  color: #fff;
+  font-size: var(--fs-1);
+  font-family: var(--ff-mono);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  z-index: 100;
+  animation: offlineBannerSlide 0.25s ease-out;
+}
+.offline-banner-icon {
+  flex-shrink: 0;
+}
+.offline-banner-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.offline-banner-timestamp {
+  opacity: 0.8;
+  font-weight: 400;
+  text-transform: none;
+}
+@keyframes offlineBannerSlide {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);      opacity: 1; }
+}
+
 .app-sidebar {
   border-right: 1px solid var(--line);
   background: var(--bg-1);

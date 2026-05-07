@@ -444,6 +444,10 @@
     "drawerToggle": "Basculer le tiroir des filtres",
     "drawerClose": "Fermer le tiroir des filtres"
   },
+  "offline": {
+    "title": "Hors ligne",
+    "lastUpdated": "Dernière mise à jour"
+  },
   "onboarding": {
     "title": "Bienvenue sur MAPR",
     "close": "Fermer le tutoriel",
