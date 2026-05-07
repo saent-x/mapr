@@ -39,6 +39,7 @@ import { encodeViewToURL } from './utils/viewManager';
 import { computeSilenceEntries } from './utils/anomalyUtils';
 import { getMockNews, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
 import SaveViewDialog from './components/SaveViewDialog';
+import BriefingExportModal from './components/BriefingExportModal';
 import db from './services/instantDb';
 
 const Globe = lazy(() => import('./components/Globe'));
@@ -755,6 +756,24 @@ function App() {
           entityFilter,
         }}
         mapState={{ mapMode, mapOverlay }}
+      />
+
+      {/* Briefing export modal */}
+      <BriefingExportModal
+        events={activeNews}
+        filters={{
+          dateWindow,
+          minSeverity,
+          minConfidence,
+          sortMode,
+          verificationFilter,
+          sourceTypeFilter,
+          languageFilter,
+          entityFilter,
+          hideAmplified,
+          searchQuery: debouncedSearch,
+          region: selectedRegion,
+        }}
       />
 
       {/*

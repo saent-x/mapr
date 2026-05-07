@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
+import { ExternalLink, ChevronDown, ChevronUp, Maximize2, FileText } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
 import useUIStore from '../stores/uiStore.js';
 import useBreakpoint from '../hooks/useBreakpoint.js';
@@ -462,6 +462,17 @@ const NewsPanel = ({
         <span>FEED · LIVE</span>
         <span className="spacer" />
         <span style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+        <button
+          type="button"
+          className="btn"
+          style={{ marginLeft: 8, padding: '2px 8px', fontSize: 'var(--fs-1)' }}
+          onClick={() => useUIStore.getState().setShowExport(true)}
+          aria-label={t('export.generateBriefing', 'Generate Briefing')}
+          title={t('export.generateBriefing', 'Generate Briefing')}
+        >
+          <FileText size={10} aria-hidden style={{ marginRight: 4 }} />
+          BRIEFING
+        </button>
         <button
           type="button"
           className="panel-collapse-btn"
