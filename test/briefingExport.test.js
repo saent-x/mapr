@@ -211,7 +211,7 @@ for (const locale of LOCALES) {
 // ── uiStore has showExport ──
 
 test('uiStore has showExport state and setter', async () => {
-  const mod = await import('../src/stores/uiStore.js');
+  const mod = await import('../src/stores/uiStore.ts');
   const store = mod.default;
   const state = store.getState();
   assert.ok('showExport' in state, 'uiStore should have showExport state');

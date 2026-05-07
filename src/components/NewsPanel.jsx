@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ExternalLink, ChevronDown, ChevronUp, Maximize2, FileText } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
-import useUIStore from '../stores/uiStore.js';
+import useUIStore from '../stores/uiStore';
 import useBreakpoint from '../hooks/useBreakpoint.js';
 import BottomSheet from './ui/BottomSheet';
 import BookmarkButton from './BookmarkButton';

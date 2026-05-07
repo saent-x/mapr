@@ -151,13 +151,13 @@ describe('VAL-M5-015: Last-known briefing cached in IndexedDB', () => {
   });
 
   it('newsStore.saveCurrentSnapshot calls eventCache.saveSnapshot', () => {
-    const store = readText('src/stores/newsStore.js');
+    const store = readText('src/stores/newsStore.ts');
     assert.ok(store.includes('saveCurrentSnapshot'), 'newsStore should have saveCurrentSnapshot');
     assert.ok(store.includes("saveSnapshot(liveNews)"), 'should call saveSnapshot with liveNews');
   });
 
   it('newsStore._initSessionMemory calls loadLastSnapshot and saveSnapshot', () => {
-    const store = readText('src/stores/newsStore.js');
+    const store = readText('src/stores/newsStore.ts');
     assert.ok(store.includes('_initSessionMemory'), 'should have _initSessionMemory');
     assert.ok(store.includes('loadLastSnapshot()'), 'should call loadLastSnapshot');
     assert.ok(store.includes('saveSnapshot(articles)'), 'should call saveSnapshot with articles');

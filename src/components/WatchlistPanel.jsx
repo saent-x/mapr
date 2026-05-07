@@ -1,9 +1,9 @@
 import React, { useCallback, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import useWatchStore from '../stores/watchStore.js';
-import useUIStore from '../stores/uiStore.js';
-import useFilterStore from '../stores/filterStore.js';
+import useWatchStore from '../stores/watchStore';
+import useUIStore from '../stores/uiStore';
+import useFilterStore from '../stores/filterStore';
 import { isoToCountry } from '../utils/geocoder.js';
 import { SEVERITY_TIER_NAMES } from '../utils/watchUtils.js';
 

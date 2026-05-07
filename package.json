@@ -8,7 +8,7 @@
     "dev:frontend": "vite",
     "start": "node server/index.js",
     "server": "node server/index.js",
-    "test": "node --test",
+    "test": "node --experimental-strip-types --test",
     "build": "vite build",
     "preview": "vite preview"
   },

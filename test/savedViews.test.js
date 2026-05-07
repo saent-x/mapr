@@ -91,7 +91,7 @@ test('VAL-M3-002: sidebar computes and displays match counts', () => {
 // ---------------------------------------------------------------------------
 
 test('VAL-M3-003: applyView restores all filter params', () => {
-  const content = readFileSync(resolve(root, 'src/stores/filterStore.js'), 'utf8');
+  const content = readFileSync(resolve(root, 'src/stores/filterStore.ts'), 'utf8');
   assert.ok(content.includes('applyView'), 'filterStore should export applyView');
   assert.ok(content.includes('minSeverity'), 'should restore minSeverity');
   assert.ok(content.includes('minConfidence'), 'should restore minConfidence');
@@ -192,7 +192,7 @@ test('deleted shared view shows graceful degradation', () => {
   assert.ok(appContent.includes('setViewNotFound'), 'should set viewNotFound on missing view');
   assert.ok(appContent.includes('view-not-found-banner'), 'should render view-not-found banner');
 
-  const storeContent = readFileSync(resolve(root, 'src/stores/uiStore.js'), 'utf8');
+  const storeContent = readFileSync(resolve(root, 'src/stores/uiStore.ts'), 'utf8');
   assert.ok(storeContent.includes('viewNotFound'), 'uiStore should have viewNotFound state');
 });
 
@@ -201,7 +201,7 @@ test('deleted shared view shows graceful degradation', () => {
 // ---------------------------------------------------------------------------
 
 test('applyView in filterStore handles all filter fields from saved view', () => {
-  const content = readFileSync(resolve(root, 'src/stores/filterStore.js'), 'utf8');
+  const content = readFileSync(resolve(root, 'src/stores/filterStore.ts'), 'utf8');
   // Check that applyView handles the full filterState shape
   assert.ok(content.includes('filters.searchQuery'), 'should handle searchQuery filter');
   assert.ok(content.includes('mapState.mapOverlay'), 'should handle mapOverlay from mapState');

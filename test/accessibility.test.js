@@ -195,7 +195,7 @@ describe('accessibility and UX polish', () => {
 
   describe('no empty/broken states', () => {
     it('newsStore has mock data fallback when both sources fail', () => {
-      const code = readFileSync(join(SRC, 'stores/newsStore.js'), 'utf-8');
+      const code = readFileSync(join(SRC, 'stores/newsStore.ts'), 'utf-8');
       assert.match(code, /dataSource.*mock/, 'Should fall back to mock data source');
     });
 

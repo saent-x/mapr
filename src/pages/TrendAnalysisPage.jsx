@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import useNewsStore from '../stores/newsStore.js';
+import useNewsStore from '../stores/newsStore';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { canonicalizeArticles } from '../utils/newsPipeline.js';
 import { buildRegionalSeries, buildByCategory, buildSourceVelocity, buildSeverityDistribution, buildLangMix } from '../utils/trendBuilders.js';

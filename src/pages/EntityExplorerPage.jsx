@@ -1,8 +1,8 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import useNewsStore from '../stores/newsStore.js';
-import useFilterStore from '../stores/filterStore.js';
+import useNewsStore from '../stores/newsStore';
+import useFilterStore from '../stores/filterStore';
 import {
   extractEntityGraph,
   filterGraphByType,

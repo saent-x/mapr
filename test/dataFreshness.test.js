@@ -162,12 +162,12 @@ test('VAL-M3-030: Header imports useDataFreshness for tooltip', () => {
 // ═══════════════════════════════════════════
 
 test('newsStore has lastDataLoadTime in initial state', () => {
-  const src = read('src/stores/newsStore.js');
+  const src = read('src/stores/newsStore.ts');
   assert.match(src, /lastDataLoadTime:\s*null/, 'newsStore initial state must have lastDataLoadTime: null');
 });
 
 test('newsStore sets lastDataLoadTime in loadLiveData', () => {
-  const src = read('src/stores/newsStore.js');
+  const src = read('src/stores/newsStore.ts');
   const matches = src.match(/lastDataLoadTime:\s*Date\.now\(\)/g);
   assert.ok(matches && matches.length >= 2, 'lastDataLoadTime must be set in at least 2 data paths (backend + client_gdelt)');
 });

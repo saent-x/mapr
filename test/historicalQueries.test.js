@@ -229,7 +229,7 @@ describe('i18n coverage', () => {
 
 describe('newsStore historical state', () => {
   it('newsStore has historical state fields', () => {
-    const content = readText('src/stores/newsStore.js');
+    const content = readText('src/stores/newsStore.ts');
     assert.ok(content.includes('historicalState'), 'should have historicalState field');
     assert.ok(content.includes('comparisonMode'), 'should have comparisonMode field');
     assert.ok(content.includes('comparisonPeriods'), 'should have comparisonPeriods field');
@@ -238,7 +238,7 @@ describe('newsStore historical state', () => {
   });
 
   it('newsStore has historical action methods', () => {
-    const content = readText('src/stores/newsStore.js');
+    const content = readText('src/stores/newsStore.ts');
     assert.ok(content.includes('loadAvailableTimestamps'), 'should have loadAvailableTimestamps');
     assert.ok(content.includes('loadHistoricalState'), 'should have loadHistoricalState');
     assert.ok(content.includes('loadComparisonPeriods'), 'should have loadComparisonPeriods');
@@ -248,7 +248,7 @@ describe('newsStore historical state', () => {
   });
 
   it('exitHistoricalMode resets all historical state', () => {
-    const content = readText('src/stores/newsStore.js');
+    const content = readText('src/stores/newsStore.ts');
     // Find exitHistoricalMode and verify it nullifies all fields
     const match = content.match(/exitHistoricalMode[^{]*\{[^}]*\}/);
     assert.ok(match, 'should find exitHistoricalMode implementation');
