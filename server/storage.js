@@ -42,6 +42,12 @@ async function ensureSchema() {
       payload TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS snapshot_history (
+      id SERIAL PRIMARY KEY,
+      at TEXT NOT NULL,
+      payload TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS coverage_history (
       id SERIAL PRIMARY KEY,
       at TEXT NOT NULL,
@@ -218,6 +224,74 @@ export async function appendHistory(entry, limit = 72) {
     )
   `, [limit]);
   return readHistory();
+}
+
+// ── Snapshot History ─────────────────────────────────────────
+// Stores periodic copies of the full snapshot for historical queries.
+
+export async function readSnapshotHistory(from, to, limit = 168) {
+  const db = await ensureDatabase();
+  let query = 'SELECT payload FROM snapshot_history';
+  const params = [];
+  const conditions = [];
+
+  if (from) {
+    conditions.push('at >= $' + (params.length + 1));
+    params.push(typeof from === 'number' ? new Date(from).toISOString() : from);
+  }
+  if (to) {
+    conditions.push('at <= $' + (params.length + 1));
+    params.push(typeof to === 'number' ? new Date(to).toISOString() : to);
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  query += ' ORDER BY id DESC LIMIT $' + (params.length + 1);
+  params.push(limit);
+
+  const { rows } = await db.query(query, params);
+  return rows.map(r => parseJson(r.payload, null)).filter(Boolean).reverse();
+}
+
+export async function readSnapshotTimestamps(from, to) {
+  const db = await ensureDatabase();
+  let query = 'SELECT at FROM snapshot_history';
+  const params = [];
+  const conditions = [];
+
+  if (from) {
+    conditions.push('at >= $' + (params.length + 1));
+    params.push(typeof from === 'number' ? new Date(from).toISOString() : from);
+  }
+  if (to) {
+    conditions.push('at <= $' + (params.length + 1));
+    params.push(typeof to === 'number' ? new Date(to).toISOString() : to);
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  query += ' ORDER BY at ASC';
+
+  const { rows } = await db.query(query, params);
+  return rows.map(r => r.at);
+}
+
+export async function persistSnapshotHistory(entry) {
+  const db = await ensureDatabase();
+  await db.query(
+    'INSERT INTO snapshot_history (at, payload) VALUES ($1, $2)',
+    [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
+  );
+  // Prune to keep max 168 entries (7 days at 1-hour intervals)
+  await db.query(`
+    DELETE FROM snapshot_history WHERE id NOT IN (
+      SELECT id FROM snapshot_history ORDER BY id DESC LIMIT 168
+    )
+  `);
 }
 
 // ── Coverage History ─────────────────────────────────────────

@@ -83,3 +83,18 @@ export function fetchBackendRegionBriefing({ iso } = {}) {
 export function fetchBackendHealth() {
   return request('/health');
 }
+
+export function fetchSnapshotHistory({ from, to, limit = 48 } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', typeof from === 'number' ? new Date(from).toISOString() : from);
+  if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
+  params.set('limit', String(limit));
+  return request(`/snapshot-history?${params.toString()}`);
+}
+
+export function fetchSnapshotTimestamps({ from, to } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', typeof from === 'number' ? new Date(from).toISOString() : from);
+  if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
+  return request(`/snapshot-history/timestamps?${params.toString()}`);
+}

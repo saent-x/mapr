@@ -3,6 +3,8 @@ import {
   fetchBackendCoverageRegion,
   fetchBackendHealth,
   fetchBackendRegionBriefing,
+  fetchSnapshotHistory,
+  fetchSnapshotTimestamps,
 } from '../services/backendService.js';
 import { fetchLiveNews } from '../services/gdeltService.js';
 import { runLoadLiveDataPipeline } from '../services/loadLiveDataPipeline.js';
@@ -69,6 +71,13 @@ const useNewsStore = create((set, get) => ({
   /* ── session memory ── */
   sessionDiff: null,
   snapshotHistory: [],
+
+  /* ── historical queries ── */
+  historicalState: null,       // { snapshots, from, to } — loaded historical data
+  comparisonMode: null,        // null | 'overlay' | 'side-by-side'
+  comparisonPeriods: null,     // { period1: { snapshots, from, to }, period2: { snapshots, from, to } }
+  isTimeTravel: false,         // true when time travel scrubber is active
+  availableTimestamps: [],     // list of available snapshot timestamps for scrubber
 
   /* ────────── actions ────────── */
 
@@ -225,6 +234,73 @@ const useNewsStore = create((set, get) => ({
       console.warn('Snapshot save failed:', err.message);
     }
   },
+
+  /* ── historical queries ── */
+
+  /** Load available snapshot timestamps for scrubber and date picker. */
+  loadAvailableTimestamps: async () => {
+    try {
+      const result = await fetchSnapshotTimestamps();
+      set({ availableTimestamps: result.timestamps || [] });
+    } catch (err) {
+      console.warn('Failed to load snapshot timestamps:', err.message);
+    }
+  },
+
+  /** Load historical snapshot state for a date range. */
+  loadHistoricalState: async (from, to) => {
+    if (!from || !to) {
+      set({ historicalState: null, isTimeTravel: false });
+      return;
+    }
+    try {
+      const result = await fetchSnapshotHistory({ from, to });
+      set({
+        historicalState: { snapshots: result.snapshots || [], from, to },
+        isTimeTravel: false,
+      });
+    } catch (err) {
+      console.warn('Failed to load historical state:', err.message);
+      set({ historicalState: null });
+    }
+  },
+
+  /** Compare two time periods. */
+  loadComparisonPeriods: async (period1, period2) => {
+    if (!period1?.from || !period1?.to || !period2?.from || !period2?.to) {
+      set({ comparisonPeriods: null, comparisonMode: null });
+      return;
+    }
+    try {
+      const [result1, result2] = await Promise.all([
+        fetchSnapshotHistory({ from: period1.from, to: period1.to }),
+        fetchSnapshotHistory({ from: period2.from, to: period2.to }),
+      ]);
+      set({
+        comparisonPeriods: {
+          period1: { snapshots: result1.snapshots || [], from: period1.from, to: period1.to },
+          period2: { snapshots: result2.snapshots || [], from: period2.from, to: period2.to },
+        },
+      });
+    } catch (err) {
+      console.warn('Failed to load comparison periods:', err.message);
+      set({ comparisonPeriods: null });
+    }
+  },
+
+  /** Set comparison mode: 'overlay' or 'side-by-side' */
+  setComparisonMode: (mode) => set({ comparisonMode: mode }),
+
+  /** Enter time travel mode with scrubber control. */
+  setTimeTravel: (enabled) => set({ isTimeTravel: enabled }),
+
+  /** Exit all historical modes and return to live data. */
+  exitHistoricalMode: () => set({
+    historicalState: null,
+    comparisonMode: null,
+    comparisonPeriods: null,
+    isTimeTravel: false,
+  }),
 
   /* ── region coverage ── */
   fetchRegionCoverage: async (iso) => {

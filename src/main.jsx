@@ -18,6 +18,7 @@ const EntityExplorerPage = lazy(() => import('./pages/EntityExplorerPage.jsx'))
 const TrendAnalysisPage = lazy(() => import('./pages/TrendAnalysisPage.jsx'))
 const IntelPage = lazy(() => import('./pages/IntelPage.jsx'))
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
+const HistoricalQueriesPage = lazy(() => import('./pages/HistoricalQueriesPage.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/" element={<App />} />
           <Route path="/region" element={<RegionDetailPage />} />
           <Route path="/region/:iso" element={<RegionDetailPage />} />
+          <Route path="/historical" element={<Suspense fallback={<PageLoadingFallback />}><HistoricalQueriesPage /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={<PageLoadingFallback />}><AdminPage /></Suspense>} />
           <Route path="/entities" element={<Suspense fallback={<PageLoadingFallback />}><EntityExplorerPage /></Suspense>} />
           <Route path="/trends" element={<Suspense fallback={<PageLoadingFallback />}><TrendAnalysisPage /></Suspense>} />

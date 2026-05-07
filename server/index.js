@@ -39,7 +39,7 @@ function serveStaticFile(response, filePath) {
   createReadStream(filePath).pipe(response);
 }
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
-import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes } from './storage.js';
+import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes, readSnapshotHistory, readSnapshotTimestamps } from './storage.js';
 import {
   getBriefing,
   getCoverageHistory,
@@ -399,6 +399,29 @@ const server = http.createServer(async (request, response) => {
       const limit = Math.max(1, Math.min(24, Number(url.searchParams.get('limit') || 10)));
       const transitions = Math.max(1, Math.min(24, Number(url.searchParams.get('transitions') || 8)));
       sendJson(response, 200, getRegionCoverageHistory(iso, limit, transitions));
+      return;
+    }
+
+    // ── Historical snapshot queries ──
+
+    if (request.method === 'GET' && url.pathname === '/api/snapshot-history/timestamps') {
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      const timestamps = await withTimeout(() => readSnapshotTimestamps(from, to));
+      sendJson(response, 200, { timestamps }, {
+        'cache-control': 'public, max-age=60, stale-while-revalidate=120'
+      });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/snapshot-history') {
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      const limit = Math.max(1, Math.min(168, Number(url.searchParams.get('limit') || 48)));
+      const snapshots = await withTimeout(() => readSnapshotHistory(from, to, limit));
+      sendJson(response, 200, { snapshots }, {
+        'cache-control': 'public, max-age=60, stale-while-revalidate=120'
+      });
       return;
     }
 

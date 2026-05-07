@@ -11,6 +11,7 @@ import {
   enforceDbSizeLimit,
   getDbSize,
   linkArticlesToEvent,
+  persistSnapshotHistory,
   pruneOrphanedArticles,
   pruneResolvedEvents,
   upsertArticles,
@@ -63,6 +64,27 @@ export { getDbSize, enforceDbSizeLimit };
  */
 export async function persistSnapshot(snapshot) {
   await writeSnapshot(snapshot);
+  // Also persist to snapshot_history for historical queries
+  // Build a lightweight historical entry with summary data (not full article list)
+  const historyEntry = {
+    at: snapshot?.fetchedAt || new Date().toISOString(),
+    articleCount: snapshot?.articles?.length || 0,
+    eventCount: snapshot?.events?.length || 0,
+    sourceHealth: snapshot?.sourceHealth || {},
+    velocitySpikes: snapshot?.velocitySpikes || [],
+    coverageMetrics: snapshot?.coverageMetrics || null,
+    ingestHealth: snapshot?.ingestHealth || null,
+    // Store a representative sample: top severity events + full event IDs
+    eventSummary: (snapshot?.events || []).slice(0, 50).map(e => ({
+      id: e.id,
+      title: e.title,
+      severity: e.severity,
+      lifecycle: e.lifecycle,
+      primaryCountry: e.primaryCountry,
+      category: e.category,
+    })),
+  };
+  await persistSnapshotHistory(historyEntry);
 }
 
 /**
