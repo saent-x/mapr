@@ -450,7 +450,7 @@ function App() {
   useEffect(() => {
     if (!urlInitRef.current) return;
     const qs = encodeViewToURL({
-      filters: { searchQuery: debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion },
+      filters: { searchQuery: debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, entityFilter },
       mapState: { mapMode, mapOverlay },
     });
     const params = new URLSearchParams(qs);
@@ -459,7 +459,7 @@ function App() {
     if (activeViewId) params.set('view', activeViewId);
     else params.delete('view');
     setSearchParams(params, { replace: true });
-  }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, mapMode, mapOverlay, selectedStoryId, activeViewId, setSearchParams]);
+  }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, entityFilter, mapMode, mapOverlay, selectedStoryId, activeViewId, setSearchParams]);
 
   const handleGlobeFallback = useCallback(() => {
     useUIStore.getState().setMapMode('flat');

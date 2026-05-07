@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw } from 'lucide-react';
+import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw, Share2 } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
@@ -75,6 +75,15 @@ export default function Header() {
     setRefreshing(true);
     useNewsStore.getState().refresh(addToast);
     setTimeout(() => setRefreshing(false), 1500);
+  };
+
+  const handleShareClick = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      addToast(t('share.linkCopied', 'Link copied to clipboard'), 'info');
+    } catch {
+      addToast(t('share.copyFailed', 'Failed to copy link'), 'error');
+    }
   };
 
   /* ── theme observer (sync with data-theme attribute) ── */
@@ -229,6 +238,15 @@ export default function Header() {
             </div>
             <button
               type="button"
+              className="header-share-btn"
+              onClick={handleShareClick}
+              title={t('share.shareButton', 'Share view')}
+              aria-label={t('share.shareButton', 'Share view')}
+            >
+              <Share2 size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
               className="theme-toggle-btn"
               onClick={handleToggleTheme}
               title={appTheme === 'light' ? t('theme.switchDark') : t('theme.switchLight')}
@@ -318,6 +336,15 @@ export default function Header() {
           >
             {appTheme === 'light' ? <Moon size={14} aria-hidden /> : <Sun size={14} aria-hidden />}
             {' '}{appTheme === 'light' ? t('theme.dark') : t('theme.light')}
+          </button>
+          <button
+            type="button"
+            className="theme-toggle-btn"
+            onClick={() => { handleShareClick(); setMenuOpen(false); }}
+            role="menuitem"
+          >
+            <Share2 size={14} aria-hidden />
+            {' '}{t('share.shareButton', 'Share')}
           </button>
           <button
             type="button"

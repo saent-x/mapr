@@ -692,5 +692,10 @@
     "jsonDesc": "Télécharger un fichier JSON structuré avec {{count}} événements filtrés et métadonnées.",
     "printTitle": "Imprimer en PDF",
     "printDesc": "Ouvrir la boîte de dialogue d'impression du navigateur pour enregistrer en PDF."
+  },
+  "share": {
+    "shareButton": "Partager la vue",
+    "linkCopied": "Lien copié dans le presse-papiers",
+    "copyFailed": "Échec de la copie du lien"
   }
 }

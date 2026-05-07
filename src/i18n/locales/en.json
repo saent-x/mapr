@@ -824,5 +824,10 @@
     "errorToRequired": "To date is required",
     "errorFromFuture": "From date cannot be in the future",
     "errorFromAfterTo": "From date cannot be after To date"
+  },
+  "share": {
+    "shareButton": "Share view",
+    "linkCopied": "Link copied to clipboard",
+    "copyFailed": "Failed to copy link"
   }
 }

@@ -102,6 +102,7 @@ const useFilterStore = create((set, get) => ({
     if (filters.minConfidence) updates.minConfidence = filters.minConfidence;
     if (filters.dateWindow) updates.dateWindow = filters.dateWindow;
     if (filters.sortMode) updates.sortMode = filters.sortMode;
+    if (filters.entityFilter) updates.entityFilter = filters.entityFilter;
     if (mapState.mapOverlay) updates.mapOverlay = mapState.mapOverlay;
     if (Object.keys(updates).length > 0) set(updates);
     return { filters, mapState };
@@ -117,6 +118,7 @@ const useFilterStore = create((set, get) => ({
         minConfidence: s.minConfidence,
         dateWindow: s.dateWindow,
         sortMode: s.sortMode,
+        entityFilter: s.entityFilter,
       },
       mapState: { mapOverlay: s.mapOverlay },
     });

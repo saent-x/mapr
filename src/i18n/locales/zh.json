@@ -691,5 +691,10 @@
     "jsonDesc": "下载包含{{count}}个筛选事件及元数据的结构化JSON文件。",
     "printTitle": "打印为PDF",
     "printDesc": "打开浏览器打印对话框保存为PDF。"
+  },
+  "share": {
+    "shareButton": "分享视图",
+    "linkCopied": "链接已复制到剪贴板",
+    "copyFailed": "复制链接失败"
   }
 }
