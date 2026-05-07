@@ -150,8 +150,8 @@ function App() {
     // Flatten all snapshot event summaries into article-like objects
     const articles = [];
     for (const snap of historicalState.snapshots) {
-      if (!snap.eventSummaries) continue;
-      for (const ev of snap.eventSummaries) {
+      if (!snap.eventSummary) continue;
+      for (const ev of snap.eventSummary) {
         articles.push({
           id: ev.id,
           title: ev.title || 'Untitled',
