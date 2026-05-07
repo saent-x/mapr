@@ -74,9 +74,10 @@ export async function triggerInstall() {
   }
 
   try {
+    const platform = deferredPrompt.platform || 'web';
     const { outcome } = await deferredPrompt.prompt();
     deferredPrompt = null;
-    return { outcome, platform: deferredPrompt?.platform || 'web' };
+    return { outcome, platform };
   } catch (err) {
     deferredPrompt = null;
     throw err;

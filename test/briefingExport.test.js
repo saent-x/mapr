@@ -182,7 +182,7 @@ test('Generate Briefing button exists in FilterDrawer', () => {
 
 test('Generate Briefing button exists in NewsPanel', () => {
   const src = readFile('src/components/NewsPanel.jsx');
-  assert.ok(src.includes('BRIEFING'), 'NewsPanel should have BRIEFING button');
+  assert.ok(src.includes("t('export.generateBriefing'"), 'NewsPanel should use t(\'export.generateBriefing\') for button text');
   assert.ok(src.includes('setShowExport'), 'NewsPanel should call setShowExport');
 });
 

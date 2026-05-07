@@ -471,7 +471,7 @@ const NewsPanel = ({
           title={t('export.generateBriefing', 'Generate Briefing')}
         >
           <FileText size={10} aria-hidden style={{ marginRight: 4 }} />
-          BRIEFING
+          {t('export.generateBriefing', 'Generate Briefing')}
         </button>
         <button
           type="button"

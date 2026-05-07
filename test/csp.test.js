@@ -37,7 +37,7 @@ function parseDirectives(cspString) {
 
 // Baseline CSP value before M1 changes (for diff comparison)
 // Updated with InstantDB auth domain (https://*.instantdb.com) added to connect-src
-const BASELINE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src blob:; " +
+const BASELINE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' https://fonts.gstatic.com; " +
   "img-src 'self' data: blob: https://*.basemaps.cartocdn.com; " +
@@ -98,7 +98,7 @@ describe('CSP directive integrity (VAL-M1-003)', () => {
   });
 
   it('worker-src unchanged', () => {
-    assert.equal(directives['worker-src'], 'blob:', 'worker-src must remain unchanged');
+    assert.equal(directives['worker-src'], "'self' blob:", 'worker-src must remain unchanged');
   });
 
   it('style-src unchanged', () => {

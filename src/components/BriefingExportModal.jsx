@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Copy, FileDown } from 'lucide-react';
 import useUIStore from '../stores/uiStore';
@@ -70,6 +70,18 @@ const BriefingExportModal = ({ events = [], filters = {}, mapContainerRef }) => 
       addToast('PDF export failed', 'error');
     }
   }, [events, filters, addToast, setShowExport, t, mapContainerRef]);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleClose]);
 
   if (!isOpen) return null;
 

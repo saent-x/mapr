@@ -467,6 +467,7 @@ function App() {
 
   const { isMobile, isTablet } = useBreakpoint();
   const didForceFlatRef = useRef(false);
+  const mapStageRef = useRef(null);
   useEffect(() => {
     if ((isMobile || isTablet) && mapMode === 'globe' && !didForceFlatRef.current) {
       didForceFlatRef.current = true;
@@ -476,7 +477,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <div className="map-stage">
+      <div className="map-stage" ref={mapStageRef}>
         <Suspense fallback={<MapLoadingFallback />}>
           <MapErrorBoundary mapMode={mapMode} onFallbackToFlat={handleGlobeFallback}>
             {mapMode === 'globe' ? (
@@ -793,6 +794,7 @@ function App() {
           searchQuery: debouncedSearch,
           region: selectedRegion,
         }}
+        mapContainerRef={mapStageRef}
       />
 
       {/*
