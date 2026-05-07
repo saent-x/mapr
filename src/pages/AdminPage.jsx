@@ -6,6 +6,8 @@ import {
   CheckCircle, XCircle, MinusCircle, Clock, Search, Globe, Rss,
   FileText, ChevronDown, ChevronUp, Loader, Lock, ShieldCheck,
   TrendingUp, TrendingDown, Minus,
+  Plus, Edit, Trash2, Upload, Download, Power, PowerOff,
+  Sliders,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
@@ -196,6 +198,19 @@ function AdminDashboard() {
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
 
+  /* ── Source management state ── */
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addFormType, setAddFormType] = useState('rss'); // 'rss' or 'gdelt'
+  const [addForm, setAddForm] = useState({ name: '', url: '', country: '', sourceType: '', fetchMode: 'rss', gdeltQuery: '', notes: '' });
+  const [editingSource, setEditingSource] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', url: '', country: '', sourceType: '', notes: '' });
+  const [showImport, setShowImport] = useState(false);
+  const [importJson, setImportJson] = useState('');
+  const [importFile, setImportFile] = useState(null);
+  const [importError, setImportError] = useState('');
+  const [sourceActionError, setSourceActionError] = useState('');
+  const [sourceActionOk, setSourceActionOk] = useState('');
+
   /* Filter/search state */
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -331,6 +346,213 @@ function AdminDashboard() {
     if (sortCol !== col) return null;
     return sortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />;
   };
+
+  /* ── Source management handlers ── */
+
+  const clearSourceMessages = useCallback(() => {
+    setSourceActionError('');
+    setSourceActionOk('');
+  }, []);
+
+  const handleAddSource = useCallback(async (e) => {
+    e.preventDefault();
+    clearSourceMessages();
+    const payload = addFormType === 'gdelt'
+      ? { name: addForm.name, url: addForm.url, country: addForm.country || undefined, sourceType: addForm.sourceType || 'gdelt', fetchMode: 'gdelt', gdeltQuery: addForm.gdeltQuery || undefined, notes: addForm.notes || undefined }
+      : { name: addForm.name, url: addForm.url, country: addForm.country || undefined, sourceType: addForm.sourceType || 'rss', fetchMode: 'rss', notes: addForm.notes || undefined };
+    try {
+      const res = await fetch('/api/source-catalog/add', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      setSourceActionOk(t('admin.sourceAdded'));
+      setShowAddForm(false);
+      setAddForm({ name: '', url: '', country: '', sourceType: '', fetchMode: 'rss', gdeltQuery: '', notes: '' });
+      fetchData();
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [addForm, addFormType, clearSourceMessages, fetchData, t]);
+
+  const handleEditClick = useCallback((source) => {
+    setEditingSource(source.id);
+    setEditForm({
+      name: source.name || '',
+      url: source.url || '',
+      country: source.country || '',
+      sourceType: source.sourceType || '',
+      notes: source.notes || '',
+    });
+    clearSourceMessages();
+  }, [clearSourceMessages]);
+
+  const handleEditSave = useCallback(async (e) => {
+    e.preventDefault();
+    clearSourceMessages();
+    if (!editingSource) return;
+    try {
+      const res = await fetch(`/api/source-catalog/${editingSource}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      setSourceActionOk(t('admin.sourceUpdated'));
+      setEditingSource(null);
+      setEditForm({ name: '', url: '', country: '', sourceType: '', notes: '' });
+      fetchData();
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [editingSource, editForm, clearSourceMessages, fetchData, t]);
+
+  const handleDeleteSource = useCallback(async (id) => {
+    if (!window.confirm(t('admin.confirmDelete'))) return;
+    clearSourceMessages();
+    try {
+      const res = await fetch(`/api/source-catalog/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      setSourceActionOk(t('admin.sourceDeleted'));
+      fetchData();
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [clearSourceMessages, fetchData, t]);
+
+  const handleReEnable = useCallback(async (id) => {
+    clearSourceMessages();
+    try {
+      const res = await fetch('/api/source-catalog/re-enable', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      setSourceActionOk(t('admin.sourceReEnabled'));
+      fetchData();
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [clearSourceMessages, fetchData, t]);
+
+  const handleImportJson = useCallback(async (e) => {
+    e.preventDefault();
+    clearSourceMessages();
+    setImportError('');
+    let feeds;
+    try {
+      feeds = JSON.parse(importJson);
+    } catch {
+      setImportError(t('admin.invalidJson'));
+      return;
+    }
+    if (!Array.isArray(feeds) || feeds.length === 0) {
+      setImportError(t('admin.importEmptyArray'));
+      return;
+    }
+    try {
+      const res = await fetch('/api/source-catalog/import', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feeds }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      const d = await res.json();
+      setSourceActionOk(t('admin.importSuccess', { count: d.addedCount || feeds.length }));
+      setShowImport(false);
+      setImportJson('');
+      setImportFile(null);
+      fetchData();
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [importJson, clearSourceMessages, fetchData, t]);
+
+  const handleImportFile = useCallback(async (e) => {
+    e.preventDefault();
+    clearSourceMessages();
+    setImportError('');
+    if (!importFile) {
+      setImportError(t('admin.noFileSelected'));
+      return;
+    }
+    try {
+      const text = await importFile.text();
+      let feeds;
+      try {
+        feeds = JSON.parse(text);
+      } catch {
+        setImportError(t('admin.invalidJsonFile'));
+        return;
+      }
+      if (!Array.isArray(feeds) || feeds.length === 0) {
+        setImportError(t('admin.importEmptyArray'));
+        return;
+      }
+      const res = await fetch('/api/source-catalog/import', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feeds }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      const d = await res.json();
+      setSourceActionOk(t('admin.importSuccess', { count: d.addedCount || feeds.length }));
+      setShowImport(false);
+      setImportJson('');
+      setImportFile(null);
+      fetchData();
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [importFile, clearSourceMessages, fetchData, t]);
+
+  const handleExport = useCallback(async () => {
+    clearSourceMessages();
+    try {
+      const res = await fetch('/api/source-catalog/export', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'source-catalog-export.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSourceActionOk(t('admin.exportSuccess'));
+    } catch (err) {
+      setSourceActionError(err.message);
+    }
+  }, [clearSourceMessages, t]);
 
   /* ── Loading state ── */
   if (loading && !catalogData) {
@@ -554,6 +776,343 @@ function AdminDashboard() {
         <div className="admin-table-footer">
           <span className="admin-table-showing">
             {filteredFeeds.length} / {mergedFeeds.length} sources
+          </span>
+        </div>
+      </Section>
+
+      {/* Source Management */}
+      <Section title={t('admin.sourceManagement')} subtitle={t('admin.sourceManagementDesc')} icon={Sliders} defaultOpen={true}>
+        {/* Status messages */}
+        {sourceActionError && (
+          <div className="admin-msg admin-msg-error">
+            <AlertTriangle size={14} />
+            <span>{sourceActionError}</span>
+            <button className="admin-msg-close" onClick={clearSourceMessages}>×</button>
+          </div>
+        )}
+        {sourceActionOk && (
+          <div className="admin-msg admin-msg-ok">
+            <CheckCircle size={14} />
+            <span>{sourceActionOk}</span>
+            <button className="admin-msg-close" onClick={clearSourceMessages}>×</button>
+          </div>
+        )}
+
+        {/* Action bar */}
+        <div className="admin-source-actions">
+          <button className="admin-btn admin-btn-primary" onClick={() => { setShowAddForm(!showAddForm); clearSourceMessages(); setEditingSource(null); }}>
+            <Plus size={14} /> {t('admin.addSource')}
+          </button>
+          <button className="admin-btn admin-btn-secondary" onClick={() => { setShowImport(!showImport); clearSourceMessages(); }}>
+            <Upload size={14} /> {t('admin.importSources')}
+          </button>
+          <button className="admin-btn admin-btn-secondary" onClick={handleExport}>
+            <Download size={14} /> {t('admin.exportSources')}
+          </button>
+        </div>
+
+        {/* Add source form */}
+        {showAddForm && (
+          <form className="admin-source-form" onSubmit={handleAddSource}>
+            <h3 className="admin-form-title">{t('admin.addNewSource')}</h3>
+            <div className="admin-form-tabs">
+              <button
+                type="button"
+                className={`admin-form-tab ${addFormType === 'rss' ? 'is-active' : ''}`}
+                onClick={() => setAddFormType('rss')}
+              >
+                <Rss size={12} /> {t('admin.rssFeed')}
+              </button>
+              <button
+                type="button"
+                className={`admin-form-tab ${addFormType === 'gdelt' ? 'is-active' : ''}`}
+                onClick={() => setAddFormType('gdelt')}
+              >
+                <Globe size={12} /> {t('admin.gdeltQuery')}
+              </button>
+            </div>
+            <div className="admin-form-grid">
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.sourceNameLabel')} *</label>
+                <input
+                  type="text"
+                  className="admin-form-input"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder={addFormType === 'rss' ? t('admin.rssNamePlaceholder') : t('admin.gdeltNamePlaceholder')}
+                  required
+                />
+              </div>
+              <div className="admin-form-field">
+                <label className="admin-form-label">{addFormType === 'gdelt' ? t('admin.gdeltQueryLabel') : t('admin.urlLabel')} *</label>
+                <input
+                  type="text"
+                  className="admin-form-input"
+                  value={addFormType === 'gdelt' ? addForm.gdeltQuery : addForm.url}
+                  onChange={(e) => setAddForm((f) => addFormType === 'gdelt' ? { ...f, gdeltQuery: e.target.value } : { ...f, url: e.target.value })}
+                  placeholder={addFormType === 'gdelt' ? t('admin.gdeltQueryPlaceholder') : 'https://example.com/rss'}
+                  required
+                />
+              </div>
+              {addFormType === 'gdelt' && (
+                <div className="admin-form-field">
+                  <label className="admin-form-label">{t('admin.gdeltSearchUrlLabel')}</label>
+                  <input
+                    type="text"
+                    className="admin-form-input"
+                    value={addForm.url}
+                    onChange={(e) => setAddForm((f) => ({ ...f, url: e.target.value }))}
+                    placeholder="https://api.gdeltproject.org/api/v2/doc/doc?query=..."
+                  />
+                </div>
+              )}
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.countryLabel')}</label>
+                <input
+                  type="text"
+                  className="admin-form-input"
+                  value={addForm.country}
+                  onChange={(e) => setAddForm((f) => ({ ...f, country: e.target.value }))}
+                  placeholder={t('admin.countryPlaceholder')}
+                />
+              </div>
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.sourceTypeLabel')}</label>
+                <select
+                  className="admin-form-select"
+                  value={addForm.sourceType}
+                  onChange={(e) => setAddForm((f) => ({ ...f, sourceType: e.target.value }))}
+                >
+                  <option value="">{t('admin.sourceTypeDefault')}</option>
+                  <option value="official">{t('admin.sourceTypeOfficial')}</option>
+                  <option value="wire">{t('admin.sourceTypeWire')}</option>
+                  <option value="global">{t('admin.sourceTypeGlobal')}</option>
+                  <option value="regional">{t('admin.sourceTypeRegional')}</option>
+                  <option value="local">{t('admin.sourceTypeLocal')}</option>
+                </select>
+              </div>
+              <div className="admin-form-field admin-form-field-full">
+                <label className="admin-form-label">{t('admin.notesLabel')}</label>
+                <input
+                  type="text"
+                  className="admin-form-input"
+                  value={addForm.notes}
+                  onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+                  placeholder={t('admin.notesPlaceholder')}
+                />
+              </div>
+            </div>
+            <div className="admin-form-actions">
+              <button type="submit" className="admin-btn admin-btn-primary" disabled={!addForm.name || !(addFormType === 'gdelt' ? addForm.gdeltQuery : addForm.url)}>
+                {t('admin.saveSource')}
+              </button>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => { setShowAddForm(false); clearSourceMessages(); }}>
+                {t('admin.cancel')}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Import modal */}
+        {showImport && (
+          <div className="admin-source-form">
+            <h3 className="admin-form-title">{t('admin.importSourcesTitle')}</h3>
+            {importError && (
+              <div className="admin-msg admin-msg-error">
+                <AlertTriangle size={14} />
+                <span>{importError}</span>
+              </div>
+            )}
+            <div className="admin-form-tabs">
+              <button
+                type="button"
+                className={`admin-form-tab ${!importFile ? 'is-active' : ''}`}
+                onClick={() => setImportFile(null)}
+              >
+                <FileText size={12} /> {t('admin.pasteJson')}
+              </button>
+              <button
+                type="button"
+                className={`admin-form-tab ${importFile ? 'is-active' : ''}`}
+                onClick={() => { setImportJson(''); document.getElementById('admin-import-file-input')?.click(); }}
+              >
+                <Upload size={12} /> {t('admin.uploadFile')}
+              </button>
+            </div>
+            {importFile ? (
+              <div className="admin-import-file-info">
+                <FileText size={14} />
+                <span>{importFile.name}</span>
+                <button type="button" className="admin-btn admin-btn-ghost admin-btn-sm" onClick={() => setImportFile(null)}>
+                  {t('admin.changeFile')}
+                </button>
+              </div>
+            ) : (
+              <textarea
+                className="admin-form-textarea"
+                value={importJson}
+                onChange={(e) => setImportJson(e.target.value)}
+                placeholder={t('admin.pasteJsonPlaceholder')}
+                rows={8}
+              />
+            )}
+            <input
+              id="admin-import-file-input"
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+            />
+            <div className="admin-form-actions">
+              <button
+                type="button"
+                className="admin-btn admin-btn-primary"
+                onClick={importFile ? handleImportFile : handleImportJson}
+                disabled={importFile ? false : !importJson.trim()}
+              >
+                {t('admin.importSubmit')}
+              </button>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => { setShowImport(false); setImportJson(''); setImportFile(null); setImportError(''); }}>
+                {t('admin.cancel')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Edit source inline form */}
+        {editingSource && (
+          <form className="admin-source-form admin-edit-form" onSubmit={handleEditSave}>
+            <h3 className="admin-form-title">{t('admin.editSource')}</h3>
+            <div className="admin-form-grid">
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.sourceNameLabel')}</label>
+                <input type="text" className="admin-form-input" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} required />
+              </div>
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.urlLabel')}</label>
+                <input type="text" className="admin-form-input" value={editForm.url} onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))} required />
+              </div>
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.countryLabel')}</label>
+                <input type="text" className="admin-form-input" value={editForm.country} onChange={(e) => setEditForm((f) => ({ ...f, country: e.target.value }))} />
+              </div>
+              <div className="admin-form-field">
+                <label className="admin-form-label">{t('admin.sourceTypeLabel')}</label>
+                <select className="admin-form-select" value={editForm.sourceType} onChange={(e) => setEditForm((f) => ({ ...f, sourceType: e.target.value }))}>
+                  <option value="">{t('admin.sourceTypeDefault')}</option>
+                  <option value="official">{t('admin.sourceTypeOfficial')}</option>
+                  <option value="wire">{t('admin.sourceTypeWire')}</option>
+                  <option value="global">{t('admin.sourceTypeGlobal')}</option>
+                  <option value="regional">{t('admin.sourceTypeRegional')}</option>
+                  <option value="local">{t('admin.sourceTypeLocal')}</option>
+                </select>
+              </div>
+              <div className="admin-form-field admin-form-field-full">
+                <label className="admin-form-label">{t('admin.notesLabel')}</label>
+                <input type="text" className="admin-form-input" value={editForm.notes} onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="admin-form-actions">
+              <button type="submit" className="admin-btn admin-btn-primary">{t('admin.saveSource')}</button>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={() => { setEditingSource(null); clearSourceMessages(); }}>{t('admin.cancel')}</button>
+            </div>
+          </form>
+        )}
+
+        {/* Source list with actions */}
+        <div className="admin-table-controls admin-mt">
+          <div className="admin-search-wrapper">
+            <Search size={14} className="admin-search-icon" />
+            <input
+              type="text"
+              className="admin-search-input"
+              placeholder={t('admin.searchSourcesManage')}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {filteredFeeds.length === 0 ? (
+          <p className="admin-no-sources">{t('admin.noSourcesFound')}</p>
+        ) : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th className="admin-th">{t('admin.name')}</th>
+                  <th className="admin-th">{t('admin.type')}</th>
+                  <th className="admin-th">{t('admin.status')}</th>
+                  <th className="admin-th">{t('admin.autoDisabledLabel')}</th>
+                  <th className="admin-th admin-th-right">{t('admin.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mergedFeeds.map((feed) => {
+                  const isAutoDisabled = feed.autoDisabled === true || (feed.enabled === false && feed.lastStatus === 'failed');
+                  return (
+                    <tr key={feed.id} className={`admin-tr ${isAutoDisabled ? 'admin-tr-disabled' : ''}`}>
+                      <td className="admin-td admin-td-name" title={feed.url}>
+                        <div className="admin-source-name-row">
+                          <span>{feed.name || feed.id}</span>
+                          <FetchModeBadge mode={feed.fetchMode} />
+                        </div>
+                      </td>
+                      <td className="admin-td">
+                        <span className="admin-source-type">{feed.sourceClass || feed.sourceType || '—'}</span>
+                      </td>
+                      <td className="admin-td"><StatusBadge status={feed.enabled === false ? 'failed' : feed.lastStatus} /></td>
+                      <td className="admin-td">
+                        {isAutoDisabled ? (
+                          <span className="admin-auto-disabled-badge">
+                            <PowerOff size={11} /> {t('admin.autoDisabled')}
+                          </span>
+                        ) : feed.enabled === false ? (
+                          <span className="admin-disabled-badge">
+                            <MinusCircle size={11} /> {t('admin.disabled')}
+                          </span>
+                        ) : (
+                          <span className="admin-active-badge">
+                            <CheckCircle size={11} /> {t('admin.active')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="admin-td admin-td-right admin-td-actions">
+                        {feed.enabled === false ? (
+                          <button
+                            className="admin-btn-icon admin-btn-icon-enable"
+                            onClick={() => handleReEnable(feed.id)}
+                            title={t('admin.reEnable')}
+                          >
+                            <Power size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            className="admin-btn-icon admin-btn-icon-edit"
+                            onClick={() => handleEditClick(feed)}
+                            title={t('admin.editSource')}
+                          >
+                            <Edit size={14} />
+                          </button>
+                        )}
+                        <button
+                          className="admin-btn-icon admin-btn-icon-delete"
+                          onClick={() => handleDeleteSource(feed.id)}
+                          title={t('admin.deleteSource')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="admin-table-footer">
+          <span className="admin-table-showing">
+            {mergedFeeds.length} {t('admin.sourcesTotal')}
           </span>
         </div>
       </Section>

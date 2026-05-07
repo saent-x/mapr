@@ -52,6 +52,19 @@ import {
   startScheduler,
   stopScheduler
 } from './ingest.js';
+import {
+  readSourceCatalog,
+  writeSourceCatalog,
+  readSourceState,
+  hydrateSourceCatalog,
+  summarizeSourceCatalog,
+  addSourceToCatalog,
+  updateSourceInCatalog,
+  removeSourceFromCatalog,
+  importSourcesToCatalog,
+  reEnableSourceInCatalog,
+  autoDisableFailingSources
+} from './sourceCatalog.js';
 import { getCircuitSummary } from './circuitBreaker.js';
 import {
   addClient as addSseClient,
@@ -406,6 +419,176 @@ const server = http.createServer(async (request, response) => {
     }
     if (request.method === 'GET' && url.pathname === '/api/source-catalog/state') {
       sendJson(response, 200, getSourceCatalogStatus());
+      return;
+    }
+
+    // ── Admin source management CRUD ──────────────────────────────────────────
+
+    if (request.method === 'POST' && url.pathname === '/api/source-catalog/add') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 64_768); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      if (!body.name || !body.url) {
+        sendJson(response, 400, { error: 'Missing required fields: name, url', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        const updated = addSourceToCatalog(catalog, body);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const newEntry = updated[updated.length - 1];
+        sendJson(response, 200, { ok: true, source: newEntry, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog add error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'PUT' && url.pathname.startsWith('/api/source-catalog/') && !url.pathname.endsWith('/add') && !url.pathname.endsWith('/import') && !url.pathname.endsWith('/re-enable') && !url.pathname.endsWith('/state')) {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const id = url.pathname.replace('/api/source-catalog/', '');
+      if (!id) {
+        sendJson(response, 400, { error: 'Missing source ID', code: 'BAD_REQUEST' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 64_768); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      try {
+        const catalog = await readSourceCatalog();
+        if (!catalog.some((e) => e.id === id)) {
+          sendJson(response, 404, { error: 'Source not found', code: 'NOT_FOUND' });
+          return;
+        }
+        const updated = updateSourceInCatalog(catalog, id, body);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const updatedEntry = updated.find((e) => e.id === id);
+        sendJson(response, 200, { ok: true, source: updatedEntry, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog edit error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/source-catalog/') && !url.pathname.endsWith('/add') && !url.pathname.endsWith('/import') && !url.pathname.endsWith('/re-enable') && !url.pathname.endsWith('/state')) {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const id = url.pathname.replace('/api/source-catalog/', '');
+      if (!id) {
+        sendJson(response, 400, { error: 'Missing source ID', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        if (!catalog.some((e) => e.id === id)) {
+          sendJson(response, 404, { error: 'Source not found', code: 'NOT_FOUND' });
+          return;
+        }
+        const updated = removeSourceFromCatalog(catalog, id);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        sendJson(response, 200, { ok: true, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog delete error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/source-catalog/import') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 512_000); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      if (!Array.isArray(body.feeds) || body.feeds.length === 0) {
+        sendJson(response, 400, { error: 'Missing or empty feeds array', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        const previousCount = catalog.length;
+        const updated = importSourcesToCatalog(catalog, body.feeds);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const addedCount = updated.length - previousCount;
+        sendJson(response, 200, { ok: true, addedCount, totalCount: updated.length, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog import error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/source-catalog/re-enable') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      const id = String(body.id || '').trim();
+      if (!id) {
+        sendJson(response, 400, { error: 'Missing source ID', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        if (!catalog.some((e) => e.id === id)) {
+          sendJson(response, 404, { error: 'Source not found', code: 'NOT_FOUND' });
+          return;
+        }
+        const updated = reEnableSourceInCatalog(catalog, id);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const reEnabledEntry = updated.find((e) => e.id === id);
+        sendJson(response, 200, { ok: true, source: reEnabledEntry, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog re-enable error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── Source catalog export (raw JSON download) ────────────────────────────
+    if (request.method === 'GET' && url.pathname === '/api/source-catalog/export') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        const sourceState = await readSourceState();
+        const hydrated = hydrateSourceCatalog(catalog, sourceState);
+        sendJson(response, 200, { feeds: hydrated, exportedAt: new Date().toISOString() }, {
+          'content-disposition': 'attachment; filename="source-catalog-export.json"'
+        });
+      } catch (err) {
+        console.error('[api] source-catalog export error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
       return;
     }
 

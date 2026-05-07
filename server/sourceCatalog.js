@@ -267,12 +267,18 @@ export function mergeSourceState(catalog, previousState = {}, feedResults = [], 
       ? prior.lastSuccessAt || null
       : checkedAt;
 
+    // Track consecutive failures for auto-disable
+    const consecutiveFailures = result.status === 'failed'
+      ? (prior.consecutiveFailures || 0) + 1
+      : 0;
+
     nextState[source.id] = {
       lastCheckedAt,
       lastSuccessAt,
       lastStatus: result.status,
       lastError: result.error || null,
       lastArticleCount: result.articleCount || 0,
+      consecutiveFailures,
       nextCheckAt: computeNextCheckAt(lastCheckedAt, source.cadenceMinutes)
     };
   });
@@ -299,4 +305,82 @@ export function summarizeSourceCatalog(catalog, sourceState = {}) {
     htmlSources: hydrated.filter((entry) => (entry.fetchMode || 'rss') === 'html').length,
     candidateSources: candidates.length
   };
+}
+
+// ── Admin source CRUD helpers ─────────────────────────────────────────────────
+
+/**
+ * Add a single source to the catalog. Returns the updated catalog.
+ * Generates a unique ID if not provided.
+ */
+export function addSourceToCatalog(catalog, newSource) {
+  const id = newSource.id || `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const entry = normalizeCatalogEntry({ ...newSource, id }, catalog.length);
+  return [...(Array.isArray(catalog) ? catalog : []), entry];
+}
+
+/**
+ * Update an existing source in the catalog. Returns the updated catalog.
+ */
+export function updateSourceInCatalog(catalog, id, updates) {
+  const index = catalog.findIndex((e) => e.id === id);
+  if (index === -1) return catalog;
+  const updated = [...catalog];
+  const existing = updated[index];
+  updated[index] = normalizeCatalogEntry({ ...existing, ...updates, id }, existing.seedIndex);
+  return updated;
+}
+
+/**
+ * Remove a source from the catalog. Returns the updated catalog.
+ */
+export function removeSourceFromCatalog(catalog, id) {
+  return catalog.filter((e) => e.id !== id);
+}
+
+/**
+ * Bulk import sources into the catalog. Merges with existing catalog:
+ * - If a source with the same id exists, skip it
+ * - Otherwise, add it
+ */
+export function importSourcesToCatalog(catalog, newFeeds) {
+  const existingIds = new Set(catalog.map((e) => e.id));
+  const merged = [...catalog];
+  let nextIndex = catalog.length;
+  for (const feed of newFeeds) {
+    if (!feed.id || existingIds.has(feed.id)) continue;
+    const entry = normalizeCatalogEntry(feed, nextIndex++);
+    merged.push(entry);
+    existingIds.add(entry.id);
+  }
+  return merged;
+}
+
+/**
+ * Re-enable a disabled source by setting enabled=true.
+ */
+export function reEnableSourceInCatalog(catalog, id) {
+  return catalog.map((e) => e.id === id ? { ...e, enabled: true } : e);
+}
+
+/**
+ * Auto-disable sources with 3+ consecutive failures.
+ * Returns { catalog, disabled: string[] } with the updated catalog and list of disabled IDs.
+ * Sources that are already disabled (enabled=false) are skipped.
+ */
+export function autoDisableFailingSources(catalog, sourceState = {}) {
+  const CONSECUTIVE_FAILURE_THRESHOLD = 3;
+  const disabled = [];
+  const updated = catalog.map((entry) => {
+    if (entry.enabled === false) return entry;
+    const state = sourceState[entry.id];
+    if (!state) return entry;
+    const failures = state.consecutiveFailures || 0;
+    if (failures >= CONSECUTIVE_FAILURE_THRESHOLD) {
+      disabled.push(entry.id);
+      return { ...entry, enabled: false, autoDisabled: true };
+    }
+    return entry;
+  });
+  return { catalog: updated, disabled };
 }

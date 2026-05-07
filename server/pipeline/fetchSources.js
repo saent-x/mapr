@@ -15,7 +15,8 @@ import {
   mergeSourceState,
   selectSourcesForRun,
   summarizeSourceCatalog,
-  writeSourceState
+  writeSourceState,
+  autoDisableFailingSources
 } from '../sourceCatalog.js';
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitSummary } from '../circuitBreaker.js';
 import { fetchCatalogSource } from '../sourceFetcher.js';
@@ -222,6 +223,20 @@ export async function fetchRssNewsDirect({ force = false, catalog, sourceState: 
   articles.sort((left, right) => right.severity - left.severity);
   const updatedSourceState = mergeSourceState(catalog, inputSourceState, feeds, checkedAt);
   await writeSourceState(updatedSourceState);
+
+  // Auto-disable sources with 3+ consecutive failures
+  try {
+    const { catalog: autoDisabledCatalog, disabled } = autoDisableFailingSources(catalog, updatedSourceState);
+    if (disabled.length > 0) {
+      const { writeSourceCatalog } = await import('../sourceCatalog.js');
+      await writeSourceCatalog(autoDisabledCatalog);
+      console.log(`[ingest] Auto-disabled ${disabled.length} source(s) with 3+ consecutive failures: ${disabled.join(', ')}`);
+      // Update local catalog reference for the health summary
+      Object.assign(catalog, autoDisabledCatalog);
+    }
+  } catch (err) {
+    console.warn('[ingest] Auto-disable check failed:', err.message);
+  }
 
   return {
     articles,
