@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useNewsStore from '../stores/newsStore.js';
 import useFilterStore from '../stores/filterStore.js';
@@ -426,15 +426,16 @@ export default function EntityExplorerPage() {
               <div style={{ borderTop: '1px solid var(--line)', padding: '12px 4px' }}>
                 <div className="micro" style={{ marginBottom: 8 }}>MENTION HISTORY · {allRelatedEvents.length}</div>
                 {visibleEvents.map((ev) => (
-                  <div
+                  <Link
                     key={ev.id}
-                    style={{ padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-1)' }}
+                    to={`/event/${ev.id}`}
+                    style={{ display: 'block', padding: '8px 0', borderBottom: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-1)', textDecoration: 'none' }}
                   >
                     <div style={{ color: 'var(--ink-0)' }}>{ev.title}</div>
                     <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.08em' }}>
                       {ev.isoA2 || '—'} · SEV {((ev.severity ?? 0) / 10).toFixed(1)}
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 {visibleEvents.length < allRelatedEvents.length && (
                   <button type="button" className="btn sm" onClick={showMoreEvents} style={{ marginTop: 8, width: '100%' }}>
@@ -515,15 +516,16 @@ export default function EntityExplorerPage() {
               <div style={{ borderTop: '1px solid var(--line)', padding: '12px 20px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 <div className="micro" style={{ marginBottom: 8 }}>{t('entities.mentionHistory') || 'MENTION HISTORY'} · {allRelatedEvents.length}</div>
                 {visibleEvents.map((ev) => (
-                  <div
+                  <Link
                     key={ev.id}
-                    style={{ padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 11, color: 'var(--ink-1)' }}
+                    to={`/event/${ev.id}`}
+                    style={{ display: 'block', padding: '6px 0', borderBottom: '1px solid var(--line)', fontSize: 11, color: 'var(--ink-1)', textDecoration: 'none' }}
                   >
                     <div style={{ color: 'var(--ink-0)' }}>{ev.title}</div>
                     <div className="mono" style={{ color: 'var(--ink-2)', fontSize: 10, letterSpacing: '0.08em' }}>
                       {ev.isoA2 || '—'} · SEV {((ev.severity ?? 0) / 10).toFixed(1)}
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 {visibleEvents.length < allRelatedEvents.length && (
                   <button type="button" className="btn sm" onClick={showMoreEvents} style={{ marginTop: 8, width: '100%' }}>

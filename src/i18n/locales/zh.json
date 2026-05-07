@@ -815,5 +815,29 @@
   },
   "nav": {
     "billing": "账单"
+  },
+  "eventDetail": {
+    "back": "返回",
+    "viewDetail": "查看事件详情",
+    "notFound": "未找到事件",
+    "notFoundHint": "您查找的事件可能已被移除或ID无效。",
+    "backToMap": "返回地图",
+    "source": "来源",
+    "openArticle": "打开文章",
+    "published": "发布时间",
+    "firstSeen": "首次出现",
+    "region": "地区",
+    "confidence": "置信度",
+    "sourceReliability": "来源可靠性",
+    "sources": "来源",
+    "independent": "独立",
+    "precision": "精度",
+    "supportingArticles": "支持文章",
+    "entities": "实体",
+    "locations": "地点",
+    "organizations": "组织",
+    "people": "人物",
+    "relatedEvents": "相关事件",
+    "noRelatedEvents": "未找到相关事件"
   }
 }

@@ -107,7 +107,7 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
   const handleNavigateToEvent = useCallback(() => {
     if (!selectedEvent) return;
     if (selectedEvent.id) {
-      navigate(`/?event=${selectedEvent.id}`);
+      navigate(`/event/${selectedEvent.id}`);
     }
   }, [selectedEvent, navigate]);
 

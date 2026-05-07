@@ -946,5 +946,29 @@
         "comingSoon": "Coming soon — contact sales"
       }
     }
+  },
+  "eventDetail": {
+    "back": "Back",
+    "viewDetail": "View event detail",
+    "notFound": "EVENT NOT FOUND",
+    "notFoundHint": "The event you are looking for may have been removed or the ID is invalid.",
+    "backToMap": "Back to Map",
+    "source": "Source",
+    "openArticle": "Open Article",
+    "published": "Published",
+    "firstSeen": "First Seen",
+    "region": "Region",
+    "confidence": "Confidence",
+    "sourceReliability": "Source Reliability",
+    "sources": "Sources",
+    "independent": "independent",
+    "precision": "Precision",
+    "supportingArticles": "Supporting Articles",
+    "entities": "Entities",
+    "locations": "Locations",
+    "organizations": "Organizations",
+    "people": "People",
+    "relatedEvents": "Related Events",
+    "noRelatedEvents": "No related events found"
   }
 }

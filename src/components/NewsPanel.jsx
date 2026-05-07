@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { ExternalLink, ChevronDown, ChevronUp, Maximize2, FileText } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
 import useUIStore from '../stores/uiStore.js';
@@ -283,6 +284,17 @@ export function ArticleDetail({ story }) {
           </ul>
         </div>
       )}
+
+      <div className="news-card-source-block">
+        <Link
+          to={`/event/${story.id}`}
+          className="btn primary sm"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+        >
+          <Maximize2 size={11} aria-hidden />
+          VIEW FULL DETAIL
+        </Link>
+      </div>
     </>
   );
 }
@@ -305,6 +317,7 @@ const NewsPanel = ({
   variant,
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isMobile } = useBreakpoint();
   const [expandedId, setExpandedId] = useState(null);
   const items = (news && news.length > 0) ? news : allEvents;
@@ -384,6 +397,18 @@ const NewsPanel = ({
                 />
               )}
               <BookmarkButton story={story} className="news-bookmark-btn" />
+              <button
+                type="button"
+                className="news-detail-link-btn"
+                title={t('eventDetail.viewDetail', 'View event detail')}
+                aria-label={t('eventDetail.viewDetail', 'View event detail')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/event/${story.id}`);
+                }}
+              >
+                <Maximize2 size={12} aria-hidden />
+              </button>
               <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
               <span>·</span>
               <span>{ago(story.firstSeenAt || story.publishedAt)}</span>

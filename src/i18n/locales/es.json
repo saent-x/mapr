@@ -816,5 +816,29 @@
   },
   "nav": {
     "billing": "Facturación"
+  },
+  "eventDetail": {
+    "back": "Volver",
+    "viewDetail": "Ver detalle del evento",
+    "notFound": "EVENTO NO ENCONTRADO",
+    "notFoundHint": "El evento que buscas puede haber sido eliminado o el ID no es válido.",
+    "backToMap": "Volver al mapa",
+    "source": "Fuente",
+    "openArticle": "Abrir artículo",
+    "published": "Publicado",
+    "firstSeen": "Visto por primera vez",
+    "region": "Región",
+    "confidence": "Confianza",
+    "sourceReliability": "Fiabilidad de la fuente",
+    "sources": "Fuentes",
+    "independent": "independiente",
+    "precision": "Precisión",
+    "supportingArticles": "Artículos de apoyo",
+    "entities": "Entidades",
+    "locations": "Ubicaciones",
+    "organizations": "Organizaciones",
+    "people": "Personas",
+    "relatedEvents": "Eventos relacionados",
+    "noRelatedEvents": "No se encontraron eventos relacionados"
   }
 }

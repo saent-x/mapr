@@ -24,6 +24,7 @@ const IntelPage = lazy(() => import('./pages/IntelPage.jsx'))
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const HistoricalQueriesPage = lazy(() => import('./pages/HistoricalQueriesPage.jsx'))
 const BillingPage = lazy(() => import('./pages/BillingPage.jsx'))
+const EventDetailPage = lazy(() => import('./pages/EventDetailPage.jsx'))
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -41,6 +42,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/entities" element={<Suspense fallback={<PageLoadingFallback />}><EntityExplorerPage /></Suspense>} />
           <Route path="/trends" element={<Suspense fallback={<PageLoadingFallback />}><TrendAnalysisPage /></Suspense>} />
           <Route path="/intel" element={<Suspense fallback={<PageLoadingFallback />}><IntelPage /></Suspense>} />
+          <Route path="/event/:id" element={<Suspense fallback={<PageLoadingFallback />}><EventDetailPage /></Suspense>} />
         </Route>
       </Routes>
     </BrowserRouter>

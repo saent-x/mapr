@@ -816,5 +816,29 @@
   },
   "nav": {
     "billing": "الفوترة"
+  },
+  "eventDetail": {
+    "back": "رجوع",
+    "viewDetail": "عرض تفاصيل الحدث",
+    "notFound": "الحدث غير موجود",
+    "notFoundHint": "ربما تمت إزالة الحدث الذي تبحث عنه أو أن المعرف غير صالح.",
+    "backToMap": "العودة إلى الخريطة",
+    "source": "المصدر",
+    "openArticle": "فتح المقال",
+    "published": "نُشر",
+    "firstSeen": "أول مشاهدة",
+    "region": "المنطقة",
+    "confidence": "الثقة",
+    "sourceReliability": "موثوقية المصدر",
+    "sources": "المصادر",
+    "independent": "مستقل",
+    "precision": "الدقة",
+    "supportingArticles": "المقالات الداعمة",
+    "entities": "الكيانات",
+    "locations": "المواقع",
+    "organizations": "المنظمات",
+    "people": "الأشخاص",
+    "relatedEvents": "الأحداث ذات الصلة",
+    "noRelatedEvents": "لم يتم العثور على أحداث ذات صلة"
   }
 }
