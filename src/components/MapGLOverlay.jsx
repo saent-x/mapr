@@ -16,6 +16,7 @@ const MapGLOverlay = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  perCountryReliability = {},
   velocitySpikes = [],
   trackingPoints = [],
   selectedRegion,
@@ -282,6 +283,7 @@ const MapGLOverlay = ({
         regionSeverities={regionSeverities}
         mapOverlay={mapOverlay}
         coverageStatusByIso={coverageStatusByIso}
+        perCountryReliability={perCountryReliability}
         selectedRegion={selectedRegion}
         drillIsos={drillIsos}
       />

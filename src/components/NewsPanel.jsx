@@ -8,6 +8,7 @@ import useBreakpoint from '../hooks/useBreakpoint.js';
 import BottomSheet from './ui/BottomSheet';
 import BookmarkButton from './BookmarkButton';
 import { getSourceHost } from '../utils/urlUtils';
+import { getReliabilityTier, getReliabilityMeta, getReliabilityLabel } from '../utils/credibilityMeta';
 
 function ago(ts) {
   if (!ts) return '—';
@@ -157,6 +158,30 @@ export function ArticleDetail({ story }) {
           <div className="news-card-detail-row">
             <dt>CONFIDENCE</dt>
             <dd>{confidence}%</dd>
+          </div>
+        )}
+        {story.sourceCredibility != null && (
+          <div className="news-card-detail-row">
+            <dt>SOURCE RELIABILITY</dt>
+            <dd>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: getReliabilityMeta(getReliabilityTier(story.sourceCredibility)).dotColor,
+                }} />
+                <span>{getReliabilityLabel(story.sourceCredibility)}</span>
+                <span style={{ color: 'var(--ink-2)' }}>
+                  ({Math.round(story.sourceCredibility * 100)}%)
+                </span>
+              </span>
+            </dd>
           </div>
         )}
         {typeof story.sourceCount === 'number' && (
@@ -347,6 +372,16 @@ const NewsPanel = ({
                 <span className="tag" style={{ color: lMeta.color, borderColor: lMeta.color }}>
                   {lMeta.label}
                 </span>
+              )}
+              {story.sourceCredibility != null && (
+                <span
+                  className="news-reliability-dot"
+                  style={{
+                    background: getReliabilityMeta(getReliabilityTier(story.sourceCredibility)).dotColor,
+                  }}
+                  title={`Source reliability: ${getReliabilityLabel(story.sourceCredibility)} (${Math.round(story.sourceCredibility * 100)}%)`}
+                  aria-label={`Source reliability: ${Math.round(story.sourceCredibility * 100)}%`}
+                />
               )}
               <BookmarkButton story={story} className="news-bookmark-btn" />
               <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>

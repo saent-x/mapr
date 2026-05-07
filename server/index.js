@@ -39,7 +39,7 @@ function serveStaticFile(response, filePath) {
   createReadStream(filePath).pipe(response);
 }
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
-import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes, readSnapshotHistory, readSnapshotTimestamps } from './storage.js';
+import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes, readSnapshotHistory, readSnapshotTimestamps, readSourceCredibilityScores } from './storage.js';
 import {
   getBriefing,
   getCoverageHistory,
@@ -379,6 +379,16 @@ const server = http.createServer(async (request, response) => {
       return withTimeout(() => runVercelHandler(sourceCatalogHandler, request, response, url));
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/source-reliability') {
+      try {
+        const scores = await readSourceCredibilityScores();
+        sendJson(response, 200, scores);
+      } catch (err) {
+        console.error('[api] source-reliability error:', err.message);
+        sendJson(response, 500, { error: 'Failed to read source reliability data' });
+      }
+      return;
+    }
     if (request.method === 'GET' && url.pathname === '/api/source-catalog/state') {
       sendJson(response, 200, getSourceCatalogStatus());
       return;

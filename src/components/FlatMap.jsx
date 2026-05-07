@@ -103,6 +103,7 @@ const FlatMap = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  perCountryReliability = {},
   velocitySpikes = [],
   trackingPoints = [],
   selectedRegion,
@@ -307,6 +308,7 @@ const FlatMap = ({
           regionSeverities={regionSeverities}
           mapOverlay={mapOverlay}
           coverageStatusByIso={coverageStatusByIso}
+          perCountryReliability={perCountryReliability}
           velocitySpikes={velocitySpikes}
           trackingPoints={trackingPoints}
           selectedRegion={selectedRegion}

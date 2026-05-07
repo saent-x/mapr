@@ -88,7 +88,18 @@
     "passwordRequired": "Admin Password Required",
     "enterPassword": "Enter admin password",
     "submit": "Submit",
-    "wrongPassword": "Incorrect password. Please try again."
+    "wrongPassword": "Incorrect password. Please try again.",
+    "sourceReliability": "Source Reliability",
+    "sourceReliabilityDesc": "Credibility scores based on corroboration history",
+    "noReliabilityData": "No reliability data yet. Scores build up as the pipeline processes events.",
+    "sourceName": "Source",
+    "credibilityScore": "Credibility",
+    "totalEvents": "Events",
+    "corroborated": "Corroborated",
+    "trend": "Trend",
+    "reliabilityHigh": "High",
+    "reliabilityMedium": "Medium",
+    "reliabilityLow": "Low"
   },
   "entities": {
     "title": "Entity Explorer",
@@ -270,7 +281,11 @@
     "low": "Low",
     "geoLow": "Low co-occurrence",
     "geoMedium": "Medium co-occurrence",
-    "geoHigh": "High co-occurrence"
+    "geoHigh": "High co-occurrence",
+    "reliability": "Source Reliability",
+    "reliabilityHigh": "High Reliability",
+    "reliabilityMedium": "Medium Reliability",
+    "reliabilityLow": "Low Reliability"
   },
   "coverageStatus": {
     "verified": "Verified",

@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import {
   Shield, RefreshCw, Activity, Database, AlertTriangle,
   CheckCircle, XCircle, MinusCircle, Clock, Search, Globe, Rss,
-  FileText, ChevronDown, ChevronUp, Loader, Lock,
+  FileText, ChevronDown, ChevronUp, Loader, Lock, ShieldCheck,
+  TrendingUp, TrendingDown, Minus,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
@@ -188,6 +189,9 @@ function AdminDashboard() {
   const { t } = useTranslation();
   const [catalogData, setCatalogData] = useState(null);
   const [healthData, setHealthData] = useState(null);
+  const [reliabilityData, setReliabilityData] = useState(null);
+  const [reliabilitySortCol, setReliabilitySortCol] = useState('score');
+  const [reliabilitySortDir, setReliabilitySortDir] = useState('desc');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -202,15 +206,21 @@ function AdminDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [catalogRes, healthRes] = await Promise.all([
+      const [catalogRes, healthRes, reliabilityRes] = await Promise.all([
         fetch('/api/source-catalog/state'),
         fetch('/api/health'),
+        fetch('/api/source-reliability'),
       ]);
       if (!catalogRes.ok) throw new Error(`Catalog: HTTP ${catalogRes.status}`);
       if (!healthRes.ok) throw new Error(`Health: HTTP ${healthRes.status}`);
-      const [catalog, health] = await Promise.all([catalogRes.json(), healthRes.json()]);
+      const [catalog, health, reliability] = await Promise.all([
+        catalogRes.json(),
+        healthRes.json(),
+        reliabilityRes.ok ? reliabilityRes.json() : null,
+      ]);
       setCatalogData(catalog);
       setHealthData(health);
+      if (reliability) setReliabilityData(reliability);
       setLastRefresh(new Date());
     } catch (err) {
       setError(err.message);
@@ -546,6 +556,118 @@ function AdminDashboard() {
             {filteredFeeds.length} / {mergedFeeds.length} sources
           </span>
         </div>
+      </Section>
+
+      {/* Source Reliability Table */}
+      <Section title={t('admin.sourceReliability')} subtitle={t('admin.sourceReliabilityDesc')} icon={ShieldCheck} defaultOpen={true}>
+        {!reliabilityData || reliabilityData.length === 0 ? (
+          <p className="admin-no-sources">{t('admin.noReliabilityData')}</p>
+        ) : (() => {
+          const sortedReliability = [...reliabilityData].sort((a, b) => {
+            let cmp = 0;
+            switch (reliabilitySortCol) {
+              case 'sourceKey': cmp = (a.sourceKey || '').localeCompare(b.sourceKey || ''); break;
+              case 'score': cmp = (a.score || 0) - (b.score || 0); break;
+              case 'totalEvents': cmp = (a.totalEvents || 0) - (b.totalEvents || 0); break;
+              case 'corroboratedEvents': cmp = (a.corroboratedEvents || 0) - (b.corroboratedEvents || 0); break;
+              case 'lastUpdatedAt': cmp = new Date(a.lastUpdatedAt || 0) - new Date(b.lastUpdatedAt || 0); break;
+              default: break;
+            }
+            return reliabilitySortDir === 'desc' ? -cmp : cmp;
+          });
+
+          const handleReliabilitySort = (col) => {
+            setReliabilitySortCol((prev) => {
+              if (prev === col) { setReliabilitySortDir((d) => d === 'asc' ? 'desc' : 'asc'); return col; }
+              setReliabilitySortDir('desc');
+              return col;
+            });
+          };
+
+          const ReliabilitySortIcon = ({ col }) => {
+            if (reliabilitySortCol !== col) return null;
+            return reliabilitySortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />;
+          };
+
+          const getScoreColor = (score) => {
+            if (score >= 0.7) return 'var(--sev-green)';
+            if (score >= 0.4) return 'var(--sev-amber)';
+            return 'var(--sev-red)';
+          };
+
+          const getScoreLabel = (score) => {
+            if (score >= 0.7) return t('admin.reliabilityHigh');
+            if (score >= 0.4) return t('admin.reliabilityMedium');
+            return t('admin.reliabilityLow');
+          };
+
+          const getTrendIcon = (score) => {
+            if (score >= 0.7) return <TrendingUp size={12} color="var(--sev-green)" />;
+            if (score >= 0.4) return <Minus size={12} color="var(--sev-amber)" />;
+            return <TrendingDown size={12} color="var(--sev-red)" />;
+          };
+
+          return (
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th className="admin-th admin-th-sortable" onClick={() => handleReliabilitySort('sourceKey')}>
+                      {t('admin.sourceName')} <ReliabilitySortIcon col="sourceKey" />
+                    </th>
+                    <th className="admin-th admin-th-sortable admin-th-right" onClick={() => handleReliabilitySort('score')}>
+                      {t('admin.credibilityScore')} <ReliabilitySortIcon col="score" />
+                    </th>
+                    <th className="admin-th admin-th-sortable admin-th-right" onClick={() => handleReliabilitySort('totalEvents')}>
+                      {t('admin.totalEvents')} <ReliabilitySortIcon col="totalEvents" />
+                    </th>
+                    <th className="admin-th admin-th-sortable admin-th-right" onClick={() => handleReliabilitySort('corroboratedEvents')}>
+                      {t('admin.corroborated')} <ReliabilitySortIcon col="corroboratedEvents" />
+                    </th>
+                    <th className="admin-th admin-th-sortable" onClick={() => handleReliabilitySort('lastUpdatedAt')}>
+                      {t('admin.lastChecked')} <ReliabilitySortIcon col="lastUpdatedAt" />
+                    </th>
+                    <th className="admin-th">{t('admin.trend')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedReliability.map((entry) => (
+                    <tr key={entry.sourceKey} className="admin-tr">
+                      <td className="admin-td admin-td-name" title={entry.sourceKey}>
+                        {entry.sourceKey.replace(/-/g, ' ').toUpperCase()}
+                      </td>
+                      <td className="admin-td admin-td-right">
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          color: getScoreColor(entry.score),
+                          fontWeight: 600,
+                        }}>
+                          <span style={{
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: getScoreColor(entry.score),
+                          }} />
+                          {Math.round(entry.score * 100)}%
+                          <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 400 }}>
+                            ({getScoreLabel(entry.score)})
+                          </span>
+                        </span>
+                      </td>
+                      <td className="admin-td admin-td-right">{entry.totalEvents}</td>
+                      <td className="admin-td admin-td-right">{entry.corroboratedEvents}</td>
+                      <td className="admin-td admin-td-time">{formatTime(entry.lastUpdatedAt) || t('admin.never')}</td>
+                      <td className="admin-td">{getTrendIcon(entry.score)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()}
       </Section>
     </div>
   );

@@ -3,6 +3,7 @@ import { useMap } from '@/components/ui/map';
 import countriesUrl from '../assets/ne_110m_admin_0_countries.geojson?url';
 import { getSeverityMeta } from '../utils/mockData';
 import { getCoverageMeta } from '../utils/coverageMeta';
+import { getReliabilityMeta } from '../utils/credibilityMeta';
 import { severityToColor, getIso } from './MapConstants';
 
 /* ──────────────────────────── constants ──────────────────────────── */
@@ -15,6 +16,7 @@ const MapCountries = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  perCountryReliability = {},
   selectedRegion,
   drillIsos = null,
 }) => {
@@ -48,6 +50,33 @@ const MapCountries = ({
 
   /* ── country fill paint ── */
   const countryFillPaint = useMemo(() => {
+    if (mapOverlay === 'reliability') {
+      const matchEntries = [];
+      for (const [iso, entry] of Object.entries(perCountryReliability)) {
+        const meta = getReliabilityMeta(entry.tier || 'unknown');
+        matchEntries.push(iso, meta.accent);
+      }
+      const colorExpr = matchEntries.length > 0
+        ? ['match', ['get', '_iso'], ...matchEntries, 'rgba(255,255,255,0.02)']
+        : 'rgba(255,255,255,0.02)';
+
+      return {
+        'fill-color': colorExpr,
+        'fill-opacity': [
+          'case',
+          ...(drillIsos ? [
+            ['!', ['in', ['get', '_iso'], ['literal', [...drillIsos]]]],
+            0.015,
+          ] : []),
+          ['boolean', ['feature-state', 'selected'], false],
+          0.42,
+          ['boolean', ['feature-state', 'hover'], false],
+          0.3,
+          0.15,
+        ],
+      };
+    }
+
     if (mapOverlay === 'coverage') {
       const matchEntries = [];
       for (const [iso, entry] of Object.entries(coverageStatusByIso)) {

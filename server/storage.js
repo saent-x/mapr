@@ -795,6 +795,57 @@ export async function updateSourceCredibility(sourceKey, wasCorroborated) {
   `, [sourceKey, inc]);
 }
 
+/**
+ * Read all source credibility records.
+ * Returns an array of { sourceKey, totalEvents, corroboratedEvents, lastUpdatedAt, score }.
+ * Score is corroboratedEvents / totalEvents, clamped to [0,1].
+ */
+export async function readSourceCredibilityScores() {
+  const db = await ensureDatabase();
+  const { rows } = await db.query(`
+    SELECT
+      "sourceKey",
+      "totalEvents",
+      "corroboratedEvents",
+      "lastUpdatedAt"
+    FROM source_credibility
+    ORDER BY "totalEvents" DESC
+  `);
+  return rows.map(row => ({
+    sourceKey: row.sourceKey,
+    totalEvents: parseInt(row.totalEvents, 10) || 0,
+    corroboratedEvents: parseInt(row.corroboratedEvents, 10) || 0,
+    lastUpdatedAt: row.lastUpdatedAt || null,
+    score: row.totalEvents > 0
+      ? Math.round((parseInt(row.corroboratedEvents, 10) / parseInt(row.totalEvents, 10)) * 100) / 100
+      : 0
+  }));
+}
+
+/**
+ * Read credibility score for a single source.
+ * Returns { score, totalEvents, corroboratedEvents } or null if not found.
+ */
+export async function readSourceCredibilityByKey(sourceKey) {
+  const db = await ensureDatabase();
+  const { rows } = await db.query(
+    'SELECT "sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt" FROM source_credibility WHERE "sourceKey" = $1',
+    [sourceKey]
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  const total = parseInt(row.totalEvents, 10) || 0;
+  return {
+    sourceKey: row.sourceKey,
+    totalEvents: total,
+    corroboratedEvents: parseInt(row.corroboratedEvents, 10) || 0,
+    lastUpdatedAt: row.lastUpdatedAt || null,
+    score: total > 0
+      ? Math.round((parseInt(row.corroboratedEvents, 10) / total) * 100) / 100
+      : 0
+  };
+}
+
 // ── Velocity History ─────────────────────────────────────────
 
 export async function upsertVelocityBucket(iso, bucketAt, articleCount) {

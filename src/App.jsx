@@ -27,9 +27,11 @@ import useBriefingStream from './hooks/useBriefingStream';
 import useTrackingOverlayData from './hooks/useTrackingOverlayData';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
+import { getReliabilityMeta, computePerCountryReliability } from './utils/credibilityMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
 import { buildSourceCoverageAudit } from './utils/sourceCoverage';
 import { sortStories, storyMatchesFilters } from './utils/storyFilters';
+import { getSourceNetworkKey } from './utils/sourceMetadata';
 import { getRelatedEvents } from './utils/entityGraph';
 import { isoToCountry } from './utils/geocoder';
 import { generateLifecycleMessages } from './utils/lifecycleMessages';
@@ -204,6 +206,57 @@ function App() {
   );
   const sourceCoverageAudit = useMemo(() => buildSourceCoverageAudit(coverageDiagnostics), [coverageDiagnostics]);
   const coverageStatusByIso = coverageDiagnostics.byIso;
+
+  /* ── Source reliability ── */
+  const [sourceCredibilityMap, setSourceCredibilityMap] = useState({});
+
+  const fetchSourceCredibility = useCallback(async () => {
+    try {
+      const res = await fetch('/api/source-reliability');
+      if (!res.ok) return;
+      const scores = await res.json();
+      const map = {};
+      for (const entry of scores) {
+        if (entry.sourceKey) {
+          map[entry.sourceKey] = { score: entry.score, totalEvents: entry.totalEvents, corroboratedEvents: entry.corroboratedEvents };
+        }
+      }
+      setSourceCredibilityMap(map);
+    } catch {
+      // Silently ignore — reliability overlay is non-critical
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSourceCredibility();
+    const interval = setInterval(fetchSourceCredibility, 120_000); // every 2 min
+    return () => clearInterval(interval);
+  }, [fetchSourceCredibility]);
+
+  // Enrich articles with source credibility score for display
+  const activeNewsWithCredibility = useMemo(() => {
+    if (Object.keys(sourceCredibilityMap).length === 0) return activeNews;
+    return activeNews.map(article => {
+      const sourceKey = getSourceNetworkKey({ source: article.source, url: article.url });
+      const cred = sourceCredibilityMap[sourceKey];
+      return cred ? { ...article, sourceCredibility: cred.score } : article;
+    });
+  }, [activeNews, sourceCredibilityMap]);
+
+  // Enrich map news list with source credibility score
+  const enrichedMapNews = useMemo(() => {
+    if (Object.keys(sourceCredibilityMap).length === 0) return mapNewsList;
+    return mapNewsList.map(article => {
+      const sourceKey = getSourceNetworkKey({ source: article.source, url: article.url });
+      const cred = sourceCredibilityMap[sourceKey];
+      return cred ? { ...article, sourceCredibility: cred.score } : article;
+    });
+  }, [mapNewsList, sourceCredibilityMap]);
+
+  const perCountryReliability = useMemo(() =>
+    computePerCountryReliability(enrichedMapNews, sourceCredibilityMap),
+    [enrichedMapNews, sourceCredibilityMap]
+  );
 
   const silenceEntries = useMemo(() => computeSilenceEntries({
     articles: activeNews,
@@ -382,10 +435,11 @@ function App() {
           <MapErrorBoundary mapMode={mapMode} onFallbackToFlat={handleGlobeFallback}>
             {mapMode === 'globe' ? (
               <Globe
-                newsList={mapNewsList}
+                newsList={enrichedMapNews}
                 regionSeverities={mapRegionSeverities}
                 mapOverlay={mapOverlay}
                 coverageStatusByIso={coverageStatusByIso}
+                perCountryReliability={perCountryReliability}
                 velocitySpikes={velocitySpikes}
                 trackingPoints={trackingPoints}
                 selectedRegion={selectedRegion}
@@ -396,10 +450,11 @@ function App() {
               />
             ) : (
               <FlatMap
-                newsList={mapNewsList}
+                newsList={enrichedMapNews}
                 regionSeverities={mapRegionSeverities}
                 mapOverlay={mapOverlay}
                 coverageStatusByIso={coverageStatusByIso}
+                perCountryReliability={perCountryReliability}
                 velocitySpikes={velocitySpikes}
                 trackingPoints={trackingPoints}
                 selectedRegion={selectedRegion}
@@ -537,8 +592,8 @@ function App() {
         regionBackfillStatus={panelBackfillStatus}
         regionSourcePlan={panelBackfillEntry?.sourcePlan || null}
         regionFeedChecks={panelBackfillEntry?.feedChecks || []}
-        news={panelNews.length > 0 ? panelNews : activeNews}
-        allEvents={activeNews}
+        news={panelNews.length > 0 ? panelNews : activeNewsWithCredibility}
+        allEvents={activeNewsWithCredibility}
         selectedStoryId={selectedStoryId}
         kbHighlightedStoryId={kbHighlightedStoryId}
         onStorySelect={handleStorySelect}
@@ -675,6 +730,17 @@ function App() {
                     ].map(({ key, color, label }) => (
                       <span key={key} className="legend-item">
                         <span className="legend-dot" style={{ background: color }} />
+                        {label}
+                      </span>
+                    ))
+                : mapOverlay === 'reliability'
+                  ? [
+                      { key: 'high', label: t('legend.reliabilityHigh'), accent: getReliabilityMeta('high').dotColor },
+                      { key: 'medium', label: t('legend.reliabilityMedium'), accent: getReliabilityMeta('medium').dotColor },
+                      { key: 'low', label: t('legend.reliabilityLow'), accent: getReliabilityMeta('low').dotColor },
+                    ].map(({ key, label, accent }) => (
+                      <span key={key} className="legend-item">
+                        <span className="legend-dot" style={{ background: accent }} />
                         {label}
                       </span>
                     ))

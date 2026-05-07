@@ -32,6 +32,7 @@ const Globe = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  perCountryReliability = {},
   velocitySpikes = [],
   trackingPoints = [],
   selectedRegion,
@@ -274,6 +275,7 @@ const Globe = ({
           regionSeverities={regionSeverities}
           mapOverlay={mapOverlay}
           coverageStatusByIso={coverageStatusByIso}
+          perCountryReliability={perCountryReliability}
           velocitySpikes={velocitySpikes}
           trackingPoints={trackingPoints}
           selectedRegion={selectedRegion}
