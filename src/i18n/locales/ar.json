@@ -124,7 +124,10 @@
     "noLocalFeedCatalog": "لا توجد مصادر محلية مهيأة لهذا البلد بعد",
     "noLocalFeedCatalogHint": "يعتمد Mapr على المصادر الإقليمية والرسمية والعالمية إلى أن تتم إضافة مصادر محلية.",
     "noFeedChecks": "لا توجد فحوصات موجهة بعد",
-    "feedCheckFailed": "فشل فحص المصدر"
+    "feedCheckFailed": "فشل فحص المصدر",
+    "loadingMore": "عرض {{shown}} من {{total}}…",
+    "showAll": "عرض الكل ({{count}})",
+    "showLess": "عرض أقل"
   },
   "legend": {
     "severity": "الخطورة",
@@ -171,7 +174,10 @@
     "noLocalFeeds": "لا توجد مصادر محلية"
   },
   "errors": {
-    "fallbackData": "استخدام بيانات احتياطية"
+    "fallbackData": "استخدام بيانات احتياطية",
+    "backendUnreachable": "الخادم غير متاح",
+    "fallbackActive": "عرض البيانات المخزنة. قد تكون بعض الميزات محدودة.",
+    "retryAction": "إعادة المحاولة"
   },
   "article": {
     "readFull": "قراءة المقال كاملاً",
@@ -327,7 +333,33 @@
     "noSeverityData": "لا توجد بيانات خطورة",
     "tabAriaLabel": "علامات تبويب الاتجاهات",
     "tabCharts": "الرسوم البيانية",
-    "tabCorrelation": "الارتباط"
+    "tabCorrelation": "الارتباط",
+    "title": "تحليل الاتجاهات",
+    "subtitle": "تتبع كيفية تغير حجم الأحداث الإخبارية عبر الزمن في مناطق مختلفة.",
+    "loading": "جارٍ تحميل بيانات الاتجاهات…",
+    "noData": "لا توجد بيانات اتجاهات. ستظهر البيانات بعد بضع دورات.",
+    "chartAriaLabel": "مخطط خطي يظهر أعداد الأحداث الإقليمية عبر الزمن",
+    "chartTitle": "حجم الأحداث حسب المنطقة",
+    "chartYLabel": "الأحداث لكل لقطة",
+    "activeRegions": "مناطق نشطة",
+    "spikes": "ارتفاعات السرعة",
+    "totalEvents": "إجمالي الأحداث",
+    "totalEventsHint": "أحداث إخبارية متعقبة عبر جميع المناطق",
+    "velocitySpikes": "ارتفاعات السرعة",
+    "velocitySpikesHint": "مناطق ذات ارتفاعات غير عادية في حجم الأحداث",
+    "dataPoints": "لقطات",
+    "dataPointsHint": "نقاط بيانات مجمعة عبر الزمن",
+    "activeRegionsHint": "دول لديها حدث واحد على الأقل",
+    "regions": "المناطق",
+    "selectTop10": "أفضل ١٠",
+    "deselectAll": "مسح الكل",
+    "velocitySpikesTitle": "شذوذ السرعة",
+    "severityTitle": "توزيع الخطورة",
+    "severityHint": "كيفية توزيع الأحداث حسب مستوى الخطورة",
+    "severityChartAriaLabel": "مخطط شريطي يظهر أعداد الأحداث حسب مستوى الخطورة",
+    "categoryTitle": "توزيع الفئات",
+    "categoryHint": "أعداد الأحداث مجمعة حسب فئة الموضوع",
+    "categoryChartAriaLabel": "مخطط شريطي يظهر أعداد الأحداث حسب الفئة"
   },
   "correlation": {
     "title": "الخط الزمني لارتباط الأحداث",
@@ -611,7 +643,25 @@
     "noPathFound": "لم يتم العثور على مسار",
     "hopCount": "{{count}} قفزة",
     "hopCount_plural": "{{count}} قفزات",
-    "nodesInPath": "عقد"
+    "nodesInPath": "عقد",
+    "clearFilter": "مسح التصفية",
+    "comingSoon": "قريباً",
+    "connectionsLabel": "اتصالات",
+    "entitiesLabel": "كيانات",
+    "filterActive": "مصفى حسب: {{name}}",
+    "loading": "جارٍ تحميل بيانات الكيانات…",
+    "location": "موقع",
+    "locations": "مواقع",
+    "mentions": "إشارات",
+    "noEntities": "لا توجد كيانات. حاول تحديث البيانات.",
+    "noRelatedEvents": "لا توجد أحداث ذات صلة",
+    "organization": "منظمة",
+    "organizations": "منظمات",
+    "people": "أشخاص",
+    "person": "شخص",
+    "placeholder": "تصور تفاعلي للعلاقات بين الكيانات يظهر الروابط بين الأشخاص والمنظمات والمواقع والأحداث.",
+    "relatedEvents": "أحداث",
+    "relatedEventsTitle": "أحداث ذات صلة"
   },
   "admin": {
     "title": "لوحة الإدارة",
@@ -714,7 +764,31 @@
     "exportSuccess": "تم تصدير الكتالوج.",
     "searchSourcesManage": "بحث في المصادر…",
     "noSourcesFound": "لا توجد مصادر.",
-    "sourcesTotal": "مصدر إجمالاً"
+    "sourcesTotal": "مصدر إجمالاً",
+    "aggregateStats": "إحصائيات مجمعة",
+    "autoRefresh": "تحديث تلقائي كل 60 ثانية",
+    "consecutiveFailures": "فشل متتالي",
+    "coverageGaps": "فجوات التغطية",
+    "coverageGapsDesc": "مناطق ذات تغطية مصادر غير كافية",
+    "enabledSources": "مفعلة",
+    "feedCount": "{{count}} خلاصات",
+    "globalSources": "عالمية",
+    "htmlSources": "كاشطات HTML",
+    "ingestionHealth": "صحة الابتلاع",
+    "ingestionHealthDesc": "حالة خط الأنابيب والنشاط الأخير",
+    "ingestionRisk": "خطر الابتلاع",
+    "lastAttempt": "آخر محاولة",
+    "lastSuccess": "آخر نجاح",
+    "localSources": "محلية",
+    "lowConfidence": "ثقة منخفضة",
+    "noFailures": "لا فشل",
+    "officialSources": "رسمية",
+    "pipelineStatus": "حالة خط الأنابيب",
+    "refreshInProgress": "التحديث قيد التقدم…",
+    "regionalSources": "إقليمية",
+    "showEmpty": "عرض الفارغة",
+    "showFailed": "عرض الفاشلة",
+    "sourceSparse": "مصادر قليلة"
   },
   "export": {
     "title": "تصدير الموجز",
@@ -819,7 +893,17 @@
     }
   },
   "nav": {
-    "billing": "الفوترة"
+    "billing": "الفوترة",
+    "admin": "الإدارة",
+    "ariaLabel": "التنقل الرئيسي",
+    "backToMap": "العودة للخريطة",
+    "collapse": "طي التنقل",
+    "entities": "الكيانات",
+    "expand": "توسيع التنقل",
+    "intel": "استخبارات",
+    "map": "الخريطة",
+    "region": "المنطقة",
+    "trends": "الاتجاهات"
   },
   "eventDetail": {
     "back": "رجوع",
@@ -844,5 +928,51 @@
     "people": "الأشخاص",
     "relatedEvents": "الأحداث ذات الصلة",
     "noRelatedEvents": "لم يتم العثور على أحداث ذات صلة"
+  },
+  "anomaly": {
+    "title": "كشف الشذوذ",
+    "spikes": "ارتفاعات",
+    "silences": "صمت",
+    "noAnomalies": "لم يتم اكتشاف شذوذ",
+    "velocitySpikes": "ارتفاعات السرعة",
+    "silenceDetection": "كشف الصمت",
+    "toggleLabel": "الشذوذ",
+    "level": {
+      "spike": "ارتفاع",
+      "elevated": "مرتفع"
+    },
+    "status": {
+      "anomalous-silence": "صمت غير طبيعي",
+      "blind-spot": "نقطة عمياء",
+      "limited-access": "وصول محدود"
+    }
+  },
+  "loading": {
+    "initialData": "جارٍ تحميل بيانات الاستخبارات…",
+    "map": "جارٍ تحميل الخريطة…",
+    "page": "جارٍ التحميل…"
+  },
+  "narrative": {
+    "label": "السرد",
+    "title": "الجدول الزمني",
+    "firstReported": "أول إبلاغ",
+    "span": "المدى",
+    "sourceDiversity": "تنوع المصادر",
+    "crossRegional": "انتشار عبر المناطق",
+    "stageFirst": "الإبلاغ الأول",
+    "stageDeveloping": "قيد التطور",
+    "stageContinued": "تغطية مستمرة"
+  },
+  "timeline": {
+    "label": "الجدول الزمني",
+    "past": "منذ ٧ أيام",
+    "now": "الآن",
+    "lifecycle": {
+      "emerging": "ناشئ",
+      "developing": "قيد التطور",
+      "escalating": "متصاعد",
+      "stabilizing": "مستقر",
+      "resolved": "محلول"
+    }
   }
 }

@@ -124,7 +124,10 @@
     "noLocalFeedCatalog": "该国家目前还没有配置本地来源",
     "noLocalFeedCatalogHint": "在补充本地来源之前，Mapr 会退回到区域、官方和全球来源。",
     "noFeedChecks": "暂无定向来源检查",
-    "feedCheckFailed": "来源检查失败"
+    "feedCheckFailed": "来源检查失败",
+    "loadingMore": "显示 {{shown}}/{{total}}…",
+    "showAll": "显示全部 ({{count}})",
+    "showLess": "显示更少"
   },
   "legend": {
     "severity": "严重性",
@@ -171,7 +174,10 @@
     "noLocalFeeds": "无本地来源"
   },
   "errors": {
-    "fallbackData": "正在使用备用数据"
+    "fallbackData": "正在使用备用数据",
+    "backendUnreachable": "后端无法访问",
+    "fallbackActive": "显示缓存数据。部分功能可能受限。",
+    "retryAction": "重试"
   },
   "article": {
     "readFull": "阅读全文",
@@ -327,7 +333,33 @@
     "noSeverityData": "无严重性数据",
     "tabAriaLabel": "趋势标签",
     "tabCharts": "图表",
-    "tabCorrelation": "相关性"
+    "tabCorrelation": "相关性",
+    "title": "趋势分析",
+    "subtitle": "跟踪不同地区新闻事件量随时间的变化。每条线代表一个国家。",
+    "loading": "加载趋势数据…",
+    "noData": "暂无趋势数据。数据将在几次摄取周期后填充。",
+    "chartAriaLabel": "显示区域事件计数随时间变化的折线图",
+    "chartTitle": "各地区事件量",
+    "chartYLabel": "每次快照的事件数",
+    "activeRegions": "活跃地区",
+    "spikes": "速度峰值",
+    "totalEvents": "事件总数",
+    "totalEventsHint": "所有地区追踪的新闻事件",
+    "velocitySpikes": "速度峰值",
+    "velocitySpikesHint": "事件量异常激增的地区",
+    "dataPoints": "快照",
+    "dataPointsHint": "随时间收集的数据点",
+    "activeRegionsHint": "至少有一个事件的国家",
+    "regions": "地区",
+    "selectTop10": "前10名",
+    "deselectAll": "清除全部",
+    "velocitySpikesTitle": "速度异常",
+    "severityTitle": "严重性分布",
+    "severityHint": "事件按严重性级别分布",
+    "severityChartAriaLabel": "按严重性级别显示事件计数的条形图",
+    "categoryTitle": "类别分布",
+    "categoryHint": "按主题类别分组的事件计数",
+    "categoryChartAriaLabel": "按类别显示事件计数的条形图"
   },
   "correlation": {
     "title": "事件相关性时间线",
@@ -610,7 +642,26 @@
     "pathMode": "最短路径",
     "noPathFound": "未找到路径",
     "hopCount": "{{count}} 跳",
-    "nodesInPath": "节点"
+    "nodesInPath": "节点",
+    "clearFilter": "清除筛选",
+    "comingSoon": "即将推出",
+    "connectionsLabel": "连接",
+    "entitiesLabel": "实体",
+    "filterActive": "筛选：{{name}}",
+    "loading": "加载实体数据…",
+    "location": "地点",
+    "locations": "地点",
+    "mentions": "提及",
+    "noEntities": "未找到实体。请尝试刷新数据。",
+    "noRelatedEvents": "无相关事件",
+    "organization": "组织",
+    "organizations": "组织",
+    "people": "人物",
+    "person": "人物",
+    "placeholder": "交互式实体关系可视化，展示人物、组织、地点和事件之间的连接。",
+    "relatedEvents": "事件",
+    "relatedEventsTitle": "相关事件",
+    "hopCount_plural": "{{count}} 跳"
   },
   "admin": {
     "title": "管理面板",
@@ -713,7 +764,31 @@
     "exportSuccess": "源目录已导出。",
     "searchSourcesManage": "搜索源…",
     "noSourcesFound": "未找到源。",
-    "sourcesTotal": "个源总计"
+    "sourcesTotal": "个源总计",
+    "aggregateStats": "汇总统计",
+    "autoRefresh": "每60秒自动刷新",
+    "consecutiveFailures": "连续失败",
+    "coverageGaps": "覆盖缺口",
+    "coverageGapsDesc": "来源覆盖不足的地区",
+    "enabledSources": "已启用",
+    "feedCount": "{{count}} 个源",
+    "globalSources": "全球",
+    "htmlSources": "HTML抓取器",
+    "ingestionHealth": "摄取健康",
+    "ingestionHealthDesc": "管道状态和最近活动",
+    "ingestionRisk": "摄取风险",
+    "lastAttempt": "上次尝试",
+    "lastSuccess": "上次成功",
+    "localSources": "本地",
+    "lowConfidence": "低置信度",
+    "noFailures": "无失败",
+    "officialSources": "官方",
+    "pipelineStatus": "管道状态",
+    "refreshInProgress": "刷新进行中…",
+    "regionalSources": "区域",
+    "showEmpty": "显示空源",
+    "showFailed": "显示失败源",
+    "sourceSparse": "来源稀疏"
   },
   "export": {
     "title": "导出简报",
@@ -818,7 +893,17 @@
     }
   },
   "nav": {
-    "billing": "账单"
+    "billing": "账单",
+    "admin": "管理",
+    "ariaLabel": "主导航",
+    "backToMap": "返回地图",
+    "collapse": "折叠导航",
+    "entities": "实体",
+    "expand": "展开导航",
+    "intel": "情报",
+    "map": "地图",
+    "region": "地区",
+    "trends": "趋势"
   },
   "eventDetail": {
     "back": "返回",
@@ -843,5 +928,51 @@
     "people": "人物",
     "relatedEvents": "相关事件",
     "noRelatedEvents": "未找到相关事件"
+  },
+  "anomaly": {
+    "title": "异常检测",
+    "spikes": "峰值",
+    "silences": "静默",
+    "noAnomalies": "未检测到异常",
+    "velocitySpikes": "速度峰值",
+    "silenceDetection": "静默检测",
+    "toggleLabel": "异常",
+    "level": {
+      "spike": "峰值",
+      "elevated": "升高"
+    },
+    "status": {
+      "anomalous-silence": "异常静默",
+      "blind-spot": "盲点",
+      "limited-access": "访问受限"
+    }
+  },
+  "loading": {
+    "initialData": "加载情报数据…",
+    "map": "加载地图…",
+    "page": "加载中…"
+  },
+  "narrative": {
+    "label": "叙述",
+    "title": "时间线",
+    "firstReported": "首次报告",
+    "span": "跨度",
+    "sourceDiversity": "来源多样性",
+    "crossRegional": "跨区域传播",
+    "stageFirst": "首次报告",
+    "stageDeveloping": "发展中",
+    "stageContinued": "持续报道"
+  },
+  "timeline": {
+    "label": "事件时间线",
+    "past": "7天前",
+    "now": "现在",
+    "lifecycle": {
+      "emerging": "新兴",
+      "developing": "发展中",
+      "escalating": "升级中",
+      "stabilizing": "稳定中",
+      "resolved": "已解决"
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { loadLastSnapshot } from '../services/eventCache.js';
+import { formatDate } from '../utils/formatDate.js';
 
 /**
  * Hook that tracks browser online/offline status and the last-updated
@@ -111,7 +112,12 @@ function formatRelativeTime(isoTimestamp) {
     return `${days} day${days !== 1 ? 's' : ''} ago`;
   }
 
-  return new Date(isoTimestamp).toLocaleDateString();
+  try {
+    // Use the i18n-aware formatter that respects the selected language
+    return formatDate(isoTimestamp);
+  } catch {
+    return new Date(isoTimestamp).toLocaleDateString();
+  }
 }
 
 export { formatRelativeTime };

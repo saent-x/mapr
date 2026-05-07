@@ -124,7 +124,10 @@
     "noLocalFeedCatalog": "Aún no hay fuentes locales configuradas para este país",
     "noLocalFeedCatalogHint": "Mapr recurre a fuentes regionales, oficiales y globales hasta que se añadan fuentes locales.",
     "noFeedChecks": "Aún no hay comprobaciones dirigidas",
-    "feedCheckFailed": "La comprobación de la fuente falló"
+    "feedCheckFailed": "La comprobación de la fuente falló",
+    "loadingMore": "Mostrando {{shown}} de {{total}}…",
+    "showAll": "Mostrar todo ({{count}})",
+    "showLess": "Mostrar menos"
   },
   "legend": {
     "severity": "Severidad",
@@ -171,7 +174,10 @@
     "noLocalFeeds": "Sin fuentes locales"
   },
   "errors": {
-    "fallbackData": "Usando datos de respaldo"
+    "fallbackData": "Usando datos de respaldo",
+    "backendUnreachable": "Backend inaccesible",
+    "fallbackActive": "Mostrando datos en caché. Algunas funciones pueden estar limitadas.",
+    "retryAction": "Reintentar"
   },
   "article": {
     "readFull": "Leer artículo completo",
@@ -327,7 +333,33 @@
     "noSeverityData": "SIN DATOS DE SEVERIDAD",
     "tabAriaLabel": "Pestañas de tendencias",
     "tabCharts": "Gráficos",
-    "tabCorrelation": "Correlación"
+    "tabCorrelation": "Correlación",
+    "title": "Análisis de Tendencias",
+    "subtitle": "Seguimiento de cómo cambia el volumen de eventos noticiosos a lo largo del tiempo en diferentes regiones.",
+    "loading": "Cargando datos de tendencias…",
+    "noData": "Sin datos de tendencias. Los datos aparecerán tras algunos ciclos de ingesta.",
+    "chartAriaLabel": "Gráfico de líneas mostrando conteos de eventos regionales en el tiempo",
+    "chartTitle": "Volumen de Eventos por Región",
+    "chartYLabel": "Eventos por instantánea",
+    "activeRegions": "regiones activas",
+    "spikes": "picos de velocidad",
+    "totalEvents": "Total de Eventos",
+    "totalEventsHint": "Eventos noticiosos rastreados en todas las regiones",
+    "velocitySpikes": "Picos de Velocidad",
+    "velocitySpikesHint": "Regiones con aumentos inusuales en volumen de eventos",
+    "dataPoints": "Instantáneas",
+    "dataPointsHint": "Puntos de datos recolectados en el tiempo",
+    "activeRegionsHint": "Países con al menos un evento",
+    "regions": "Regiones",
+    "selectTop10": "Top 10",
+    "deselectAll": "Limpiar todo",
+    "velocitySpikesTitle": "Anomalías de Velocidad",
+    "severityTitle": "Distribución de Severidad",
+    "severityHint": "Cómo se desglosan los eventos por nivel de severidad",
+    "severityChartAriaLabel": "Gráfico de barras mostrando conteos de eventos por nivel de severidad",
+    "categoryTitle": "Desglose por Categoría",
+    "categoryHint": "Conteos de eventos agrupados por categoría temática",
+    "categoryChartAriaLabel": "Gráfico de barras mostrando conteos de eventos por categoría"
   },
   "correlation": {
     "title": "Línea de Tiempo de Correlación de Eventos",
@@ -611,7 +643,25 @@
     "noPathFound": "RUTA NO ENCONTRADA",
     "hopCount": "{{count}} SALTO",
     "hopCount_plural": "{{count}} SALTOS",
-    "nodesInPath": "NODOS"
+    "nodesInPath": "NODOS",
+    "clearFilter": "Limpiar filtro",
+    "comingSoon": "Próximamente",
+    "connectionsLabel": "conexiones",
+    "entitiesLabel": "entidades",
+    "filterActive": "Filtrado por: {{name}}",
+    "loading": "Cargando datos de entidades…",
+    "location": "Ubicación",
+    "locations": "Ubicaciones",
+    "mentions": "menciones",
+    "noEntities": "Sin entidades. Intente actualizar los datos.",
+    "noRelatedEvents": "Sin eventos relacionados",
+    "organization": "Organización",
+    "organizations": "Organizaciones",
+    "people": "Personas",
+    "person": "Persona",
+    "placeholder": "Visualización interactiva de relaciones entre entidades mostrando conexiones entre personas, organizaciones, ubicaciones y eventos.",
+    "relatedEvents": "eventos",
+    "relatedEventsTitle": "Eventos Relacionados"
   },
   "admin": {
     "title": "Panel de Administración",
@@ -714,7 +764,31 @@
     "exportSuccess": "Catálogo exportado.",
     "searchSourcesManage": "Buscar fuentes…",
     "noSourcesFound": "Sin fuentes.",
-    "sourcesTotal": "fuentes en total"
+    "sourcesTotal": "fuentes en total",
+    "aggregateStats": "Estadísticas Agregadas",
+    "autoRefresh": "Actualización automática cada 60s",
+    "consecutiveFailures": "Fallos Consecutivos",
+    "coverageGaps": "Brechas de Cobertura",
+    "coverageGapsDesc": "Regiones con cobertura de fuentes insuficiente",
+    "enabledSources": "Activas",
+    "feedCount": "{{count}} fuentes",
+    "globalSources": "Globales",
+    "htmlSources": "Raspadores HTML",
+    "ingestionHealth": "Salud de Ingesta",
+    "ingestionHealthDesc": "Estado del pipeline y actividad reciente",
+    "ingestionRisk": "Riesgo de Ingesta",
+    "lastAttempt": "Último Intento",
+    "lastSuccess": "Último Éxito",
+    "localSources": "Locales",
+    "lowConfidence": "Confianza Baja",
+    "noFailures": "Sin fallos",
+    "officialSources": "Oficiales",
+    "pipelineStatus": "Estado del Pipeline",
+    "refreshInProgress": "Actualización en progreso…",
+    "regionalSources": "Regionales",
+    "showEmpty": "Mostrar Vacías",
+    "showFailed": "Mostrar Fallidas",
+    "sourceSparse": "Fuentes Escasas"
   },
   "export": {
     "title": "Exportar Informe",
@@ -819,7 +893,17 @@
     }
   },
   "nav": {
-    "billing": "Facturación"
+    "billing": "Facturación",
+    "admin": "Admin",
+    "ariaLabel": "Navegación principal",
+    "backToMap": "Volver al mapa",
+    "collapse": "Contraer navegación",
+    "entities": "Entidades",
+    "expand": "Expandir navegación",
+    "intel": "Intel",
+    "map": "Mapa",
+    "region": "Región",
+    "trends": "Tendencias"
   },
   "eventDetail": {
     "back": "Volver",
@@ -844,5 +928,51 @@
     "people": "Personas",
     "relatedEvents": "Eventos relacionados",
     "noRelatedEvents": "No se encontraron eventos relacionados"
+  },
+  "anomaly": {
+    "title": "Detección de Anomalías",
+    "spikes": "picos",
+    "silences": "silencios",
+    "noAnomalies": "Sin anomalías detectadas",
+    "velocitySpikes": "Picos de Velocidad",
+    "silenceDetection": "Detección de Silencio",
+    "toggleLabel": "Anomalías",
+    "level": {
+      "spike": "Pico",
+      "elevated": "Elevado"
+    },
+    "status": {
+      "anomalous-silence": "Silencio Anómalo",
+      "blind-spot": "Punto Ciego",
+      "limited-access": "Acceso Limitado"
+    }
+  },
+  "loading": {
+    "initialData": "Cargando datos de inteligencia…",
+    "map": "Cargando mapa…",
+    "page": "Cargando…"
+  },
+  "narrative": {
+    "label": "Narrativa",
+    "title": "Línea de Tiempo",
+    "firstReported": "Primer informe",
+    "span": "Duración",
+    "sourceDiversity": "Diversidad de Fuentes",
+    "crossRegional": "Propagación Interregional",
+    "stageFirst": "Primer Informe",
+    "stageDeveloping": "En Desarrollo",
+    "stageContinued": "Cobertura Continua"
+  },
+  "timeline": {
+    "label": "Línea de tiempo",
+    "past": "hace 7d",
+    "now": "ahora",
+    "lifecycle": {
+      "emerging": "Emergente",
+      "developing": "En Desarrollo",
+      "escalating": "Escalando",
+      "stabilizing": "Estabilizando",
+      "resolved": "Resuelto"
+    }
   }
 }

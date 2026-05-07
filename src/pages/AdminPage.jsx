@@ -10,6 +10,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { getLocale } from '../utils/formatDate.js';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
 /* ── Status helpers ── */
@@ -593,7 +594,7 @@ function AdminDashboard() {
         </div>
         <div className="admin-header-right">
           {lastRefresh && (
-            <span className="admin-updated">{t('admin.lastUpdated', { time: lastRefresh.toLocaleTimeString() })}</span>
+            <span className="admin-updated">{t('admin.lastUpdated', { time: lastRefresh instanceof Date ? lastRefresh.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : new Date(lastRefresh).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })}</span>
           )}
           <button className="admin-refresh-btn" onClick={fetchData} disabled={loading} aria-label={t('admin.refresh')}>
             <RefreshCw size={14} className={loading ? 'admin-spinner' : ''} />

@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Play, Pause, SkipBack, SkipForward, Clock } from 'lucide-react';
+import { getLocale } from '../utils/formatDate.js';
 
 function formatTimestamp(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(getLocale(), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

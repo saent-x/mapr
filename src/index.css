@@ -6466,3 +6466,91 @@ a { color: inherit; text-decoration: none; }
     color: #555 !important;
   }
 }
+
+
+/* ================================================================
+   RTL OVERRIDES — Arabic (ar) language support
+   Applied when <html dir="rtl">
+   ================================================================ */
+
+[dir="rtl"] {
+  /* ── Map corner positions must swap horizontally ── */
+  .map-corner.tl {
+    left: auto;
+    right: 10px;
+  }
+
+  .map-corner.tr {
+    right: auto;
+    left: 10px;
+    text-align: left;
+  }
+
+  .map-corner.bl {
+    left: auto;
+    right: 10px;
+  }
+
+  .map-corner.br {
+    right: auto;
+    left: 50px;
+    text-align: left;
+  }
+
+  /* ── Sidebar/navigation swaps sides ── */
+  .layout-sidebar {
+    order: 1;
+  }
+
+  /* ── Text alignment overrides for RTL ── */
+  .admin-header-left,
+  .region-detail-page,
+  .trends-page {
+    text-align: right;
+  }
+
+  /* ── Header: status-right moves to left ── */
+  .status-right {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .header-overlays .micro {
+    margin-right: 0;
+    margin-left: 6px;
+  }
+
+  /* ── News panel chips ── */
+  .chip .ct {
+    margin-left: 0;
+    margin-right: 2px;
+  }
+
+  /* ── Button groups ── */
+  .btn-group > * + * {
+    margin-left: 0;
+    margin-right: 4px;
+  }
+
+  /* ── Forms: ensure inputs flow RTL ── */
+  input, textarea, select {
+    direction: rtl;
+    text-align: right;
+  }
+
+  /* ── Icons in buttons maintain LTR for lucide ── */
+  button svg,
+  a svg {
+    direction: ltr;
+  }
+
+  /* ── Ensure subscriptions / billing layouts work ── */
+  .subscription-tier-card {
+    text-align: right;
+  }
+
+  /* ── Dates displayed inline should flow RTL ── */
+  time, .datetime, .timestamp {
+    direction: rtl;
+  }
+}

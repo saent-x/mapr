@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { mergeAdminHealthPayloads } from '../utils/healthSummary.js';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import ShortcutHelp from '../components/ShortcutHelp.jsx';
+import { getLocale } from '../utils/formatDate.js';
 
 const STATUS_COLORS = {
   ok: '#00e5a0',
@@ -145,7 +146,7 @@ const HealthPage = () => {
         <div style={s.header}>
           <span style={s.headerTitle}>SYSTEM HEALTH</span>
           <div style={s.headerRight}>
-            {lastRefresh && <span style={s.dim}>Updated {lastRefresh.toLocaleTimeString()}</span>}
+            {lastRefresh && <span style={s.dim}>Updated {new Date(lastRefresh).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}
             <button onClick={fetchHealth} style={s.btnSmall} disabled={loading}>
               {loading ? 'LOADING...' : 'REFRESH'}
             </button>
