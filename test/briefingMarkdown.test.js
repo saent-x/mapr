@@ -89,6 +89,27 @@ test('generateBriefingMarkdown includes entity mentions when events have entitie
   assert.ok(md.includes('Russia'));
 });
 
+test('generateBriefingMarkdown includes entity mentions from bucketed entity objects', () => {
+  const events = [
+    {
+      id: 'bucketed-1',
+      title: 'Bucketed entity event',
+      severity: 75,
+      entities: {
+        people: [{ name: 'Jane Doe' }],
+        organizations: [{ name: 'NATO' }],
+        locations: [{ name: 'Brussels' }],
+      },
+    },
+  ];
+  const md = generateBriefingMarkdown(events, {});
+
+  assert.ok(md.includes('Jane Doe'));
+  assert.ok(md.includes('NATO'));
+  assert.ok(md.includes('Brussels'));
+  assert.ok(!md.includes('No named entities found'));
+});
+
 test('generateBriefingMarkdown includes coverage stats section', () => {
   const events = [
     { id: '1', title: 'A', severity: 50, isoA2: 'US', articleCount: 3 },

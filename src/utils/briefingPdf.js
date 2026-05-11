@@ -11,7 +11,7 @@
  */
 
 import { jsPDF } from 'jspdf';
-import { severityLabel, buildFilterSummary } from './briefingMarkdown.js';
+import { severityLabel, buildFilterSummary, extractEntityMentions } from './briefingMarkdown.js';
 
 const SEVERITY_TIERS = [
   { label: 'Critical', min: 85, color: [210, 87, 87] },
@@ -322,22 +322,7 @@ export async function generateBriefingPdf(events = [], filters = {}, options = {
     doc.text('Entity Mentions', margin, y);
     y += 8;
 
-    const entityMap = new Map();
-    for (const event of events) {
-      const entities = event.entities || event.enrichedEntities || [];
-      for (const entity of entities) {
-        const name = entity.name?.trim() || entity.text?.trim();
-        if (!name || name.length < 2) continue;
-        const key = `${name.toLowerCase()}::${entity.type || 'unknown'}`;
-        if (!entityMap.has(key)) {
-          entityMap.set(key, { name, type: entity.type || 'unknown', count: 0 });
-        }
-        entityMap.get(key).count++;
-      }
-    }
-    const sortedEntities = Array.from(entityMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 30);
+    const sortedEntities = extractEntityMentions(events).slice(0, 30);
 
     if (sortedEntities.length > 0) {
       const colWidthsE = [65, 25, 20];

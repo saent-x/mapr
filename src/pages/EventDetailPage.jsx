@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ExternalLink, MapPin } from 'lucide-react';
@@ -6,6 +6,7 @@ import useNewsStore from '../stores/newsStore';
 import { getRelatedEvents } from '../utils/entityGraph';
 import { getSourceHost } from '../utils/urlUtils';
 import { getReliabilityTier, getReliabilityMeta, getReliabilityLabel } from '../utils/credibilityMeta';
+import { getEventDetailCandidates, resolveEventById } from '../utils/eventDetailResolver';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 import MapErrorBoundary from '../components/MapErrorBoundary';
 import { ArticleDetail } from '../components/NewsPanel';
@@ -67,17 +68,17 @@ export default function EventDetailPage() {
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const backendEvents = useNewsStore((s) => s.backendEvents);
+  const historicalState = useNewsStore((s) => s.historicalState);
+  const regionBackfills = useNewsStore((s) => s.regionBackfills);
 
-  // Find the event by ID across both liveNews and backendEvents
-  const event = useMemo(() => {
-    const allEvents = [...(backendEvents || []), ...(liveNews || [])];
-    return allEvents.find((ev) => ev.id === id) || null;
-  }, [id, liveNews, backendEvents]);
+  const allEvents = useMemo(() => getEventDetailCandidates({
+    liveNews,
+    backendEvents,
+    historicalState,
+    regionBackfills,
+  }), [liveNews, backendEvents, historicalState, regionBackfills]);
 
-  const allEvents = useMemo(() => {
-    if (backendEvents && backendEvents.length > 0) return backendEvents;
-    return liveNews || [];
-  }, [backendEvents, liveNews]);
+  const event = useMemo(() => resolveEventById(allEvents, id), [allEvents, id]);
 
   // Related events — events that share entities with this event.
   // Iterate all entity names (people, organizations, locations), call

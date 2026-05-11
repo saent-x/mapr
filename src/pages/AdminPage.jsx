@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { getLocale } from '../utils/formatDate.js';
+import { buildSourceAddPayload } from '../utils/adminSourcePayload.js';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
 /* ── Status helpers ── */
@@ -358,9 +359,7 @@ function AdminDashboard() {
   const handleAddSource = useCallback(async (e) => {
     e.preventDefault();
     clearSourceMessages();
-    const payload = addFormType === 'gdelt'
-      ? { name: addForm.name, url: addForm.url, country: addForm.country || undefined, sourceType: addForm.sourceType || 'gdelt', fetchMode: 'gdelt', gdeltQuery: addForm.gdeltQuery || undefined, notes: addForm.notes || undefined }
-      : { name: addForm.name, url: addForm.url, country: addForm.country || undefined, sourceType: addForm.sourceType || 'rss', fetchMode: 'rss', notes: addForm.notes || undefined };
+    const payload = buildSourceAddPayload(addForm, addFormType);
     try {
       const res = await fetch('/api/source-catalog/add', {
         method: 'POST',

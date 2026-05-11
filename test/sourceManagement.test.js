@@ -10,6 +10,10 @@ import {
   reEnableSourceInCatalog,
   autoDisableFailingSources,
 } from '../server/sourceCatalog.js';
+import {
+  buildGdeltSearchUrl,
+  buildSourceAddPayload,
+} from '../src/utils/adminSourcePayload.js';
 
 const SRC = join(import.meta.dirname, '..', 'src');
 
@@ -57,6 +61,21 @@ describe('Source Management CRUD helpers', () => {
       assert.ok(Number.isFinite(added.cadenceMinutes));
       assert.ok(added.priority !== undefined);
       assert.equal(added.fetchMode, 'rss');
+    });
+
+    it('preserves GDELT source contract fields after required-only UI payload', () => {
+      const payload = buildSourceAddPayload({
+        name: 'Ukraine Conflict Monitor',
+        gdeltQuery: 'Ukraine AND conflict',
+      }, 'gdelt');
+      const result = addSourceToCatalog(baseCatalog, payload);
+      const added = result[result.length - 1];
+
+      assert.equal(added.name, 'Ukraine Conflict Monitor');
+      assert.equal(added.fetchMode, 'gdelt');
+      assert.equal(added.sourceType, 'gdelt');
+      assert.equal(added.gdeltQuery, 'Ukraine AND conflict');
+      assert.equal(added.url, buildGdeltSearchUrl('Ukraine AND conflict'));
     });
   });
 
@@ -185,6 +204,42 @@ describe('Source Management CRUD helpers', () => {
       const { catalog: updated, disabled } = autoDisableFailingSources(catalog, sourceState);
       assert.equal(disabled.length, 0); // already disabled, not re-disabled
     });
+  });
+});
+
+describe('Admin source add payload contract', () => {
+  it('builds RSS payload with the server required name and url fields', () => {
+    const payload = buildSourceAddPayload({
+      name: 'Reuters World',
+      url: 'https://www.reutersagency.com/feed/',
+      country: 'United Kingdom',
+      sourceType: 'wire',
+      notes: 'Wire feed',
+    }, 'rss');
+
+    assert.deepEqual(payload, {
+      name: 'Reuters World',
+      url: 'https://www.reutersagency.com/feed/',
+      country: 'United Kingdom',
+      sourceType: 'wire',
+      fetchMode: 'rss',
+      notes: 'Wire feed',
+    });
+  });
+
+  it('builds GDELT payload with generated url when the required-only form omits URL', () => {
+    const payload = buildSourceAddPayload({
+      name: 'GDELT Required Only',
+      gdeltQuery: 'sourcecountry:UK protest',
+    }, 'gdelt');
+
+    assert.equal(payload.name, 'GDELT Required Only');
+    assert.equal(payload.fetchMode, 'gdelt');
+    assert.equal(payload.sourceType, 'gdelt');
+    assert.equal(payload.gdeltQuery, 'sourcecountry:UK protest');
+    assert.equal(payload.url, buildGdeltSearchUrl('sourcecountry:UK protest'));
+    assert.ok(payload.url.includes('api.gdeltproject.org/api/v2/doc/doc'));
+    assert.ok(payload.url.includes('query=sourcecountry%3AUK+protest'));
   });
 });
 

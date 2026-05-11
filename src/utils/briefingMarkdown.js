@@ -44,15 +44,48 @@ function formatDate(dateVal) {
   }
 }
 
+function normalizeEntityEntries(entities, fallbackType = 'unknown') {
+  if (!entities) return [];
+
+  if (typeof entities === 'string') {
+    return [{ name: entities, type: fallbackType }];
+  }
+
+  if (Array.isArray(entities)) {
+    return entities.flatMap((entity) => normalizeEntityEntries(entity, fallbackType));
+  }
+
+  if (typeof entities !== 'object') {
+    return [];
+  }
+
+  const bucketSpecs = [
+    ['people', 'person'],
+    ['organizations', 'organization'],
+    ['locations', 'location'],
+  ];
+  const bucketed = [];
+  for (const [key, type] of bucketSpecs) {
+    if (Array.isArray(entities[key])) {
+      bucketed.push(...normalizeEntityEntries(entities[key], type));
+    }
+  }
+  if (bucketed.length > 0) return bucketed;
+
+  const name = entities.name?.trim?.() || entities.text?.trim?.() || entities.label?.trim?.();
+  if (!name) return [];
+  return [{ ...entities, name, type: entities.type || fallbackType }];
+}
+
 /**
  * Extracts unique entity mentions from events, sorted by frequency.
  * @param {object[]} events
  * @returns {{ name: string, type: string, count: number }[]}
  */
-function extractEntityMentions(events) {
+export function extractEntityMentions(events) {
   const entityMap = new Map();
   for (const event of events) {
-    const entities = event.entities || event.enrichedEntities || [];
+    const entities = normalizeEntityEntries(event.entities || event.enrichedEntities || []);
     for (const entity of entities) {
       const name = entity.name?.trim() || entity.text?.trim();
       if (!name || name.length < 2) continue;

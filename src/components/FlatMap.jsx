@@ -8,6 +8,7 @@ import useBreakpoint from '../hooks/useBreakpoint';
 import { findStateInStory } from '../utils/statesData';
 import { isoToCountry } from '../utils/geocoder';
 import { getCountryBbox } from '../utils/countryBbox';
+import { getRegionCameraTarget, getSelectedStoryCameraTarget } from '../utils/mapCamera';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
@@ -171,23 +172,36 @@ const FlatMap = ({
     const map = mapRef.current;
     if (!map) return;
 
+    const fitCountry = (iso, padding = 40) => {
+      let cancelled = false;
+      getCountryBbox(iso).then((bbox) => {
+        if (cancelled || !bbox) return;
+        try {
+          map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], {
+            padding,
+            duration: 1200,
+          });
+        } catch { /* ignore */ }
+      });
+      return () => { cancelled = true; };
+    };
+
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
       const stateMatch = selectedStory.isoA2
         ? findStateInStory(selectedStory.isoA2, selectedStory)
         : null;
+      const target = getSelectedStoryCameraTarget(selectedStory, { stateMatch });
 
-      if (stateMatch) {
+      if (target.type === 'point') {
         map.flyTo({
-          center: [stateMatch.lng, stateMatch.lat],
-          zoom: STORY_ZOOM,
+          center: target.center,
+          zoom: stateMatch ? STORY_ZOOM : REGION_ZOOM,
           duration: 1200,
         });
-      } else {
-        map.flyTo({
-          center: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
-          zoom: REGION_ZOOM,
-          duration: 1200,
-        });
+      } else if (target.type === 'country') {
+        prevStoryRef.current = selectedStory.id;
+        hadSelectionRef.current = true;
+        return fitCountry(target.iso);
       }
       prevStoryRef.current = selectedStory.id;
       hadSelectionRef.current = true;
@@ -204,9 +218,10 @@ const FlatMap = ({
       const focal =
         regionSeverities[selectedRegion]?.peakStory ||
         newsList.find((s) => s.isoA2 === selectedRegion);
-      if (focal?.coordinates) {
+      const target = getRegionCameraTarget(selectedRegion, focal);
+      if (target.type === 'point') {
         map.flyTo({
-          center: [focal.coordinates[1], focal.coordinates[0]],
+          center: target.center,
           zoom: REGION_ZOOM,
           duration: 1200,
         });
@@ -214,7 +229,11 @@ const FlatMap = ({
         hadSelectionRef.current = true;
         return;
       }
-      // No focal yet — wait for newsList to arrive rather than locking prev.
+      if (target.type === 'country') {
+        prevRegionRef.current = selectedRegion;
+        hadSelectionRef.current = true;
+        return fitCountry(target.iso);
+      }
     }
 
     if (!selectedStory && !selectedRegion && hadSelectionRef.current) {

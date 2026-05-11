@@ -91,6 +91,7 @@ function normalizeCatalogEntry(feed, index = 0) {
     fetchMode,
     enabled: feed.enabled ?? (fetchMode === 'rss'),
     candidate: Boolean(feed.candidate || fetchMode !== 'rss'),
+    gdeltQuery: feed.gdeltQuery || null,
     notes: feed.notes || null,
     seedIndex: Number.isFinite(feed.seedIndex) ? feed.seedIndex : index
   };
