@@ -38,6 +38,41 @@ export const FEATURE_ACCESS_CATALOG = [
     category: 'Workflow',
     defaultTier: FEATURE_TIER_FREE,
   },
+  {
+    id: 'storyThreads',
+    label: 'Story threads',
+    description: 'Pin events and auto-collate follow-up coverage as a thread.',
+    category: 'Workflow',
+    defaultTier: FEATURE_TIER_FREE,
+  },
+  {
+    id: 'aiBriefs',
+    label: 'AI briefs',
+    description: 'Generate analyst-grade event briefs with sources, key actors, and a suggested angle.',
+    category: 'Analysis',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'dailyDigest',
+    label: 'Daily digest',
+    description: 'Per-user daily watchlist digest email.',
+    category: 'Output',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'sharedViews',
+    label: 'Shared view links',
+    description: 'Generate read-only public links for a saved view.',
+    category: 'Workflow',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'sourceCredibility',
+    label: 'Source credibility panel',
+    description: 'Per-event panel with first publisher, corroboration count, bias and reliability flags.',
+    category: 'Analysis',
+    defaultTier: FEATURE_TIER_FREE,
+  },
 ];
 
 const VALID_TIERS = new Set([FEATURE_TIER_FREE, FEATURE_TIER_PRO, FEATURE_TIER_DISABLED]);

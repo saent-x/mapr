@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { BookmarkCheck, Filter, X, ChevronDown, ChevronUp, Crown, CheckCircle2, Star, FileText } from 'lucide-react';
+import { BookmarkCheck, Filter, X, ChevronDown, ChevronUp, Crown, CheckCircle2, Star, FileText, Tag, Download, CheckSquare, Square, Trash2 } from 'lucide-react';
 import useBookmarks from '../hooks/useBookmarks';
 import useUIStore from '../stores/uiStore';
+import { exportBookmarksToCSV, exportBookmarksToJSON, parseTagsInput } from '../utils/bookmarkExport.js';
 
 const SEVERITY_OPTIONS = [
   { value: 0, label: 'All' },
@@ -52,11 +53,58 @@ export default function BookmarksPanel() {
     setFilterPriority,
     toggleBookmark,
     updateBookmark,
+    bulkUpdate,
+    bulkDelete,
   } = useBookmarks();
 
   const [collapsed, setCollapsed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkTagInput, setBulkTagInput] = useState('');
+  const [editingTagsFor, setEditingTagsFor] = useState(null);
+  const [tagDraft, setTagDraft] = useState('');
   const selectStory = useUIStore((s) => s.selectStory);
+
+  const selectedCount = selectedIds.size;
+  const toggleSelectAll = () => {
+    if (selectedCount === filteredBookmarks.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredBookmarks.map((b) => b.id)));
+  };
+  const toggleItem = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => { setSelectedIds(new Set()); setSelectMode(false); };
+  const handleBulkArchive = async () => {
+    if (!selectedCount) return;
+    await bulkUpdate([...selectedIds], { status: 'archived' }).catch(() => {});
+    clearSelection();
+  };
+  const handleBulkDelete = async () => {
+    if (!selectedCount) return;
+    if (!window.confirm(t('bookmarks.bulkDeleteConfirm', { count: selectedCount, defaultValue: `Delete ${selectedCount} bookmarks?` }))) return;
+    await bulkDelete([...selectedIds]).catch(() => {});
+    clearSelection();
+  };
+  const handleBulkAddTags = async () => {
+    const tags = parseTagsInput(bulkTagInput);
+    if (!tags.length || !selectedCount) return;
+    await bulkUpdate([...selectedIds], { addTags: tags }).catch(() => {});
+    setBulkTagInput('');
+  };
+  const handleEditTags = (bm) => {
+    setEditingTagsFor(bm.id);
+    setTagDraft(Array.isArray(bm.tags) ? bm.tags.join(', ') : '');
+  };
+  const handleSaveTagsForBookmark = async (bm) => {
+    const tags = parseTagsInput(tagDraft);
+    await updateBookmark(bm.id, { tags }).catch(() => {});
+    setEditingTagsFor(null);
+  };
 
   const uniqueRegions = React.useMemo(() => {
     const regions = new Set();
@@ -147,6 +195,28 @@ export default function BookmarksPanel() {
         <button
           type="button"
           className="alert-rules-toggle"
+          onClick={() => { setSelectMode((v) => !v); if (selectMode) setSelectedIds(new Set()); }}
+          aria-label={selectMode ? t('bookmarks.exitSelect', 'Exit selection') : t('bookmarks.enterSelect', 'Select bookmarks')}
+          title={selectMode ? t('bookmarks.exitSelect', 'Exit selection') : t('bookmarks.enterSelect', 'Select')}
+          data-active={selectMode ? 'true' : undefined}
+          data-testid="bookmarks-select-toggle"
+        >
+          <CheckSquare size={10} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="alert-rules-toggle"
+          onClick={() => exportBookmarksToCSV(filteredBookmarks)}
+          aria-label={t('bookmarks.exportCsv', 'Export CSV')}
+          title={t('bookmarks.exportCsv', 'Export CSV')}
+          disabled={!filteredBookmarks.length}
+          data-testid="bookmarks-export-csv"
+        >
+          <Download size={10} aria-hidden />
+        </button>
+        <button
+          type="button"
+          className="alert-rules-toggle"
           onClick={() => setCollapsed((v) => !v)}
           aria-label={collapsed ? 'Expand bookmarks' : 'Collapse bookmarks'}
           title={collapsed ? 'Expand' : 'Collapse'}
@@ -154,6 +224,57 @@ export default function BookmarksPanel() {
           {collapsed ? <ChevronDown size={10} aria-hidden /> : <ChevronUp size={10} aria-hidden />}
         </button>
       </div>
+
+      {selectMode && !collapsed && (
+        <div className="bookmarks-bulk-bar" data-testid="bookmarks-bulk-bar">
+          <button
+            type="button"
+            className="bookmarks-bulk-btn"
+            onClick={toggleSelectAll}
+            title={selectedCount === filteredBookmarks.length ? t('bookmarks.deselectAll', 'Deselect all') : t('bookmarks.selectAll', 'Select all')}
+          >
+            <CheckSquare size={10} aria-hidden />
+            <span>{selectedCount}/{filteredBookmarks.length}</span>
+          </button>
+          <input
+            type="text"
+            className="bookmarks-bulk-tag-input"
+            placeholder={t('bookmarks.bulkTagPlaceholder', 'add tags…')}
+            value={bulkTagInput}
+            onChange={(e) => setBulkTagInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleBulkAddTags(); }}
+            disabled={!selectedCount}
+            aria-label={t('bookmarks.bulkTagPlaceholder', 'add tags…')}
+          />
+          <button
+            type="button"
+            className="bookmarks-bulk-btn"
+            onClick={handleBulkAddTags}
+            disabled={!selectedCount || !bulkTagInput.trim()}
+            title={t('bookmarks.bulkAddTag', 'Add tags')}
+          >
+            <Tag size={10} aria-hidden /> +
+          </button>
+          <button
+            type="button"
+            className="bookmarks-bulk-btn"
+            onClick={handleBulkArchive}
+            disabled={!selectedCount}
+            title={t('bookmarks.bulkArchive', 'Archive selected')}
+          >
+            {t('bookmarks.archive', 'Archive')}
+          </button>
+          <button
+            type="button"
+            className="bookmarks-bulk-btn bookmarks-bulk-danger"
+            onClick={handleBulkDelete}
+            disabled={!selectedCount}
+            title={t('bookmarks.bulkDelete', 'Delete selected')}
+          >
+            <Trash2 size={10} aria-hidden />
+          </button>
+        </div>
+      )}
 
       {showFilters && (
         <div className="bookmarks-filters">
@@ -289,12 +410,25 @@ export default function BookmarksPanel() {
                 if (bm.severity >= 85) sevClass = 'black';
                 else if (bm.severity >= 70) sevClass = 'red';
                 else if (bm.severity >= 40) sevClass = 'amber';
+                const isSelected = selectedIds.has(bm.id);
+                const tagsList = Array.isArray(bm.tags) ? bm.tags : [];
                 return (
-                  <li key={bm.id} className="bookmarks-item">
+                  <li key={bm.id} className={`bookmarks-item${isSelected ? ' is-selected' : ''}`}>
+                    {selectMode && (
+                      <button
+                        type="button"
+                        className="bookmarks-select-cb"
+                        onClick={() => toggleItem(bm.id)}
+                        aria-label={isSelected ? t('bookmarks.deselect', 'Deselect') : t('bookmarks.select', 'Select')}
+                        aria-pressed={isSelected}
+                      >
+                        {isSelected ? <CheckSquare size={12} aria-hidden /> : <Square size={12} aria-hidden />}
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="bookmarks-item-main"
-                      onClick={() => handleSelect(bm)}
+                      onClick={() => (selectMode ? toggleItem(bm.id) : handleSelect(bm))}
                       title={bm.storyTitle}
                     >
                       <span className="bookmarks-item-header">
@@ -308,6 +442,13 @@ export default function BookmarksPanel() {
                         {bm.priority === 'high' && <span className="bookmark-priority-chip"><Star size={8} aria-hidden />high</span>}
                         <span className="bookmarks-item-ago">{ago(bm.bookmarkedAt)}</span>
                       </span>
+                      {tagsList.length > 0 && (
+                        <span className="bookmarks-item-tags">
+                          {tagsList.map((tag) => (
+                            <span key={tag} className="bookmark-tag-chip"><Tag size={7} aria-hidden />{tag}</span>
+                          ))}
+                        </span>
+                      )}
                       {bm.note && <span className="bookmarks-item-note"><FileText size={8} aria-hidden />{bm.note}</span>}
                     </button>
                     <div className="bookmarks-item-actions">
@@ -332,6 +473,16 @@ export default function BookmarksPanel() {
                       </button>
                       <button
                         type="button"
+                        className="bookmark-workflow-btn"
+                        data-active={editingTagsFor === bm.id ? 'true' : undefined}
+                        onClick={(e) => { e.stopPropagation(); editingTagsFor === bm.id ? setEditingTagsFor(null) : handleEditTags(bm); }}
+                        title={t('bookmarks.editTags', 'Edit tags')}
+                        aria-label={t('bookmarks.editTags', 'Edit tags')}
+                      >
+                        <Tag size={10} />
+                      </button>
+                      <button
+                        type="button"
                         className="bookmark-workflow-btn bookmark-remove-btn"
                         onClick={(e) => handleRemove(e, bm)}
                         title={t('watchlist.remove', 'Remove from watchlist')}
@@ -340,6 +491,27 @@ export default function BookmarksPanel() {
                         <X size={10} />
                       </button>
                     </div>
+                    {editingTagsFor === bm.id && (
+                      <div className="bookmark-tag-editor" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          className="bookmark-tag-input"
+                          value={tagDraft}
+                          onChange={(e) => setTagDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleSaveTagsForBookmark(bm); if (e.key === 'Escape') setEditingTagsFor(null); }}
+                          placeholder={t('bookmarks.tagInputPlaceholder', 'tag1, tag2, …')}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className="bookmark-workflow-btn"
+                          onClick={() => handleSaveTagsForBookmark(bm)}
+                          aria-label={t('bookmarks.saveTags', 'Save tags')}
+                        >
+                          <CheckCircle2 size={10} />
+                        </button>
+                      </div>
+                    )}
                     <textarea
                       className="bookmark-note-input"
                       defaultValue={bm.note}

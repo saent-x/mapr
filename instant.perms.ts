@@ -41,6 +41,19 @@ const rules = {
   savedViews: {
     bind: {
       isOwner: "data.id in auth.ref('$user.savedViews.id')",
+      isShared: "data.shareToken != null && data.shareToken != ''",
+    },
+    allow: {
+      view: 'isOwner || isShared',
+      create: "auth.id in data.ref('owner.id')",
+      update: 'isOwner',
+      delete: 'isOwner',
+    },
+  },
+
+  watchlistItems: {
+    bind: {
+      isOwner: "data.id in auth.ref('$user.watchlistItems.id')",
     },
     allow: {
       view: 'isOwner',

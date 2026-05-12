@@ -204,7 +204,7 @@ export default function EntityExplorerPage() {
 
   const showTimeline = () => {
     if (!selNode) return;
-    navigate(`/trends?tab=correlation&entity=${encodeURIComponent(selNode.name)}`);
+    navigate(`/trends?tab=threads&entity=${encodeURIComponent(selNode.name)}`);
   };
 
   const clearAll = () => {
