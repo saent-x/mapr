@@ -16,12 +16,36 @@ function getPool() {
   const cleanUrl = connectionString.replace(/[&?]channel_binding=[^&]*/g, '');
 
   const isLocal = /localhost|127\.0\.0\.1/.test(cleanUrl);
-  pool = new Pool({
+  // Pool sizing notes:
+  //   - max 2 was dangerously low — a single ingest cycle holding a BEGIN/COMMIT
+  //     client plus one /api/briefing request would starve any further calls
+  //     (connectionTimeoutMillis kicks in → 504).
+  //   - keepAlive prevents managed Postgres (Neon, Railway) idle-disconnects
+  //     surfacing as ECONNRESET on the next query.
+  //   - ssl.ca should be set in prod via PGSSLROOTCERT; we still prefer cert
+  //     validation if a CA bundle is available.
+  const poolConfig = {
     connectionString: cleanUrl,
-    ...(isLocal ? {} : { ssl: { rejectUnauthorized: false } }),
-    max: 2,
+    max: Number(process.env.PGPOOL_MAX || 8),
     idleTimeoutMillis: 10000,
-    connectionTimeoutMillis: 5000
+    connectionTimeoutMillis: 5000,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+  };
+  if (!isLocal) {
+    poolConfig.ssl = process.env.PGSSLROOTCERT
+      ? { ca: process.env.PGSSLROOTCERT, rejectUnauthorized: true }
+      : { rejectUnauthorized: false };
+  }
+  pool = new Pool(poolConfig);
+
+  // Without an `error` listener the `pg` Pool will crash the process on a
+  // background client error. We log structured and let the next query reopen.
+  pool.on('error', (err) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.error('[pg] pool_error', { msg: err.message });
+    } catch { /* ignore */ }
   });
 
   return pool;
@@ -37,6 +61,12 @@ async function ensureSchema() {
     );
 
     CREATE TABLE IF NOT EXISTS refresh_history (
+      id SERIAL PRIMARY KEY,
+      at TEXT NOT NULL,
+      payload TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS snapshot_history (
       id SERIAL PRIMARY KEY,
       at TEXT NOT NULL,
       payload TEXT NOT NULL
@@ -123,7 +153,10 @@ async function ensureSchema() {
     }
   } catch { /* table may not exist yet on first run */ }
 
-  // Ensure id column is the primary key (older DB instances may have url as PK)
+  // Ensure id column is the primary key (older DB instances may have url as PK).
+  // Wrap the migration in a single transaction on a dedicated client so a crash
+  // mid-migration cannot leave `articles` without a primary key (which would
+  // silently allow duplicates).
   try {
     const pkCheck = await db.query(`
       SELECT a.attname FROM pg_constraint c
@@ -133,16 +166,25 @@ async function ensureSchema() {
     const pkCols = pkCheck.rows.map(r => r.attname);
     if (pkCols.length > 0 && !pkCols.includes('id')) {
       console.log('[storage] Fixing articles primary key: currently on', pkCols.join(','), '→ id');
-      await db.query('ALTER TABLE articles DROP CONSTRAINT articles_pkey CASCADE');
-      // Remove any duplicate ids before adding the PK
-      await db.query(`DELETE FROM articles a USING articles b WHERE a.id = b.id AND a.ctid < b.ctid`);
-      await db.query('ALTER TABLE articles ADD PRIMARY KEY (id)');
-      // Recreate event_articles FK after CASCADE drop
-      await db.query(`
-        ALTER TABLE event_articles DROP CONSTRAINT IF EXISTS event_articles_articleId_fkey;
-        ALTER TABLE event_articles ADD CONSTRAINT event_articles_articleId_fkey
-          FOREIGN KEY ("articleId") REFERENCES articles(id) ON DELETE CASCADE
-      `).catch(() => {});
+      const client = await db.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('ALTER TABLE articles DROP CONSTRAINT articles_pkey CASCADE');
+        await client.query(`DELETE FROM articles a USING articles b WHERE a.id = b.id AND a.ctid < b.ctid`);
+        await client.query('ALTER TABLE articles ADD PRIMARY KEY (id)');
+        // Recreate event_articles FK after CASCADE drop. IF NOT EXISTS isn't
+        // available for ADD CONSTRAINT pre-PG14, so we DROP defensively.
+        await client.query('ALTER TABLE event_articles DROP CONSTRAINT IF EXISTS event_articles_articleId_fkey');
+        await client.query(
+          'ALTER TABLE event_articles ADD CONSTRAINT event_articles_articleId_fkey FOREIGN KEY ("articleId") REFERENCES articles(id) ON DELETE CASCADE'
+        );
+        await client.query('COMMIT');
+      } catch (txErr) {
+        try { await client.query('ROLLBACK'); } catch { /* already rolled back */ }
+        throw txErr;
+      } finally {
+        client.release();
+      }
     }
   } catch (pkErr) {
     console.warn('[storage] Primary key check/fix warning:', pkErr.message);
@@ -218,6 +260,74 @@ export async function appendHistory(entry, limit = 72) {
     )
   `, [limit]);
   return readHistory();
+}
+
+// ── Snapshot History ─────────────────────────────────────────
+// Stores periodic copies of the full snapshot for historical queries.
+
+export async function readSnapshotHistory(from, to, limit = 168) {
+  const db = await ensureDatabase();
+  let query = 'SELECT payload FROM snapshot_history';
+  const params = [];
+  const conditions = [];
+
+  if (from) {
+    conditions.push('at >= $' + (params.length + 1));
+    params.push(typeof from === 'number' ? new Date(from).toISOString() : from);
+  }
+  if (to) {
+    conditions.push('at <= $' + (params.length + 1));
+    params.push(typeof to === 'number' ? new Date(to).toISOString() : to);
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  query += ' ORDER BY id DESC LIMIT $' + (params.length + 1);
+  params.push(limit);
+
+  const { rows } = await db.query(query, params);
+  return rows.map(r => parseJson(r.payload, null)).filter(Boolean).reverse();
+}
+
+export async function readSnapshotTimestamps(from, to) {
+  const db = await ensureDatabase();
+  let query = 'SELECT at FROM snapshot_history';
+  const params = [];
+  const conditions = [];
+
+  if (from) {
+    conditions.push('at >= $' + (params.length + 1));
+    params.push(typeof from === 'number' ? new Date(from).toISOString() : from);
+  }
+  if (to) {
+    conditions.push('at <= $' + (params.length + 1));
+    params.push(typeof to === 'number' ? new Date(to).toISOString() : to);
+  }
+
+  if (conditions.length > 0) {
+    query += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  query += ' ORDER BY at ASC';
+
+  const { rows } = await db.query(query, params);
+  return rows.map(r => r.at);
+}
+
+export async function persistSnapshotHistory(entry) {
+  const db = await ensureDatabase();
+  await db.query(
+    'INSERT INTO snapshot_history (at, payload) VALUES ($1, $2)',
+    [entry?.at || new Date().toISOString(), JSON.stringify(entry)]
+  );
+  // Prune to keep max 168 entries (7 days at 1-hour intervals)
+  await db.query(`
+    DELETE FROM snapshot_history WHERE id NOT IN (
+      SELECT id FROM snapshot_history ORDER BY id DESC LIMIT 168
+    )
+  `);
 }
 
 // ── Coverage History ─────────────────────────────────────────
@@ -354,6 +464,29 @@ export async function upsertArticles(articles) {
   console.log(`[storage] upsertArticles: ${inserted} inserted/updated, ${skipped} skipped (of ${articles.length} input)`);
 }
 
+/**
+ * Read articles with an optional time filter.
+ * @param {{ since?: string, limit?: number }} options
+ * @returns {Promise<Array>}
+ */
+export async function readArticles({ since, limit = 500 } = {}) {
+  const db = await ensureDatabase();
+  const params = [];
+  const conditions = [];
+
+  if (since) {
+    conditions.push('"publishedAt" >= $' + (params.length + 1));
+    params.push(since);
+  }
+
+  const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+  const query = `SELECT * FROM articles ${where} ORDER BY "publishedAt" DESC LIMIT $${params.length + 1}`;
+  params.push(limit);
+
+  const { rows } = await db.query(query, params);
+  return rows.map(r => reconstructArticle(r)).filter(Boolean);
+}
+
 // ── Events ───────────────────────────────────────────────────
 
 export async function upsertEvent(event) {
@@ -387,6 +520,19 @@ export async function upsertEvent(event) {
     event.coordinates != null ? JSON.stringify(event.coordinates) : null,
     event.enrichment ?? '{}'
   ]);
+}
+
+/**
+ * Update only the lifecycle and lastUpdatedAt of an event.
+ * @param {string} eventId
+ * @param {string} lifecycle - e.g. 'emerging', 'developing', 'active', 'resolved'
+ */
+export async function updateEventLifecycle(eventId, lifecycle) {
+  const db = await ensureDatabase();
+  await db.query(
+    `UPDATE events SET lifecycle = $1, "lastUpdatedAt" = $2 WHERE id = $3`,
+    [lifecycle, new Date().toISOString(), eventId]
+  );
 }
 
 export async function readActiveEvents({ maxAgeHours } = {}) {
@@ -433,10 +579,26 @@ export async function readActiveEvents({ maxAgeHours } = {}) {
   return events;
 }
 
+/**
+ * Counter of link inserts that fell through after the foreign-key
+ * fallback. Surface in `/api/admin-health` so dropped links are
+ * auditable instead of silent.
+ */
+let _droppedArticleLinkCount = 0;
+export function getDroppedArticleLinkCount() {
+  return _droppedArticleLinkCount;
+}
+export function resetDroppedArticleLinkCount() {
+  _droppedArticleLinkCount = 0;
+}
+
 export async function linkArticlesToEvent(eventId, articleIds) {
   const db = await ensureDatabase();
   const validIds = (articleIds || []).filter(Boolean);
-  if (validIds.length === 0) return;
+  if (validIds.length === 0) return { linked: 0, dropped: 0 };
+
+  let linked = 0;
+  let dropped = 0;
 
   // Batch insert all links at once
   const BATCH_SIZE = 100;
@@ -449,24 +611,36 @@ export async function linkArticlesToEvent(eventId, articleIds) {
       params.push(batch[j]);
     }
     try {
-      await db.query(`
+      const r = await db.query(`
         INSERT INTO event_articles ("eventId", "articleId") VALUES ${values.join(',')}
         ON CONFLICT ("eventId", "articleId") DO NOTHING
       `, params);
+      linked += r.rowCount || 0;
     } catch (batchErr) {
-      // Batch failed (FK violation likely) — fall back to one-by-one
+      // Batch failed (FK violation likely) — fall back to one-by-one so we
+      // can attribute success/failure per article and count the drops.
+      // Match on err.code === '23503' (PG foreign-key violation) instead of
+      // substring; substrings break across PG locales/versions.
       for (const articleId of batch) {
         try {
-          await db.query(`
+          const r = await db.query(`
             INSERT INTO event_articles ("eventId", "articleId") VALUES ($1, $2)
             ON CONFLICT ("eventId", "articleId") DO NOTHING
           `, [eventId, articleId]);
+          linked += r.rowCount || 0;
         } catch (err) {
-          // FK violation — skip silently
+          if (err?.code === '23503') {
+            dropped += 1;
+            _droppedArticleLinkCount += 1;
+          } else {
+            // Non-FK errors are unexpected; surface them so we don't hide bugs.
+            throw err;
+          }
         }
       }
     }
   }
+  return { linked, dropped };
 }
 
 // Reconstruct a full article object from columns + stripped payload.
@@ -719,6 +893,85 @@ export async function updateSourceCredibility(sourceKey, wasCorroborated) {
       "corroboratedEvents" = source_credibility."corroboratedEvents" + $2,
       "lastUpdatedAt" = now()::text
   `, [sourceKey, inc]);
+}
+
+/**
+ * Batched credibility update — accumulate per-source counters across
+ * an ingest cycle and apply in a single round-trip. Replaces N+1 pattern
+ * where the pipeline awaited one INSERT per article per event.
+ *
+ * @param {Iterable<[string, { total: number, corroborated: number }]>} entries
+ */
+export async function updateSourceCredibilityBatch(entries) {
+  const list = Array.from(entries).filter(([k]) => k);
+  if (list.length === 0) return;
+  const db = await ensureDatabase();
+  const values = [];
+  const params = [];
+  list.forEach(([sourceKey, { total, corroborated }], idx) => {
+    const base = idx * 3;
+    values.push(`($${base + 1}, $${base + 2}::int, $${base + 3}::int, now()::text)`);
+    params.push(sourceKey, Number(total) || 0, Number(corroborated) || 0);
+  });
+  await db.query(`
+    INSERT INTO source_credibility ("sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt")
+    VALUES ${values.join(',')}
+    ON CONFLICT ("sourceKey") DO UPDATE SET
+      "totalEvents" = source_credibility."totalEvents" + EXCLUDED."totalEvents",
+      "corroboratedEvents" = source_credibility."corroboratedEvents" + EXCLUDED."corroboratedEvents",
+      "lastUpdatedAt" = EXCLUDED."lastUpdatedAt"
+  `, params);
+}
+
+/**
+ * Read all source credibility records.
+ * Returns an array of { sourceKey, totalEvents, corroboratedEvents, lastUpdatedAt, score }.
+ * Score is corroboratedEvents / totalEvents, clamped to [0,1].
+ */
+export async function readSourceCredibilityScores() {
+  const db = await ensureDatabase();
+  const { rows } = await db.query(`
+    SELECT
+      "sourceKey",
+      "totalEvents",
+      "corroboratedEvents",
+      "lastUpdatedAt"
+    FROM source_credibility
+    ORDER BY "totalEvents" DESC
+  `);
+  return rows.map(row => ({
+    sourceKey: row.sourceKey,
+    totalEvents: parseInt(row.totalEvents, 10) || 0,
+    corroboratedEvents: parseInt(row.corroboratedEvents, 10) || 0,
+    lastUpdatedAt: row.lastUpdatedAt || null,
+    score: row.totalEvents > 0
+      ? Math.round((parseInt(row.corroboratedEvents, 10) / parseInt(row.totalEvents, 10)) * 100) / 100
+      : 0
+  }));
+}
+
+/**
+ * Read credibility score for a single source.
+ * Returns { score, totalEvents, corroboratedEvents } or null if not found.
+ */
+export async function readSourceCredibilityByKey(sourceKey) {
+  const db = await ensureDatabase();
+  const { rows } = await db.query(
+    'SELECT "sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt" FROM source_credibility WHERE "sourceKey" = $1',
+    [sourceKey]
+  );
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  const total = parseInt(row.totalEvents, 10) || 0;
+  return {
+    sourceKey: row.sourceKey,
+    totalEvents: total,
+    corroboratedEvents: parseInt(row.corroboratedEvents, 10) || 0,
+    lastUpdatedAt: row.lastUpdatedAt || null,
+    score: total > 0
+      ? Math.round((parseInt(row.corroboratedEvents, 10) / total) * 100) / 100
+      : 0
+  };
 }
 
 // ── Velocity History ─────────────────────────────────────────

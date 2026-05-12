@@ -10,7 +10,7 @@ import { getRelatedEvents } from '../src/utils/entityGraph.js';
 // ── filterStore entity filter ────────────────────────────────────────────────
 
 describe('filterStore entity filter', async () => {
-  const { default: useFilterStore } = await import('../src/stores/filterStore.js');
+  const { default: useFilterStore } = await import('../src/stores/filterStore.ts');
 
   const DEFAULTS = {
     searchQuery: '',

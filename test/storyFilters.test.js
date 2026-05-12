@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sortStories, storyMatchesFilters } from '../src/utils/storyFilters.js';
+import { formatConfidencePercent, normalizeConfidenceScore } from '../src/utils/confidenceScore.js';
 
 function createStory(overrides = {}) {
   return {
@@ -42,6 +43,28 @@ test('storyMatchesFilters enforces a minimum confidence threshold', () => {
   );
   assert.equal(
     storyMatchesFilters(lowConfidenceStory, { minConfidence: 60 }),
+    false
+  );
+});
+
+test('confidence scores normalize backend decimals and frontend percentages', () => {
+  assert.equal(normalizeConfidenceScore(0.72), 72);
+  assert.equal(normalizeConfidenceScore(72), 72);
+  assert.equal(formatConfidencePercent(0.72), '72%');
+  assert.equal(formatConfidencePercent(72), '72%');
+  assert.equal(normalizeConfidenceScore(null), null);
+});
+
+test('storyMatchesFilters applies confidence thresholds after score normalization', () => {
+  const backendDecimalStory = createStory({ confidence: 0.72 });
+  const lowBackendDecimalStory = createStory({ confidence: 0.41 });
+
+  assert.equal(
+    storyMatchesFilters(backendDecimalStory, { minConfidence: 60 }),
+    true
+  );
+  assert.equal(
+    storyMatchesFilters(lowBackendDecimalStory, { minConfidence: 60 }),
     false
   );
 });

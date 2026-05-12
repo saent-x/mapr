@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Gauge, Layers, Globe as GlobeIcon, Activity, SlidersHorizontal } from 'lucide-react';
+import { Gauge, Layers, Globe as GlobeIcon, Activity, SlidersHorizontal, ShieldCheck } from 'lucide-react';
 import useBreakpoint from '../hooks/useBreakpoint';
 import useFilterStore from '../stores/filterStore';
 import useDerivedIntel from '../hooks/useDerivedIntel';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from '../utils/coverageMeta';
+import { getReliabilityMeta } from '../utils/credibilityMeta';
+import { getGeopoliticalLegend } from '../utils/visualSystem';
 import BottomSheet from './ui/BottomSheet';
 import FilterDrawer from './FilterDrawer';
 
@@ -16,11 +18,7 @@ const SEV_TIERS = [
   { key: 'green', min: 0, label: 'GREEN' },
 ];
 
-const GEO_LEGEND = [
-  { key: 'low', color: 'rgba(0, 212, 255, 0.8)', labelKey: 'legend.geoLow' },
-  { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', labelKey: 'legend.geoMedium' },
-  { key: 'high', color: 'rgba(255, 85, 85, 0.8)', labelKey: 'legend.geoHigh' },
-];
+const GEO_LEGEND = getGeopoliticalLegend();
 
 function IconButton({ id, icon: Icon, label, active, onClick }) {
   return (
@@ -154,6 +152,13 @@ export default function MapFloatingIcons() {
           onClick={() => handleIconTap('geo')}
         />
         <IconButton
+          id="reliability"
+          icon={ShieldCheck}
+          label="Source reliability overlay"
+          active={openPopover === 'reliability'}
+          onClick={() => handleIconTap('reliability')}
+        />
+        <IconButton
           id="intel"
           icon={Activity}
           label="Intel"
@@ -245,6 +250,33 @@ export default function MapFloatingIcons() {
               <span key={key} className="legend-item">
                 <span className="legend-dot" style={{ background: color }} />
                 {t(labelKey)}
+              </span>
+            ))}
+          </div>
+        </Popover>
+      )}
+
+      {openPopover === 'reliability' && (
+        <Popover id="reliability" title={t('legend.reliability')} onClose={closePopover}>
+          <button
+            type="button"
+            className="chip map-fab-overlay-toggle"
+            data-active={mapOverlay === 'reliability'}
+            aria-pressed={mapOverlay === 'reliability'}
+            onClick={() => toggleOverlay('reliability')}
+          >
+            REL · {mapOverlay === 'reliability' ? 'ON' : 'OFF'}
+          </button>
+          <div className="map-fab-section-label">Legend</div>
+          <div className="map-fab-legend">
+            {[
+              { key: 'high', label: t('legend.reliabilityHigh'), accent: getReliabilityMeta('high').dotColor },
+              { key: 'medium', label: t('legend.reliabilityMedium'), accent: getReliabilityMeta('medium').dotColor },
+              { key: 'low', label: t('legend.reliabilityLow'), accent: getReliabilityMeta('low').dotColor },
+            ].map(({ key, label, accent }) => (
+              <span key={key} className="legend-item">
+                <span className="legend-dot" style={{ background: accent }} />
+                {label}
               </span>
             ))}
           </div>

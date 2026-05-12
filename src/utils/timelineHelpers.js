@@ -1,3 +1,5 @@
+import { LIFECYCLE_VISUALS } from './visualSystem.js';
+
 /**
  * Pure-logic helpers for the EventTimeline component.
  * Shared between frontend (EventTimeline.jsx) and tests.
@@ -7,16 +9,16 @@ export const BUCKET_COUNT = 50;
 export const WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export const LIFECYCLE_COLORS = {
-  emerging: '#00d4ff',
-  developing: '#00e5a0',
-  escalating: '#ff5555',
-  stabilizing: '#ffaa00',
-  resolved: '#666666',
+  emerging: LIFECYCLE_VISUALS.emerging,
+  developing: LIFECYCLE_VISUALS.developing,
+  escalating: LIFECYCLE_VISUALS.escalating,
+  stabilizing: LIFECYCLE_VISUALS.stabilizing,
+  resolved: LIFECYCLE_VISUALS.resolved,
 };
 
 const LIFECYCLE_PRIORITY = ['escalating', 'developing', 'emerging', 'stabilizing', 'resolved'];
 
-const DEFAULT_LIFECYCLE_COLOR = '#334155';
+const DEFAULT_LIFECYCLE_COLOR = LIFECYCLE_VISUALS.unknown;
 
 /**
  * Get the predominant lifecycle colour from a bucket's lifecycle counts.
@@ -118,20 +120,27 @@ export function pickTimelineEvents(events, limit = 20) {
 
 /**
  * Format a timestamp into a short label for timeline ticks.
- * Shows "Mon", "Tue", etc. for day boundaries.
+ * Shows "Mon", "Tue", etc. for day boundaries — locale-aware so AR/ZH/FR/ES
+ * users see their own week/month names instead of hard-coded English.
  */
-export function formatTickLabel(ts) {
+export function formatTickLabel(ts, locale) {
   const date = new Date(ts);
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
+  try {
+    return new Intl.DateTimeFormat(locale || undefined, {
+      weekday: 'short', day: 'numeric', month: 'short',
+    }).format(date);
+  } catch {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]}`;
+  }
 }
 
 /**
  * Generate day-boundary tick positions within the 7-day window.
  * Returns an array of { fraction, label } objects.
  */
-export function generateDayTicks() {
+export function generateDayTicks(locale) {
   const now = Date.now();
   const windowStart = now - WINDOW_MS;
   const ticks = [];
@@ -145,7 +154,7 @@ export function generateDayTicks() {
   while (tickTime < now) {
     ticks.push({
       fraction: timestampToFraction(tickTime),
-      label: formatTickLabel(tickTime),
+      label: formatTickLabel(tickTime, locale),
       timestamp: tickTime,
     });
     tickTime += 24 * 60 * 60 * 1000;

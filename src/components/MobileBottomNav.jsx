@@ -2,14 +2,18 @@ import React from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Map as MapIcon,
   Network,
   MapPin,
   TrendingUp,
   Activity,
 } from 'lucide-react';
+import BrandMark from './BrandMark';
 import useBreakpoint from '../hooks/useBreakpoint';
 import useUIStore from '../stores/uiStore';
+
+function MaprNavIcon({ size = 18 }) {
+  return <BrandMark className="mobile-nav-brand-mark" size={size} />;
+}
 
 export default function MobileBottomNav() {
   const { t } = useTranslation();
@@ -22,7 +26,7 @@ export default function MobileBottomNav() {
   const regionTarget = lastRegionIso ? `/region/${lastRegionIso}` : '/region';
 
   const tabs = [
-    { to: '/', label: t('nav.map', 'Map'), icon: MapIcon, active: path === '/' },
+    { to: '/', label: t('nav.map', 'Map'), icon: MaprNavIcon, active: path === '/' },
     { to: '/entities', label: t('nav.entities', 'Entities'), icon: Network, active: path.startsWith('/entities') },
     { to: regionTarget, label: t('nav.region', 'Region'), icon: MapPin, active: path.startsWith('/region') },
     { to: '/trends', label: t('nav.trends', 'Trends'), icon: TrendingUp, active: path.startsWith('/trends') },

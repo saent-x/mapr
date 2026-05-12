@@ -6,6 +6,7 @@
  */
 
 import { detectSilence } from './silenceDetector.js';
+import { getAnomalyVisual } from './visualSystem.js';
 
 /**
  * Build a unified anomaly list from velocity spikes and silence entries.
@@ -120,18 +121,5 @@ export function computeSilenceEntries({
  * @returns {{ color: string, label: string, icon: string }}
  */
 export function getAnomalySeverity(type) {
-  switch (type) {
-    case 'spike':
-      return { color: '#ff5577', label: 'Spike', icon: '⚡' };
-    case 'elevated':
-      return { color: '#ffaa33', label: 'Elevated', icon: '↑' };
-    case 'anomalous-silence':
-      return { color: '#8b5cf6', label: 'Silence', icon: '◉' };
-    case 'blind-spot':
-      return { color: '#6b7280', label: 'Blind Spot', icon: '○' };
-    case 'limited-access':
-      return { color: '#9ca3af', label: 'Limited', icon: '⊘' };
-    default:
-      return { color: '#6b7280', label: type, icon: '•' };
-  }
+  return getAnomalyVisual(type);
 }

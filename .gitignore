@@ -26,3 +26,5 @@ bun.lock
 *.sw?
 .env
 .superpowers/
+.deepseek/
+.factory/mission-scratch/

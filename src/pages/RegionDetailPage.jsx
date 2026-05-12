@@ -1,7 +1,7 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, Search, MapPin, Loader } from 'lucide-react';
+import { ExternalLink, Search, MapPin, Loader, Columns2 } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
@@ -10,8 +10,11 @@ import { sortStories, storyMatchesFilters } from '../utils/storyFilters';
 import { canonicalizeArticles } from '../utils/newsPipeline';
 import { resolveDateFloor } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
+import { getArticleTextPreview } from '../utils/articleText';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 import { ArticleDetail } from '../components/NewsPanel';
+import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
+import ComparativeRegions from '../components/ComparativeRegions';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
 
@@ -59,6 +62,8 @@ function RegionBrief({ iso }) {
   const { t } = useTranslation();
 
   const [expandedId, setExpandedId] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareIso, setCompareIso] = useState(null);
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const regionBackfills = useNewsStore((s) => s.regionBackfills);
@@ -76,6 +81,15 @@ function RegionBrief({ iso }) {
     const regionName = isoToCountry(upper) || upper;
     useNewsStore.getState().fetchRegionBackfill(upper, regionName, { sortMode });
   }, [iso, sortMode]);
+
+  // Fetch data for the second region when it changes in compare mode
+  useEffect(() => {
+    if (!compareIso) return;
+    const upper = compareIso.toUpperCase();
+    useNewsStore.getState().fetchRegionCoverage(upper);
+    const regionName = isoToCountry(upper) || upper;
+    useNewsStore.getState().fetchRegionBackfill(upper, regionName, { sortMode });
+  }, [compareIso, sortMode]);
 
   const countryName = isoToCountry(iso?.toUpperCase()) || iso?.toUpperCase() || '?';
   const dateFloor = useMemo(() => resolveDateFloor(dateWindow), [dateWindow]);
@@ -103,6 +117,43 @@ function RegionBrief({ iso }) {
     : 0;
   const sevSub = sevTier(avgSev * 10);
   const sources = new Set(regionNews.map((a) => a.source).filter(Boolean));
+
+  /* ── Keyboard j/k navigation on region article list ── */
+  const [kbRegionIdx, setKbRegionIdx] = useState(-1);
+
+  const { getSelectedIndex: getRegionIdx } = useKeyboardNavigation({
+    items: regionNews,
+    searchSelector: '.search-input, .header-search input',
+    onSelect: useCallback((story) => {
+      setExpandedId((id) => (id === story.id ? null : story.id));
+    }, []),
+    onBookmark: useCallback((story) => {
+      // Bookmarking from region page — could wire to watchStore
+    }, []),
+    onSaveView: useCallback(() => {
+      // Save view flow from region page — could trigger save dialog
+    }, []),
+    onEscape: useCallback(() => true, []),
+    onHelp: useCallback(() => {
+      window.dispatchEvent(new CustomEvent('mapr:openShortcutHelp'));
+    }, []),
+  });
+
+  // Sync keyboard index to React state
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const current = getRegionIdx();
+      setKbRegionIdx((prev) => (prev !== current ? current : prev));
+    }, 50);
+    return () => clearInterval(interval);
+  }, [getRegionIdx]);
+
+  const kbHighlightedRegionStoryId = useMemo(() => {
+    if (kbRegionIdx >= 0 && kbRegionIdx < regionNews.length) {
+      return regionNews[kbRegionIdx]?.id || null;
+    }
+    return null;
+  }, [kbRegionIdx, regionNews]);
 
   return (
     <div className="region-page">
@@ -133,6 +184,16 @@ function RegionBrief({ iso }) {
             <span className="val">{sources.size}</span>
             <span className="sub">distinct</span>
           </div>
+          <button
+            type="button"
+            className={`compare-toggle-btn${compareMode ? ' active' : ''}`}
+            onClick={() => setCompareMode((v) => !v)}
+            aria-pressed={compareMode}
+            aria-label={compareMode ? t('regionDetail.compareExit') : t('regionDetail.compare')}
+          >
+            <Columns2 size={14} aria-hidden />
+            <span>{compareMode ? t('regionDetail.compareExit') : t('regionDetail.compare')}</span>
+          </button>
         </div>
       </div>
 
@@ -162,6 +223,7 @@ function RegionBrief({ iso }) {
           const conf = typeof story.confidence === 'number' ? story.confidence : null;
           const lMeta = lifecycleMeta(story.lifecycle);
           const expanded = expandedId === story.id;
+          const kbHighlighted = kbHighlightedRegionStoryId === story.id;
           const toggle = () =>
             setExpandedId((id) => (id === story.id ? null : story.id));
           return (
@@ -169,6 +231,7 @@ function RegionBrief({ iso }) {
               key={story.id}
               className="news-item"
               data-expanded={expanded || undefined}
+              data-kb-highlighted={kbHighlighted ? 'true' : undefined}
               role="button"
               tabIndex={0}
               aria-label={story.title}
@@ -193,7 +256,7 @@ function RegionBrief({ iso }) {
               </div>
               <div className="news-title">{story.title}</div>
               {story.summary && (
-                <div className="news-summary-preview">{story.summary}</div>
+                <div className="news-summary-preview">{getArticleTextPreview(story.summary, 180).text}</div>
               )}
               <div className="news-src">
                 <span className="mono">{story.id}</span>
@@ -225,30 +288,41 @@ function RegionBrief({ iso }) {
         })}
       </div>
 
-      <div className="region-minimap">
-        <div className="region-minimap-label">
-          <div className="micro">MINI-MAP · {iso?.toUpperCase()}</div>
-        </div>
-        <Suspense fallback={<MapLoadingFallback />}>
-          <FlatMap
-            newsList={regionNews}
-            regionSeverities={{}}
-            mapOverlay="severity"
-            coverageStatusByIso={{}}
-            velocitySpikes={[]}
-            trackingPoints={[]}
-            selectedRegion={iso?.toUpperCase()}
-            selectedStory={null}
-            onRegionSelect={() => {}}
-            onStorySelect={() => {}}
-            onArcSelect={() => {}}
-            compact
+      {compareMode ? (
+        <div className="region-comparative-wrap">
+          <ComparativeRegions
+            isoA={iso?.toUpperCase()}
+            isoB={compareIso}
+            onRegionBChange={setCompareIso}
+            onExit={() => setCompareMode(false)}
           />
-        </Suspense>
-        <div className="region-minimap-actions">
-          <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
         </div>
-      </div>
+      ) : (
+        <div className="region-minimap">
+          <div className="region-minimap-label">
+            <div className="micro">MINI-MAP · {iso?.toUpperCase()}</div>
+          </div>
+          <Suspense fallback={<MapLoadingFallback />}>
+            <FlatMap
+              newsList={regionNews}
+              regionSeverities={{}}
+              mapOverlay="severity"
+              coverageStatusByIso={{}}
+              velocitySpikes={[]}
+              trackingPoints={[]}
+              selectedRegion={iso?.toUpperCase()}
+              selectedStory={null}
+              onRegionSelect={() => {}}
+              onStorySelect={() => {}}
+              onArcSelect={() => {}}
+              compact
+            />
+          </Suspense>
+          <div className="region-minimap-actions">
+            <Link to="/" className="btn" aria-label={t('nav.backToMap')}>‹ BACK</Link>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

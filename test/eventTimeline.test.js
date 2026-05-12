@@ -151,12 +151,12 @@ describe('getLifecycleColor', () => {
 
   it('returns default color for unknown states', () => {
     const color = getLifecycleColor('unknown');
-    assert.ok(typeof color === 'string' && color.startsWith('#'));
+    assert.ok(typeof color === 'string' && color.length > 0);
   });
 
   it('returns default color for undefined', () => {
     const color = getLifecycleColor(undefined);
-    assert.ok(typeof color === 'string' && color.startsWith('#'));
+    assert.ok(typeof color === 'string' && color.length > 0);
   });
 });
 

@@ -8,15 +8,16 @@ import useBreakpoint from '../hooks/useBreakpoint';
 import { findStateInStory } from '../utils/statesData';
 import { isoToCountry } from '../utils/geocoder';
 import { getCountryBbox } from '../utils/countryBbox';
+import { getRegionCameraTarget, getSelectedStoryCameraTarget } from '../utils/mapCamera';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
 const DEFAULT_CENTER = { lng: 10, lat: 20 };
 
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
-const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
+const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/voyager-nolabels-gl-style/style.json';
 const STYLE_DARK_LABELED = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
-const STYLE_LIGHT_LABELED = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+const STYLE_LIGHT_LABELED = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 /* ──────────────────────────── macro regions (flat-only drill) ──────────────────────────── */
 
@@ -103,6 +104,7 @@ const FlatMap = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  perCountryReliability = {},
   velocitySpikes = [],
   trackingPoints = [],
   selectedRegion,
@@ -110,6 +112,7 @@ const FlatMap = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  onCoverageCountryClick,
   compact = false,
 }) => {
   const { t } = useTranslation();
@@ -169,23 +172,36 @@ const FlatMap = ({
     const map = mapRef.current;
     if (!map) return;
 
+    const fitCountry = (iso, padding = 40) => {
+      let cancelled = false;
+      getCountryBbox(iso).then((bbox) => {
+        if (cancelled || !bbox) return;
+        try {
+          map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], {
+            padding,
+            duration: 1200,
+          });
+        } catch { /* ignore */ }
+      });
+      return () => { cancelled = true; };
+    };
+
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
       const stateMatch = selectedStory.isoA2
         ? findStateInStory(selectedStory.isoA2, selectedStory)
         : null;
+      const target = getSelectedStoryCameraTarget(selectedStory, { stateMatch });
 
-      if (stateMatch) {
+      if (target.type === 'point') {
         map.flyTo({
-          center: [stateMatch.lng, stateMatch.lat],
-          zoom: STORY_ZOOM,
+          center: target.center,
+          zoom: stateMatch ? STORY_ZOOM : REGION_ZOOM,
           duration: 1200,
         });
-      } else {
-        map.flyTo({
-          center: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
-          zoom: REGION_ZOOM,
-          duration: 1200,
-        });
+      } else if (target.type === 'country') {
+        prevStoryRef.current = selectedStory.id;
+        hadSelectionRef.current = true;
+        return fitCountry(target.iso);
       }
       prevStoryRef.current = selectedStory.id;
       hadSelectionRef.current = true;
@@ -202,9 +218,10 @@ const FlatMap = ({
       const focal =
         regionSeverities[selectedRegion]?.peakStory ||
         newsList.find((s) => s.isoA2 === selectedRegion);
-      if (focal?.coordinates) {
+      const target = getRegionCameraTarget(selectedRegion, focal);
+      if (target.type === 'point') {
         map.flyTo({
-          center: [focal.coordinates[1], focal.coordinates[0]],
+          center: target.center,
           zoom: REGION_ZOOM,
           duration: 1200,
         });
@@ -212,7 +229,11 @@ const FlatMap = ({
         hadSelectionRef.current = true;
         return;
       }
-      // No focal yet — wait for newsList to arrive rather than locking prev.
+      if (target.type === 'country') {
+        prevRegionRef.current = selectedRegion;
+        hadSelectionRef.current = true;
+        return fitCountry(target.iso);
+      }
     }
 
     if (!selectedStory && !selectedRegion && hadSelectionRef.current) {
@@ -307,6 +328,7 @@ const FlatMap = ({
           regionSeverities={regionSeverities}
           mapOverlay={mapOverlay}
           coverageStatusByIso={coverageStatusByIso}
+          perCountryReliability={perCountryReliability}
           velocitySpikes={velocitySpikes}
           trackingPoints={trackingPoints}
           selectedRegion={selectedRegion}
@@ -314,6 +336,7 @@ const FlatMap = ({
           onRegionSelect={onRegionSelect}
           onStorySelect={onStorySelect}
           onArcSelect={onArcSelect}
+          onCoverageCountryClick={onCoverageCountryClick}
           drillIsos={drillIsos}
         />
         {compact && selectedRegion && <CompactRegionLock iso={selectedRegion} />}
@@ -337,7 +360,7 @@ const FlatMap = ({
           backdropFilter: 'blur(8px)',
           padding: '4px 8px',
           borderRadius: '3px',
-          border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,200,255,0.1)'}`,
+          border: '1px solid var(--line)',
           pointerEvents: 'auto',
         }}>
           {breadcrumb.map((part, i) => (
@@ -353,11 +376,11 @@ const FlatMap = ({
                   onClick={part.onClick}
                   style={{
                     cursor: 'pointer',
-                    color: isLight ? 'rgba(0,0,0,0.7)' : 'rgba(0,200,255,0.7)',
+                    color: 'var(--cyan)',
                     whiteSpace: 'nowrap',
                   }}
-                  onMouseEnter={(e) => e.target.style.color = isLight ? '#000' : '#00d4ff'}
-                  onMouseLeave={(e) => e.target.style.color = isLight ? 'rgba(0,0,0,0.7)' : 'rgba(0,200,255,0.7)'}
+                  onMouseEnter={(e) => e.target.style.color = 'var(--ink-0)'}
+                  onMouseLeave={(e) => e.target.style.color = 'var(--cyan)'}
                 >
                   {part.label}
                 </span>

@@ -91,9 +91,9 @@ describe('region detail mobile layout', () => {
 });
 
 describe('desktop invariance', () => {
-  it('still has original layout grid-template-columns: 52px 1fr (outside media queries)', () => {
+  it('still has original layout grid-template-columns: 44px 1fr (outside media queries)', () => {
     const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];
-    assert.match(pre, /\.layout\s*\{[\s\S]*?grid-template-columns:\s*52px\s+1fr/);
+    assert.match(pre, /\.layout\s*\{[\s\S]*?grid-template-columns:\s*44px\s+1fr/);
   });
   it('still has .news-panel { width: ... } base rule', () => {
     const pre = CSS.split(/@media\s*\(max-width:\s*(?:1023|767)px\)/)[0];

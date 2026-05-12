@@ -101,7 +101,7 @@ test('search filter matches against title, summary, locality, category, and regi
 });
 
 test('filterStore debouncedSearch is wired for search filtering', () => {
-  const storeSrc = readFileSync('src/stores/filterStore.js', 'utf8');
+  const storeSrc = readFileSync('src/stores/filterStore.ts', 'utf8');
 
   assert.ok(
     storeSrc.includes('debouncedSearch'),

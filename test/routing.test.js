@@ -192,7 +192,7 @@ describe('frontend routing', () => {
   it('i18n keys exist for navigation items', () => {
     const en = JSON.parse(readFileSync(join(SRC, 'i18n', 'locales', 'en.json'), 'utf8'));
     assert.ok(en.nav, 'nav section must exist in i18n');
-    for (const key of ['map', 'admin', 'entities', 'trends', 'intel', 'region']) {
+    for (const key of ['map', 'admin', 'entities', 'trends', 'intel', 'region', 'account']) {
       assert.ok(en.nav[key], `nav.${key} key must exist`);
     }
   });

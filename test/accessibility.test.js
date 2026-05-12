@@ -52,7 +52,8 @@ describe('accessibility and UX polish', () => {
   describe('keyboard navigation', () => {
     it('App.jsx Escape closes panels, drawers, and overlays', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      assert.match(code, /case 'Escape'/, 'Should handle Escape key');
+      // Escape is handled via the useKeyboardNavigation hook's onEscape callback
+      assert.match(code, /onEscape/, 'Should pass onEscape to useKeyboardNavigation');
       assert.match(code, /handleClosePanel/, 'Escape should close news panel');
       assert.match(code, /setDrawerMode\(null\)/, 'Escape should close drawer');
     });
@@ -70,12 +71,12 @@ describe('accessibility and UX polish', () => {
     });
 
     it('Escape works even when focused on input fields', () => {
-      const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      // The Escape key should work even from inputs
+      const code = readFileSync(join(SRC, 'hooks/useKeyboardNavigation.js'), 'utf-8');
+      // The hook's input guard must allow Escape to pass through from any field
       assert.match(
         code,
-        /e\.key\s*!==\s*'Escape'\s*&&.*INPUT/,
-        'Escape should bypass the input guard so it works from any field'
+        /isEditingTarget.*e\.key\s*!==\s*'Escape'/s,
+        'Escape should bypass the input guard in useKeyboardNavigation hook'
       );
     });
 
@@ -194,13 +195,17 @@ describe('accessibility and UX polish', () => {
 
   describe('no empty/broken states', () => {
     it('newsStore has mock data fallback when both sources fail', () => {
-      const code = readFileSync(join(SRC, 'stores/newsStore.js'), 'utf-8');
-      assert.match(code, /dataSource.*mock/, 'Should fall back to mock data source');
+      // Truthfulness change: the app no longer substitutes mock entries on
+      // backend failure. It surfaces an honest 'unavailable' state plus a
+      // DataErrorBanner. These tests pin that policy.
+      const code = readFileSync(join(SRC, 'stores/newsStore.ts'), 'utf-8');
+      assert.match(code, /dataSource.*unavailable/, 'Should mark dataSource unavailable on failure');
+      assert.doesNotMatch(code, /dataSource:\s*'mock'/, 'Must not set dataSource to mock');
     });
 
-    it('App.jsx imports getMockNews for fallback', () => {
+    it('App.jsx must NOT import getMockNews (no fake data fallback)', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      assert.match(code, /getMockNews/, 'Should use getMockNews as fallback data');
+      assert.doesNotMatch(code, /getMockNews/, 'App.jsx must not import or use getMockNews');
     });
 
     it('MapLoadingFallback is rendered during lazy load', () => {

@@ -8,9 +8,10 @@
 import {
   readActiveEvents,
   readEventArticles,
+  readEventArticlesBatch,
   upsertEvent,
   linkArticlesToEvent,
-  updateSourceCredibility
+  updateSourceCredibilityBatch
 } from '../storage.js';
 import { mergeArticlesIntoEvents, aggregateEntities, computeSourceProfile } from '../eventStore.js';
 import { computeLifecycleTransition } from '../../src/utils/eventModel.js';
@@ -42,11 +43,14 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
   console.log(`[ingest] Processing ${mergedEvents.length} events...`);
   let eventIdx = 0;
 
-  for (const event of mergedEvents) {
-    eventIdx++;
-    if (eventIdx % 200 === 0) console.log(`[ingest]   event ${eventIdx}/${mergedEvents.length}`);
+  // Accumulate per-source credibility counters across the cycle so we can
+  // flush a single batched upsert at the end (was N+1: one query per
+  // article per event, hundreds of round-trips on the hot path).
+  const credibilityAcc = new Map();
 
-    // Persist the event first so FK constraints are satisfied for new events
+  // Phase 1: persist all events + link articles. We must do this before
+  // we can readEventArticlesBatch, since the FK side has to exist.
+  for (const event of mergedEvents) {
     await upsertEvent({
       id: event.id,
       title: event.title,
@@ -61,20 +65,40 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
       coordinates: event.coordinates,
       enrichment: '{}'
     });
-
-    // Link articles to event (event exists in DB, per-row FK errors handled inside)
     try {
-      await linkArticlesToEvent(event.id, event.articleIds);
+      const linkRes = await linkArticlesToEvent(event.id, event.articleIds);
+      if (linkRes?.dropped > 0) {
+        console.warn('[ingest] articles dropped (FK)', { eventId: event.id, dropped: linkRes.dropped });
+      }
     } catch (linkErr) {
-      if (linkErr.message.includes('foreign key') || linkErr.message.includes('violates')) {
-        // FK violation — some articleIds were deduped. Non-fatal.
+      if (linkErr?.code === '23503') {
+        console.warn('[ingest] FK violation linking event', event.id);
       } else {
         console.error('[ingest] linkArticlesToEvent failed for event', event.id, ':', linkErr.message);
       }
     }
+  }
 
-    // Get ALL articles for this event (from DB, not just current batch)
-    const allEventArticles = await readEventArticles(event.id);
+  // Phase 2: ONE batched read of every event's articles, instead of N
+  // separate readEventArticles calls in the enrichment loop.
+  const articlesByEvent = await readEventArticlesBatch(mergedEvents.map((e) => e.id));
+  function bumpCredibility(sourceKey, isCorroborated) {
+    if (!sourceKey) return;
+    const cur = credibilityAcc.get(sourceKey) || { total: 0, corroborated: 0 };
+    cur.total += 1;
+    if (isCorroborated) cur.corroborated += 1;
+    credibilityAcc.set(sourceKey, cur);
+  }
+
+  // Phase 3: enrich each event using the batch-prefetched articles map.
+  for (const event of mergedEvents) {
+    eventIdx++;
+    if (eventIdx % 200 === 0) console.log(`[ingest]   event ${eventIdx}/${mergedEvents.length}`);
+
+    // Get ALL articles for this event (from DB, not just current batch).
+    // Prefer the batch-cache prefetched outside the loop; fall back to a
+    // single-event query for any cache miss (rare race with new rows).
+    const allEventArticles = articlesByEvent?.get(event.id) || await readEventArticles(event.id);
 
     // Compute lifecycle transition
     const now = Date.now();
@@ -100,11 +124,11 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
     event.sourceProfile = sourceProfile;
     event.entities = aggregateEntities(allEventArticles);
 
-    // Update source credibility based on corroboration
+    // Accumulate source credibility — flushed in a single batched query
+    // after the loop, replacing the previous N+1 await-per-article pattern.
     const isCorroborated = allEventArticles.length >= 2 && sourceProfile.diversityScore > 0.3;
     for (const article of allEventArticles) {
-      const sourceKey = getSourceNetworkKey(article);
-      await updateSourceCredibility(sourceKey, isCorroborated);
+      bumpCredibility(getSourceNetworkKey(article), isCorroborated);
     }
 
     // Use composite severity model with entity significance, conflict zones, and baseline
@@ -138,7 +162,16 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
       (sourceProfile.wireCount > 0 ? 0.15 : 0) +
       (amplification.isAmplified ? -0.2 : 0.1)
     ));
-    event.confidence = Math.round(confidence * 100) / 100;
+    event.confidence = Math.round(confidence * 100);
+  }
+
+  // Flush accumulated source-credibility deltas in one round-trip.
+  if (credibilityAcc.size > 0) {
+    try {
+      await updateSourceCredibilityBatch(credibilityAcc);
+    } catch (err) {
+      console.error('[ingest] credibility batch failed:', err.message);
+    }
   }
 
   return mergedEvents;

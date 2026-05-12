@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { isoToCountry } from '../utils/geocoder.js';
-import useUIStore from '../stores/uiStore.js';
+import useUIStore from '../stores/uiStore';
 
 /**
  * Build cluster summaries from the current event pool — group by category,

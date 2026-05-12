@@ -65,14 +65,6 @@ const MAP_STATE_PARAM_MAP = {
   mapOverlay: 'overlay',
 };
 
-/** Values that are considered "empty / default" and should be omitted. */
-function isDefaultValue(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string' && value.trim() === '') return true;
-  if (typeof value === 'number' && value === 0) return true;
-  return false;
-}
-
 /**
  * Encodes a view's filters and mapState into a URL query string.
  * Omits params whose values are empty or default.
@@ -84,14 +76,26 @@ export function encodeViewToURL({ filters = {}, mapState = {} } = {}) {
 
   for (const [filterKey, paramKey] of Object.entries(FILTER_PARAM_MAP)) {
     const value = filters[filterKey];
-    if (!isDefaultValue(value)) {
-      params.set(paramKey, String(value));
+    if (value !== null && value !== undefined) {
+      // Special handling for entityFilter (object → string)
+      if (filterKey === 'entityFilter' && typeof value === 'object' && value.name) {
+        const type = value.type || 'entity';
+        params.set(paramKey, `${type}:${value.name}`);
+      } else if (typeof value === 'string' && value.trim() === '') {
+        // skip empty strings
+      } else if (typeof value === 'number' && value === 0) {
+        // skip zero (default)
+      } else if (value === null || value === undefined) {
+        // skip null/undefined
+      } else {
+        params.set(paramKey, String(value));
+      }
     }
   }
 
   for (const [stateKey, paramKey] of Object.entries(MAP_STATE_PARAM_MAP)) {
     const value = mapState[stateKey];
-    if (!isDefaultValue(value)) {
+    if (value !== null && value !== undefined && value !== '') {
       params.set(paramKey, String(value));
     }
   }
@@ -102,6 +106,7 @@ export function encodeViewToURL({ filters = {}, mapState = {} } = {}) {
 /**
  * Parses a URLSearchParams instance back into { filters, mapState }.
  * Numeric filter fields are coerced to numbers.
+ * Entity filter is parsed from "type:name" compound format.
  * @param {URLSearchParams} searchParams
  * @returns {{ filters: object, mapState: object }}
  */
@@ -121,9 +126,22 @@ export function decodeURLToFilters(searchParams) {
   for (const [paramKey, rawValue] of searchParams.entries()) {
     if (reverseFilterMap[paramKey] !== undefined) {
       const filterKey = reverseFilterMap[paramKey];
-      filters[filterKey] = numericFilters.has(filterKey)
-        ? Number(rawValue)
-        : rawValue;
+      if (filterKey === 'entityFilter') {
+        // Decode entity filter from "type:name" compound format
+        const colonIdx = rawValue.indexOf(':');
+        if (colonIdx > 0) {
+          const type = rawValue.slice(0, colonIdx);
+          const name = rawValue.slice(colonIdx + 1);
+          filters.entityFilter = { id: '', name: decodeURIComponent(name), type: decodeURIComponent(type) };
+        } else {
+          // Legacy: just entity name
+          filters.entityFilter = { id: '', name: rawValue, type: 'entity' };
+        }
+      } else if (numericFilters.has(filterKey)) {
+        filters[filterKey] = Number(rawValue);
+      } else {
+        filters[filterKey] = rawValue;
+      }
     } else if (reverseMapStateMap[paramKey] !== undefined) {
       const stateKey = reverseMapStateMap[paramKey];
       mapState[stateKey] = rawValue;

@@ -1,0 +1,130 @@
+{
+  "metadata": {
+    "version": "2026.05.08",
+    "lastUpdated": "2026-05-08",
+    "criteria": "State-controlled or state-directed editorial output. Excludes publicly-funded but editorially independent public broadcasters (BBC, NHK, ARD, NPR, ABC.au, CBC, RTBF, etc.) and excludes private media operating in countries with state pressure unless ownership/control is documented. Coverage is intentionally global across every region — additions/changes should preserve regional balance.",
+    "sources": [
+      {
+        "name": "ASPI International Cyber Policy Centre — State-affiliated media registry",
+        "url": "https://www.aspi.org.au/"
+      },
+      {
+        "name": "EU DisinfoLab — State-controlled media mapping",
+        "url": "https://www.disinfo.eu/"
+      },
+      {
+        "name": "Stanford Internet Observatory — State-affiliated media tracker",
+        "url": "https://cyber.fsi.stanford.edu/io"
+      },
+      {
+        "name": "Reporters Without Borders — Press Freedom Index 2024",
+        "url": "https://rsf.org/en/index"
+      }
+    ],
+    "categories": {
+      "state-controlled": "Government holds direct ownership/editorial control. Output reflects state position by design.",
+      "state-affiliated": "Editorially aligned with state via funding, board, or law without full direct control.",
+      "publicly-funded": "Public-service broadcaster with statutory editorial independence (informational only — NOT flagged as amplification)."
+    }
+  },
+  "networks": [
+    {"name": "RT", "country": "RU", "category": "state-controlled", "aliases": ["Russia Today", "rt.com"]},
+    {"name": "TASS", "country": "RU", "category": "state-controlled", "aliases": ["tass.com", "tass.ru"]},
+    {"name": "Sputnik", "country": "RU", "category": "state-controlled", "aliases": ["sputniknews.com", "sputnikglobe.com"]},
+    {"name": "RIA Novosti", "country": "RU", "category": "state-controlled", "aliases": ["ria.ru", "ria novosti"]},
+    {"name": "Rossiya 24", "country": "RU", "category": "state-controlled", "aliases": ["rossiya"]},
+    {"name": "Channel One Russia", "country": "RU", "category": "state-controlled", "aliases": ["1tv.ru", "perviy kanal"]},
+    {"name": "NTV Russia", "country": "RU", "category": "state-affiliated", "aliases": ["ntv.ru"]},
+    {"name": "Pravda", "country": "RU", "category": "state-affiliated", "aliases": ["pravda.ru"]},
+    {"name": "Izvestia", "country": "RU", "category": "state-affiliated", "aliases": ["iz.ru"]},
+
+    {"name": "Xinhua", "country": "CN", "category": "state-controlled", "aliases": ["xinhuanet.com", "新华社", "Xinhua News Agency"]},
+    {"name": "CCTV", "country": "CN", "category": "state-controlled", "aliases": ["cctv.com", "China Central Television"]},
+    {"name": "CGTN", "country": "CN", "category": "state-controlled", "aliases": ["cgtn.com", "China Global Television Network"]},
+    {"name": "People's Daily", "country": "CN", "category": "state-controlled", "aliases": ["peopledaily", "people.cn"]},
+    {"name": "Global Times", "country": "CN", "category": "state-controlled", "aliases": ["globaltimes.cn"]},
+    {"name": "China Daily", "country": "CN", "category": "state-controlled", "aliases": ["chinadaily.com"]},
+    {"name": "China News Service", "country": "CN", "category": "state-affiliated", "aliases": ["chinanews.com", "ecns.cn"]},
+    {"name": "Beijing Daily", "country": "CN", "category": "state-affiliated", "aliases": ["bjd.com.cn"]},
+    {"name": "Phoenix TV", "country": "CN", "category": "state-affiliated", "aliases": ["ifeng.com"]},
+    {"name": "Xinmin Evening News", "country": "CN", "category": "state-affiliated", "aliases": ["xinmin"]},
+
+    {"name": "Press TV", "country": "IR", "category": "state-controlled", "aliases": ["presstv.ir"]},
+    {"name": "IRNA", "country": "IR", "category": "state-controlled", "aliases": ["irna.ir", "Islamic Republic News Agency"]},
+    {"name": "Tasnim", "country": "IR", "category": "state-affiliated", "aliases": ["tasnimnews.com"]},
+    {"name": "Fars News", "country": "IR", "category": "state-affiliated", "aliases": ["farsnews.ir"]},
+    {"name": "Mehr News", "country": "IR", "category": "state-affiliated", "aliases": ["mehrnews.com"]},
+    {"name": "IRIB", "country": "IR", "category": "state-controlled", "aliases": ["iribnews.ir"]},
+
+    {"name": "KCNA", "country": "KP", "category": "state-controlled", "aliases": ["Korean Central News Agency", "kcna.kp"]},
+    {"name": "Rodong Sinmun", "country": "KP", "category": "state-controlled", "aliases": ["rodong.rep.kp"]},
+
+    {"name": "BelTA", "country": "BY", "category": "state-controlled", "aliases": ["belta.by"]},
+    {"name": "SB Belarus Segodnya", "country": "BY", "category": "state-controlled", "aliases": ["sb.by"]},
+
+    {"name": "Telesur", "country": "VE", "category": "state-controlled", "aliases": ["telesurenglish.net", "teleSUR"]},
+    {"name": "VTV Venezuela", "country": "VE", "category": "state-controlled", "aliases": ["vtv.gob.ve"]},
+    {"name": "AVN Venezuela", "country": "VE", "category": "state-affiliated", "aliases": ["avn.info.ve"]},
+
+    {"name": "Granma", "country": "CU", "category": "state-controlled", "aliases": ["granma.cu"]},
+    {"name": "Prensa Latina", "country": "CU", "category": "state-controlled", "aliases": ["prensa-latina.cu"]},
+    {"name": "Cubadebate", "country": "CU", "category": "state-affiliated", "aliases": ["cubadebate.cu"]},
+
+    {"name": "Anadolu Agency", "country": "TR", "category": "state-affiliated", "aliases": ["aa.com.tr", "anadolu ajansı"]},
+    {"name": "TRT", "country": "TR", "category": "state-controlled", "aliases": ["trtworld.com", "trt.net.tr", "Turkish Radio and Television"]},
+    {"name": "Daily Sabah", "country": "TR", "category": "state-affiliated", "aliases": ["dailysabah.com"]},
+
+    {"name": "SPA", "country": "SA", "category": "state-controlled", "aliases": ["spa.gov.sa", "Saudi Press Agency"]},
+    {"name": "Al Arabiya", "country": "SA", "category": "state-affiliated", "aliases": ["alarabiya.net"]},
+
+    {"name": "WAM", "country": "AE", "category": "state-controlled", "aliases": ["wam.ae", "Emirates News Agency"]},
+    {"name": "Khaleej Times", "country": "AE", "category": "state-affiliated", "aliases": ["khaleejtimes.com"]},
+
+    {"name": "QNA", "country": "QA", "category": "state-controlled", "aliases": ["qna.org.qa", "Qatar News Agency"]},
+
+    {"name": "MENA", "country": "EG", "category": "state-controlled", "aliases": ["Middle East News Agency"]},
+    {"name": "Al-Ahram", "country": "EG", "category": "state-affiliated", "aliases": ["ahram.org.eg"]},
+
+    {"name": "APS", "country": "DZ", "category": "state-controlled", "aliases": ["aps.dz", "Algérie Presse Service"]},
+
+    {"name": "JANA", "country": "LY", "category": "state-controlled", "aliases": ["Jamahiriya News Agency"]},
+
+    {"name": "ENA", "country": "ET", "category": "state-controlled", "aliases": ["Ethiopian News Agency"]},
+
+    {"name": "Eri-TV", "country": "ER", "category": "state-controlled", "aliases": ["Eritrean Television"]},
+    {"name": "Hadas Eritrea", "country": "ER", "category": "state-controlled", "aliases": ["Haddas Ertra"]},
+
+    {"name": "ZBC", "country": "ZW", "category": "state-controlled", "aliases": ["zbc.co.zw", "Zimbabwe Broadcasting Corp"]},
+    {"name": "The Herald", "country": "ZW", "category": "state-affiliated", "aliases": ["herald.co.zw"]},
+
+    {"name": "Sudan News Agency", "country": "SD", "category": "state-controlled", "aliases": ["SUNA"]},
+
+    {"name": "VNA", "country": "VN", "category": "state-controlled", "aliases": ["vietnamnews.vn", "Vietnam News Agency"]},
+    {"name": "Nhan Dan", "country": "VN", "category": "state-controlled", "aliases": ["nhandan.vn"]},
+    {"name": "VTV Vietnam", "country": "VN", "category": "state-controlled", "aliases": ["vtv.vn"]},
+
+    {"name": "KPL", "country": "LA", "category": "state-controlled", "aliases": ["kpl.gov.la", "Khaosan Pathet Lao"]},
+
+    {"name": "AKP", "country": "KH", "category": "state-controlled", "aliases": ["Agence Kampuchea Presse"]},
+
+    {"name": "MRTV", "country": "MM", "category": "state-controlled", "aliases": ["Myanmar Radio and Television"]},
+    {"name": "Global New Light of Myanmar", "country": "MM", "category": "state-controlled", "aliases": []},
+
+    {"name": "APP", "country": "PK", "category": "state-controlled", "aliases": ["app.com.pk", "Associated Press of Pakistan"]},
+    {"name": "PTV", "country": "PK", "category": "state-controlled", "aliases": ["ptv.com.pk", "Pakistan Television"]},
+
+    {"name": "BSS", "country": "BD", "category": "state-controlled", "aliases": ["bssnews.net", "Bangladesh Sangbad Sangstha"]},
+
+    {"name": "Kazinform", "country": "KZ", "category": "state-controlled", "aliases": ["inform.kz"]},
+    {"name": "UzA", "country": "UZ", "category": "state-controlled", "aliases": ["uza.uz"]},
+    {"name": "TDH", "country": "TM", "category": "state-controlled", "aliases": ["Turkmen State News Agency"]},
+    {"name": "Khovar", "country": "TJ", "category": "state-controlled", "aliases": ["khovar.tj"]},
+    {"name": "Kabar", "country": "KG", "category": "state-affiliated", "aliases": ["kabar.kg"]},
+    {"name": "AZERTAC", "country": "AZ", "category": "state-controlled", "aliases": ["azertag.az"]},
+
+    {"name": "MTI", "country": "HU", "category": "state-affiliated", "aliases": ["mti.hu", "Magyar Távirati Iroda"]},
+    {"name": "Tanjug", "country": "RS", "category": "state-affiliated", "aliases": ["tanjug.rs"]},
+
+    {"name": "TT News Agency state-aligned", "country": "PL", "category": "state-affiliated", "aliases": ["TVP Info"]}
+  ]
+}

@@ -8,7 +8,7 @@
     "dev:frontend": "vite",
     "start": "node server/index.js",
     "server": "node server/index.js",
-    "test": "node --test",
+    "test": "node --experimental-strip-types --test",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -20,11 +20,16 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@instantdb/admin": "^1.0.24",
+    "@instantdb/react": "^1.0.24",
+    "@stripe/stripe-js": "^9.4.0",
     "afinn-165": "^2.0.2",
     "axios": "^1.13.6",
     "compromise": "^14.15.0",
     "date-fns": "^4.1.0",
+    "html2canvas": "^1.4.1",
     "i18next": "^25.8.18",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.577.0",
     "maplibre-gl": "^5.20.2",
     "pg": "^8.20.0",
@@ -32,6 +37,7 @@
     "react-dom": "^19.2.4",
     "react-i18next": "^16.5.8",
     "react-router-dom": "^7.13.1",
+    "stripe": "^22.1.1",
     "ws": "^8.20.0",
     "zustand": "^5.0.12"
   },

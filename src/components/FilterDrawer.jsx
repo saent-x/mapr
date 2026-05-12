@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X } from 'lucide-react';
+import { X, FileText } from 'lucide-react';
 import { DATE_WINDOWS, SORT_OPTIONS } from '../utils/mockData';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
 
-const VERIFICATION_OPTIONS = ['all', 'official', 'verified', 'developing', 'single-source'];
+const VERIFICATION_OPTIONS = ['all', 'official', 'corroborated', 'developing', 'single-source'];
 const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local'];
 const LANGUAGE_OPTIONS = ['all', 'en', 'es', 'fr', 'ar', 'zh'];
 
@@ -307,6 +307,15 @@ const FilterDrawer = ({
               onClick={reset}
             >
               RESET
+            </button>
+            <button
+              type="button"
+              className="btn"
+              aria-label={t('export.generateBriefing', 'Generate Briefing')}
+              onClick={() => useUIStore.getState().setShowExport(true)}
+            >
+              <FileText size={12} aria-hidden style={{ marginRight: 4 }} />
+              {t('export.generateBriefing', 'Generate Briefing')}
             </button>
             <button
               type="button"

@@ -1,0 +1,84 @@
+export const FEATURE_TIER_FREE = 'free';
+export const FEATURE_TIER_PRO = 'pro';
+export const FEATURE_TIER_DISABLED = 'disabled';
+
+export const FEATURE_ACCESS_CATALOG = [
+  {
+    id: 'savedViews',
+    label: 'Saved views',
+    description: 'Save and recall analyst filters and map state.',
+    category: 'Workflow',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'alertRules',
+    label: 'Alert rules',
+    description: 'Create alert rules from saved views.',
+    category: 'Workflow',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'briefingExport',
+    label: 'Briefing export',
+    description: 'Copy or export filtered intelligence briefings.',
+    category: 'Output',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'historicalQueries',
+    label: 'Historical queries',
+    description: 'Query previous snapshots, compare ranges, and time travel.',
+    category: 'Analysis',
+    defaultTier: FEATURE_TIER_PRO,
+  },
+  {
+    id: 'bookmarks',
+    label: 'Bookmarks',
+    description: 'Bookmark stories for a user account.',
+    category: 'Workflow',
+    defaultTier: FEATURE_TIER_FREE,
+  },
+];
+
+const VALID_TIERS = new Set([FEATURE_TIER_FREE, FEATURE_TIER_PRO, FEATURE_TIER_DISABLED]);
+
+export const DEFAULT_FEATURE_FLAGS = Object.freeze({
+  billingEnabled: true,
+  features: Object.freeze(Object.fromEntries(
+    FEATURE_ACCESS_CATALOG.map((feature) => [feature.id, feature.defaultTier]),
+  )),
+  updatedAt: null,
+});
+
+export function normalizeFeatureFlags(raw = {}) {
+  const sourceFeatures = raw && typeof raw === 'object' && raw.features && typeof raw.features === 'object'
+    ? raw.features
+    : {};
+
+  const features = {};
+  for (const feature of FEATURE_ACCESS_CATALOG) {
+    const configuredTier = sourceFeatures[feature.id];
+    features[feature.id] = VALID_TIERS.has(configuredTier) ? configuredTier : feature.defaultTier;
+  }
+
+  return {
+    billingEnabled: raw?.billingEnabled !== false,
+    features,
+    updatedAt: raw?.updatedAt || null,
+  };
+}
+
+export function canAccessFeature(featureFlags, featureId, subscriptionStatus = FEATURE_TIER_FREE) {
+  const flags = normalizeFeatureFlags(featureFlags);
+  if (flags.billingEnabled === false) return true;
+  const requiredTier = flags.features[featureId] || FEATURE_TIER_PRO;
+  if (requiredTier === FEATURE_TIER_DISABLED) return false;
+  if (requiredTier === FEATURE_TIER_FREE) return true;
+  return subscriptionStatus === FEATURE_TIER_PRO || subscriptionStatus === 'enterprise';
+}
+
+export function isFeatureDisabled(featureFlags, featureId) {
+  const flags = normalizeFeatureFlags(featureFlags);
+  if (flags.billingEnabled === false) return false;
+  return flags.features[featureId] === FEATURE_TIER_DISABLED;
+}

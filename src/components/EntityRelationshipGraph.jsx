@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useBreakpoint from '../hooks/useBreakpoint';
+// Worker module — Vite turns this into a same-origin classic worker bundle.
+// The graphPhysics module is shared between the worker and main thread so
+// the per-frame `tickSimulation` calls in this file use the exact same
+// physics that the prewarm worker computed.
+import GraphPrewarmWorker from '../workers/graphPrewarm.worker.js?worker';
 
 /**
  * Force-directed entity relationship graph on HTML5 Canvas.
@@ -25,13 +30,33 @@ const TYPE_COLORS = {
 };
 const TYPE_LABELS = { person: 'Person', organization: 'Organization', location: 'Location' };
 
-const INK_0 = '#e8e6df';
-const INK_2 = 'rgba(232, 230, 223, 0.55)';
-const INK_3 = 'rgba(232, 230, 223, 0.28)';
-const GRID_DOT = 'rgba(232, 230, 223, 0.055)';
-const EDGE_BASE = 'rgba(140, 146, 160, 0.18)';
-const EDGE_DIM  = 'rgba(140, 146, 160, 0.08)';
-const EDGE_HIGH = 'rgba(232, 163, 61, 0.85)';
+const DARK_GRAPH_PALETTE = {
+  graphCanvas: '#0b0d10',
+  ink0: '#e8e6df',
+  ink2: 'rgba(232, 230, 223, 0.55)',
+  ink3: 'rgba(232, 230, 223, 0.28)',
+  label: 'rgba(232, 230, 223, 0.7)',
+  gridDot: 'rgba(232, 230, 223, 0.055)',
+  edgeBase: 'rgba(140, 146, 160, 0.18)',
+  edgeDim: 'rgba(140, 146, 160, 0.08)',
+  edgeHigh: 'rgba(232, 163, 61, 0.85)',
+  inactiveNodeFill: '#0f1115',
+  activeGlyph: '#0f1115',
+};
+
+const LIGHT_GRAPH_PALETTE = {
+  graphCanvas: '#f5f4f0',
+  ink0: '#1b1d21',
+  ink2: 'rgba(58, 61, 68, 0.72)',
+  ink3: 'rgba(107, 110, 118, 0.45)',
+  label: 'rgba(27, 29, 33, 0.78)',
+  gridDot: 'rgba(27, 29, 33, 0.12)',
+  edgeBase: 'rgba(74, 79, 88, 0.30)',
+  edgeDim: 'rgba(74, 79, 88, 0.14)',
+  edgeHigh: 'rgba(196, 130, 30, 0.86)',
+  inactiveNodeFill: 'rgba(250, 249, 245, 0.96)',
+  activeGlyph: '#f9f8f4',
+};
 
 const MIN_NODE_RADIUS = 9;
 const MAX_NODE_RADIUS = 18;
@@ -56,6 +81,13 @@ const COLLIDE_PADDING_MAX = 80;
 
 const GRID_SPACING = 22;
 const GRID_DOT_RADIUS = 1;
+
+function getGraphPalette() {
+  if (typeof document === 'undefined') return DARK_GRAPH_PALETTE;
+  return document.documentElement.getAttribute('data-theme') === 'light'
+    ? LIGHT_GRAPH_PALETTE
+    : DARK_GRAPH_PALETTE;
+}
 
 function nodeRadius(mentionCount, maxMentions) {
   const ratio = (mentionCount || 1) / (maxMentions || 1);
@@ -252,8 +284,8 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
   }
 }
 
-function drawDotGrid(ctx, width, height) {
-  ctx.fillStyle = GRID_DOT;
+function drawDotGrid(ctx, width, height, palette) {
+  ctx.fillStyle = palette.gridDot;
   for (let y = GRID_SPACING / 2; y < height; y += GRID_SPACING) {
     for (let x = GRID_SPACING / 2; x < width; x += GRID_SPACING) {
       ctx.beginPath();
@@ -263,14 +295,14 @@ function drawDotGrid(ctx, width, height) {
   }
 }
 
-function drawNodeGlyph(ctx, node, color, isActive, view) {
+function drawNodeGlyph(ctx, node, color, isActive, view, palette) {
   const r = node.radius;
   const g = r * 0.52;
   if (node.type === 'organization') {
-    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillStyle = isActive ? palette.activeGlyph : color;
     ctx.fillRect(node.x - g / 2, node.y - g / 2, g, g);
   } else if (node.type === 'location') {
-    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillStyle = isActive ? palette.activeGlyph : color;
     ctx.beginPath();
     ctx.moveTo(node.x, node.y - g * 0.8);
     ctx.lineTo(node.x + g * 0.8, node.y);
@@ -288,18 +320,20 @@ function drawNodeGlyph(ctx, node, color, isActive, view) {
     ctx.font = `${GLYPH_FONT_WEIGHT} ${fontPx}px "IBM Plex Mono", ui-monospace, Menlo, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillStyle = isActive ? palette.activeGlyph : color;
     ctx.fillText('P', sx, sy);
     ctx.restore();
   }
 }
 
-function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewport, view, worldW, worldH) {
+function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selectedEntityB, pathHighlight, viewport, view, worldW, worldH, palette = getGraphPalette()) {
   const { width, height } = viewport;
   ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = palette.graphCanvas;
+  ctx.fillRect(0, 0, width, height);
 
   // 1. Dot grid in screen space
-  drawDotGrid(ctx, width, height);
+  drawDotGrid(ctx, width, height, palette);
 
   // 2. World transform for graph content
   ctx.save();
@@ -314,62 +348,109 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
       if (edge.target === selectedEntity) connectedIds.add(edge.source);
     }
   }
+  // Also include second selected entity's connections
+  if (selectedEntityB) {
+    connectedIds.add(selectedEntityB);
+    for (const edge of simEdges) {
+      if (edge.source === selectedEntityB) connectedIds.add(edge.target);
+      if (edge.target === selectedEntityB) connectedIds.add(edge.source);
+    }
+  }
 
-  // 3. Edges
+  const pathSet = new Set(pathHighlight || []);
+  const pathEdges = new Set();
+  if (pathHighlight && pathHighlight.length > 1) {
+    for (let i = 0; i < pathHighlight.length - 1; i++) {
+      const a = pathHighlight[i];
+      const b = pathHighlight[i + 1];
+      pathEdges.add(`${a}|${b}`);
+      pathEdges.add(`${b}|${a}`);
+    }
+  }
+
+  // Compute max edge weight for visual scaling
+  let maxEdgeWeight = 1;
+  for (const edge of simEdges) {
+    if ((edge.weight || 1) > maxEdgeWeight) maxEdgeWeight = edge.weight;
+  }
+
+  // 3. Edges — with weight-proportional visual
   for (const edge of simEdges) {
     const a = edge.sourceNode;
     const b = edge.targetNode;
-    const isHighlighted = selectedEntity
+    const edgeKeyAB = `${edge.source}|${edge.target}`;
+    const isPathEdge = pathEdges.has(edgeKeyAB);
+    const isHighlighted = !isPathEdge && selectedEntity
       ? connectedIds.has(edge.source) && connectedIds.has(edge.target)
       : false;
+    const weight = edge.weight || 1;
+    // Weight ratio: 0.3–1.0 based on weight relative to max
+    const weightRatio = 0.3 + 0.7 * (weight / maxEdgeWeight);
+
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    if (isHighlighted) {
-      ctx.strokeStyle = EDGE_HIGH;
-      ctx.lineWidth = 1.4 / view.scale;
+    if (isPathEdge) {
+      // Shortest path edges: bright cyan with thicker line
+      ctx.strokeStyle = 'rgba(94, 199, 212, 0.9)';
+      ctx.lineWidth = (2.0 * weightRatio) / view.scale;
+    } else if (isHighlighted) {
+      ctx.strokeStyle = palette.edgeHigh;
+      ctx.lineWidth = (1.4 * weightRatio) / view.scale;
     } else {
-      ctx.strokeStyle = selectedEntity ? EDGE_DIM : EDGE_BASE;
-      ctx.lineWidth = 0.8 / view.scale;
+      ctx.strokeStyle = selectedEntity ? palette.edgeDim : palette.edgeBase;
+      ctx.lineWidth = (0.8 * weightRatio) / view.scale;
     }
     ctx.stroke();
   }
 
   // 4. Nodes — outlined rings with inner glyph, solid disc when active
   for (const node of simNodes) {
-    const isSelected = node.id === selectedEntity;
+    const isSelectedA = node.id === selectedEntity;
+    const isSelectedB = node.id === selectedEntityB;
+    const isInPath = pathSet.has(node.id);
     const isHovered  = node.id === hoveredEntity;
     const isConnected = connectedIds.has(node.id);
-    const isActive = isSelected || isConnected;
-    const dimmed = selectedEntity && !isActive;
+    const isActive = isSelectedA || isSelectedB || isInPath || isConnected;
+    const dimmed = (selectedEntity || selectedEntityB) && !isActive;
     const color = TYPE_COLORS[node.type] || '#999';
 
     ctx.beginPath();
     ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-    if (isActive) {
+    if (isInPath) {
+      // Path nodes: cyan fill
+      ctx.fillStyle = 'rgba(94, 199, 212, 0.35)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(94, 199, 212, 0.7)';
+      ctx.lineWidth = 1.8 / view.scale;
+      ctx.stroke();
+    } else if (isActive) {
       ctx.fillStyle = color;
       ctx.fill();
     } else {
-      ctx.fillStyle = '#0f1115';
+      ctx.fillStyle = palette.inactiveNodeFill;
       ctx.fill();
       ctx.strokeStyle = dimmed ? `${color}55` : color;
       ctx.lineWidth = 1.3 / view.scale;
       ctx.stroke();
     }
 
-    drawNodeGlyph(ctx, node, color, isActive, view);
+    drawNodeGlyph(ctx, node, isInPath ? 'rgba(94, 199, 212, 0.9)' : color, isActive && !isInPath, view, palette);
 
-    if (isSelected) {
-      // Outer halo ring
+    if (isSelectedA || isSelectedB) {
+      // Outer halo ring — amber for first, cyan for second
+      const haloColor = isSelectedA
+        ? 'rgba(232, 163, 61, 0.45)'
+        : 'rgba(94, 199, 212, 0.45)';
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius + 5, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(232, 163, 61, 0.35)';
-      ctx.lineWidth = 1 / view.scale;
+      ctx.strokeStyle = haloColor;
+      ctx.lineWidth = 1.5 / view.scale;
       ctx.stroke();
     } else if (isHovered) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = INK_2;
+      ctx.strokeStyle = palette.ink2;
       ctx.lineWidth = 1 / view.scale;
       ctx.stroke();
     }
@@ -379,16 +460,24 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, viewp
 
   // 5. Labels in screen space (crisp at any zoom)
   for (const node of simNodes) {
-    const isSelected = node.id === selectedEntity;
+    const isSelectedA = node.id === selectedEntity;
+    const isSelectedB = node.id === selectedEntityB;
+    const isInPath = pathSet.has(node.id);
     const isHovered  = node.id === hoveredEntity;
     const isConnected = connectedIds.has(node.id);
-    const dimmed = selectedEntity && !(isSelected || isConnected);
+    const dimmed = (selectedEntity || selectedEntityB) && !(isSelectedA || isSelectedB || isInPath || isConnected);
     const sx = node.x * view.scale + view.tx;
     const sy = (node.y + node.radius) * view.scale + view.ty + 6;
     ctx.font = LABEL_FONT;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = dimmed ? INK_3 : (isSelected || isHovered ? INK_0 : 'rgba(232, 230, 223, 0.7)');
+    if (isInPath) {
+      ctx.fillStyle = 'rgba(94, 199, 212, 0.9)';
+    } else if (dimmed) {
+      ctx.fillStyle = palette.ink3;
+    } else {
+      ctx.fillStyle = (isSelectedA || isSelectedB || isHovered) ? palette.ink0 : palette.label;
+    }
     ctx.fillText(node.name, sx, sy);
   }
 }
@@ -446,6 +535,8 @@ export default function EntityRelationshipGraph({
   edges = [],
   events = [],
   selectedEntity,
+  selectedEntityB = null,   // second entity for shortest-path mode
+  pathHighlight = [],       // array of node IDs forming highlighted path
   onEntitySelect,
   width = 800,
   height = 600,
@@ -455,9 +546,12 @@ export default function EntityRelationshipGraph({
   const wrapperRef = useRef(null);
   const simRef = useRef(null);
   const animRef = useRef(null);
+  const prewarmWorkerRef = useRef(null);
   const alphaRef = useRef(1);
   const hoveredRef = useRef(null);
   const selectedRef = useRef(null);
+  const selectedBRef = useRef(null);
+  const pathRef = useRef([]);
   const connectedRef = useRef(new Set());
   const viewRef = useRef({ scale: 1, tx: 0, ty: 0 });
   const dragRef = useRef(null); // { kind: 'pan' | 'node', ... }
@@ -499,6 +593,8 @@ export default function EntityRelationshipGraph({
 
   useEffect(() => {
     selectedRef.current = selectedEntity || null;
+    selectedBRef.current = selectedEntityB || null;
+    pathRef.current = pathHighlight || [];
     const set = new Set();
     if (selectedEntity && simRef.current) {
       set.add(selectedEntity);
@@ -507,9 +603,16 @@ export default function EntityRelationshipGraph({
         if (edge.target === selectedEntity) set.add(edge.source);
       }
     }
+    if (selectedEntityB && simRef.current) {
+      set.add(selectedEntityB);
+      for (const edge of simRef.current.simEdges) {
+        if (edge.source === selectedEntityB) set.add(edge.target);
+        if (edge.target === selectedEntityB) set.add(edge.source);
+      }
+    }
     connectedRef.current = set;
     alphaRef.current = Math.max(alphaRef.current, REHEAT_ALPHA);
-  }, [selectedEntity]);
+  }, [selectedEntity, selectedEntityB, pathHighlight]);
 
   useEffect(() => {
     if (!nodes || nodes.length === 0) {
@@ -571,9 +674,59 @@ export default function EntityRelationshipGraph({
       simRef.current = sim;
       alphaRef.current = 1;
 
-      for (let i = 0; i < PREWARM_TICKS; i++) {
-        tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
-        alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
+      // Off-thread prewarm. Old behaviour ran 360 × O(n²) ticks
+      // synchronously here — locked the UI for ~2-4s on slow devices at
+      // 200+ nodes. The worker computes the final positions while the
+      // main thread can paint the initial scatter and stay interactive.
+      // Falls back to a chunked main-thread loop if the worker can't be
+      // constructed (older Safari, dev hot-reload edge case).
+      let workerHandled = false;
+      try {
+        const worker = new GraphPrewarmWorker();
+        prewarmWorkerRef.current = worker;
+        const workerSig = newIdSig;
+        const handleMessage = (event) => {
+          // Drop late messages from a previous prewarm if the graph changed.
+          if (workerSig !== simRef.current?.idSig) return;
+          if (event.data?.type === 'prewarmDone' && simRef.current) {
+            const positionsById = new Map(event.data.positions.map((p) => [p.id, p]));
+            for (const n of simRef.current.simNodes) {
+              const p = positionsById.get(n.id);
+              if (!p) continue;
+              n.x = p.x; n.y = p.y; n.vx = p.vx; n.vy = p.vy;
+            }
+            alphaRef.current = event.data.finalAlpha ?? alphaRef.current;
+            viewRef.current = fitViewToNodes(simRef.current.simNodes, { width, height });
+            setZoomDisplay(viewRef.current.scale);
+          }
+          worker.terminate();
+          if (prewarmWorkerRef.current === worker) prewarmWorkerRef.current = null;
+        };
+        worker.addEventListener('message', handleMessage);
+        worker.addEventListener('error', () => {
+          // Worker died — the rAF loop will still produce a usable layout
+          // over the next ~60 frames; we just lose the prewarm head start.
+          worker.terminate();
+          if (prewarmWorkerRef.current === worker) prewarmWorkerRef.current = null;
+        });
+        worker.postMessage({
+          type: 'prewarm',
+          // Strip canvas/back-ref state — only send raw graph data.
+          nodes: nodes.map((n) => ({ id: n.id, mentionCount: n.mentionCount, type: n.type })),
+          edges: edges.map((e) => ({ source: e.source, target: e.target, weight: e.weight })),
+          worldW,
+          worldH,
+        });
+        workerHandled = true;
+      } catch {
+        workerHandled = false;
+      }
+
+      if (!workerHandled) {
+        for (let i = 0; i < PREWARM_TICKS; i++) {
+          tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
+          alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
+        }
       }
 
       viewRef.current = fitViewToNodes(sim.simNodes, { width, height });
@@ -591,6 +744,7 @@ export default function EntityRelationshipGraph({
       if (canvas) {
         const ctx = canvas.getContext('2d');
         drawGraph(ctx, simNodes, simEdges, selectedRef.current, hoveredRef.current,
+          selectedBRef.current, pathRef.current,
           { width, height }, viewRef.current, worldW, worldH);
       }
       animRef.current = requestAnimationFrame(animate);
@@ -600,6 +754,12 @@ export default function EntityRelationshipGraph({
     return () => {
       running = false;
       if (animRef.current) cancelAnimationFrame(animRef.current);
+      // Kill any in-flight prewarm worker so an unmounted component can't
+      // keep CPU busy or fire setState after teardown.
+      if (prewarmWorkerRef.current) {
+        try { prewarmWorkerRef.current.terminate(); } catch { /* already gone */ }
+        prewarmWorkerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges, width, height, worldW, worldH]);
@@ -634,8 +794,8 @@ export default function EntityRelationshipGraph({
     const node = findNodeAt(e.clientX, e.clientY);
     if (isMobile) {
       // Mobile: tap-select only. Pan/pinch handled by touch listeners.
-      if (node) onEntitySelect?.(node.id === selectedEntity ? null : node.id);
-      else onEntitySelect?.(null);
+      if (node) onEntitySelect?.(node.id === selectedEntity ? null : node.id, e.shiftKey);
+      else onEntitySelect?.(null, false);
       return;
     }
     if (node) {
@@ -649,6 +809,7 @@ export default function EntityRelationshipGraph({
         startX: e.clientX,
         startY: e.clientY,
         moved: false,
+        shiftKey: e.shiftKey,
       };
       alphaRef.current = Math.max(alphaRef.current, 0.5);
     } else {
@@ -724,11 +885,11 @@ export default function EntityRelationshipGraph({
       // unpin is the expected "nudge it then let physics take over" feel.
       d.node.fixed = false;
       if (!d.moved) {
-        onEntitySelect?.(d.node.id === selectedEntity ? null : d.node.id);
+        onEntitySelect?.(d.node.id === selectedEntity ? null : d.node.id, d.shiftKey);
         alphaRef.current = REHEAT_ALPHA;
       }
     } else if (d.kind === 'pan' && !d.moved) {
-      onEntitySelect?.(null);
+      onEntitySelect?.(null, false);
     }
   }, [onEntitySelect, selectedEntity]);
 

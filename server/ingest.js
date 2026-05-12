@@ -492,12 +492,15 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
     }
 
     try {
+      // Always read the latest catalog to pick up admin writes
+      const latestCatalog = await readSourceCatalog();
+
       // ── Stage 1: Fetch from all sources (GDELT + RSS + HTML) ──
       const { gdeltArticles, rssResult, updatedSourceState, gdeltHealth } = await fetchAllSources({
         force,
         timespan: DEFAULT_TIMESPAN,
         maxRecords: DEFAULT_MAX_RECORDS,
-        catalog: getSourceCatalog(),
+        catalog: latestCatalog,
         sourceState
       });
       sourceState = updatedSourceState;
@@ -507,7 +510,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         gdeltArticles,
         rssResult,
         previousArticles: currentSnapshot?.articles || [],
-        catalog: getSourceCatalog()
+        catalog: latestCatalog
       });
 
       if (mergedArticles.length === 0) {

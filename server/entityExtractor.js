@@ -7,6 +7,101 @@
 import nlp from 'compromise';
 import { GAZETTEER_ORGS } from './entityGazetteer.js';
 
+// ── Entity normalization map ──────────────────────────────────────────────────
+
+/**
+ * Maps common entity name variants to a canonical form.
+ * Used to normalize extracted entities so that "U.S." and "USA" map to the
+ * same canonical name (and similar for other common abbreviations/variants).
+ */
+const ENTITY_NORMALIZATION_MAP = new Map([
+  // Country / location variants
+  ['u.s.', 'USA'],
+  ['u.s.a.', 'USA'],
+  ['us', 'USA'],
+  ['united states', 'USA'],
+  ['united states of america', 'USA'],
+  ['u.k.', 'United Kingdom'],
+  ['uk', 'United Kingdom'],
+  ['great britain', 'United Kingdom'],
+  ['dprk', 'North Korea'],
+  ['n. korea', 'North Korea'],
+  ['rok', 'South Korea'],
+  ['s. korea', 'South Korea'],
+  ['prc', 'China'],
+  ["people's republic of china", 'China'],
+
+  // Organization variants
+  ['un', 'United Nations'],
+  ['u.n.', 'United Nations'],
+  ['eu', 'European Union'],
+  ['e.u.', 'European Union'],
+  ['icc', 'International Criminal Court'],
+  ['imf', 'International Monetary Fund'],
+  ['who', 'World Health Organization'],
+  ['wto', 'World Trade Organization'],
+  ['n.korea', 'North Korea'],
+  ['s.korea', 'South Korea'],
+
+  // Common political abbreviations
+  ['govt', 'Government'],
+  ['gov.', 'Government'],
+  ['dept.', 'Department'],
+]);
+
+/**
+ * Normalize an entity name to its canonical form.
+ *
+ * Returns the canonical name if a mapping exists, otherwise returns the
+ * input as-is. Case-insensitive lookup.
+ *
+ * @param {string} name - Entity name to normalize
+ * @returns {string} Canonical entity name
+ */
+export function normalizeEntityName(name) {
+  if (!name) return '';
+
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+
+  // Check direct normalization map
+  if (ENTITY_NORMALIZATION_MAP.has(lower)) {
+    return ENTITY_NORMALIZATION_MAP.get(lower);
+  }
+
+  // Check entity gazetteer for canonical name mapping
+  for (const org of GAZETTEER_ORGS) {
+    if (org.name.toLowerCase() === lower) return org.name;
+    for (const alias of org.aliases) {
+      if (alias.toLowerCase() === lower) return org.name;
+    }
+  }
+
+  return trimmed;
+}
+
+/**
+ * Normalize a list of entity objects, deduplicating by canonical name.
+ *
+ * @param {Array<{name: string}>} entities - Array of entity objects
+ * @returns {Array<{name: string}>} Normalized, deduplicated entity array
+ */
+export function normalizeEntityList(entities) {
+  const seen = new Map();
+
+  for (const entity of (entities || [])) {
+    const canonical = normalizeEntityName(entity.name);
+    if (!canonical) continue;
+
+    const lower = canonical.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.set(lower, { ...entity, name: canonical });
+    }
+  }
+
+  return [...seen.values()];
+}
+
 // ── Event type patterns ────────────────────────────────────────────────────────
 
 const EVENT_PATTERNS = [
@@ -185,10 +280,15 @@ export async function extractEntities(text) {
   // ── 5. Classify event ─────────────────────────────────────────────────────
   const category = classifyEvent(text);
 
+  // ── 6. Normalize all entities to canonical forms ─────────────────────────
+  const normalizedPeople = normalizeEntityList(people);
+  const normalizedOrgs = normalizeEntityList(organizations);
+  const normalizedPlaces = normalizeEntityList(nlpPlaces);
+
   return {
-    people,
-    organizations,
-    locations: nlpPlaces,
+    people: normalizedPeople,
+    organizations: normalizedOrgs,
+    locations: normalizedPlaces,
     category,
   };
 }
