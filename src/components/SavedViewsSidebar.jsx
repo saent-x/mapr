@@ -125,6 +125,10 @@ export default function SavedViewsSidebar() {
   const handleShare = async (e, view) => {
     e.stopPropagation();
     if (view.isDefault) return;
+    if (!hasFeatureAccess('sharedViews')) {
+      upgradeToPro().catch(() => {});
+      return;
+    }
     setCopied(false);
     try {
       let token = view.shareToken;

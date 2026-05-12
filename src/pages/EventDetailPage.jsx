@@ -16,6 +16,8 @@ import MapLoadingFallback from '../components/MapLoadingFallback';
 import MapErrorBoundary from '../components/MapErrorBoundary';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
+const SourceCredibilityPanel = lazy(() => import('../components/SourceCredibilityPanel.jsx'));
+const BriefGenerator = lazy(() => import('../components/BriefGenerator.jsx'));
 
 function formatTs(ts, locale) {
   if (!ts) return '—';
@@ -438,6 +440,14 @@ export default function EventDetailPage() {
 
         {/* Right column — entities + related events */}
         <aside className="event-detail-sidebar">
+          <Suspense fallback={<div className="event-detail-section credibility-loading mono">Loading…</div>}>
+            <SourceCredibilityPanel eventId={event.id} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <BriefGenerator event={event} />
+          </Suspense>
+
           {hasCoords && (
             <section className="event-detail-section event-detail-location-section">
               <h2 className="event-detail-section-title">

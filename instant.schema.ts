@@ -63,6 +63,9 @@ const _schema = i.schema({
       savedViewId: i.string(),
       active: i.boolean(),
       createdAt: i.number(),
+      digestSchedule: i.json().optional(),
+      lastDigestSentAt: i.number().optional(),
+      emailAddress: i.string().optional(),
     }),
 
     watchlistItems: i.entity({

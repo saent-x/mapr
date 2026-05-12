@@ -138,3 +138,20 @@ export function archiveThread(threadId) {
     auth: true,
   });
 }
+
+export function fetchEventCredibility(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/credibility`);
+}
+
+export function fetchEventBrief(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/brief`);
+}
+
+export function generateEventBrief(eventId, { force = false } = {}) {
+  return request(`/events/${encodeURIComponent(eventId)}/brief`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force }),
+    auth: true,
+  });
+}

@@ -146,6 +146,35 @@ async function ensureSchema() {
       "addedAt" TEXT NOT NULL,
       PRIMARY KEY ("threadId", "articleId")
     );
+
+    CREATE TABLE IF NOT EXISTS briefs (
+      "eventId" TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      "eventLastUpdatedAt" TEXT NOT NULL,
+      lede TEXT,
+      summary TEXT,
+      actors TEXT,
+      citations TEXT,
+      angle TEXT,
+      "modelUsed" TEXT,
+      "generatedAt" TEXT NOT NULL,
+      "ownerUserId" TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS credibility_explanations (
+      "sourceKey" TEXT PRIMARY KEY,
+      "scoreAtGeneration" REAL NOT NULL,
+      explanation TEXT NOT NULL,
+      "generatedAt" TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_digest_state (
+      "ownerUserId" TEXT NOT NULL,
+      "ruleId" TEXT NOT NULL,
+      "lastSentAt" TEXT,
+      "nextDueAt" TEXT,
+      "lastMatchCount" INTEGER DEFAULT 0,
+      PRIMARY KEY ("ownerUserId", "ruleId")
+    );
   `);
 
   // Create indexes (IF NOT EXISTS is supported in Postgres)
@@ -556,6 +585,22 @@ export async function updateEventLifecycle(eventId, lifecycle) {
     `UPDATE events SET lifecycle = $1, "lastUpdatedAt" = $2 WHERE id = $3`,
     [lifecycle, new Date().toISOString(), eventId]
   );
+}
+
+export async function readEventById(eventId) {
+  if (!eventId) return null;
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT * FROM events WHERE id = $1', [eventId]);
+  if (!rows[0]) return null;
+  const row = rows[0];
+  const enrichment = parseJson(row.enrichment, {});
+  return {
+    ...row,
+    ...enrichment,
+    countries: parseJson(row.countries, []),
+    topicFingerprint: parseJson(row.topicFingerprint, []),
+    coordinates: parseJson(row.coordinates, null),
+  };
 }
 
 export async function readActiveEvents({ maxAgeHours } = {}) {
