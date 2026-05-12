@@ -102,6 +102,7 @@ import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 import { createCheckoutSession, createPortalSession, handleStripeWebhook } from './stripe.js';
 import { requireUser, getRequestUserRecord } from './auth.js';
+import { listThreadsForUser, createThread, archiveThread } from './storyThreads.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
@@ -950,6 +951,53 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 200, result);
       } catch (err) {
         log.warn('stripe_portal_error', { msg: err.message, code: err.code });
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── Story Threads ──
+    if (request.method === 'GET' && url.pathname === '/api/threads') {
+      try {
+        const user = await requireUser(request);
+        const status = url.searchParams.get('status') || 'active';
+        const threads = await withTimeout(() => listThreadsForUser({ userId: user.id, status }));
+        sendJson(response, 200, { threads });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/threads') {
+      try {
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        const thread = await withTimeout(() => createThread({
+          userId: user.id,
+          title: body.title,
+          seedEventId: body.seedEventId || null,
+          seedArticleId: body.seedArticleId || null,
+        }));
+        sendJson(response, 201, { thread });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/threads/')) {
+      try {
+        const user = await requireUser(request);
+        const threadId = url.pathname.replace('/api/threads/', '');
+        const ok = await withTimeout(() => archiveThread({ userId: user.id, threadId }));
+        sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
         const { status, body: b } = classifyError(err);
         sendJson(response, status, b);
       }

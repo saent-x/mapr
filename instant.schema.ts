@@ -47,6 +47,9 @@ const _schema = i.schema({
       mapState: i.json(),
       createdAt: i.number(),
       updatedAt: i.number(),
+      shareToken: i.string().optional().indexed(),
+      sharedAt: i.number().optional(),
+      shareViewCount: i.number().optional(),
     }),
 
     alertRules: i.entity({
@@ -60,6 +63,15 @@ const _schema = i.schema({
       savedViewId: i.string(),
       active: i.boolean(),
       createdAt: i.number(),
+    }),
+
+    watchlistItems: i.entity({
+      type: i.string(),
+      value: i.string(),
+      label: i.string(),
+      addedAt: i.number(),
+      lastMatchAt: i.number().optional(),
+      matchCount: i.number().optional(),
     }),
 
     bookmarks: i.entity({
@@ -109,6 +121,10 @@ const _schema = i.schema({
     userSubscriptions: {
       forward: { on: 'subscriptions', has: 'one', label: 'owner' },
       reverse: { on: '$users', has: 'many', label: 'subscriptions' },
+    },
+    userWatchlistItems: {
+      forward: { on: 'watchlistItems', has: 'one', label: 'owner' },
+      reverse: { on: '$users', has: 'many', label: 'watchlistItems' },
     },
   },
 });

@@ -25,6 +25,7 @@ const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const HistoricalQueriesPage = lazy(() => import('./pages/HistoricalQueriesPage.jsx'))
 const AccountPage = lazy(() => import('./pages/AccountPage.jsx'))
 const EventDetailPage = lazy(() => import('./pages/EventDetailPage.jsx'))
+const SharedViewPage = lazy(() => import('./pages/SharedViewPage.jsx'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'))
 // RegionDetailPage was previously eagerly imported — lazy-loading it brings it
 // in line with peer pages and shrinks the main entry chunk.
@@ -53,6 +54,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/trends" element={<Suspense fallback={<PageLoadingFallback />}><TrendAnalysisPage /></Suspense>} />
             <Route path="/intel" element={<Suspense fallback={<PageLoadingFallback />}><IntelPage /></Suspense>} />
             <Route path="/event/:id" element={<Suspense fallback={<PageLoadingFallback />}><EventDetailPage /></Suspense>} />
+            <Route path="/v/:token" element={<Suspense fallback={<PageLoadingFallback />}><SharedViewPage /></Suspense>} />
           </Route>
           {/* 404 fallback for any unknown path — without this, react-router
               renders nothing and the user sees a blank document. */}

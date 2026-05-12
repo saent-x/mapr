@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Copy, FileDown } from 'lucide-react';
+import { X, Copy, FileDown, FileText, Table as TableIcon } from 'lucide-react';
 import useUIStore from '../stores/uiStore';
 import { generateBriefingMarkdown } from '../utils/briefingMarkdown';
 import { generateBriefingPdf } from '../utils/briefingPdf';
+import { exportBriefingHtml, exportBriefingCsv } from '../utils/briefingHtmlCsv';
 
 /**
  * BriefingExportModal — export modal with clipboard (markdown) and PDF options.
@@ -46,6 +47,34 @@ const BriefingExportModal = ({ events = [], filters = {}, mapContainerRef }) => 
     } catch (err) {
       console.warn('Clipboard write failed:', err);
       addToast('Failed to copy to clipboard', 'error');
+    }
+  }, [events, filters, addToast, setShowExport, t]);
+
+  const handleExportHtml = useCallback(() => {
+    if (events.length === 0) {
+      addToast(t('export.noEvents', 'No events to export'), 'info');
+      return;
+    }
+    try {
+      exportBriefingHtml(events, filters);
+      addToast(t('export.htmlSuccess', 'HTML briefing exported'), 'info');
+      setShowExport(false);
+    } catch (err) {
+      addToast(`${t('export.htmlFailed', 'HTML export failed')}: ${err.message || err}`, 'error');
+    }
+  }, [events, filters, addToast, setShowExport, t]);
+
+  const handleExportCsv = useCallback(() => {
+    if (events.length === 0) {
+      addToast(t('export.noEvents', 'No events to export'), 'info');
+      return;
+    }
+    try {
+      exportBriefingCsv(events, filters);
+      addToast(t('export.csvSuccess', 'CSV briefing exported'), 'info');
+      setShowExport(false);
+    } catch (err) {
+      addToast(`${t('export.csvFailed', 'CSV export failed')}: ${err.message || err}`, 'error');
     }
   }, [events, filters, addToast, setShowExport, t]);
 
@@ -136,6 +165,30 @@ const BriefingExportModal = ({ events = [], filters = {}, mapContainerRef }) => 
             >
               <FileDown size={14} aria-hidden />
               <span>{isExportingPdf ? t('export.exportingPdf', 'Exporting PDF...') : t('export.exportPdf', 'Export PDF')}</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn"
+              onClick={handleExportHtml}
+              disabled={events.length === 0}
+              aria-label={t('export.exportHtml', 'Export HTML')}
+              data-testid="export-html"
+            >
+              <FileText size={14} aria-hidden />
+              <span>{t('export.exportHtml', 'Export HTML')}</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn"
+              onClick={handleExportCsv}
+              disabled={events.length === 0}
+              aria-label={t('export.exportCsv', 'Export CSV')}
+              data-testid="export-csv"
+            >
+              <TableIcon size={14} aria-hidden />
+              <span>{t('export.exportCsv', 'Export CSV')}</span>
             </button>
           </div>
 

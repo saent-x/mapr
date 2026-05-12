@@ -116,3 +116,25 @@ export function fetchSnapshotTimestamps({ from, to } = {}) {
   if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
   return request(`/snapshot-history/timestamps?${params.toString()}`, { auth: true });
 }
+
+export function listThreads({ status = 'active' } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  return request(`/threads?${params.toString()}`, { auth: true });
+}
+
+export function createThread({ title, seedEventId = null, seedArticleId = null } = {}) {
+  return request('/threads', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, seedEventId, seedArticleId }),
+    auth: true,
+  });
+}
+
+export function archiveThread(threadId) {
+  return request(`/threads/${encodeURIComponent(threadId)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}

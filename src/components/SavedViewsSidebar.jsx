@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { BookmarkCheck, Trash2, Loader2, Crown, Pin, Copy, Clock3 } from 'lucide-react';
+import { BookmarkCheck, Trash2, Loader2, Crown, Pin, Copy, Clock3, Share2, Link as LinkIcon, X } from 'lucide-react';
 import useSavedViews from '../hooks/useSavedViews';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
@@ -40,7 +40,9 @@ export default function SavedViewsSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const liveNews = useNewsStore((s) => s.liveNews) || [];
-  const { views, isLoading, needsAuth, deleteView, updateView, duplicateView } = useSavedViews(liveNews);
+  const { views, isLoading, needsAuth, deleteView, updateView, duplicateView, generateShareToken, revokeShareToken } = useSavedViews(liveNews);
+  const [shareModal, setShareModal] = React.useState(null); // { view, url } | null
+  const [copied, setCopied] = React.useState(false);
   const { upgradeToPro, hasFeatureAccess } = useSubscription();
   const applyView = useFilterStore((s) => s.applyView);
   const setActiveViewId = useUIStore((s) => s.setActiveViewId);
@@ -117,6 +119,43 @@ export default function SavedViewsSidebar() {
     }
   };
 
+  const buildShareUrl = (token) =>
+    `${window.location.origin}/v/${encodeURIComponent(token)}`;
+
+  const handleShare = async (e, view) => {
+    e.stopPropagation();
+    if (view.isDefault) return;
+    setCopied(false);
+    try {
+      let token = view.shareToken;
+      if (!token) {
+        token = await generateShareToken(view.id);
+      }
+      setShareModal({ view, url: buildShareUrl(token) });
+    } catch (err) {
+      console.warn('share generate failed', err.message);
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!shareModal) return;
+    try {
+      await revokeShareToken(shareModal.view.id);
+      setShareModal(null);
+    } catch (err) {
+      console.warn('share revoke failed', err.message);
+    }
+  };
+
+  const handleCopyShare = async () => {
+    if (!shareModal) return;
+    try {
+      await navigator.clipboard.writeText(shareModal.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard not available */ }
+  };
+
   if (needsAuth) {
     return (
       <div className="saved-views-sidebar sidebar-pro-feature-slot">
@@ -184,6 +223,38 @@ export default function SavedViewsSidebar() {
         </div>
       )}
 
+      {shareModal && (
+        <div className="saved-views-share-modal" role="dialog" aria-modal="true" data-testid="share-view-modal">
+          <div className="saved-views-share-modal-head">
+            <span>{t('savedViews.shareLinkTitle', 'Share link for')} <b>{shareModal.view.name}</b></span>
+            <button type="button" className="alert-rules-toggle" onClick={() => setShareModal(null)} aria-label={t('common.close', 'Close')}>
+              <X size={10} aria-hidden />
+            </button>
+          </div>
+          <p className="saved-views-share-modal-body">
+            {t('savedViews.shareDescription', 'Anyone with this link can apply your view as read-only. Revoke any time.')}
+          </p>
+          <div className="saved-views-share-link-row">
+            <LinkIcon size={10} aria-hidden />
+            <input
+              className="saved-views-share-input"
+              readOnly
+              value={shareModal.url}
+              onFocus={(e) => e.target.select()}
+              data-testid="share-view-link"
+            />
+            <button type="button" className="bookmarks-bulk-btn" onClick={handleCopyShare}>
+              {copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
+            </button>
+          </div>
+          <div className="saved-views-share-modal-actions">
+            <button type="button" className="bookmarks-bulk-btn bookmarks-bulk-danger" onClick={handleRevoke} data-testid="share-view-revoke">
+              {t('savedViews.shareRevoke', 'Revoke link')}
+            </button>
+          </div>
+        </div>
+      )}
+
       {!isLoading && visibleViews.length > 0 && (
         <ul className="saved-views-list" role="list">
           {visibleViews.map((view) => {
@@ -232,6 +303,17 @@ export default function SavedViewsSidebar() {
                     aria-label={t('savedViews.duplicate', 'Duplicate view')}
                   >
                     <Copy size={10} />
+                  </button>
+                  <button
+                    type="button"
+                    className="saved-views-delete saved-views-share"
+                    data-active={view.shareToken ? 'true' : undefined}
+                    onClick={(e) => handleShare(e, view)}
+                    title={view.shareToken ? t('savedViews.shareManage', 'Manage share link') : t('savedViews.share', 'Share view')}
+                    aria-label={view.shareToken ? t('savedViews.shareManage', 'Manage share link') : t('savedViews.share', 'Share view')}
+                    data-testid={`share-view-${view.id}`}
+                  >
+                    <Share2 size={10} />
                   </button>
                   <button
                     type="button"

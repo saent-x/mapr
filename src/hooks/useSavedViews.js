@@ -74,6 +74,8 @@ export default function useSavedViews(activeNews = []) {
         updatedAt: v.updatedAt,
         lastOpenedAt: v.lastOpenedAt || null,
         matchCount,
+        shareToken: v.shareToken || null,
+        sharedAt: v.sharedAt || null,
       };
     }).sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -123,7 +125,41 @@ export default function useSavedViews(activeNews = []) {
       if (updates.tags !== undefined) patch.tags = Array.isArray(updates.tags) ? updates.tags : [];
       if (updates.pinned !== undefined) patch.pinned = Boolean(updates.pinned);
       if (updates.lastOpenedAt !== undefined) patch.lastOpenedAt = updates.lastOpenedAt;
+      if (updates.shareToken !== undefined) patch.shareToken = updates.shareToken;
+      if (updates.sharedAt !== undefined) patch.sharedAt = updates.sharedAt;
       await db.transact(db.tx.savedViews[viewId].update(patch));
+    },
+    [user],
+  );
+
+  const generateShareToken = useCallback(
+    async (viewId) => {
+      if (!user) throw new Error('Must be authenticated to share a view');
+      const token = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID().replace(/-/g, '').slice(0, 22)
+        : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      await db.transact(
+        db.tx.savedViews[viewId].update({
+          shareToken: token,
+          sharedAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      return token;
+    },
+    [user],
+  );
+
+  const revokeShareToken = useCallback(
+    async (viewId) => {
+      if (!user) throw new Error('Must be authenticated to revoke share');
+      await db.transact(
+        db.tx.savedViews[viewId].update({
+          shareToken: null,
+          sharedAt: null,
+          updatedAt: Date.now(),
+        }),
+      );
     },
     [user],
   );
@@ -150,5 +186,7 @@ export default function useSavedViews(activeNews = []) {
     deleteView,
     updateView,
     duplicateView,
+    generateShareToken,
+    revokeShareToken,
   };
 }

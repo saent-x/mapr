@@ -630,7 +630,27 @@
     "noSeverityData": "NO SEVERITY DATA",
     "tabAriaLabel": "Trend tabs",
     "tabCharts": "Charts",
-    "tabCorrelation": "Correlation"
+    "tabThreads": "Story threads"
+  },
+  "threads": {
+    "title": "Story threads",
+    "subtitle": "Pin an event to track how the story develops over time. New articles join the thread automatically and changes are highlighted.",
+    "emptyTitle": "NO ACTIVE THREADS",
+    "emptyBody": "Open any event and pin it to start tracking. Threads collate new coverage, surface diff badges when key details change, and notify you of developments.",
+    "emptyPrefilter": "No threads match \"{{entity}}\". Pin an event mentioning it from the entity explorer or event detail page.",
+    "pin": "Pin to thread",
+    "pinned": "Pinned",
+    "unpin": "Unpin",
+    "threadCount_one": "{{count}} thread",
+    "threadCount_other": "{{count}} threads",
+    "articleCount_one": "{{count}} article",
+    "articleCount_other": "{{count}} articles",
+    "lastUpdate": "Last update",
+    "diffNewEntity": "+entity",
+    "diffNumberChange": "Δ count",
+    "diffNewQuote": "+quote",
+    "viewThread": "Open thread",
+    "comingSoon": "Story thread auto-collation will activate once the AI sidecar is online. Pinned events are recorded now and will backfill on first run."
   },
   "correlation": {
     "title": "Event Correlation Timeline",

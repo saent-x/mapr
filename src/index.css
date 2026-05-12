@@ -8899,3 +8899,256 @@ h1, h2, h3, h4, h5, h6 {
     direction: rtl;
   }
 }
+
+/* ── Story Threads Panel ─────────────────────────────────────────────── */
+.threads-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 4px;
+}
+.threads-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.threads-panel-title {
+  font-family: var(--ff-mono);
+  letter-spacing: 0.06em;
+  font-size: 14px;
+  color: var(--ink-0);
+  margin: 0 0 4px;
+  text-transform: uppercase;
+}
+.threads-panel-sub {
+  font-size: 12px;
+  color: var(--ink-2);
+  max-width: 60ch;
+  margin: 0;
+  line-height: 1.5;
+}
+.threads-panel-count {
+  font-size: 10px;
+  color: var(--ink-2);
+  letter-spacing: 0.1em;
+}
+.threads-empty {
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--bg-2);
+}
+.threads-empty-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--ink-1);
+}
+.threads-empty-body {
+  font-size: 13px;
+  color: var(--ink-1);
+  margin: 0;
+  line-height: 1.5;
+  max-width: 68ch;
+}
+.threads-empty-note {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 8px 0 0;
+  font-family: var(--ff-mono);
+}
+.threads-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.threads-card {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 12px 14px;
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.threads-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.threads-card-title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-0);
+  font-weight: 500;
+}
+.threads-card-meta {
+  font-size: 10px;
+  color: var(--ink-2);
+  letter-spacing: 0.06em;
+}
+.threads-card-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.event-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* ── Bookmark bulk + tags ─────────────────────────────────────────────── */
+.bookmarks-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-2);
+  margin: 6px 0;
+}
+.bookmarks-bulk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  font-size: 10px;
+  font-family: var(--ff-mono);
+  letter-spacing: 0.06em;
+  color: var(--ink-1);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.bookmarks-bulk-btn:hover:not(:disabled) { color: var(--ink-0); border-color: var(--ink-2); }
+.bookmarks-bulk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.bookmarks-bulk-danger { color: var(--sev-red); border-color: var(--sev-red); }
+.bookmarks-bulk-tag-input {
+  flex: 1;
+  min-width: 80px;
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  padding: 3px 6px;
+  background: var(--bg-1);
+  color: var(--ink-0);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.bookmarks-bulk-tag-input:focus { outline: none; border-color: var(--amber); }
+
+.bookmarks-select-cb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.bookmarks-select-cb:hover { color: var(--ink-0); }
+.bookmarks-item.is-selected { border-color: var(--amber); background: rgba(255, 191, 0, 0.05); }
+
+.bookmarks-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.bookmark-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 9px;
+  font-family: var(--ff-mono);
+  letter-spacing: 0.04em;
+  color: var(--cyan);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 1px 4px;
+  background: rgba(0, 200, 220, 0.06);
+}
+.bookmark-tag-editor {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 4px;
+}
+.bookmark-tag-input {
+  flex: 1;
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  padding: 3px 6px;
+  background: var(--bg-1);
+  color: var(--ink-0);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.bookmark-tag-input:focus { outline: none; border-color: var(--amber); }
+
+/* ── Saved view share modal ───────────────────────────────────────────── */
+.saved-views-share-modal {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg-2);
+  padding: 10px 12px;
+  margin: 6px 0 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.saved-views-share-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-1);
+}
+.saved-views-share-modal-head b { color: var(--ink-0); font-weight: 500; }
+.saved-views-share-modal-body {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.saved-views-share-link-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.saved-views-share-input {
+  flex: 1;
+  font-family: var(--ff-mono);
+  font-size: 10px;
+  padding: 4px 6px;
+  background: var(--bg-1);
+  color: var(--ink-0);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.saved-views-share-input:focus { outline: none; border-color: var(--amber); }
+.saved-views-share-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.saved-views-share[data-active="true"] {
+  color: var(--cyan);
+}
