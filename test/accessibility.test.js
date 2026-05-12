@@ -195,13 +195,17 @@ describe('accessibility and UX polish', () => {
 
   describe('no empty/broken states', () => {
     it('newsStore has mock data fallback when both sources fail', () => {
+      // Truthfulness change: the app no longer substitutes mock entries on
+      // backend failure. It surfaces an honest 'unavailable' state plus a
+      // DataErrorBanner. These tests pin that policy.
       const code = readFileSync(join(SRC, 'stores/newsStore.ts'), 'utf-8');
-      assert.match(code, /dataSource.*mock/, 'Should fall back to mock data source');
+      assert.match(code, /dataSource.*unavailable/, 'Should mark dataSource unavailable on failure');
+      assert.doesNotMatch(code, /dataSource:\s*'mock'/, 'Must not set dataSource to mock');
     });
 
-    it('App.jsx imports getMockNews for fallback', () => {
+    it('App.jsx must NOT import getMockNews (no fake data fallback)', () => {
       const code = readFileSync(join(SRC, 'App.jsx'), 'utf-8');
-      assert.match(code, /getMockNews/, 'Should use getMockNews as fallback data');
+      assert.doesNotMatch(code, /getMockNews/, 'App.jsx must not import or use getMockNews');
     });
 
     it('MapLoadingFallback is rendered during lazy load', () => {

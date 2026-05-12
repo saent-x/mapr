@@ -57,11 +57,11 @@ test('AlertRuleDialog component exists', () => {
   assert.ok(content.includes('export default'), 'should export a default component');
   assert.ok(content.includes('save-view-overlay'), 'should reuse dialog overlay pattern');
   assert.ok(content.includes('save-view-dialog'), 'should reuse dialog container pattern');
-  assert.ok(content.includes('SignedIn'), 'should use SignedIn wrapper');
-  assert.ok(content.includes('SignedOut'), 'should use SignedOut wrapper');
+  assert.ok(content.includes('useNavigate'), 'should use useNavigate for login redirect');
+  assert.ok(content.includes('needsAuth'), 'should check needsAuth');
   assert.ok(content.includes('severityThreshold'), 'should have severity threshold selector');
   assert.ok(content.includes('savedViewId'), 'should have saved view selector');
-  assert.ok(content.includes('LogIn'), 'should show login prompt when unauthenticated');
+  assert.ok(content.includes('handleSave'), 'should have handleSave that redirects when unauthenticated');
 });
 
 // ---------------------------------------------------------------------------
@@ -84,13 +84,14 @@ test('VAL-M3-008: createRule creates alert rule with correct fields', () => {
 });
 
 test('VAL-M3-008: alert rule linked to user and saved view', () => {
-  // Schema verification
+  // Schema verification — relationships moved to the dedicated `links:` block.
   const schema = readFileSync(resolve(root, 'instant.schema.ts'), 'utf8');
   assert.ok(schema.includes('alertRules: i.entity'), 'alertRules entity should be defined');
   assert.ok(schema.includes('savedViewId: i.string()'), 'should have savedViewId string field');
   assert.ok(schema.includes('severityThreshold: i.number()'), 'should have severityThreshold number field');
   assert.ok(schema.includes('active: i.boolean()'), 'should have active boolean field');
-  assert.ok(schema.includes('owner: i.belongsTo'), 'should have owner belongsTo relationship');
+  assert.match(schema, /userAlertRules:\s*\{[\s\S]*forward:\s*\{\s*on:\s*'alertRules',\s*has:\s*'one',\s*label:\s*'owner'/,
+    'userAlertRules forward link must be alertRules.owner → $users (one)');
 });
 
 // ---------------------------------------------------------------------------
@@ -183,6 +184,13 @@ test('VAL-M3-011: match count badge displayed per alert rule', () => {
   assert.ok(hookContent.includes('severityThreshold'), 'should check severity threshold');
 });
 
+test('AlertRulesPanel header shows total rule count badge', () => {
+  const panelContent = readFileSync(resolve(root, 'src/components/AlertRulesPanel.jsx'), 'utf8');
+  assert.ok(panelContent.includes('sidebar-section-count-badge'), 'header should render a section count badge');
+  assert.ok(panelContent.includes('{rules.length}'), 'alert rules header count should use total rules');
+  assert.ok(panelContent.includes('{rules.length > 0 && ('), 'alert rules header badge should be hidden when count is zero');
+});
+
 test('VAL-M3-011: match count updates when news changes', () => {
   const hookContent = readFileSync(resolve(root, 'src/hooks/useAlertRules.js'), 'utf8');
   // The useMemo depends on [data, savedViews, activeNews] so it recomputes on news change
@@ -220,14 +228,15 @@ test('VAL-M3-012: toggle button changes active state', () => {
 
 test('alert rules panel is auth-gated', () => {
   const panelContent = readFileSync(resolve(root, 'src/components/AlertRulesPanel.jsx'), 'utf8');
-  assert.ok(panelContent.includes('SignedIn'), 'panel should use SignedIn wrapper');
-  assert.ok(panelContent.includes('SignedOut'), 'panel should use SignedOut wrapper');
+  assert.ok(panelContent.includes('useNavigate'), 'panel should use useNavigate for login redirect');
   assert.ok(panelContent.includes('needsAuth'), 'panel should check needsAuth');
   assert.ok(panelContent.includes('signInPrompt'), 'should show sign-in prompt when logged out');
+  assert.ok(panelContent.includes('sidebar-pro-feature-action'), 'signed-out panel should render an icon action');
+  assert.ok(panelContent.includes('sidebar-pro-badge'), 'signed-out panel should mark alert rules as Pro');
 
   const dialogContent = readFileSync(resolve(root, 'src/components/AlertRuleDialog.jsx'), 'utf8');
-  assert.ok(dialogContent.includes('SignedIn'), 'dialog should use SignedIn wrapper');
-  assert.ok(dialogContent.includes('SignedOut'), 'dialog should use SignedOut wrapper');
+  assert.ok(dialogContent.includes('useNavigate'), 'dialog should use useNavigate for login redirect');
+  assert.ok(dialogContent.includes('needsAuth'), 'dialog should check needsAuth');
 });
 
 test('hook skips query when unauthenticated', () => {

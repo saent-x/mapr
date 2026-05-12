@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useBreakpoint from '../hooks/useBreakpoint';
+// Worker module — Vite turns this into a same-origin classic worker bundle.
+// The graphPhysics module is shared between the worker and main thread so
+// the per-frame `tickSimulation` calls in this file use the exact same
+// physics that the prewarm worker computed.
+import GraphPrewarmWorker from '../workers/graphPrewarm.worker.js?worker';
 
 /**
  * Force-directed entity relationship graph on HTML5 Canvas.
@@ -25,13 +30,33 @@ const TYPE_COLORS = {
 };
 const TYPE_LABELS = { person: 'Person', organization: 'Organization', location: 'Location' };
 
-const INK_0 = '#e8e6df';
-const INK_2 = 'rgba(232, 230, 223, 0.55)';
-const INK_3 = 'rgba(232, 230, 223, 0.28)';
-const GRID_DOT = 'rgba(232, 230, 223, 0.055)';
-const EDGE_BASE = 'rgba(140, 146, 160, 0.18)';
-const EDGE_DIM  = 'rgba(140, 146, 160, 0.08)';
-const EDGE_HIGH = 'rgba(232, 163, 61, 0.85)';
+const DARK_GRAPH_PALETTE = {
+  graphCanvas: '#0b0d10',
+  ink0: '#e8e6df',
+  ink2: 'rgba(232, 230, 223, 0.55)',
+  ink3: 'rgba(232, 230, 223, 0.28)',
+  label: 'rgba(232, 230, 223, 0.7)',
+  gridDot: 'rgba(232, 230, 223, 0.055)',
+  edgeBase: 'rgba(140, 146, 160, 0.18)',
+  edgeDim: 'rgba(140, 146, 160, 0.08)',
+  edgeHigh: 'rgba(232, 163, 61, 0.85)',
+  inactiveNodeFill: '#0f1115',
+  activeGlyph: '#0f1115',
+};
+
+const LIGHT_GRAPH_PALETTE = {
+  graphCanvas: '#f5f4f0',
+  ink0: '#1b1d21',
+  ink2: 'rgba(58, 61, 68, 0.72)',
+  ink3: 'rgba(107, 110, 118, 0.45)',
+  label: 'rgba(27, 29, 33, 0.78)',
+  gridDot: 'rgba(27, 29, 33, 0.12)',
+  edgeBase: 'rgba(74, 79, 88, 0.30)',
+  edgeDim: 'rgba(74, 79, 88, 0.14)',
+  edgeHigh: 'rgba(196, 130, 30, 0.86)',
+  inactiveNodeFill: 'rgba(250, 249, 245, 0.96)',
+  activeGlyph: '#f9f8f4',
+};
 
 const MIN_NODE_RADIUS = 9;
 const MAX_NODE_RADIUS = 18;
@@ -56,6 +81,13 @@ const COLLIDE_PADDING_MAX = 80;
 
 const GRID_SPACING = 22;
 const GRID_DOT_RADIUS = 1;
+
+function getGraphPalette() {
+  if (typeof document === 'undefined') return DARK_GRAPH_PALETTE;
+  return document.documentElement.getAttribute('data-theme') === 'light'
+    ? LIGHT_GRAPH_PALETTE
+    : DARK_GRAPH_PALETTE;
+}
 
 function nodeRadius(mentionCount, maxMentions) {
   const ratio = (mentionCount || 1) / (maxMentions || 1);
@@ -252,8 +284,8 @@ function tickSimulation(simNodes, simEdges, worldW, worldH, alpha, selectedId, c
   }
 }
 
-function drawDotGrid(ctx, width, height) {
-  ctx.fillStyle = GRID_DOT;
+function drawDotGrid(ctx, width, height, palette) {
+  ctx.fillStyle = palette.gridDot;
   for (let y = GRID_SPACING / 2; y < height; y += GRID_SPACING) {
     for (let x = GRID_SPACING / 2; x < width; x += GRID_SPACING) {
       ctx.beginPath();
@@ -263,14 +295,14 @@ function drawDotGrid(ctx, width, height) {
   }
 }
 
-function drawNodeGlyph(ctx, node, color, isActive, view) {
+function drawNodeGlyph(ctx, node, color, isActive, view, palette) {
   const r = node.radius;
   const g = r * 0.52;
   if (node.type === 'organization') {
-    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillStyle = isActive ? palette.activeGlyph : color;
     ctx.fillRect(node.x - g / 2, node.y - g / 2, g, g);
   } else if (node.type === 'location') {
-    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillStyle = isActive ? palette.activeGlyph : color;
     ctx.beginPath();
     ctx.moveTo(node.x, node.y - g * 0.8);
     ctx.lineTo(node.x + g * 0.8, node.y);
@@ -288,18 +320,20 @@ function drawNodeGlyph(ctx, node, color, isActive, view) {
     ctx.font = `${GLYPH_FONT_WEIGHT} ${fontPx}px "IBM Plex Mono", ui-monospace, Menlo, monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = isActive ? '#0f1115' : color;
+    ctx.fillStyle = isActive ? palette.activeGlyph : color;
     ctx.fillText('P', sx, sy);
     ctx.restore();
   }
 }
 
-function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selectedEntityB, pathHighlight, viewport, view, worldW, worldH) {
+function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selectedEntityB, pathHighlight, viewport, view, worldW, worldH, palette = getGraphPalette()) {
   const { width, height } = viewport;
   ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = palette.graphCanvas;
+  ctx.fillRect(0, 0, width, height);
 
   // 1. Dot grid in screen space
-  drawDotGrid(ctx, width, height);
+  drawDotGrid(ctx, width, height, palette);
 
   // 2. World transform for graph content
   ctx.save();
@@ -361,10 +395,10 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selec
       ctx.strokeStyle = 'rgba(94, 199, 212, 0.9)';
       ctx.lineWidth = (2.0 * weightRatio) / view.scale;
     } else if (isHighlighted) {
-      ctx.strokeStyle = EDGE_HIGH;
+      ctx.strokeStyle = palette.edgeHigh;
       ctx.lineWidth = (1.4 * weightRatio) / view.scale;
     } else {
-      ctx.strokeStyle = selectedEntity ? EDGE_DIM : EDGE_BASE;
+      ctx.strokeStyle = selectedEntity ? palette.edgeDim : palette.edgeBase;
       ctx.lineWidth = (0.8 * weightRatio) / view.scale;
     }
     ctx.stroke();
@@ -394,14 +428,14 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selec
       ctx.fillStyle = color;
       ctx.fill();
     } else {
-      ctx.fillStyle = '#0f1115';
+      ctx.fillStyle = palette.inactiveNodeFill;
       ctx.fill();
       ctx.strokeStyle = dimmed ? `${color}55` : color;
       ctx.lineWidth = 1.3 / view.scale;
       ctx.stroke();
     }
 
-    drawNodeGlyph(ctx, node, isInPath ? 'rgba(94, 199, 212, 0.9)' : color, isActive && !isInPath, view);
+    drawNodeGlyph(ctx, node, isInPath ? 'rgba(94, 199, 212, 0.9)' : color, isActive && !isInPath, view, palette);
 
     if (isSelectedA || isSelectedB) {
       // Outer halo ring — amber for first, cyan for second
@@ -416,7 +450,7 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selec
     } else if (isHovered) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = INK_2;
+      ctx.strokeStyle = palette.ink2;
       ctx.lineWidth = 1 / view.scale;
       ctx.stroke();
     }
@@ -440,9 +474,9 @@ function drawGraph(ctx, simNodes, simEdges, selectedEntity, hoveredEntity, selec
     if (isInPath) {
       ctx.fillStyle = 'rgba(94, 199, 212, 0.9)';
     } else if (dimmed) {
-      ctx.fillStyle = INK_3;
+      ctx.fillStyle = palette.ink3;
     } else {
-      ctx.fillStyle = (isSelectedA || isSelectedB || isHovered) ? INK_0 : 'rgba(232, 230, 223, 0.7)';
+      ctx.fillStyle = (isSelectedA || isSelectedB || isHovered) ? palette.ink0 : palette.label;
     }
     ctx.fillText(node.name, sx, sy);
   }
@@ -512,6 +546,7 @@ export default function EntityRelationshipGraph({
   const wrapperRef = useRef(null);
   const simRef = useRef(null);
   const animRef = useRef(null);
+  const prewarmWorkerRef = useRef(null);
   const alphaRef = useRef(1);
   const hoveredRef = useRef(null);
   const selectedRef = useRef(null);
@@ -639,9 +674,59 @@ export default function EntityRelationshipGraph({
       simRef.current = sim;
       alphaRef.current = 1;
 
-      for (let i = 0; i < PREWARM_TICKS; i++) {
-        tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
-        alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
+      // Off-thread prewarm. Old behaviour ran 360 × O(n²) ticks
+      // synchronously here — locked the UI for ~2-4s on slow devices at
+      // 200+ nodes. The worker computes the final positions while the
+      // main thread can paint the initial scatter and stay interactive.
+      // Falls back to a chunked main-thread loop if the worker can't be
+      // constructed (older Safari, dev hot-reload edge case).
+      let workerHandled = false;
+      try {
+        const worker = new GraphPrewarmWorker();
+        prewarmWorkerRef.current = worker;
+        const workerSig = newIdSig;
+        const handleMessage = (event) => {
+          // Drop late messages from a previous prewarm if the graph changed.
+          if (workerSig !== simRef.current?.idSig) return;
+          if (event.data?.type === 'prewarmDone' && simRef.current) {
+            const positionsById = new Map(event.data.positions.map((p) => [p.id, p]));
+            for (const n of simRef.current.simNodes) {
+              const p = positionsById.get(n.id);
+              if (!p) continue;
+              n.x = p.x; n.y = p.y; n.vx = p.vx; n.vy = p.vy;
+            }
+            alphaRef.current = event.data.finalAlpha ?? alphaRef.current;
+            viewRef.current = fitViewToNodes(simRef.current.simNodes, { width, height });
+            setZoomDisplay(viewRef.current.scale);
+          }
+          worker.terminate();
+          if (prewarmWorkerRef.current === worker) prewarmWorkerRef.current = null;
+        };
+        worker.addEventListener('message', handleMessage);
+        worker.addEventListener('error', () => {
+          // Worker died — the rAF loop will still produce a usable layout
+          // over the next ~60 frames; we just lose the prewarm head start.
+          worker.terminate();
+          if (prewarmWorkerRef.current === worker) prewarmWorkerRef.current = null;
+        });
+        worker.postMessage({
+          type: 'prewarm',
+          // Strip canvas/back-ref state — only send raw graph data.
+          nodes: nodes.map((n) => ({ id: n.id, mentionCount: n.mentionCount, type: n.type })),
+          edges: edges.map((e) => ({ source: e.source, target: e.target, weight: e.weight })),
+          worldW,
+          worldH,
+        });
+        workerHandled = true;
+      } catch {
+        workerHandled = false;
+      }
+
+      if (!workerHandled) {
+        for (let i = 0; i < PREWARM_TICKS; i++) {
+          tickSimulation(sim.simNodes, sim.simEdges, worldW, worldH, alphaRef.current, null, connectedRef.current);
+          alphaRef.current = Math.max(ALPHA_FLOOR, alphaRef.current * ALPHA_DECAY);
+        }
       }
 
       viewRef.current = fitViewToNodes(sim.simNodes, { width, height });
@@ -669,6 +754,12 @@ export default function EntityRelationshipGraph({
     return () => {
       running = false;
       if (animRef.current) cancelAnimationFrame(animRef.current);
+      // Kill any in-flight prewarm worker so an unmounted component can't
+      // keep CPU busy or fire setState after teardown.
+      if (prewarmWorkerRef.current) {
+        try { prewarmWorkerRef.current.terminate(); } catch { /* already gone */ }
+        prewarmWorkerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges, width, height, worldW, worldH]);

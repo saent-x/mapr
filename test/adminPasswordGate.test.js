@@ -47,6 +47,12 @@ describe('admin password gate', () => {
       assert.ok(adminPage.includes("t('admin.wrongPassword')"), 'AdminPage should show wrong password error');
     });
 
+    it('provides back-to-map navigation from the password gate', () => {
+      assert.ok(adminPage.includes('admin-password-back-link'), 'Password gate should render a back-to-map control');
+      assert.ok(adminPage.includes("navigate('/')"), 'Password gate back control should use router navigation to /');
+      assert.ok(adminPage.includes("t('admin.backToMap'"), 'Password gate back control should use admin.backToMap copy');
+    });
+
     it('uses i18n keys for all password gate strings', () => {
       assert.ok(adminPage.includes("t('admin.passwordRequired')"), 'should use admin.passwordRequired key');
       assert.ok(adminPage.includes("t('admin.enterPassword')"), 'should use admin.enterPassword key');
@@ -104,6 +110,10 @@ describe('admin password gate', () => {
 
     it('has admin.wrongPassword key', () => {
       assert.ok(en.admin.wrongPassword, 'en.json should have admin.wrongPassword');
+    });
+
+    it('has admin.backToMap key', () => {
+      assert.ok(en.admin.backToMap, 'en.json should have admin.backToMap');
     });
   });
 

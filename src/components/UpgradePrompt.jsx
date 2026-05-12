@@ -17,7 +17,7 @@ import useSubscription from '../hooks/useSubscription';
  */
 export default function UpgradePrompt({ feature, description }) {
   const { t } = useTranslation();
-  const { upgradeToPro } = useSubscription();
+  const { upgradeToPro, billingEnabled } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -62,7 +62,7 @@ export default function UpgradePrompt({ feature, description }) {
       <button
         className="mapr-upgrade-prompt-btn"
         onClick={handleUpgrade}
-        disabled={loading}
+        disabled={loading || !billingEnabled}
         aria-label={t('subscription.upgradeToPro')}
       >
         {loading ? (
@@ -72,6 +72,12 @@ export default function UpgradePrompt({ feature, description }) {
         )}
         <span>{loading ? t('subscription.redirecting') : t('subscription.upgradeToPro')}</span>
       </button>
+      {!billingEnabled && (
+        <p className="mapr-upgrade-prompt-error" role="status">
+          <AlertTriangle size={14} />
+          {t('subscription.billingDisabled', 'Subscription upgrades are currently disabled.')}
+        </p>
+      )}
       {error && (
         <p className="mapr-upgrade-prompt-error" role="alert">
           <AlertTriangle size={14} />

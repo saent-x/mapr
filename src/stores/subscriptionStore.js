@@ -10,6 +10,7 @@
 
 import { create } from 'zustand';
 import db from '../services/instantDb';
+import { canAccessFeature, DEFAULT_FEATURE_FLAGS, normalizeFeatureFlags } from '../utils/featureAccess';
 
 const useSubscriptionStore = create((set, get) => ({
   /** Current subscription status */
@@ -22,6 +23,10 @@ const useSubscriptionStore = create((set, get) => ({
   stripeCustomerId: null,
   /** User ID in InstantDB */
   userId: null,
+  /** Server-controlled feature access policy */
+  featureFlags: DEFAULT_FEATURE_FLAGS,
+  /** Whether feature flags are being loaded from the API */
+  featureFlagsLoading: false,
 
   /**
    * Initialize subscription status from InstantDB $users record.
@@ -61,6 +66,32 @@ const useSubscriptionStore = create((set, get) => ({
    * Update status locally (e.g., after checkout redirect)
    */
   setStatus: (status) => set({ status }),
+
+  loadFeatureFlags: async () => {
+    set({ featureFlagsLoading: true });
+    try {
+      const res = await fetch('/api/feature-flags', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      set({
+        featureFlags: normalizeFeatureFlags(payload),
+        featureFlagsLoading: false,
+      });
+    } catch (err) {
+      console.warn('[subscriptionStore] Failed to load feature flags:', err.message);
+      set({
+        featureFlags: DEFAULT_FEATURE_FLAGS,
+        featureFlagsLoading: false,
+      });
+    }
+  },
+
+  setFeatureFlags: (featureFlags) => set({ featureFlags: normalizeFeatureFlags(featureFlags) }),
+
+  hasFeatureAccess: (featureId) => {
+    const { featureFlags, status } = get();
+    return canAccessFeature(featureFlags, featureId, status);
+  },
 
   /**
    * Clear subscription data (on sign out)

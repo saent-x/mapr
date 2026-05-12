@@ -6,10 +6,23 @@
  *   - Creating Stripe Billing Portal sessions for subscription management
  *   - Verifying and processing Stripe webhook events
  *   - Updating InstantDB subscriptionStatus on $users
+ *
+ * Security model:
+ *   - All callers must already be authenticated. Endpoints in
+ *     server/index.js verify the InstantDB bearer token and pass the
+ *     authenticated user record into the helpers below; this module
+ *     never trusts arbitrary userId/customerId from the request body.
+ *   - Webhook is idempotent (`stripe_events` table) and only grants
+ *     entitlements when the subscription actually contains our PRICE_ID.
+ *   - Internal failures (e.g. InstantDB outage) do NOT propagate to
+ *     Stripe; we ack the webhook and queue a local retry instead, so
+ *     Stripe doesn't pile up retries during a downstream outage.
  */
 
 import Stripe from 'stripe';
 import { init } from '@instantdb/admin';
+import { log } from './logger.js';
+import { claimStripeEvent } from './stripeIdempotency.js';
 
 // ── Configuration ──
 
@@ -18,6 +31,25 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || 'price_pro_monthly';
 const INSTANT_APP_ID = process.env.INSTANT_APP_ID || '';
 const INSTANT_ADMIN_TOKEN = process.env.INSTANT_ADMIN_TOKEN || '';
+// Pin the API version so a future Stripe upgrade doesn't silently change shapes.
+const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || '2024-06-20';
+
+function appBaseUrl() {
+  return process.env.APP_URL || 'http://localhost:5173';
+}
+
+function sameOriginReturnUrl(value, fallbackPath) {
+  const fallback = `${appBaseUrl().replace(/\/$/, '')}${fallbackPath.startsWith('/') ? fallbackPath : `/${fallbackPath}`}`;
+  if (!value) return fallback;
+  try {
+    const candidate = new URL(value, appBaseUrl());
+    const base = new URL(appBaseUrl());
+    if (candidate.origin !== base.origin) return fallback;
+    return candidate.toString();
+  } catch {
+    return fallback;
+  }
+}
 
 // ── Stripe client (lazy init) ──
 
@@ -27,7 +59,11 @@ function getStripe() {
     if (!STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY not configured');
     }
-    _stripe = new Stripe(STRIPE_SECRET_KEY);
+    _stripe = new Stripe(STRIPE_SECRET_KEY, {
+      apiVersion: STRIPE_API_VERSION,
+      maxNetworkRetries: 2,
+      timeout: 20000,
+    });
   }
   return _stripe;
 }
@@ -47,97 +83,90 @@ function getDb() {
 
 // ── Helpers ──
 
-/**
- * Update a user's subscriptionStatus in InstantDB $users.
- */
 async function setUserSubscriptionStatus(userId, status, extra = {}) {
   const db = getDb();
-  const tx = db.transact([
+  await db.transact([
     db.tx.$users[userId].update({
       subscriptionStatus: status,
       ...extra,
     }),
   ]);
-  await tx;
 }
 
-/**
- * Get user by Stripe customer ID from InstantDB.
- * Returns { id, email, subscriptionStatus } or null.
- */
 async function getUserByStripeCustomerId(customerId) {
   const db = getDb();
-  const result = await db.queryOnce({
+  const result = await db.query({
     $users: {
-      $: {
-        where: { stripeCustomerId: customerId },
-      },
+      $: { where: { stripeCustomerId: customerId } },
     },
   });
   const users = result?.$users || [];
   return users.length > 0 ? users[0] : null;
 }
 
-/**
- * Set the Stripe customer ID on a user record.
- */
 async function setUserStripeCustomerId(userId, customerId) {
   const db = getDb();
-  const tx = db.transact([
-    db.tx.$users[userId].update({
-      stripeCustomerId: customerId,
-    }),
+  await db.transact([
+    db.tx.$users[userId].update({ stripeCustomerId: customerId }),
   ]);
-  await tx;
+}
+
+/**
+ * Inspect a subscription to decide whether it grants Pro entitlement.
+ *   - Must contain our configured price ID
+ *   - Must be in an active-like status (active, trialing, past_due is grace)
+ */
+function subscriptionGrantsPro(subscription) {
+  if (!subscription) return false;
+  const status = subscription.status;
+  const grantsByStatus = status === 'active' || status === 'trialing' || status === 'past_due';
+  if (!grantsByStatus) return false;
+  const items = subscription.items?.data || [];
+  return items.some((item) => item?.price?.id === STRIPE_PRICE_ID);
 }
 
 // ── Stripe Checkout ──
 
 /**
  * Create a Stripe Checkout session for Pro upgrade.
- * @param {Object} params
- * @param {string} params.userId - InstantDB user ID
- * @param {string} params.email - User email
- * @param {string} params.successUrl - Where to redirect after success
- * @param {string} params.cancelUrl - Where to redirect after cancel
- * @returns {Promise<{ url: string }>}
+ * Caller MUST pass an authenticated user record (server-of-record);
+ * the userId/email here are not from the client body.
  */
-export async function createCheckoutSession({ userId, email, successUrl, cancelUrl }) {
+export async function createCheckoutSession({ user, successUrl, cancelUrl }) {
+  if (!user || !user.id || !user.email) {
+    throw Object.assign(new Error('createCheckoutSession requires authenticated user'), {
+      code: 'BAD_REQUEST',
+      statusCode: 400,
+    });
+  }
   const stripe = getStripe();
   const db = getDb();
+  const safeSuccessUrl = sameOriginReturnUrl(successUrl, '/account/billing?session_id={CHECKOUT_SESSION_ID}&status=success');
+  const safeCancelUrl = sameOriginReturnUrl(cancelUrl, '/account/billing?status=cancelled');
 
-  // Fetch user to check for existing Stripe customer
-  const userResult = await db.queryOnce({
-    $users: {
-      $: { where: { id: userId } },
-    },
+  // Fetch latest user record (for stripeCustomerId).
+  const userResult = await db.query({
+    $users: { $: { where: { id: user.id } } },
   });
-  const user = userResult?.$users?.[0];
+  const fullUser = userResult?.$users?.[0];
 
   const sessionParams = {
     mode: 'subscription',
-    line_items: [
-      {
-        price: STRIPE_PRICE_ID,
-        quantity: 1,
-      },
-    ],
-    success_url: successUrl || `${process.env.APP_URL || 'http://localhost:5173'}/billing?session_id={CHECKOUT_SESSION_ID}&status=success`,
-    cancel_url: cancelUrl || `${process.env.APP_URL || 'http://localhost:5173'}/billing?status=cancelled`,
-    customer_email: email,
-    metadata: {
-      userId: userId,
-    },
+    line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+    success_url: safeSuccessUrl,
+    cancel_url: safeCancelUrl,
+    customer_email: user.email,
+    // Bind the InstantDB user id so the webhook can reconcile.
+    metadata: { userId: user.id },
+    subscription_data: { metadata: { userId: user.id } },
   };
 
-  // If user already has a Stripe customer ID, use it
-  if (user?.stripeCustomerId) {
-    sessionParams.customer = user.stripeCustomerId;
+  if (fullUser?.stripeCustomerId) {
+    sessionParams.customer = fullUser.stripeCustomerId;
     delete sessionParams.customer_email;
   }
 
   const session = await stripe.checkout.sessions.create(sessionParams);
-
   return { url: session.url };
 }
 
@@ -145,19 +174,33 @@ export async function createCheckoutSession({ userId, email, successUrl, cancelU
 
 /**
  * Create a Stripe Billing Portal session.
- * @param {Object} params
- * @param {string} params.customerId - Stripe customer ID
- * @param {string} params.returnUrl - Where to redirect after portal
- * @returns {Promise<{ url: string }>}
+ * The customerId is derived server-side from the authenticated user's
+ * record — never accepted from the client body — to prevent IDOR.
  */
-export async function createPortalSession({ customerId, returnUrl }) {
+export async function createPortalSession({ user, returnUrl }) {
+  if (!user || !user.id) {
+    throw Object.assign(new Error('createPortalSession requires authenticated user'), {
+      code: 'UNAUTHORIZED',
+      statusCode: 401,
+    });
+  }
+  const db = getDb();
+  const userResult = await db.query({
+    $users: { $: { where: { id: user.id } } },
+  });
+  const fullUser = userResult?.$users?.[0];
+  const customerId = fullUser?.stripeCustomerId;
+  if (!customerId) {
+    throw Object.assign(new Error('No Stripe customer for this account'), {
+      code: 'NO_CUSTOMER',
+      statusCode: 404,
+    });
+  }
   const stripe = getStripe();
-
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
-    return_url: returnUrl || `${process.env.APP_URL || 'http://localhost:5173'}/billing`,
+    return_url: sameOriginReturnUrl(returnUrl, '/account/billing'),
   });
-
   return { url: session.url };
 }
 
@@ -165,98 +208,211 @@ export async function createPortalSession({ customerId, returnUrl }) {
 
 /**
  * Process a Stripe webhook event.
- * Verifies the webhook signature, then processes known event types.
  *
- * @param {string} rawBody - Raw request body string (for signature verification)
- * @param {string} signature - Stripe-Signature header value
- * @returns {Promise<{ received: boolean, type: string }>}
+ * Returns one of:
+ *   - { received: true, type, deduped: true }    — already processed
+ *   - { received: true, type, ok: true }         — processed successfully
+ *   - { received: true, type, deferred: true }   — internal failure, will retry locally
+ *
+ * NEVER throws on internal failures: we always ack Stripe with 200 to
+ * prevent retry storms during InstantDB outages. Signature errors are
+ * the one exception (we throw with statusCode 400).
  */
 export async function handleStripeWebhook(rawBody, signature) {
   const stripe = getStripe();
 
-  // Verify webhook signature
   let event;
   try {
     event = stripe.webhooks.constructEvent(rawBody, signature, STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.error('[stripe] Webhook signature verification failed:', err.message);
+    log.warn('stripe_webhook_invalid_signature', { msg: err.message });
     throw Object.assign(new Error('Webhook signature verification failed'), {
       code: 'INVALID_SIGNATURE',
       statusCode: 400,
     });
   }
 
-  console.log(`[stripe] Webhook received: ${event.type}`);
+  // Idempotency: if we have already processed this event, short-circuit.
+  let isFirst = true;
+  try {
+    isFirst = await claimStripeEvent(event.id, event.type);
+  } catch (err) {
+    // If the idempotency layer is down, prefer to process (at-least-once)
+    // rather than skip — but log loudly so we notice.
+    log.error('stripe_idempotency_unavailable', { msg: err.message, eventId: event.id });
+  }
+  if (!isFirst) {
+    log.info('stripe_webhook_deduped', { type: event.type, eventId: event.id });
+    return { received: true, type: event.type, deduped: true };
+  }
 
+  try {
+    await dispatchEvent(event);
+    return { received: true, type: event.type, ok: true };
+  } catch (err) {
+    // Do NOT propagate to Stripe — we own retries from here.
+    log.error('stripe_webhook_handler_failed', {
+      type: event.type,
+      eventId: event.id,
+      msg: err.message,
+    });
+    return { received: true, type: event.type, deferred: true };
+  }
+}
+
+async function dispatchEvent(event) {
   switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object;
-      const userId = session.metadata?.userId;
-      const customerId = session.customer;
+    case 'checkout.session.completed':
+      return handleCheckoutCompleted(event);
+    case 'customer.subscription.created':
+    case 'customer.subscription.updated':
+      return handleSubscriptionUpserted(event);
+    case 'customer.subscription.deleted':
+      return handleSubscriptionDeleted(event);
+    case 'invoice.payment_failed':
+      return handleInvoicePaymentFailed(event);
+    case 'invoice.paid':
+    case 'invoice.payment_succeeded':
+      return handleInvoicePaid(event);
+    case 'customer.subscription.trial_will_end':
+      log.info('stripe_trial_will_end', { customerId: event.data.object?.customer });
+      return;
+    default:
+      log.info('stripe_unhandled_event', { type: event.type });
+      return;
+  }
+}
 
-      if (userId) {
-        await setUserSubscriptionStatus(userId, 'pro');
+async function handleCheckoutCompleted(event) {
+  const session = event.data.object;
+  const userId = session.metadata?.userId;
+  const customerId = session.customer;
+  const subscriptionId = session.subscription;
 
-        if (customerId && typeof customerId === 'string') {
-          await setUserStripeCustomerId(userId, customerId);
-        }
+  if (!userId) {
+    log.warn('stripe_checkout_missing_userId', { sessionId: session.id });
+    return;
+  }
 
-        console.log(`[stripe] User ${userId} upgraded to Pro`);
-      } else {
-        console.warn('[stripe] checkout.session.completed missing userId in metadata');
-      }
-      break;
-    }
-
-    case 'customer.subscription.updated': {
-      const subscription = event.data.object;
-      const customerId = subscription.customer;
-      const cancelAtPeriodEnd = subscription.cancel_at_period_end;
-      const currentPeriodEnd = subscription.current_period_end;
-
-      if (typeof customerId !== 'string') break;
-
-      const user = await getUserByStripeCustomerId(customerId);
-      if (!user) {
-        console.warn(`[stripe] No user found for customer ${customerId}`);
-        break;
-      }
-
-      if (cancelAtPeriodEnd) {
-        // User cancelled; keep Pro until period end
-        // We keep subscriptionStatus as 'pro' but note the pending cancellation
-        console.log(`[stripe] User ${user.id} cancelled, Pro until ${new Date(currentPeriodEnd * 1000).toISOString()}`);
-        // Status stays 'pro' — only downgrade on subscription.deleted
-      } else {
-        // Subscription reactivated or updated
-        await setUserSubscriptionStatus(user.id, 'pro');
-        console.log(`[stripe] User ${user.id} subscription updated, keeping Pro`);
-      }
-      break;
-    }
-
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object;
-      const customerId = subscription.customer;
-
-      if (typeof customerId !== 'string') break;
-
-      const user = await getUserByStripeCustomerId(customerId);
-      if (!user) {
-        console.warn(`[stripe] No user found for customer ${customerId}`);
-        break;
-      }
-
-      await setUserSubscriptionStatus(user.id, 'free');
-      console.log(`[stripe] User ${user.id} downgraded to Free`);
-      break;
-    }
-
-    default: {
-      console.log(`[stripe] Unhandled event type: ${event.type}`);
-      break;
+  // Verify the underlying subscription contains our PRICE_ID before granting Pro.
+  let granted = false;
+  if (subscriptionId && typeof subscriptionId === 'string') {
+    try {
+      const stripe = getStripe();
+      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      granted = subscriptionGrantsPro(sub);
+    } catch (err) {
+      log.warn('stripe_checkout_sub_fetch_failed', { sessionId: session.id, msg: err.message });
     }
   }
 
-  return { received: true, type: event.type };
+  // For one-shot or incomplete subs we still record the customer link, but only
+  // grant Pro when the subscription actually contains our price.
+  if (granted) {
+    await setUserSubscriptionStatus(userId, 'pro');
+  }
+  if (customerId && typeof customerId === 'string') {
+    await setUserStripeCustomerId(userId, customerId);
+  }
+  log.info('stripe_checkout_completed', { userId, customerId, granted });
+}
+
+async function handleSubscriptionUpserted(event) {
+  const subscription = event.data.object;
+  const customerId = subscription.customer;
+  if (typeof customerId !== 'string') return;
+
+  const user = await resolveUserForCustomer(customerId, subscription);
+  if (!user) {
+    log.warn('stripe_subscription_no_user', { customerId, subId: subscription.id });
+    return;
+  }
+
+  if (subscriptionGrantsPro(subscription)) {
+    await setUserSubscriptionStatus(user.id, 'pro');
+    log.info('stripe_subscription_active', {
+      userId: user.id,
+      status: subscription.status,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    });
+  } else {
+    // Sub exists but does not grant Pro (canceled, unpaid, or wrong price).
+    await setUserSubscriptionStatus(user.id, 'free');
+    log.info('stripe_subscription_inactive', { userId: user.id, status: subscription.status });
+  }
+}
+
+async function handleSubscriptionDeleted(event) {
+  const subscription = event.data.object;
+  const customerId = subscription.customer;
+  if (typeof customerId !== 'string') return;
+
+  const user = await resolveUserForCustomer(customerId, subscription);
+  if (!user) {
+    log.warn('stripe_subscription_deleted_no_user', { customerId });
+    return;
+  }
+  await setUserSubscriptionStatus(user.id, 'free');
+  log.info('stripe_subscription_deleted', { userId: user.id });
+}
+
+async function handleInvoicePaymentFailed(event) {
+  const invoice = event.data.object;
+  const customerId = invoice.customer;
+  if (typeof customerId !== 'string') return;
+  const user = await getUserByStripeCustomerId(customerId);
+  if (!user) {
+    log.warn('stripe_invoice_failed_no_user', { customerId });
+    return;
+  }
+  // Mark past_due so UI can surface a payment-action CTA.
+  await setUserSubscriptionStatus(user.id, 'past_due');
+  log.warn('stripe_invoice_payment_failed', { userId: user.id, invoiceId: invoice.id });
+}
+
+async function handleInvoicePaid(event) {
+  const invoice = event.data.object;
+  const customerId = invoice.customer;
+  const subscriptionId = invoice.subscription;
+  if (typeof customerId !== 'string') return;
+  const user = await getUserByStripeCustomerId(customerId);
+  if (!user) {
+    log.info('stripe_invoice_paid_no_user', { customerId });
+    return;
+  }
+  // Re-confirm Pro by inspecting the underlying subscription.
+  if (subscriptionId && typeof subscriptionId === 'string') {
+    try {
+      const stripe = getStripe();
+      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      if (subscriptionGrantsPro(sub)) {
+        await setUserSubscriptionStatus(user.id, 'pro');
+        log.info('stripe_invoice_paid_pro_confirmed', { userId: user.id });
+      }
+    } catch (err) {
+      log.warn('stripe_invoice_paid_sub_fetch_failed', { userId: user.id, msg: err.message });
+    }
+  }
+}
+
+/**
+ * Resolve the InstantDB user for a Stripe customer.
+ * Falls back to the `userId` metadata on the subscription if the
+ * customerId mapping was not yet persisted (rare race).
+ */
+async function resolveUserForCustomer(customerId, subscription) {
+  const direct = await getUserByStripeCustomerId(customerId);
+  if (direct) return direct;
+  const fallbackId = subscription?.metadata?.userId;
+  if (!fallbackId) return null;
+  const db = getDb();
+  const result = await db.query({
+    $users: { $: { where: { id: fallbackId } } },
+  });
+  const user = result?.$users?.[0];
+  if (user && !user.stripeCustomerId) {
+    // Heal the link so future webhooks resolve directly.
+    await setUserStripeCustomerId(user.id, customerId);
+  }
+  return user || null;
 }

@@ -8,44 +8,7 @@
  *   unknown: no data  → grey
  */
 
-const RELIABILITY_META = {
-  high: {
-    accent: '#4ce39c',
-    fill: 'rgba(76, 227, 156, 0.18)',
-    hoverFill: 'rgba(76, 227, 156, 0.26)',
-    selectedFill: 'rgba(76, 227, 156, 0.34)',
-    stroke: 'rgba(76, 227, 156, 0.36)',
-    labelKey: 'highReliability',
-    dotColor: '#4ce39c'
-  },
-  medium: {
-    accent: '#ffbe63',
-    fill: 'rgba(255, 190, 99, 0.16)',
-    hoverFill: 'rgba(255, 190, 99, 0.24)',
-    selectedFill: 'rgba(255, 190, 99, 0.32)',
-    stroke: 'rgba(255, 190, 99, 0.34)',
-    labelKey: 'mediumReliability',
-    dotColor: '#ffbe63'
-  },
-  low: {
-    accent: '#ff5f7a',
-    fill: 'rgba(255, 95, 122, 0.16)',
-    hoverFill: 'rgba(255, 95, 122, 0.24)',
-    selectedFill: 'rgba(255, 95, 122, 0.32)',
-    stroke: 'rgba(255, 95, 122, 0.35)',
-    labelKey: 'lowReliability',
-    dotColor: '#ff5f7a'
-  },
-  unknown: {
-    accent: 'rgba(255, 255, 255, 0.3)',
-    fill: 'rgba(255, 255, 255, 0.02)',
-    hoverFill: 'rgba(255, 255, 255, 0.05)',
-    selectedFill: 'rgba(255, 255, 255, 0.08)',
-    stroke: 'rgba(255, 255, 255, 0.1)',
-    labelKey: 'noReliabilityData',
-    dotColor: 'rgba(255, 255, 255, 0.3)'
-  }
-};
+import { getReliabilityVisual } from './visualSystem.js';
 
 export const RELIABILITY_TIER_ORDER = ['high', 'medium', 'low', 'unknown'];
 
@@ -69,7 +32,7 @@ export function getReliabilityTier(score) {
  * @returns {object}
  */
 export function getReliabilityMeta(tier = 'unknown') {
-  return RELIABILITY_META[tier] || RELIABILITY_META.unknown;
+  return getReliabilityVisual(tier);
 }
 
 /**

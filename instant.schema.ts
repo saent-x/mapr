@@ -1,8 +1,15 @@
 /**
- * InstantDB Schema — MAPR v5
+ * InstantDB Schema — MAPR
  *
- * Defines the data model for all InstantDB entities.
- * Run `npx instant-cli push-schema` or use the Dashboard to apply.
+ * Apply via:
+ *   npx instant-cli@latest push schema
+ *
+ * Layout follows the InstantDB docs exactly:
+ *   - Entities declare scalar fields only
+ *   - Relationships go in the dedicated `links` block
+ *   - `$users.email` is `i.any().unique().indexed()` for legacy owner-link
+ *     fallbacks; client writes prefer the authenticated `$users` UUID when it
+ *     is available.
  */
 
 import { i } from '@instantdb/core';
@@ -10,82 +17,67 @@ import { i } from '@instantdb/core';
 const _schema = i.schema({
   entities: {
     /**
-     * Built-in InstantDB users entity.
-     * Extended with custom attributes for MAPR-specific data.
+     * Built-in InstantDB users entity. Only fields that need to be on
+     * the row appear here — InstantDB handles auth fields itself.
+     *
+     * `subscriptionStatus` and `stripeCustomerId` are server-of-record:
+     * the perms file below blocks all client writes; only the Stripe
+     * webhook (running with the admin token) may mutate them.
      */
     $users: i.entity({
-      email: i.string().unique(),
-      createdAt: i.date(),
-      /** Subscription tier: 'free' | 'pro' | 'enterprise' */
-      subscriptionStatus: i.string(),
-      /** Stripe customer ID for payment processing */
-      stripeCustomerId: i.string(),
-      /** User's saved filter views */
-      savedViews: i.hasMany('savedViews'),
-      /** User's alert rules */
-      alertRules: i.hasMany('alertRules'),
-      /** User's bookmarks */
-      bookmarks: i.hasMany('bookmarks'),
+      email: i.any().unique().indexed(),
+      subscriptionStatus: i.string().optional(),
+      stripeCustomerId: i.string().optional(),
     }),
 
-    /**
-     * User profiles — public-facing user data.
-     * Created on first sign-in, linked to $users.
-     */
     profiles: i.entity({
       displayName: i.string(),
       email: i.string(),
       createdAt: i.number(),
-      uid: i.string().unique(),
+      uid: i.string().unique().indexed(),
     }),
 
-    /**
-     * Saved filter views — named filter presets.
-     * Each view captures the full filter state for one-click recall.
-     * Linked to a $user via the `owner` relationship.
-     */
     savedViews: i.entity({
       name: i.string(),
+      description: i.string().optional(),
+      tags: i.json().optional(),
+      pinned: i.boolean().optional(),
+      lastOpenedAt: i.number().optional(),
       filterState: i.json(),
       mapState: i.json(),
       createdAt: i.number(),
       updatedAt: i.number(),
-      owner: i.belongsTo('$users'),
     }),
 
-    /**
-     * Alert rules — notification triggers based on saved views.
-     * When a new event matches the view's filters and meets the severity threshold,
-     * a toast notification fires.
-     * Linked to a $user via the `owner` relationship.
-     */
     alertRules: i.entity({
       name: i.string(),
       severityThreshold: i.number(),
+      minConfidence: i.number().optional(),
+      deliveryMode: i.string().optional(),
+      quietHours: i.json().optional(),
+      channels: i.json().optional(),
+      lastTriggeredAt: i.number().optional(),
       savedViewId: i.string(),
       active: i.boolean(),
       createdAt: i.number(),
-      owner: i.belongsTo('$users'),
     }),
 
-    /**
-     * Story bookmarks — individual story saves.
-     * Each bookmark links a user to a specific story/article.
-     * Linked to a $user via the `owner` relationship.
-     */
     bookmarks: i.entity({
       storyId: i.string(),
       storyTitle: i.string(),
+      storySummary: i.string().optional(),
+      source: i.string().optional(),
+      url: i.string().optional(),
+      note: i.string().optional(),
+      tags: i.json().optional(),
+      status: i.string().optional(),
+      priority: i.string().optional(),
       region: i.string(),
       severity: i.number(),
       bookmarkedAt: i.number(),
-      owner: i.belongsTo('$users'),
+      updatedAt: i.number().optional(),
     }),
 
-    /**
-     * User subscription records — Stripe integration.
-     * Tracks subscription state for gated features.
-     */
     subscriptions: i.entity({
       stripeSubscriptionId: i.string(),
       stripeCustomerId: i.string(),
@@ -96,6 +88,34 @@ const _schema = i.schema({
       createdAt: i.number(),
     }),
   },
+
+  // All relationships live here. The forward side is what we link FROM
+  // in transactions (`db.tx.savedViews[id].link({ owner: ... })`); the
+  // reverse side is what `auth.ref('$user.savedViews.id')` traverses
+  // in perm checks.
+  links: {
+    userSavedViews: {
+      forward: { on: 'savedViews', has: 'one', label: 'owner' },
+      reverse: { on: '$users', has: 'many', label: 'savedViews' },
+    },
+    userAlertRules: {
+      forward: { on: 'alertRules', has: 'one', label: 'owner' },
+      reverse: { on: '$users', has: 'many', label: 'alertRules' },
+    },
+    userBookmarks: {
+      forward: { on: 'bookmarks', has: 'one', label: 'owner' },
+      reverse: { on: '$users', has: 'many', label: 'bookmarks' },
+    },
+    userSubscriptions: {
+      forward: { on: 'subscriptions', has: 'one', label: 'owner' },
+      reverse: { on: '$users', has: 'many', label: 'subscriptions' },
+    },
+  },
 });
 
-export default _schema;
+type _AppSchema = typeof _schema;
+interface AppSchema extends _AppSchema {}
+const schema: AppSchema = _schema;
+
+export type { AppSchema };
+export default schema;

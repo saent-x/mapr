@@ -16,7 +16,7 @@ import { fetchLiveNews, getGdeltFetchHealth } from './gdeltService.js';
  *   | { kind: 'backend'; briefing: object; historyPayload: object | null }
  *   | { kind: 'backend_warming'; briefing: object; historyPayload: object | null }
  *   | { kind: 'client_gdelt'; articles: object[]; gdeltHealth: object | null }
- *   | { kind: 'mock'; errorMessage: string }
+ *   | { kind: 'unavailable'; errorMessage: string }
  * >}
  */
 export async function runLoadLiveDataPipeline({ forceRefresh = false } = {}) {
@@ -27,7 +27,7 @@ export async function runLoadLiveDataPipeline({ forceRefresh = false } = {}) {
     if (raw.status === 503 && briefing && typeof briefing === 'object') {
       const warmingArticles = briefing.articles || [];
       // Only return backend_warming if we actually have articles to show;
-      // fall through to GDELT / mock when backend returns 503 with 0 articles.
+      // fall through to GDELT / unavailable when backend returns 503 with 0 articles.
       if (warmingArticles.length > 0) {
         let historyPayload = null;
         try {
@@ -74,5 +74,5 @@ export async function runLoadLiveDataPipeline({ forceRefresh = false } = {}) {
     console.warn('Client-side GDELT fallback also failed:', err.message);
   }
 
-  return { kind: 'mock', errorMessage: 'Both backend and client-side fetching failed' };
+  return { kind: 'unavailable', errorMessage: 'Both backend and client-side fetching failed' };
 }

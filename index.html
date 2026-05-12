@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: https://*.basemaps.cartocdn.com; connect-src 'self' ws: wss: https://*.gdeltproject.org https://opensky-network.org https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com https://*.instantdb.com; frame-src 'self';" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; connect-src 'self' ws: wss: https://*.gdeltproject.org https://opensky-network.org https://corsproxy.io https://api.allorigins.win https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://*.instantdb.com; frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';" />
+    <!-- frame-ancestors is enforced via the server's X-Frame-Options: DENY header (browsers ignore frame-ancestors in <meta>). corsproxy/allorigins remain in connect-src for the offline RSS fallback path; remove once that path is server-routed. -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0e14" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

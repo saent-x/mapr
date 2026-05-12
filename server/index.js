@@ -39,7 +39,20 @@ function serveStaticFile(response, filePath) {
   createReadStream(filePath).pipe(response);
 }
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
-import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes, readSnapshotHistory, readSnapshotTimestamps, readSourceCredibilityScores } from './storage.js';
+import { DEFAULT_FEATURE_FLAGS, normalizeFeatureFlags } from '../src/utils/featureAccess.js';
+import {
+  closeStorage,
+  enforceDbSizeLimit,
+  getDbSize,
+  getDbSizeLimits,
+  getDroppedArticleLinkCount,
+  getTableSizes,
+  readMetadataJson,
+  readSnapshotHistory,
+  readSnapshotTimestamps,
+  readSourceCredibilityScores,
+  writeMetadataJson
+} from './storage.js';
 import {
   getBriefing,
   getCoverageHistory,
@@ -88,19 +101,54 @@ import { log } from './logger.js';
 import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 import { createCheckoutSession, createPortalSession, handleStripeWebhook } from './stripe.js';
+import { requireUser, getRequestUserRecord } from './auth.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
+const FEATURE_FLAGS_METADATA_KEY = 'feature_flags';
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET,POST,OPTIONS',
-  'access-control-allow-headers': 'Content-Type, X-Admin-Password',
+  'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
+  'access-control-allow-headers': 'Content-Type, X-Admin-Password, Authorization',
 };
 
-function sendJson(response, statusCode, payload, extraHeaders = {}) {
+// Sent on every response. CSP belongs in index.html so it covers static
+// assets too; here we add transport-layer hardening that the browser
+// applies regardless of route.
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
+  'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+};
+
+const SENSITIVE_API_PREFIXES = [
+  '/api/admin',
+  '/api/admin-auth',
+  '/api/admin-health',
+  '/api/source-catalog',
+  '/api/stripe',
+  '/api/me',
+  '/api/refresh',
+];
+
+function corsHeadersForPath(pathname) {
+  if (!SENSITIVE_API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return CORS_HEADERS;
+  }
+  return {
+    'access-control-allow-methods': CORS_HEADERS['access-control-allow-methods'],
+    'access-control-allow-headers': CORS_HEADERS['access-control-allow-headers'],
+    vary: 'Origin',
+  };
+}
+
+function sendJson(response, statusCode, payload, extraHeaders = {}, requestPath = '') {
   response.writeHead(statusCode, {
-    ...CORS_HEADERS,
+    ...corsHeadersForPath(requestPath || response._maprPath || ''),
+    ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'content-type': 'application/json; charset=utf-8',
     ...extraHeaders
@@ -109,10 +157,11 @@ function sendJson(response, statusCode, payload, extraHeaders = {}) {
 }
 
 /** @param {string[]} setCookieValues */
-function sendJsonWithCookies(response, statusCode, payload, setCookieValues) {
+function sendJsonWithCookies(response, statusCode, payload, setCookieValues, requestPath = '') {
   response.statusCode = statusCode;
   for (const [k, v] of Object.entries({
-    ...CORS_HEADERS,
+    ...corsHeadersForPath(requestPath || response._maprPath || ''),
+    ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'content-type': 'application/json; charset=utf-8'
   })) {
@@ -144,6 +193,20 @@ function adminAuthorized(request) {
   if (header === adminPw) return true;
   const tok = getSessionTokenFromCookie(request.headers.cookie);
   return Boolean(tok && verifySessionToken(tok));
+}
+
+async function readFeatureFlags() {
+  const stored = await readMetadataJson(FEATURE_FLAGS_METADATA_KEY, DEFAULT_FEATURE_FLAGS);
+  return normalizeFeatureFlags(stored);
+}
+
+async function writeFeatureFlags(payload) {
+  const flags = normalizeFeatureFlags({
+    ...payload,
+    updatedAt: new Date().toISOString(),
+  });
+  await writeMetadataJson(FEATURE_FLAGS_METADATA_KEY, flags);
+  return flags;
 }
 
 async function readJsonBody(request, maxBytes = 32_768) {
@@ -182,10 +245,31 @@ async function readRawBody(request, maxBytes = 256_000) {
 function sendText(response, statusCode, text) {
   response.writeHead(statusCode, {
     ...CORS_HEADERS,
+    ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'content-type': 'text/plain; charset=utf-8'
   });
   response.end(text);
+}
+
+/**
+ * Verify a paywall: requires an authenticated user whose subscription
+ * grants access to `featureId` per the current feature flags.
+ * Throws with statusCode 401 (no/invalid token) or 402 (auth ok but
+ * subscription does not grant the feature).
+ */
+async function requireProFeature(request, featureId) {
+  const { record } = await getRequestUserRecord(request);
+  const flags = await readFeatureFlags();
+  const status = record?.subscriptionStatus || 'free';
+  const required = flags.features[featureId] || 'pro';
+  if (flags.billingEnabled === false) return record;
+  if (required === 'disabled') {
+    throw Object.assign(new Error('Feature disabled'), { code: 'FEATURE_DISABLED', statusCode: 403 });
+  }
+  if (required === 'free') return record;
+  if (status === 'pro' || status === 'enterprise') return record;
+  throw Object.assign(new Error('Subscription required'), { code: 'PAYMENT_REQUIRED', statusCode: 402 });
 }
 
 /**
@@ -220,6 +304,22 @@ function classifyError(error) {
 
   if (code === 'PAYLOAD_TOO_LARGE' || error?.statusCode === 413) {
     return { status: 413, body: { error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' } };
+  }
+
+  if (code === 'UNAUTHORIZED' || error?.statusCode === 401) {
+    return { status: 401, body: { error: message || 'Unauthorized', code: 'UNAUTHORIZED' } };
+  }
+
+  if (code === 'PAYMENT_REQUIRED' || error?.statusCode === 402) {
+    return { status: 402, body: { error: 'Subscription required', code: 'PAYMENT_REQUIRED' } };
+  }
+
+  if (code === 'FEATURE_DISABLED' || code === 'NO_CUSTOMER' || error?.statusCode === 403 || error?.statusCode === 404) {
+    return { status: error?.statusCode || 403, body: { error: message, code: code || 'FORBIDDEN' } };
+  }
+
+  if (code === 'AUTH_NOT_CONFIGURED' || error?.statusCode === 503) {
+    return { status: 503, body: { error: 'Service unavailable', code: code || 'SERVICE_UNAVAILABLE' } };
   }
 
   if (code === 'BAD_REQUEST' && error?.statusCode === 400) {
@@ -276,11 +376,17 @@ async function buildAdminHealthResponse() {
   });
   const healthPayload = await getHealth();
 
-  return mergeAdminHealthPayloads(briefingPayload, {
+  const merged = mergeAdminHealthPayloads(briefingPayload, {
     sourceHealth: healthPayload.sourceHealth,
     coverageMetrics: healthPayload.coverageMetrics,
     coverageDiagnostics: healthPayload.coverageDiagnostics
   });
+  // Surface integrity counters separately so dropped links don't disappear
+  // silently. Spike here means UI is missing sources for some events.
+  merged.integrity = {
+    droppedArticleLinks: getDroppedArticleLinkCount()
+  };
+  return merged;
 }
 
 const server = http.createServer(async (request, response) => {
@@ -290,12 +396,14 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method === 'OPTIONS') {
-    response.writeHead(204, CORS_HEADERS);
+    const optionsUrl = new URL(request.url, `http://127.0.0.1:${PORT}`);
+    response.writeHead(204, corsHeadersForPath(optionsUrl.pathname));
     response.end();
     return;
   }
 
   const url = new URL(request.url, `http://127.0.0.1:${PORT}`);
+  response._maprPath = url.pathname;
 
   try {
     // ── Stateful routes (use server's cache/SQLite) ──
@@ -327,9 +435,20 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/api/health') {
+    // Liveness: process is up. Always 200 unless we're in the middle of
+    // shutdown. Used by orchestrators (Railway, K8s) to decide whether to
+    // restart the container.
+    if (request.method === 'GET' && url.pathname === '/api/health/live') {
+      sendJson(response, _shuttingDown ? 503 : 200, { ok: !_shuttingDown });
+      return;
+    }
+
+    // Readiness: are we ready to serve traffic? Postgres reachable, snapshot
+    // primed. Used by load balancers to decide whether to route requests.
+    if (request.method === 'GET' && (url.pathname === '/api/health/ready' || url.pathname === '/api/health')) {
       const health = await withTimeout(() => getHealth());
       health.circuitBreaker = getCircuitSummary();
+      let dbOk = false;
       try {
         const size = await getDbSize();
         const limits = getDbSizeLimits();
@@ -339,8 +458,41 @@ const server = http.createServer(async (request, response) => {
           hardMb: limits.hardMb,
           capacityMb: limits.capacityMb
         };
-      } catch { /* ignore */ }
-      sendJson(response, 200, health);
+        dbOk = true;
+      } catch (err) {
+        // Surface the failure honestly — a healthy 200 here would route
+        // traffic to a broken instance.
+        health.database = { error: err.message };
+      }
+      const briefingReady = health.snapshotStatus !== 'cold';
+      const ready = dbOk && briefingReady && !_shuttingDown;
+      sendJson(response, ready ? 200 : 503, { ...health, ready });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/feature-flags') {
+      sendJson(response, 200, await readFeatureFlags());
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/admin/feature-flags') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      sendJson(response, 200, await readFeatureFlags());
+      return;
+    }
+
+    if (request.method === 'PUT' && url.pathname === '/api/admin/feature-flags') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 64_768); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      sendJson(response, 200, await writeFeatureFlags(body));
       return;
     }
 
@@ -374,6 +526,14 @@ const server = http.createServer(async (request, response) => {
 
     // ── SSE: real-time event stream ──
     if (request.method === 'GET' && url.pathname === '/api/stream') {
+      // Reject if the SSE pool is at capacity rather than letting the
+      // client set grow unbounded. Returning 503 lets the client retry.
+      // Set socket-level keepalive so an idle proxy doesn't quietly close
+      // without firing the request.close handler.
+      try {
+        request.socket?.setKeepAlive?.(true, 30_000);
+        request.socket?.setNoDelay?.(true);
+      } catch { /* best-effort */ }
       response.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Connection': 'keep-alive',
@@ -381,7 +541,11 @@ const server = http.createServer(async (request, response) => {
         ...CORS_HEADERS
       });
       response.write(': connected\n\n');
-      addSseClient(response);
+      const accepted = addSseClient(response);
+      if (!accepted) {
+        try { response.end(); } catch { /* ignore */ }
+        return;
+      }
       request.on('close', () => removeSseClient(response));
       return;
     }
@@ -613,6 +777,8 @@ const server = http.createServer(async (request, response) => {
     // ── Historical snapshot queries ──
 
     if (request.method === 'GET' && url.pathname === '/api/snapshot-history/timestamps') {
+      try { await requireProFeature(request, 'historicalQueries'); }
+      catch (err) { const { status, body: b } = classifyError(err); sendJson(response, status, b); return; }
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
       const timestamps = await withTimeout(() => readSnapshotTimestamps(from, to));
@@ -623,6 +789,8 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'GET' && url.pathname === '/api/snapshot-history') {
+      try { await requireProFeature(request, 'historicalQueries'); }
+      catch (err) { const { status, body: b } = classifyError(err); sendJson(response, status, b); return; }
       const from = url.searchParams.get('from');
       const to = url.searchParams.get('to');
       const limit = Math.max(1, Math.min(168, Number(url.searchParams.get('limit') || 48)));
@@ -641,6 +809,15 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/refresh') {
+      // Admin-only — full ingest is heavy, so it must not be a public DoS surface.
+      if (!adminPasswordConfigured()) {
+        sendJson(response, 503, { error: 'ADMIN_PASSWORD not configured', code: 'SERVICE_UNAVAILABLE' });
+        return;
+      }
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
       const briefing = await withTimeout(() => refreshSnapshot({ force: true, reason: 'manual' }), 120_000);
       sendJson(response, 200, briefing);
       return;
@@ -695,7 +872,7 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const secure = isHttpsRequest(request);
-      sendJsonWithCookies(response, 200, { ok: true }, [buildSetSessionCookie(token, secure)]);
+      sendJsonWithCookies(response, 200, { ok: true }, [buildSetSessionCookie(token, secure)], url.pathname);
       return;
     }
 
@@ -708,7 +885,7 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/admin/logout') {
       const secure = isHttpsRequest(request);
-      sendJsonWithCookies(response, 200, { ok: true }, [buildClearSessionCookie(secure)]);
+      sendJsonWithCookies(response, 200, { ok: true }, [buildClearSessionCookie(secure)], url.pathname);
       return;
     }
 
@@ -740,20 +917,20 @@ const server = http.createServer(async (request, response) => {
     // ── Stripe Integration ──
 
     if (request.method === 'POST' && url.pathname === '/api/stripe/create-checkout-session') {
-      let body;
-      try { body = await readJsonBody(request); }
-      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
-      const userId = String(body.userId || '').trim();
-      const email = String(body.email || '').trim();
-      const successUrl = String(body.successUrl || '').trim();
-      const cancelUrl = String(body.cancelUrl || '').trim();
-      if (!userId) { sendJson(response, 400, { error: 'Missing userId' }); return; }
-      if (!email) { sendJson(response, 400, { error: 'Missing email' }); return; }
       try {
-        const result = await withTimeout(() => createCheckoutSession({ userId, email, successUrl, cancelUrl }));
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        // userId/email are derived from the verified token. Body fields are ignored.
+        const successUrl = String(body.successUrl || '').trim();
+        const cancelUrl = String(body.cancelUrl || '').trim();
+        const result = await withTimeout(() =>
+          createCheckoutSession({ user, successUrl, cancelUrl }),
+        );
         sendJson(response, 200, result);
       } catch (err) {
-        console.error('[api] stripe create-checkout-session error:', err.message);
+        log.warn('stripe_checkout_error', { msg: err.message, code: err.code });
         const { status, body: b } = classifyError(err);
         sendJson(response, status, b);
       }
@@ -761,17 +938,36 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/stripe/create-portal-session') {
-      let body;
-      try { body = await readJsonBody(request); }
-      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
-      const customerId = String(body.customerId || '').trim();
-      const returnUrl = String(body.returnUrl || '').trim();
-      if (!customerId) { sendJson(response, 400, { error: 'Missing customerId' }); return; }
       try {
-        const result = await withTimeout(() => createPortalSession({ customerId, returnUrl }));
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        // customerId is NEVER trusted from the body. createPortalSession looks
+        // it up server-side from the authenticated user's $users record.
+        const returnUrl = String(body.returnUrl || '').trim();
+        const result = await withTimeout(() => createPortalSession({ user, returnUrl }));
         sendJson(response, 200, result);
       } catch (err) {
-        console.error('[api] stripe create-portal-session error:', err.message);
+        log.warn('stripe_portal_error', { msg: err.message, code: err.code });
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // Server-of-record subscription state. Clients should prefer this over the
+    // local InstantDB $users field (which is read-only after the perms file is
+    // applied) for any UI that drives access control.
+    if (request.method === 'GET' && url.pathname === '/api/me') {
+      try {
+        const { authedUser, record } = await getRequestUserRecord(request);
+        sendJson(response, 200, {
+          user: { id: authedUser.id, email: authedUser.email },
+          subscriptionStatus: record?.subscriptionStatus || 'free',
+          stripeCustomerId: record?.stripeCustomerId || null,
+        });
+      } catch (err) {
         const { status, body: b } = classifyError(err);
         sendJson(response, status, b);
       }
@@ -804,7 +1000,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     // ── Serve static frontend from dist/ ──
-    if (HAS_DIST && request.method === 'GET') {
+    if (HAS_DIST && request.method === 'GET' && !url.pathname.startsWith('/api/')) {
       // Strip .. and leading slash, then join. Verify result stays within DIST_DIR.
       const safeName = url.pathname.replace(/\.\./g, '').replace(/^\/+/, '');
       const filePath = join(DIST_DIR, safeName);
@@ -922,19 +1118,56 @@ server.listen(PORT, HOST, async () => {
 });
 
 server.on('error', (err) => {
-  console.error('Server error:', err.message);
-  process.exit(1);
+  log.error('server_error', { msg: err.message });
+  // Do NOT process.exit(1) directly — drop in-flight requests, leak PG conns,
+  // and skip closeStorage. Let shutdown() run with a hard timeout.
+  shutdown('server_error').catch(() => process.exit(1));
 });
 
-function shutdown() {
-  stopScheduler();
-  stopFlightTracking();
-  stopShipTracking();
-  server.close(() => {
-    closeStorage();
+let _shuttingDown = false;
+async function shutdown(reason = 'signal') {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  log.info('server_shutdown_begin', { reason });
+
+  // Hard timeout — Railway/K8s SIGKILLs at 30s by default. Bail out before that
+  // so we always run closeStorage and don't leak PG connections.
+  const hardKill = setTimeout(() => {
+    log.error('server_shutdown_timeout');
+    process.exit(1);
+  }, 10_000);
+  hardKill.unref();
+
+  try {
+    stopScheduler();
+    stopFlightTracking();
+    stopShipTracking();
+    await new Promise((resolve) => server.close(() => resolve()));
+    await closeStorage();
+    log.info('server_shutdown_done');
     process.exit(0);
-  });
+  } catch (err) {
+    log.error('server_shutdown_failed', { msg: err.message });
+    process.exit(1);
+  }
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => { shutdown('SIGINT'); });
+process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+
+// Without these, any unhandled async error tears down the process with no
+// structured log and leaks connections. Log loudly, then trigger graceful
+// shutdown so the next deploy/restart starts clean.
+process.on('unhandledRejection', (reason) => {
+  log.error('unhandled_rejection', {
+    msg: reason?.message || String(reason),
+    stack: reason?.stack,
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  log.error('uncaught_exception', { msg: err.message, stack: err.stack });
+  // Per Node docs, after uncaughtException the process is in an undefined
+  // state — best to shut down rather than continue serving.
+  shutdown('uncaughtException').catch(() => process.exit(1));
+});

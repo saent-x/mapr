@@ -36,15 +36,18 @@ function parseDirectives(cspString) {
 }
 
 // Baseline CSP value before M1 changes (for diff comparison)
-// Updated with InstantDB auth domain (https://*.instantdb.com) added to connect-src
+// Updated with InstantDB auth domain (https://*.instantdb.com) added to connect-src,
+// plus security hardening directives (frame-ancestors, object-src, base-uri,
+// form-action) that lock down clickjacking, plugin abuse, and form action
+// hijacking. img-src additionally permits any HTTPS source for article thumbs.
 const BASELINE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; " +
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' https://fonts.gstatic.com; " +
-  "img-src 'self' data: blob: https://*.basemaps.cartocdn.com; " +
+  "img-src 'self' data: blob: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com; " +
   "connect-src 'self' ws: wss: https://*.gdeltproject.org https://opensky-network.org " +
-  "https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com " +
+  "https://corsproxy.io https://api.allorigins.win https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com " +
   "https://*.instantdb.com; " +
-  "frame-src 'self';";
+  "frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self';";
 
 describe('CSP img-src directive', () => {
   // VAL-M1-001: CSP img-src allows external HTTPS article images
@@ -69,11 +72,26 @@ describe('CSP img-src directive', () => {
     // We also verify the explicit pattern is still present.
     const hasHttpsWildcard = directives['img-src'].includes('https:');
     const hasCartocdn = directives['img-src'].includes('https://*.basemaps.cartocdn.com');
+    const hasBareCartocdn = directives['img-src'].includes('https://basemaps.cartocdn.com');
 
     assert.ok(
-      hasHttpsWildcard || hasCartocdn,
+      hasHttpsWildcard || (hasBareCartocdn && hasCartocdn),
       `img-src must allow cartocdn tile images. ` +
-      `Has https: wildcard: ${hasHttpsWildcard}, has cartocdn explicit: ${hasCartocdn}`
+      `Has https: wildcard: ${hasHttpsWildcard}, has cartocdn explicit: ${hasCartocdn}, has bare host: ${hasBareCartocdn}`
+    );
+  });
+
+  it('allows bare CARTO basemap style host in connect-src for Chrome', () => {
+    const csp = parseCSP();
+    const directives = parseDirectives(csp);
+    const sources = directives['connect-src'].split(/\s+/);
+    assert.ok(
+      sources.includes('https://basemaps.cartocdn.com'),
+      `connect-src must include bare CARTO style host. Got: ${directives['connect-src']}`
+    );
+    assert.ok(
+      sources.includes('https://*.basemaps.cartocdn.com'),
+      `connect-src must keep CARTO tile subdomain wildcard. Got: ${directives['connect-src']}`
     );
   });
 });
@@ -121,7 +139,7 @@ describe('CSP directive integrity (VAL-M1-003)', () => {
     assert.equal(
       directives['connect-src'],
       "'self' ws: wss: https://*.gdeltproject.org https://opensky-network.org " +
-        'https://corsproxy.io https://api.allorigins.win https://*.basemaps.cartocdn.com ' +
+        'https://corsproxy.io https://api.allorigins.win https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com ' +
         'https://*.instantdb.com',
       'connect-src must remain unchanged'
     );

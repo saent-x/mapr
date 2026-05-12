@@ -11,7 +11,7 @@ const MapVelocity = ({
   velocitySpikes = [],
   newsList,
 }) => {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, styleRevision } = useMap();
 
   /* ── spike border filter/paint ── */
   const spikeIsos = useMemo(() => velocitySpikes.map((s) => s.iso), [velocitySpikes]);
@@ -87,7 +87,7 @@ const MapVelocity = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map || !map.getLayer('country-spike-border')) return;
@@ -95,7 +95,7 @@ const MapVelocity = ({
     for (const [key, value] of Object.entries(spikeBorderPaint)) {
       try { map.setPaintProperty('country-spike-border', key, value); } catch { /* ignore */ }
     }
-  }, [isLoaded, map, spikeBorderFilter, spikeBorderPaint]);
+  }, [isLoaded, map, spikeBorderFilter, spikeBorderPaint, styleRevision]);
 
   /* ── velocity spike markers source + layers ── */
   useEffect(() => {
@@ -149,13 +149,13 @@ const MapVelocity = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map) return;
     const src = map.getSource('velocity-spikes');
     if (src) src.setData(velocitySpikesGeoJson);
-  }, [isLoaded, map, velocitySpikesGeoJson]);
+  }, [isLoaded, map, velocitySpikesGeoJson, styleRevision]);
 
   return null;
 };

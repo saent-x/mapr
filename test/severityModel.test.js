@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { computeCompositeSeverity } from '../src/utils/severityModel.js';
+import { computeCompositeSeverity, getConflictZoneBoost } from '../src/utils/severityModel.js';
 
 // ── Existing tests (baseline) ────────────────────────────────────────────────
 
@@ -189,62 +189,54 @@ test('multiple significant entities stack boost', () => {
 
 // ── Geographic clustering (conflict zone) tests ──────────────────────────────
 
-test('event in conflict zone gets severity boost', () => {
+// ── Regional context ─────────────────────────────────────────────
+// Truthfulness change: severity composite must NOT bake in a hard-coded
+// geopolitical boost (CONFLICT_ZONES/TENSION_ZONES). The boost is now
+// returned separately for UI to surface as a "regional context" badge.
+// Pass `includeRegionalContextInSeverity: true` to opt into legacy behavior.
+
+test('severity is NOT inflated by hardcoded conflict zone list (truthfulness)', () => {
   const conflictZone = computeCompositeSeverity({
     keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
     entities: { organizations: [], people: [] },
     category: 'Conflict',
-    isoA2: 'SY' // Syria
+    isoA2: 'SY'
   });
   const peaceful = computeCompositeSeverity({
     keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
     entities: { organizations: [], people: [] },
     category: 'Conflict',
-    isoA2: 'CH' // Switzerland
+    isoA2: 'CH'
+  });
+  assert.equal(conflictZone, peaceful,
+    `Same content should produce same severity regardless of country (got SY=${conflictZone}, CH=${peaceful})`);
+});
+
+test('regional context boost is exposed as standalone helper', () => {
+  assert.equal(getConflictZoneBoost('SY'), 10);
+  assert.equal(getConflictZoneBoost('UA'), 10);
+  assert.equal(getConflictZoneBoost('IR'), 5);
+  assert.equal(getConflictZoneBoost('CH'), 0);
+  assert.ok(getConflictZoneBoost('SY') > getConflictZoneBoost('IR'));
+});
+
+test('legacy behavior available via includeRegionalContextInSeverity flag', () => {
+  const conflictZone = computeCompositeSeverity({
+    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
+    entities: { organizations: [], people: [] },
+    category: 'Conflict',
+    isoA2: 'SY',
+    includeRegionalContextInSeverity: true
+  });
+  const peaceful = computeCompositeSeverity({
+    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
+    entities: { organizations: [], people: [] },
+    category: 'Conflict',
+    isoA2: 'CH',
+    includeRegionalContextInSeverity: true
   });
   assert.ok(conflictZone > peaceful,
-    `Conflict zone (Syria: ${conflictZone}) should exceed peaceful (Switzerland: ${peaceful})`);
-});
-
-test('Ukraine events get conflict zone boost', () => {
-  const ukraine = computeCompositeSeverity({
-    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
-    entities: { organizations: [], people: [] },
-    category: 'Conflict',
-    isoA2: 'UA'
-  });
-  const base = computeCompositeSeverity({
-    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
-    entities: { organizations: [], people: [] },
-    category: 'Conflict'
-  });
-  assert.ok(ukraine > base,
-    `Ukraine score (${ukraine}) should exceed base score (${base})`);
-});
-
-test('tension zone gets smaller boost than conflict zone', () => {
-  const conflictZone = computeCompositeSeverity({
-    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
-    entities: { organizations: [], people: [] },
-    category: 'Conflict',
-    isoA2: 'SY' // Syria - active conflict
-  });
-  const tensionZone = computeCompositeSeverity({
-    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
-    entities: { organizations: [], people: [] },
-    category: 'Conflict',
-    isoA2: 'IR' // Iran - tension zone
-  });
-  const peaceful = computeCompositeSeverity({
-    keywordSeverity: 50, articleCount: 3, diversityScore: 0.5,
-    entities: { organizations: [], people: [] },
-    category: 'Conflict',
-    isoA2: 'CH' // Switzerland - no boost
-  });
-  assert.ok(conflictZone > tensionZone,
-    `Conflict zone (${conflictZone}) should exceed tension zone (${tensionZone})`);
-  assert.ok(tensionZone > peaceful,
-    `Tension zone (${tensionZone}) should exceed peaceful (${peaceful})`);
+    `Legacy mode: SY (${conflictZone}) should exceed CH (${peaceful})`);
 });
 
 test('no isoA2 still works (backward compatibility)', () => {

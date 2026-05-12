@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import useNewsStore from '../stores/newsStore';
 import useFilterStore from '../stores/filterStore';
@@ -9,6 +9,7 @@ import {
   getRelatedEvents,
   findShortestPath,
   searchEntitiesByName,
+  entityKey,
 } from '../utils/entityGraph.js';
 import PageLoadingFallback from '../components/PageLoadingFallback.jsx';
 import useBreakpoint from '../hooks/useBreakpoint';
@@ -32,6 +33,7 @@ const EVENTS_PER_PAGE = 15;
 export default function EntityExplorerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const backendEvents = useNewsStore((s) => s.backendEvents);
@@ -48,6 +50,7 @@ export default function EntityExplorerPage() {
   const [eventsShown, setEventsShown] = useState(EVENTS_PER_PAGE);
   const canvasRef = useRef(null);
   const searchInputRef = useRef(null);
+  const appliedDeepLinkRef = useRef('');
 
   useEffect(() => {
     if (!liveNews) useNewsStore.getState().loadLiveData();
@@ -97,6 +100,29 @@ export default function EntityExplorerPage() {
 
   const selNode = useMemo(() => nodes.find((n) => n.id === selected) || null, [nodes, selected]);
   const selNodeB = useMemo(() => nodes.find((n) => n.id === selectedB) || null, [nodes, selectedB]);
+
+  useEffect(() => {
+    const entityName = (searchParams.get('entity') || '').trim();
+    const entityType = (searchParams.get('type') || '').trim();
+    const deepLinkKey = `${entityType}:${entityName}`;
+    if (!entityName || appliedDeepLinkRef.current === deepLinkKey) return;
+
+    appliedDeepLinkRef.current = deepLinkKey;
+    setSearchQuery(entityName);
+    setSelectedB(null);
+
+    const typedId = entityType ? entityKey(entityType, entityName) : null;
+    const directMatch = typedId ? nodes.find((n) => n.id === typedId) : null;
+    const fuzzyMatch = nodes.find((n) =>
+      n.name.toLowerCase() === entityName.toLowerCase() &&
+      (!entityType || n.type === entityType)
+    );
+
+    const match = directMatch || fuzzyMatch;
+    if (match) {
+      setSelected(match.id);
+    }
+  }, [nodes, searchParams]);
 
   // Calculate connected IDs for the primary selected entity
   const connectedIds = useMemo(() => {
@@ -252,6 +278,7 @@ export default function EntityExplorerPage() {
     return (
       <div
         key={node.id}
+        className="entity-list-item"
         role="button"
         tabIndex={0}
         data-kb-highlighted={kbHighlighted ? 'true' : undefined}
@@ -259,23 +286,12 @@ export default function EntityExplorerPage() {
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleEntitySelect(node.id, false); }
         }}
-        style={{
-          padding: '5px 0',
-          borderBottom: '1px solid var(--line)',
-          display: 'flex',
-          gap: 8,
-          fontSize: 12,
-          cursor: 'pointer',
-          background: kbHighlighted ? 'var(--bg-2)' : undefined,
-          boxShadow: kbHighlighted ? 'inset 2px 0 0 var(--cyan)' : undefined,
-          paddingLeft: kbHighlighted ? '4px' : undefined,
-        }}
       >
-        <span style={{ width: 14, color: TYPE_STYLES[node.type]?.color, fontFamily: 'var(--ff-mono)' }}>
+        <span className="entity-list-item-glyph" style={{ color: TYPE_STYLES[node.type]?.color }}>
           {TYPE_STYLES[node.type]?.glyph}
         </span>
-        <span style={{ flex: 1, color: 'var(--ink-0)' }}>{node.name}</span>
-        <span className="mono" style={{ color: 'var(--ink-2)', fontSize: 10 }}>{node.mentionCount}</span>
+        <span className="entity-list-item-name">{node.name}</span>
+        <span className="entity-list-item-count">{node.mentionCount}</span>
       </div>
     );
   };
@@ -284,6 +300,10 @@ export default function EntityExplorerPage() {
     <div className="entities-page">
       {/* ── Search + type filter bar ── */}
       <div className="entity-top-bar">
+        <div className="entity-page-label">
+          <span>Entity graph</span>
+          <strong>2B Horizon</strong>
+        </div>
         <div className="entity-search-wrap">
           <input
             ref={searchInputRef}
@@ -305,6 +325,10 @@ export default function EntityExplorerPage() {
               ×
             </button>
           )}
+        </div>
+        <div className="entity-top-summary" aria-label="Visible graph size">
+          <span>{nodes.length} nodes</span>
+          <span>{edges.length} edges</span>
         </div>
         <div className="entity-type-chips" role="group" aria-label={t('entities.typeFilterAriaLabel') || 'Filter by entity type'}>
           <button
@@ -354,7 +378,7 @@ export default function EntityExplorerPage() {
           />
         </Suspense>
         <div className="map-chrome">
-          <div className="map-corner tl">
+          <div className="map-corner tl entity-graph-hud">
             <div>ENTITY GRAPH · 2B HORIZON</div>
             <div style={{ color: 'var(--ink-0)', marginTop: 4 }}>
               {nodes.length} NODES · {edges.length} EDGES
@@ -367,8 +391,8 @@ export default function EntityExplorerPage() {
               </div>
             )}
           </div>
-          <div className="map-corner tr">
-            <div style={{ display: 'flex', gap: 12 }}>
+          <div className="map-corner tr entity-graph-legend">
+            <div>
               <span><span style={{ color: 'var(--amber)' }}>{TYPE_STYLES.organization.glyph}</span> ORG · {orgCount}</span>
               <span><span style={{ color: 'var(--cyan)' }}>{TYPE_STYLES.location.glyph}</span> LOC · {locCount}</span>
               <span><span style={{ color: 'var(--sev-green)' }}>{TYPE_STYLES.person.glyph}</span> PERSON · {perCount}</span>
@@ -460,11 +484,19 @@ export default function EntityExplorerPage() {
       ) : (
         <aside className="entity-panel" aria-label="Selected entity">
           {!selNode ? (
-            <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-              <div className="micro" style={{ marginBottom: 8 }}>{t('entities.noSelection') || 'NO ENTITY SELECTED'}</div>
-              <p style={{ color: 'var(--ink-2)', fontSize: 'var(--fs-2)' }}>
+            <div className="entity-empty-state">
+              <div className="entity-empty-reticle" aria-hidden>
+                <span />
+              </div>
+              <div className="micro">{t('entities.noSelection') || 'NO ENTITY SELECTED'}</div>
+              <p>
                 {t('entities.noSelectionHint') || 'Click a node to inspect it. Shift+click a second node to find the shortest path.'}
               </p>
+              <div className="entity-empty-hints" aria-hidden>
+                <span>Inspect</span>
+                <span>Trace paths</span>
+                <span>Open timeline</span>
+              </div>
             </div>
           ) : (
             <>

@@ -24,13 +24,13 @@ export function stripHtmlTags(value) {
   if (typeof DOMParser !== 'undefined') {
     try {
       const doc = new DOMParser().parseFromString(rawValue, 'text/html');
-      return doc.body?.textContent || '';
+      return decodeHtmlEntities(doc.body?.textContent || '').replace(/<[^>]*>/g, ' ');
     } catch {
       // Fall through to the regex-based fallback.
     }
   }
 
-  return decodeHtmlEntities(rawValue.replace(/<[^>]*>/g, ' '));
+  return decodeHtmlEntities(rawValue).replace(/<[^>]*>/g, ' ');
 }
 
 export function normalizeArticleText(value) {

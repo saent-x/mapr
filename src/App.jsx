@@ -20,7 +20,7 @@ import useNewsStore from './stores/newsStore';
 import useFilterStore from './stores/filterStore';
 import useUIStore from './stores/uiStore';
 import useWatchStore from './stores/watchStore';
-import useSubscriptionStore from './stores/subscriptionStore';
+import useSubscription from './hooks/useSubscription';
 import useKeyboardNavigation from './hooks/useKeyboardNavigation';
 import usePanelState from './hooks/usePanelState';
 import useBreakpoint from './hooks/useBreakpoint';
@@ -28,7 +28,7 @@ import useBriefingStream from './hooks/useBriefingStream';
 import useTrackingOverlayData from './hooks/useTrackingOverlayData';
 import { canonicalizeArticles, calculateCoverageMetrics } from './utils/newsPipeline';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from './utils/coverageMeta';
-import { getReliabilityMeta, computePerCountryReliability } from './utils/credibilityMeta';
+import { computePerCountryReliability } from './utils/credibilityMeta';
 import { buildCoverageDiagnostics } from './utils/coverageDiagnostics';
 import { buildSourceCoverageAudit } from './utils/sourceCoverage';
 import { sortStories, storyMatchesFilters } from './utils/storyFilters';
@@ -38,9 +38,12 @@ import { isoToCountry } from './utils/geocoder';
 import { generateLifecycleMessages } from './utils/lifecycleMessages';
 import { encodeViewToURL } from './utils/viewManager';
 import { computeSilenceEntries } from './utils/anomalyUtils';
-import { getMockNews, calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
+import { calculateRegionSeverity, getSeverityMeta, resolveDateFloor } from './utils/mockData';
+import { getGeopoliticalLegend } from './utils/visualSystem';
 import SaveViewDialog from './components/SaveViewDialog';
-import BriefingExportModal from './components/BriefingExportModal';
+// jspdf + html2canvas pull ~100 KB gz that should not ship to every visitor.
+// Lazy-loaded so the modal (and its PDF deps) only download when opened.
+const BriefingExportModal = lazy(() => import('./components/BriefingExportModal'));
 import CoverageDrilldown from './components/CoverageDrilldown';
 import UpgradePrompt from './components/UpgradePrompt';
 import db from './services/instantDb';
@@ -48,29 +51,105 @@ import db from './services/instantDb';
 const Globe = lazy(() => import('./components/Globe'));
 const FlatMap = lazy(() => import('./components/FlatMap'));
 
+function MapOverlayLegend({ overlay }) {
+  const { t } = useTranslation();
+  if (!overlay) return null;
+
+  const items = overlay === 'severity'
+    ? ['critical', 'elevated', 'watch', 'low'].map((key) => ({
+        key,
+        color: `var(--${key})`,
+        label: t(`legend.${key}`),
+      }))
+    : overlay === 'geopolitical'
+      ? getGeopoliticalLegend().map(({ key, color, labelKey }) => ({
+          key,
+          color,
+          label: t(labelKey),
+        }))
+      : COVERAGE_STATUS_ORDER.map((status) => {
+          const meta = getCoverageMeta(status);
+          return {
+            key: status,
+            color: meta.accent,
+            label: t(`coverageStatus.${meta.labelKey}`),
+          };
+        });
+
+  return (
+    <div className="map-overlay-legend" aria-label={t(`legend.${overlay}`)}>
+      <span className="micro">{t(`legend.${overlay}`)}</span>
+      <div className="legend-items">
+        {items.map(({ key, color, label }) => (
+          <span key={key} className="legend-item">
+            <span className="legend-dot" style={{ background: color }} />
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  /* ── stores ── */
-  const {
-    liveNews, dataSource, dataError, sourceHealth, coverageTrends, coverageHistory,
-    opsHealth, velocitySpikes: hookVelocitySpikes, regionCoverageHistory,
-    sessionDiff, historicalState, isTimeTravel,
-  } = useNewsStore();
-  const {
-    searchQuery, debouncedSearch, dateWindow, minSeverity, minConfidence, sortMode,
-    mapOverlay, showFlightsLayer, showVesselsLayer, verificationFilter, sourceTypeFilter,
-    languageFilter, accuracyMode, precisionFilter, hideAmplified, entityFilter,
-  } = useFilterStore();
-  const {
-    mapMode, drawerMode, selectedRegion, selectedStoryId, selectedArc,
-    showExport, scrubTime, toasts, activeViewId, viewNotFound,
-  } = useUIStore();
+  /* ── stores ──
+   *
+   * Per-field selectors (NOT whole-store destructure). Reading the whole
+   * store object subscribes the component to every field, so a single
+   * `addToast` push or `searchQuery` debounce-tick re-renders all of App.
+   * With per-field selectors we only re-render when the field we read
+   * changes — measured ~5-10× re-render reduction on filter/scrub flows.
+   */
+  // newsStore
+  const liveNews = useNewsStore((s) => s.liveNews);
+  const dataSource = useNewsStore((s) => s.dataSource);
+  const dataError = useNewsStore((s) => s.dataError);
+  const sourceHealth = useNewsStore((s) => s.sourceHealth);
+  const coverageTrends = useNewsStore((s) => s.coverageTrends);
+  const coverageHistory = useNewsStore((s) => s.coverageHistory);
+  const opsHealth = useNewsStore((s) => s.opsHealth);
+  const hookVelocitySpikes = useNewsStore((s) => s.velocitySpikes);
+  const regionCoverageHistory = useNewsStore((s) => s.regionCoverageHistory);
+  const sessionDiff = useNewsStore((s) => s.sessionDiff);
+  const historicalState = useNewsStore((s) => s.historicalState);
+  const isTimeTravel = useNewsStore((s) => s.isTimeTravel);
 
-  const subscriptionStatus = useSubscriptionStore((s) => s.status);
-  const isPro = subscriptionStatus === 'pro';
+  // filterStore
+  const searchQuery = useFilterStore((s) => s.searchQuery);
+  const debouncedSearch = useFilterStore((s) => s.debouncedSearch);
+  const dateWindow = useFilterStore((s) => s.dateWindow);
+  const minSeverity = useFilterStore((s) => s.minSeverity);
+  const minConfidence = useFilterStore((s) => s.minConfidence);
+  const sortMode = useFilterStore((s) => s.sortMode);
+  const mapOverlay = useFilterStore((s) => s.mapOverlay);
+  const showFlightsLayer = useFilterStore((s) => s.showFlightsLayer);
+  const showVesselsLayer = useFilterStore((s) => s.showVesselsLayer);
+  const verificationFilter = useFilterStore((s) => s.verificationFilter);
+  const sourceTypeFilter = useFilterStore((s) => s.sourceTypeFilter);
+  const languageFilter = useFilterStore((s) => s.languageFilter);
+  const accuracyMode = useFilterStore((s) => s.accuracyMode);
+  const precisionFilter = useFilterStore((s) => s.precisionFilter);
+  const hideAmplified = useFilterStore((s) => s.hideAmplified);
+  const entityFilter = useFilterStore((s) => s.entityFilter);
+
+  // uiStore
+  const mapMode = useUIStore((s) => s.mapMode);
+  const drawerMode = useUIStore((s) => s.drawerMode);
+  const selectedRegion = useUIStore((s) => s.selectedRegion);
+  const selectedStoryId = useUIStore((s) => s.selectedStoryId);
+  const selectedArc = useUIStore((s) => s.selectedArc);
+  const showExport = useUIStore((s) => s.showExport);
+  const scrubTime = useUIStore((s) => s.scrubTime);
+  const toasts = useUIStore((s) => s.toasts);
+  const activeViewId = useUIStore((s) => s.activeViewId);
+  const viewNotFound = useUIStore((s) => s.viewNotFound);
+
+  const { hasFeatureAccess } = useSubscription();
+  const canExportBriefings = hasFeatureAccess('briefingExport');
 
   const filtersOpen = drawerMode !== null;
   const addToast = useUIStore((s) => s.addToast);
@@ -181,9 +260,10 @@ function App() {
 
   const baseArticles = useMemo(() => {
     if (isTimeTravel && historicalArticles) return historicalArticles;
-    if (dataSource !== 'live') return liveNews || getMockNews();
+    // No mock fallback — when data isn't available the UI shows an empty
+    // state plus DataErrorBanner with retry. We never substitute fake data.
     return liveNews || [];
-  }, [dataSource, liveNews, isTimeTravel, historicalArticles]);
+  }, [liveNews, isTimeTravel, historicalArticles]);
 
   const canonicalNews = useMemo(() => canonicalizeArticles(baseArticles), [baseArticles]);
   const dateFloor = useMemo(() => resolveDateFloor(dateWindow), [dateWindow]);
@@ -552,6 +632,12 @@ function App() {
         </button>
       </div>
 
+      {mapOverlay && !coverageDrillIso && (
+        <div className="map-corner br map-legend-corner">
+          <MapOverlayLegend overlay={mapOverlay} />
+        </div>
+      )}
+
       {/* Drawer toggles (top-left of main area) */}
       <div className="drawer-toggles">
         <button
@@ -658,7 +744,6 @@ function App() {
       />
 
       <NewsPanel
-        key={panelRegion || 'closed'}
         isOpen={panelOpen && !selectedArc}
         regionIso={panelRegion}
         regionName={panelRegionName}
@@ -676,6 +761,7 @@ function App() {
         kbHighlightedStoryId={kbHighlightedStoryId}
         onStorySelect={handleStorySelect}
         onClose={handleClosePanel}
+        dataSource={dataSource}
         sessionDiff={sessionDiff}
         velocitySpikes={velocitySpikes}
       />
@@ -734,6 +820,7 @@ function App() {
       {dataSource === 'loading' && !liveNews && <DataLoadingOverlay />}
 
       {dataError && <DataErrorBanner onRetry={handleRefresh} />}
+      {!dataError && dataSource === 'unavailable' && <DataErrorBanner onRetry={handleRefresh} />}
 
       {toasts.length > 0 && (
         <div className="toast-container">
@@ -784,13 +871,14 @@ function App() {
         mapState={{ mapMode, mapOverlay }}
       />
 
-      {/* Briefing export modal — Pro gated */}
-      {showExport && !isPro ? (
+      {/* Briefing export modal — admin-configurable feature gate */}
+      {showExport && !canExportBriefings ? (
         <div className="mapr-export-gate" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--bg-0) 85%, transparent)', backdropFilter: 'blur(4px)' }}>
           <UpgradePrompt feature="export" />
         </div>
-      ) : (
-        <BriefingExportModal
+      ) : showExport ? (
+        <Suspense fallback={null}>
+          <BriefingExportModal
           events={activeNews}
           filters={{
             dateWindow,
@@ -807,73 +895,23 @@ function App() {
           }}
           mapContainerRef={mapStageRef}
         />
-      )}
+        </Suspense>
+      ) : null}
 
       {/*
         Coverage legend (mapped onto the current overlay). Rendered hidden when no
         overlay-specific chip set would apply, so the main canvas stays clean.
         For coverage overlay: shows static legend OR interactive drill-down.
       */}
-      {mapOverlay && (
+      {mapOverlay === 'coverage' && coverageDrillIso && (
         <div className={`map-corner br${mapOverlay === 'coverage' && coverageDrillIso ? ' map-corner-drill' : ''}`} aria-hidden={mapOverlay !== 'coverage' || !coverageDrillIso}>
-          {mapOverlay === 'coverage' && coverageDrillIso ? (
-            <CoverageDrilldown
-              iso={coverageDrillIso}
-              coverageEntry={coverageStatusByIso[coverageDrillIso] || null}
-              coverageHistory={coverageHistory}
-              sourceHealth={sourceHealth}
-              onClose={handleCloseCoverageDrill}
-            />
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="micro">{t(`legend.${mapOverlay}`)}</span>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {mapOverlay === 'severity'
-                  ? ['critical', 'elevated', 'watch', 'low'].map((key) => (
-                      <span key={key} className="legend-item">
-                        <span className="legend-dot" style={{ background: `var(--${key})` }} />
-                        {t(`legend.${key}`)}
-                      </span>
-                    ))
-                  : mapOverlay === 'geopolitical'
-                    ? [
-                        { key: 'low', color: 'rgba(0, 212, 255, 0.8)', label: t('legend.geoLow') },
-                        { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', label: t('legend.geoMedium') },
-                        { key: 'high', color: 'rgba(255, 85, 85, 0.8)', label: t('legend.geoHigh') },
-                      ].map(({ key, color, label }) => (
-                        <span key={key} className="legend-item">
-                          <span className="legend-dot" style={{ background: color }} />
-                          {label}
-                        </span>
-                      ))
-                  : mapOverlay === 'reliability'
-                    ? [
-                        { key: 'high', label: t('legend.reliabilityHigh'), accent: getReliabilityMeta('high').dotColor },
-                        { key: 'medium', label: t('legend.reliabilityMedium'), accent: getReliabilityMeta('medium').dotColor },
-                        { key: 'low', label: t('legend.reliabilityLow'), accent: getReliabilityMeta('low').dotColor },
-                      ].map(({ key, label, accent }) => (
-                        <span key={key} className="legend-item">
-                          <span className="legend-dot" style={{ background: accent }} />
-                          {label}
-                        </span>
-                      ))
-                  : COVERAGE_STATUS_ORDER.map((status) => {
-                      const meta = getCoverageMeta(status);
-                      return (
-                        <span key={status} className="legend-item">
-                          <span className="legend-dot" style={{ background: meta.accent }} />
-                          {t(`coverageStatus.${meta.labelKey}`)}
-                        </span>
-                      );
-                    })}
-              </div>
-              {mapOverlay === 'coverage' && !coverageDrillIso && (
-                <span className="coverage-drill-hint micro" style={{ opacity: 0.5, marginTop: 2 }}>
-                  {t('coverageDrill.clickCountryHint', 'Click a country to see source details')}
-                </span>
-              )}
-            </div>
-          )}
+          <CoverageDrilldown
+            iso={coverageDrillIso}
+            coverageEntry={coverageStatusByIso[coverageDrillIso] || null}
+            coverageHistory={coverageHistory}
+            sourceHealth={sourceHealth}
+            onClose={handleCloseCoverageDrill}
+          />
         </div>
       )}
     </ErrorBoundary>

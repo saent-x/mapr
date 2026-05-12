@@ -130,13 +130,18 @@ test('VAL-M1-013: createProfileOps generates transaction operations', async () =
   // Mock tx object similar to InstantDB shape
   const mockTx = {
     profiles: {
-      'user-1': {
-        update: (data) => ({ __op: 'update', entity: 'profiles', id: 'user-1', data }),
-      },
+      lookup: (attr, value) => ({
+        update: (data) => ({
+          __op: 'update',
+          entity: 'profiles',
+          lookup: { attr, value },
+          data,
+        }),
+      }),
     },
   };
 
-  const ops = createProfileOps(mockTx, 'user-1', 'test@mapr.io');
+  const ops = createProfileOps(mockTx, 'hai-user-1', 'test@mapr.io');
 
   assert.ok(Array.isArray(ops), 'should return an array of operations');
   assert.equal(ops.length, 1, 'should return exactly one operation');
@@ -144,13 +149,37 @@ test('VAL-M1-013: createProfileOps generates transaction operations', async () =
   const op = ops[0];
   assert.equal(op.__op, 'update', 'operation should be an update');
   assert.equal(op.entity, 'profiles', 'operation should target profiles entity');
-  assert.equal(op.id, 'user-1', 'operation should use the correct user ID');
+  assert.deepEqual(op.lookup, { attr: 'uid', value: 'hai-user-1' },
+    'operation should use uid lookup instead of a non-UUID tx path');
 
   const data = op.data;
   assert.equal(data.email, 'test@mapr.io', 'data must have email');
   assert.equal(data.displayName, 'test', 'data must have displayName');
-  assert.equal(data.uid, 'user-1', 'data must have uid');
+  assert.equal(data.uid, 'hai-user-1', 'data must have uid');
   assert.ok(typeof data.createdAt === 'number', 'data must have createdAt timestamp');
+});
+
+test('VAL-M1-013: user-owned writes avoid non-UUID auth IDs', async () => {
+  const { isUuid } = await import('../src/utils/instantUser.js');
+
+  assert.equal(isUuid('hai-1778260218878'), false,
+    'human auth IDs should not be used as InstantDB entity IDs');
+  assert.equal(isUuid('550e8400-e29b-41d4-a716-446655440000'), true,
+    'valid UUIDs remain valid entity IDs');
+});
+
+test('user-owned writes prefer UUID auth IDs over email lookups', async () => {
+  const { getUserOwnerRef, getUserOwnerWhere } = await import('../src/utils/instantUser.js');
+
+  const user = {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    email: 'analyst@mapr.test',
+  };
+
+  assert.equal(getUserOwnerRef(user), user.id,
+    'owner links should use the existing $users UUID instead of an email lookup when available');
+  assert.deepEqual(getUserOwnerWhere(user), { owner: user.id },
+    'owner queries should use the same UUID owner path as writes');
 });
 
 test('VAL-M1-013: second sign-in does not overwrite profile', async () => {
@@ -220,6 +249,18 @@ test('LoginPage component file exists', () => {
     'LoginPage must handle return URL redirect');
 });
 
+test('LoginPage exposes a sign-up mode and cross-links sign-in/sign-up', () => {
+  const content = read('src/pages/LoginPage.jsx');
+  assert.ok(content.includes("location.pathname === '/signup'"),
+    'LoginPage must detect /signup mode');
+  assert.ok(content.includes("t('auth.signupTitle')"),
+    'LoginPage must render sign-up title copy');
+  assert.ok(content.includes("t('auth.signUp')"),
+    'LoginPage must link sign-in users to sign up');
+  assert.ok(content.includes("to={alternateTo}"),
+    'LoginPage must preserve returnUrl when switching auth modes');
+});
+
 test('Header includes auth UI elements', () => {
   const f = path.join(SRC, 'components', 'Header.jsx');
   assert.ok(existsSync(f), 'Header.jsx must exist');
@@ -234,9 +275,22 @@ test('Header includes auth UI elements', () => {
     'Header must have sign-in link');
 });
 
+test('Header uses a right-side profile avatar menu for signed-in users', () => {
+  const header = readFileSync(path.join(SRC, 'components', 'Header.jsx'), 'utf-8');
+  const css = readFileSync(path.join(SRC, 'index.css'), 'utf-8');
+  assert.match(header, /header-profile-trigger/, 'Signed-in header should use an avatar trigger');
+  assert.match(header, /header-profile-menu/, 'Signed-in header should expose an account menu');
+  assert.match(header, /to="\/account"/, 'Profile menu should link to account');
+  assert.match(header, /to="\/account\/billing"/, 'Profile menu should link to billing');
+  assert.doesNotMatch(header, /className="header-account-link"[\s\S]*?\{user\.email\}/, 'Header should not place raw email as the primary navbar item');
+  assert.match(css, /\.header-profile-avatar/, 'Profile avatar should be styled as a circular control');
+  assert.match(css, /\.header-user-menu:hover \.header-profile-menu/, 'Profile menu should open on hover');
+});
+
 test('main.jsx has login route', () => {
   const content = read('src/main.jsx');
   assert.ok(content.includes('/login'), 'main.jsx must define /login route');
+  assert.ok(content.includes('/signup'), 'main.jsx must define /signup route');
   assert.ok(content.includes('LoginPage'), 'main.jsx must import LoginPage');
 });
 
@@ -263,7 +317,8 @@ test('Auth i18n keys present in all 5 locale files', () => {
   const requiredKeys = [
     'signIn', 'signOut', 'sendCode', 'verifyCode',
     'codeLabel', 'emailLabel', 'loginTitle', 'loginFooter',
-    'signInPrompt', 'backToEmail',
+    'signInPrompt', 'backToEmail', 'signUp', 'signupTitle',
+    'signupSubtitle', 'signupFooter', 'noAccount', 'hasAccount',
   ];
 
   for (const lang of locales) {

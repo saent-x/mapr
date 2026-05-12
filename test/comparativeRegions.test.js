@@ -7,6 +7,11 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  buildSeverityTrend,
+  buildSharedEntityEvidence,
+  summarizeRegionArticles,
+} from '../src/utils/regionComparison.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
@@ -52,6 +57,8 @@ describe('ComparativeRegions component', () => {
     assert.ok(content.includes('isoToCountry'), 'should import isoToCountry');
     assert.ok(content.includes('canonicalizeArticles'), 'should import canonicalizeArticles');
     assert.ok(content.includes('useNewsStore'), 'should import useNewsStore');
+    assert.ok(content.includes('buildSharedEntityEvidence'), 'should use ranked shared entity evidence');
+    assert.ok(content.includes('summarizeRegionArticles'), 'should use shared stats utility');
   });
 
   it('ComparativeRegions renders split-view with DualSeverityChart', () => {
@@ -73,21 +80,73 @@ describe('ComparativeRegions component', () => {
   it('ComparativeRegions has shared entity extraction logic', () => {
     const content = readText('src/components/ComparativeRegions.jsx');
     assert.ok(
-      content.includes('function extractEntities'),
-      'should define extractEntities helper',
+      content.includes('buildSharedEntityEvidence'),
+      'should compute shared entity evidence through the utility',
     );
     assert.ok(
-      content.includes('sharedEntities'),
-      'should compute sharedEntities',
+      content.includes('sharedEntityEvidence'),
+      'should render shared entity evidence',
     );
   });
 
   it('ComparativeRegions builds severity trend with buildSeverityTrend', () => {
     const content = readText('src/components/ComparativeRegions.jsx');
     assert.ok(
-      content.includes('function buildSeverityTrend'),
-      'should define buildSeverityTrend helper',
+      content.includes('buildSeverityTrend'),
+      'should use buildSeverityTrend helper',
     );
+  });
+});
+
+describe('Region comparison analytics', () => {
+  it('buildSeverityTrend bins daily average severity and critical counts', () => {
+    const now = Date.parse('2026-05-08T12:00:00Z');
+    const series = buildSeverityTrend([
+      { id: 'a', firstSeenAt: '2026-05-08T10:00:00Z', severity: 80 },
+      { id: 'b', firstSeenAt: '2026-05-08T11:00:00Z', severity: 40 },
+    ], 2, now);
+    const last = series.at(-1);
+    assert.equal(last.count, 2);
+    assert.equal(last.value, 6);
+    assert.equal(last.critical, 1);
+  });
+
+  it('buildSharedEntityEvidence filters broad entities and ranks supported shared entities', () => {
+    const left = [
+      {
+        id: 'l1',
+        title: 'Zelensky visits Warsaw after air defense talks',
+        source: 'Source A',
+        severity: 80,
+        entities: { people: [{ name: 'Zelensky' }], organizations: [{ name: 'WHO' }], locations: [] },
+      },
+    ];
+    const right = [
+      {
+        id: 'r1',
+        title: 'Zelensky asks Poland for more air defense support',
+        source: 'Source B',
+        severity: 70,
+        entities: { people: [{ name: 'Zelensky' }], organizations: [{ name: 'WHO' }], locations: [] },
+      },
+    ];
+    const shared = buildSharedEntityEvidence(left, right);
+    assert.equal(shared.length, 1);
+    assert.equal(shared[0].name, 'Zelensky');
+    assert.equal(shared[0].leftCount, 1);
+    assert.equal(shared[0].rightCount, 1);
+    assert.equal(shared[0].sourceCount, 2);
+  });
+
+  it('summarizeRegionArticles returns professional comparison stats', () => {
+    const stats = summarizeRegionArticles([
+      { id: 'a', severity: 80, source: 'A' },
+      { id: 'b', severity: 20, source: 'B' },
+    ]);
+    assert.equal(stats.avgSev, 5);
+    assert.equal(stats.eventCount, 2);
+    assert.equal(stats.sourceCount, 2);
+    assert.equal(stats.criticalCount, 1);
   });
 });
 

@@ -10,14 +10,32 @@ async function parseJsonResponse(response) {
   return payload;
 }
 
+// Lazy import to avoid circular and to make this util work in non-React envs.
+async function authHeader() {
+  try {
+    const mod = await import('./instantDb.js');
+    const u = await mod.default?.getAuth?.();
+    const token = u?.refresh_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  const headers = { ...(options.headers || {}) };
+  if (options.auth) {
+    Object.assign(headers, await authHeader());
+    delete options.auth;
+  }
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
     const message = payload?.error || `Backend request failed (${response.status})`;
     const error = new Error(message);
     error.status = response.status;
+    error.code = payload?.code;
     error.payload = payload;
     throw error;
   }
@@ -89,12 +107,12 @@ export function fetchSnapshotHistory({ from, to, limit = 48 } = {}) {
   if (from) params.set('from', typeof from === 'number' ? new Date(from).toISOString() : from);
   if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
   params.set('limit', String(limit));
-  return request(`/snapshot-history?${params.toString()}`);
+  return request(`/snapshot-history?${params.toString()}`, { auth: true });
 }
 
 export function fetchSnapshotTimestamps({ from, to } = {}) {
   const params = new URLSearchParams();
   if (from) params.set('from', typeof from === 'number' ? new Date(from).toISOString() : from);
   if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
-  return request(`/snapshot-history/timestamps?${params.toString()}`);
+  return request(`/snapshot-history/timestamps?${params.toString()}`, { auth: true });
 }

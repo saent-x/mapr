@@ -58,8 +58,8 @@ test('BookmarksPanel component exists', () => {
   assert.ok(existsSync(p), 'BookmarksPanel.jsx should exist');
   const content = readFileSync(p, 'utf8');
   assert.ok(content.includes('export default'), 'should export a default component');
-  assert.ok(content.includes('SignedIn'), 'should use SignedIn wrapper');
-  assert.ok(content.includes('SignedOut'), 'should use SignedOut wrapper');
+  assert.ok(content.includes('useNavigate'), 'should use useNavigate for login redirect');
+  assert.ok(content.includes('needsAuth'), 'should check needsAuth for signed-out state');
   assert.ok(content.includes('useBookmarks'), 'should use useBookmarks hook');
   assert.ok(content.includes('bookmarks-sidebar'), 'should render bookmarks sidebar');
   assert.ok(content.includes('bookmarks-list'), 'should render bookmarks list');
@@ -91,7 +91,8 @@ test('VAL-M3-020: toggleBookmark adds bookmark with correct fields', () => {
 });
 
 test('VAL-M3-020: bookmark linked to user in InstantDB', () => {
-  // Schema verification
+  // Schema verification — InstantDB requires relationships in the dedicated
+  // `links:` block (not as `belongsTo` shorthand inside the entity).
   const schema = readFileSync(resolve(root, 'instant.schema.ts'), 'utf8');
   assert.ok(schema.includes('bookmarks: i.entity'), 'bookmarks entity should be defined');
   assert.ok(schema.includes('storyId: i.string()'), 'should have storyId string field');
@@ -99,12 +100,15 @@ test('VAL-M3-020: bookmark linked to user in InstantDB', () => {
   assert.ok(schema.includes('region: i.string()'), 'should have region string field');
   assert.ok(schema.includes('severity: i.number()'), 'should have severity number field');
   assert.ok(schema.includes('bookmarkedAt: i.number()'), 'should have bookmarkedAt number field');
-  assert.ok(schema.includes('owner: i.belongsTo'), 'should have owner belongsTo relationship');
+  assert.ok(schema.includes('userBookmarks:'), 'should declare userBookmarks link');
+  assert.match(schema, /userBookmarks:\s*\{[\s\S]*forward:\s*\{\s*on:\s*'bookmarks',\s*has:\s*'one',\s*label:\s*'owner'/,
+    'userBookmarks forward link must be bookmarks.owner → $users (one)');
 });
 
-test('VAL-M3-020: $users has bookmarks hasMany relationship', () => {
+test('VAL-M3-020: $users has bookmarks reverse link', () => {
   const schema = readFileSync(resolve(root, 'instant.schema.ts'), 'utf8');
-  assert.ok(schema.includes("bookmarks: i.hasMany('bookmarks')"), '$users should have hasMany bookmarks relationship');
+  assert.match(schema, /userBookmarks:\s*\{[\s\S]*reverse:\s*\{\s*on:\s*'\$users',\s*has:\s*'many',\s*label:\s*'bookmarks'/,
+    '$users should have a many bookmarks reverse link');
 });
 
 // ---------------------------------------------------------------------------
@@ -228,9 +232,12 @@ test('VAL-M3-023: bookmark button navigates to login when unauthenticated', () =
 test('VAL-M3-023: bookmark panel shows login prompt when unauthenticated', () => {
   const content = readFileSync(resolve(root, 'src/components/BookmarksPanel.jsx'), 'utf8');
 
-  assert.ok(content.includes('SignedOut'), 'should use SignedOut wrapper');
-  assert.ok(content.includes('signInPrompt'), 'should show sign-in prompt when logged out');
   assert.ok(content.includes('needsAuth'), 'should check needsAuth');
+  assert.ok(content.includes('signInPrompt'), 'should show sign-in prompt when logged out');
+  assert.ok(content.includes('useNavigate'), 'should redirect to /login when clicked');
+  assert.ok(content.includes('needsAuth'), 'should check needsAuth');
+  assert.ok(content.includes('sidebar-pro-feature-action'), 'signed-out panel should render an icon action');
+  assert.ok(content.includes('sidebar-pro-badge'), 'signed-out panel should mark bookmarks as Pro');
 });
 
 test('VAL-M3-023: hook skips query when unauthenticated', () => {
@@ -257,7 +264,7 @@ test('VAL-M3-024: toggleBookmark removes existing bookmark', () => {
   assert.ok(content.includes('db.tx.bookmarks[existing.id].delete()'), 'should call delete on existing bookmark');
 
   // When not bookmarked, toggle should create
-  assert.ok(content.includes("bmId = `bm-"), 'should generate bookmark ID');
+  assert.ok(content.includes('const bmId = id()'), 'should generate a UUID bookmark ID');
   assert.ok(content.includes('db.tx.bookmarks[bmId]'), 'should create new bookmark');
 });
 
@@ -266,7 +273,7 @@ test('VAL-M3-024: remove button in bookmarks panel', () => {
 
   assert.ok(content.includes('handleRemove'), 'should have remove handler');
   assert.ok(content.includes('toggleBookmark'), 'should call toggleBookmark to remove');
-  assert.ok(content.includes("saved-views-delete"), 'should render delete button');
+  assert.ok(content.includes("bookmark-remove-btn"), 'should render compact bookmark remove button');
 });
 
 test('VAL-M3-024: bookmark button shows unbookmarked state after removal', () => {
@@ -317,12 +324,31 @@ test('CSS styles exist for bookmarks components', () => {
   assert.ok(css.includes('.bookmarks-list'), 'should have list styles');
   assert.ok(css.includes('.bookmarks-item'), 'should have item styles');
   assert.ok(css.includes('.bookmarks-item-title'), 'should have title styles');
+  assert.ok(css.includes('.bookmarks-item-main'), 'should have dedicated bookmark row button styles');
+  assert.ok(css.includes('.bookmarks-item-header'), 'should have compact bookmark header layout');
+  assert.ok(css.includes('-webkit-line-clamp: 2'), 'bookmark titles should clamp instead of overflowing the sidebar flyout');
   assert.ok(css.includes('.bookmarks-item-meta'), 'should have meta styles');
   assert.ok(css.includes('.bookmarks-item-region'), 'should have region styles');
   assert.ok(css.includes('.bookmarks-item-ago'), 'should have ago styles');
   assert.ok(css.includes('.bookmark-btn'), 'should have bookmark button styles');
   assert.ok(css.includes('.bookmark-btn.is-bookmarked'), 'should have bookmarked state styles');
   assert.ok(css.includes('.news-bookmark-btn'), 'should have news bookmark positioning');
+});
+
+test('BookmarksPanel uses compact story-row anatomy', () => {
+  const content = readFileSync(resolve(root, 'src/components/BookmarksPanel.jsx'), 'utf8');
+  assert.ok(content.includes('className="bookmarks-item-main"'), 'bookmark rows should use a dedicated main story button');
+  assert.ok(content.includes('className="bookmarks-item-header"'), 'bookmark rows should group title and severity in a header');
+  assert.ok(content.includes('className="bookmarks-item-actions"'), 'bookmark row controls should be grouped in a compact action rail');
+  assert.ok(content.includes('bookmark-remove-btn'), 'remove action should live with the bookmark actions');
+  assert.ok(content.includes('rows={1}'), 'note input should start as a compact single-line control');
+});
+
+test('BookmarksPanel header shows filtered bookmark count badge', () => {
+  const content = readFileSync(resolve(root, 'src/components/BookmarksPanel.jsx'), 'utf8');
+  assert.ok(content.includes('sidebar-section-count-badge'), 'header should render a section count badge');
+  assert.ok(content.includes('{filteredBookmarks.length}'), 'bookmarks header count should use visible filtered bookmarks');
+  assert.ok(content.includes('{filteredBookmarks.length > 0 && ('), 'bookmarks header badge should be hidden when count is zero');
 });
 
 // ---------------------------------------------------------------------------
@@ -372,7 +398,9 @@ test('bookmark filter logic handles edge cases', () => {
 // Bookmark toggle dedup
 // ---------------------------------------------------------------------------
 
-test('bookmark ID is deterministic per story+user', () => {
+test('bookmark ID uses InstantDB UUIDs instead of story/user strings', () => {
   const content = readFileSync(resolve(root, 'src/hooks/useBookmarks.js'), 'utf8');
-  assert.ok(content.includes("bm-${story.id}-${user.id}"), 'should use story.id + user.id for determinism');
+  assert.ok(content.includes("import { id } from '@instantdb/react'"), 'should import UUID helper');
+  assert.ok(content.includes('const bmId = id()'), 'should use UUID IDs for InstantDB tx paths');
+  assert.ok(!content.includes("bm-${story.id}-${user.id}"), 'should not use story/user strings as entity IDs');
 });

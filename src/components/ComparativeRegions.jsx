@@ -4,6 +4,11 @@ import { Search, X, ChevronDown } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import { isoToCountry } from '../utils/geocoder';
 import { canonicalizeArticles } from '../utils/newsPipeline';
+import {
+  buildSeverityTrend,
+  buildSharedEntityEvidence,
+  summarizeRegionArticles,
+} from '../utils/regionComparison';
 
 /* ── helpers ── */
 
@@ -13,61 +18,6 @@ function sevTier(sev) {
   if (v >= 70) return 'red';
   if (v >= 40) return 'amber';
   return 'green';
-}
-
-/**
- * Build a severity trend series from articles — bins into daily buckets
- * and calculates average severity per bucket.
- */
-function buildSeverityTrend(articles, daysBack = 30) {
-  if (!articles || articles.length === 0) return [];
-  const now = Date.now();
-  const buckets = new Map();
-  const msPerDay = 86400000;
-
-  // Initialize all buckets
-  for (let i = daysBack - 1; i >= 0; i--) {
-    const dayStart = new Date(now - i * msPerDay).toISOString().slice(0, 10);
-    buckets.set(dayStart, { total: 0, count: 0 });
-  }
-
-  for (const a of articles) {
-    const ts = a.publishedAt || a.firstSeenAt;
-    if (!ts) continue;
-    const day = new Date(ts).toISOString().slice(0, 10);
-    const bucket = buckets.get(day);
-    if (bucket) {
-      bucket.total += a.severity || 0;
-      bucket.count += 1;
-    }
-  }
-
-  const sortedDays = [...buckets.keys()].sort();
-  return sortedDays.map((day) => {
-    const b = buckets.get(day);
-    return {
-      date: day,
-      value: b.count > 0 ? (b.total / b.count / 10) : 0,
-      count: b.count,
-    };
-  });
-}
-
-/**
- * Extract unique entity names from a set of articles (across all types).
- */
-function extractEntities(articles) {
-  const entities = new Set();
-  if (!articles) return entities;
-  for (const a of articles) {
-    if (a.entities) {
-      const { people = [], organizations = [], locations = [] } = a.entities;
-      for (const p of people) if (p.name) entities.add(p.name.toLowerCase());
-      for (const o of organizations) if (o.name) entities.add(o.name.toLowerCase());
-      for (const l of locations) if (l.name) entities.add(l.name.toLowerCase());
-    }
-  }
-  return entities;
 }
 
 /* ── Region selector dropdown ── */
@@ -293,41 +243,19 @@ export default function ComparativeRegions({ isoA, isoB, onRegionBChange, onExit
   }, [canonicalNews, regionBackfills, isoB]);
 
   // Stats
-  const statsA = useMemo(() => {
-    const articles = regionAData;
-    const avgSev =
-      articles.length > 0
-        ? articles.reduce((s, a) => s + (a.severity || 0), 0) / articles.length / 10
-        : 0;
-    const sources = new Set(articles.map((a) => a.source).filter(Boolean));
-    return { avgSev, eventCount: articles.length, sourceCount: sources.size };
-  }, [regionAData]);
-
-  const statsB = useMemo(() => {
-    if (!regionBData.length) return { avgSev: 0, eventCount: 0, sourceCount: 0 };
-    const articles = regionBData;
-    const avgSev =
-      articles.length > 0
-        ? articles.reduce((s, a) => s + (a.severity || 0), 0) / articles.length / 10
-        : 0;
-    const sources = new Set(articles.map((a) => a.source).filter(Boolean));
-    return { avgSev, eventCount: articles.length, sourceCount: sources.size };
-  }, [regionBData]);
+  const statsA = useMemo(() => summarizeRegionArticles(regionAData), [regionAData]);
+  const statsB = useMemo(() => summarizeRegionArticles(regionBData), [regionBData]);
 
   // Build severity trends
   const trendA = useMemo(() => buildSeverityTrend(regionAData, 30), [regionAData]);
   const trendB = useMemo(() => buildSeverityTrend(regionBData, 30), [regionBData]);
 
-  // Shared entities
-  const sharedEntities = useMemo(() => {
-    const entitiesA = extractEntities(regionAData);
-    const entitiesB = extractEntities(regionBData);
-    const shared = new Set();
-    for (const e of entitiesA) {
-      if (entitiesB.has(e)) shared.add(e);
-    }
-    return [...shared].sort();
-  }, [regionAData, regionBData]);
+  // Shared entity evidence, filtered to remove broad global entities and ranked
+  // by event count, source coverage, recency, and severity.
+  const sharedEntityEvidence = useMemo(
+    () => buildSharedEntityEvidence(regionAData, regionBData),
+    [regionAData, regionBData],
+  );
 
   const countryNameA = isoToCountry(isoA?.toUpperCase()) || isoA?.toUpperCase() || '?';
   const countryNameB = isoB ? (isoToCountry(isoB.toUpperCase()) || isoB.toUpperCase()) : '';
@@ -364,6 +292,10 @@ export default function ComparativeRegions({ isoA, isoB, onRegionBChange, onExit
               <span className="compare-stat-label">{t('regionDetail.sourceCount')}</span>
               <span className="compare-stat-val">{statsA.sourceCount}</span>
             </div>
+            <div className="compare-stat">
+              <span className="compare-stat-label">{t('regionDetail.criticalCount', 'Critical')}</span>
+              <span className="compare-stat-val sev-red">{statsA.criticalCount}</span>
+            </div>
           </div>
         </div>
 
@@ -393,6 +325,10 @@ export default function ComparativeRegions({ isoA, isoB, onRegionBChange, onExit
                 <span className="compare-stat-label">{t('regionDetail.sourceCount')}</span>
                 <span className="compare-stat-val">{statsB.sourceCount}</span>
               </div>
+              <div className="compare-stat">
+                <span className="compare-stat-label">{t('regionDetail.criticalCount', 'Critical')}</span>
+                <span className="compare-stat-val sev-red">{statsB.criticalCount}</span>
+              </div>
             </div>
           ) : (
             <div className="compare-stats-grid">
@@ -406,6 +342,10 @@ export default function ComparativeRegions({ isoA, isoB, onRegionBChange, onExit
               </div>
               <div className="compare-stat is-empty">
                 <span className="compare-stat-label">{t('regionDetail.sourceCount')}</span>
+                <span className="compare-stat-val">—</span>
+              </div>
+              <div className="compare-stat is-empty">
+                <span className="compare-stat-label">{t('regionDetail.criticalCount', 'Critical')}</span>
                 <span className="compare-stat-val">—</span>
               </div>
             </div>
@@ -431,17 +371,33 @@ export default function ComparativeRegions({ isoA, isoB, onRegionBChange, onExit
         />
       )}
 
-      {/* Shared entities */}
+      {/* Shared entity evidence */}
       {isoB && (
         <div className="compare-shared-entities">
           <div className="compare-shared-entities-head">
             <span className="micro">{t('regionDetail.sharedEntities')}</span>
-            <span className="compare-shared-entities-count">{sharedEntities.length}</span>
+            <span className="compare-shared-entities-count">{sharedEntityEvidence.length}</span>
           </div>
-          {sharedEntities.length > 0 ? (
+          <p className="compare-evidence-note">
+            {t('regionDetail.sharedEntitiesHint', 'Shared means the same typed entity appears in both countries after removing broad global organizations.')}
+          </p>
+          {sharedEntityEvidence.length > 0 ? (
             <div className="compare-shared-entities-list">
-              {sharedEntities.map((e) => (
-                <span key={e} className="compare-shared-entity-tag">{e}</span>
+              {sharedEntityEvidence.map((entity) => (
+                <div key={entity.key} className="compare-shared-entity-card">
+                  <div className="compare-shared-entity-card-head">
+                    <span className="compare-shared-entity-tag">{entity.name}</span>
+                    <span className="compare-shared-entity-type">{entity.type}</span>
+                  </div>
+                  <div className="compare-shared-entity-meta">
+                    <span>{countryNameA}: {entity.leftCount}</span>
+                    <span>{countryNameB}: {entity.rightCount}</span>
+                    <span>{entity.sourceCount} {t('regionDetail.sourcesShort', 'src')}</span>
+                  </div>
+                  {entity.evidenceTitles[0] && (
+                    <div className="compare-shared-entity-evidence">{entity.evidenceTitles[0]}</div>
+                  )}
+                </div>
               ))}
             </div>
           ) : (

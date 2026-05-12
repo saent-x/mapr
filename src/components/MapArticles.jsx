@@ -6,6 +6,9 @@ import { getStatesByIso } from '../utils/statesData';
 /* ──────────────────────────── constants ──────────────────────────── */
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+const CLUSTER_FILL = 'rgba(45, 138, 148, 0.12)';
+const CLUSTER_STROKE = 'rgba(45, 138, 148, 0.25)';
+const CLUSTER_TEXT = 'rgba(45, 138, 148, 0.82)';
 
 /* ──────────────────────────── component ──────────────────────────── */
 
@@ -15,7 +18,7 @@ const MapArticles = ({
   surface = 'flat',
   selectedRegion,
 }) => {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, styleRevision } = useMap();
 
   /* ── articles GeoJSON ── */
   const articlesGeoJson = useMemo(() => ({
@@ -88,13 +91,13 @@ const MapArticles = ({
         id: 'cluster-circles', type: 'circle', source: 'articles',
         filter: ['has', 'point_count'],
         paint: {
-          'circle-color': 'rgba(0, 200, 255, 0.12)',
+          'circle-color': CLUSTER_FILL,
           'circle-radius': [
             'step', ['get', 'point_count'],
             8, 10, 10, 50, 12,
           ],
           'circle-stroke-width': 0.5,
-          'circle-stroke-color': 'rgba(0, 200, 255, 0.25)',
+          'circle-stroke-color': CLUSTER_STROKE,
         },
       });
     }
@@ -109,7 +112,7 @@ const MapArticles = ({
           'text-allow-overlap': true,
         },
         paint: {
-          'text-color': 'rgba(0, 220, 255, 0.7)',
+          'text-color': CLUSTER_TEXT,
         },
       });
     }
@@ -144,13 +147,13 @@ const MapArticles = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map) return;
     const src = map.getSource('articles');
     if (src) src.setData(articlesGeoJson);
-  }, [isLoaded, map, articlesGeoJson]);
+  }, [isLoaded, map, articlesGeoJson, styleRevision]);
 
   /* ── selected story source + layers ── */
   useEffect(() => {
@@ -188,13 +191,13 @@ const MapArticles = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map) return;
     const src = map.getSource('selected-story');
     if (src) src.setData(selectedStoryGeoJson);
-  }, [isLoaded, map, selectedStoryGeoJson]);
+  }, [isLoaded, map, selectedStoryGeoJson, styleRevision]);
 
   /* ── locality labels (flat only) ── */
   useEffect(() => {
@@ -231,13 +234,13 @@ const MapArticles = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map, surface]);
+  }, [isLoaded, map, surface, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map || surface !== 'flat') return;
     const src = map.getSource('locality-labels');
     if (src) src.setData(localityLabelsGeoJson);
-  }, [isLoaded, map, localityLabelsGeoJson, surface]);
+  }, [isLoaded, map, localityLabelsGeoJson, surface, styleRevision]);
 
   return null;
 };

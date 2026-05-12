@@ -168,8 +168,8 @@ test('newsStore has lastDataLoadTime in initial state', () => {
 
 test('newsStore sets lastDataLoadTime in loadLiveData', () => {
   const src = read('src/stores/newsStore.ts');
-  const matches = src.match(/lastDataLoadTime:\s*Date\.now\(\)/g);
-  assert.ok(matches && matches.length >= 2, 'lastDataLoadTime must be set in at least 2 data paths (backend + client_gdelt)');
+  const matches = src.match(/lastDataLoadTime:\s*(?:serverFetchedAt|Date\.now\(\))/g);
+  assert.ok(matches && matches.length >= 2, 'lastDataLoadTime must be set from server ingest time for backend data and client time for client_gdelt');
 });
 
 // ═══════════════════════════════════════════

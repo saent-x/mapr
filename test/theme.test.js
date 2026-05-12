@@ -178,13 +178,14 @@ test('VAL-CROSS-011: all 5 locales have theme keys', () => {
   }
 });
 
-test('VAL-CROSS-011: CARTO basemap light URL exists in FlatMap', () => {
+test('VAL-CROSS-011: map light theme uses higher-contrast CARTO basemap in FlatMap', () => {
   const src = read('src/components/FlatMap.jsx');
-  assert.match(src, /positron/, 'FlatMap must reference light CARTO basemap (positron)');
-  assert.match(src, /dark-matter/, 'FlatMap must reference dark CARTO basemap (dark-matter)');
+  assert.doesNotMatch(src, /positron/, 'FlatMap light theme should not use pale Positron basemap');
+  assert.match(src, /STYLE_LIGHT\s*=\s*['"]https:\/\/basemaps\.cartocdn\.com\/gl\/voyager-nolabels-gl-style\/style\.json['"]/, 'FlatMap light theme must use higher-contrast CARTO Voyager basemap');
+  assert.match(src, /STYLE_LIGHT_LABELED\s*=\s*['"]https:\/\/basemaps\.cartocdn\.com\/gl\/voyager-gl-style\/style\.json['"]/, 'FlatMap labeled light theme must use higher-contrast CARTO Voyager basemap');
 });
 
-test('VAL-CROSS-011: CARTO basemap light URL exists in Globe', () => {
+test('VAL-CROSS-011: Globe keeps theme-aware map selection', () => {
   const src = read('src/components/Globe.jsx');
   assert.match(src, /isLight/, 'Globe must use theme for style selection');
 });
@@ -194,6 +195,33 @@ test('VAL-CROSS-011: AppMap component passes theme through', () => {
   assert.match(src, /theme\?:\s*'light'\s*\|\s*'dark'/, 'AppMap must accept theme prop');
   assert.match(src, /DEFAULT_STYLE_LIGHT/, 'AppMap must define light style URL');
   assert.match(src, /DEFAULT_STYLE_DARK/, 'AppMap must define dark style URL');
+  assert.doesNotMatch(src, /positron/, 'AppMap light map should avoid pale Positron basemap');
+  assert.match(src, /DEFAULT_STYLE_LIGHT[\s\S]*?voyager-gl-style/, 'AppMap light map must use higher-contrast CARTO Voyager basemap');
+});
+
+test('VAL-CROSS-011: map light theme strengthens country overlay contrast', () => {
+  const countries = read('src/components/MapCountries.jsx');
+  const overlay = read('src/components/MapGLOverlay.jsx');
+  assert.match(countries, /LIGHT_COUNTRY_PALETTE/, 'MapCountries must define a light-theme country palette');
+  assert.match(countries, /quietLine:\s*'rgba\(24,\s*58,\s*55,\s*0\.58\)'/, 'Light country borders should be darker than the dark-theme quiet border');
+  assert.match(countries, /emptyFill:\s*'rgba\(32,\s*84,\s*76,\s*0\.24\)'/, 'Light empty country fill should be stronger than the dark-theme empty fill');
+  assert.match(overlay, /isLight=\{isLight\}/, 'MapGLOverlay must pass light theme state to country layers');
+});
+
+test('VAL-CROSS-011: map dark theme country overlay remains visible without basemap tiles', () => {
+  const countries = read('src/components/MapCountries.jsx');
+  assert.match(countries, /DARK_COUNTRY_PALETTE/, 'MapCountries must define a dark-theme country palette');
+  assert.match(countries, /emptyFill:\s*'rgba\(45,\s*138,\s*148,\s*0\.16\)'/, 'Dark empty country fill should be visible against the dark app background');
+  assert.match(countries, /quietLine:\s*'rgba\(80,\s*174,\s*186,\s*0\.34\)'/, 'Dark country borders should not disappear when the basemap is unavailable');
+  assert.match(countries, /dataOpacity:\s*0\.42/, 'Dark data-bearing countries should carry the map when tile loading is slow');
+});
+
+test('VAL-CROSS-011: flat map avoids duplicate static backdrop over the live map', () => {
+  const flatMap = read('src/components/FlatMap.jsx');
+  const map = read('src/components/ui/map.tsx');
+  assert.doesNotMatch(flatMap, /MapStaticBackdrop/, 'FlatMap should not render a static SVG map behind the live basemap');
+  assert.match(map, /createOfflineStyle/, 'Map component should have an internal style fallback');
+  assert.match(map, /mapr-offline-/, 'Offline style should be identifiable for theme switching');
 });
 
 test('VAL-CROSS-011: main.jsx calls initTheme on startup', () => {

@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
+import { id } from '@instantdb/react';
 import db from '../services/instantDb';
+import { getUserOwnerRef, getUserOwnerWhere } from '../utils/instantUser';
 
 /**
  * Hook for managing story bookmarks via InstantDB.
@@ -34,6 +36,8 @@ export default function useBookmarks() {
   const [filterMinSeverity, setFilterMinSeverity] = useState(0);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterPriority, setFilterPriority] = useState('all');
 
   // Query bookmarks for the current user. Pass null when not logged in to skip.
   const { data, isLoading: queryLoading, error } = db.useQuery(
@@ -41,9 +45,7 @@ export default function useBookmarks() {
       ? {
           bookmarks: {
             $: {
-              where: {
-                owner: user.id,
-              },
+              where: getUserOwnerWhere(user),
             },
           },
         }
@@ -56,9 +58,17 @@ export default function useBookmarks() {
       id: b.id,
       storyId: b.storyId,
       storyTitle: b.storyTitle,
+      storySummary: b.storySummary || '',
+      source: b.source || '',
+      url: b.url || '',
+      note: b.note || '',
+      tags: Array.isArray(b.tags) ? b.tags : [],
+      status: b.status || 'unread',
+      priority: b.priority || 'normal',
       region: b.region || '',
       severity: b.severity ?? 0,
       bookmarkedAt: b.bookmarkedAt,
+      updatedAt: b.updatedAt || b.bookmarkedAt,
     }));
   }, [data]);
 
@@ -98,8 +108,16 @@ export default function useBookmarks() {
       }
     }
 
+    if (filterStatus !== 'all') {
+      result = result.filter((b) => b.status === filterStatus);
+    }
+
+    if (filterPriority !== 'all') {
+      result = result.filter((b) => b.priority === filterPriority);
+    }
+
     return result;
-  }, [bookmarks, filterRegion, filterMinSeverity, filterDateFrom, filterDateTo]);
+  }, [bookmarks, filterRegion, filterMinSeverity, filterDateFrom, filterDateTo, filterStatus, filterPriority]);
 
   const isBookmarked = useCallback(
     (storyId) => bookmarkSet.has(storyId),
@@ -119,21 +137,42 @@ export default function useBookmarks() {
       } else {
         // Add bookmark
         const now = Date.now();
-        const bmId = `bm-${story.id}-${user.id}`;
+        const bmId = id();
         await db.transact(
           db.tx.bookmarks[bmId]
             .update({
               storyId: story.id,
               storyTitle: story.title || 'Untitled',
+              storySummary: story.summary || '',
+              source: story.source || '',
+              url: story.url || '',
+              note: '',
+              tags: Array.isArray(story.tags) ? story.tags : [],
+              status: 'unread',
+              priority: story.severity >= 70 ? 'high' : 'normal',
               region: story.isoA2 || story.region || '',
               severity: story.severity ?? 0,
               bookmarkedAt: now,
+              updatedAt: now,
             })
-            .link({ owner: user.id }),
+            .link({ owner: getUserOwnerRef(user) }),
         );
       }
     },
     [user, bookmarks],
+  );
+
+  const updateBookmark = useCallback(
+    async (bookmarkId, updates) => {
+      if (!user) throw new Error('Must be authenticated to update bookmark');
+      const patch = { updatedAt: Date.now() };
+      if (updates.note !== undefined) patch.note = updates.note;
+      if (updates.tags !== undefined) patch.tags = Array.isArray(updates.tags) ? updates.tags : [];
+      if (updates.status !== undefined) patch.status = updates.status;
+      if (updates.priority !== undefined) patch.priority = updates.priority;
+      await db.transact(db.tx.bookmarks[bookmarkId].update(patch));
+    },
+    [user],
   );
 
   return {
@@ -145,6 +184,7 @@ export default function useBookmarks() {
     user,
     isBookmarked,
     toggleBookmark,
+    updateBookmark,
     // Filters
     filterRegion,
     setFilterRegion,
@@ -154,5 +194,9 @@ export default function useBookmarks() {
     setFilterDateFrom,
     filterDateTo,
     setFilterDateTo,
+    filterStatus,
+    setFilterStatus,
+    filterPriority,
+    setFilterPriority,
   };
 }

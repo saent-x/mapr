@@ -171,6 +171,14 @@ describe('HistoricalQueriesPage', () => {
     assert.ok(content.includes('ArrowLeft'), 'should have back button');
     assert.ok(content.includes('navigate(-1)'), 'should navigate back');
   });
+
+  it('HistoricalQueriesPage requires sign-in before mounting protected snapshot queries', () => {
+    const content = readText('src/pages/HistoricalQueriesPage.jsx');
+    assert.ok(content.includes("import useAuth from '../hooks/useAuth'"), 'should read auth state');
+    assert.ok(content.includes('if (!user)'), 'should gate unauthenticated users');
+    assert.ok(content.includes('account-auth-gate'), 'should show the shared sign-in gate');
+    assert.ok(content.includes('/login?returnUrl='), 'should deep-link to login with a return URL');
+  });
 });
 
 // ── Route registration ──

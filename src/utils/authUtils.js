@@ -32,7 +32,7 @@ export function buildProfileCreationTxn(userId, email) {
 export function createProfileOps(tx, userId, email) {
   const profile = buildProfileCreationTxn(userId, email);
   return [
-    tx.profiles[userId]
+    tx.profiles.lookup('uid', userId)
       .update({
         email: profile.email,
         displayName: profile.displayName,

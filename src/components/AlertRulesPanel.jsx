@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellOff, Pencil, Trash2, Plus, Loader2, LogIn, Crown } from 'lucide-react';
-import { SignedIn, SignedOut } from './auth';
+import { Bell, BellOff, Trash2, Plus, Loader2, Crown, Mail, ShieldCheck } from 'lucide-react';
 import useAlertRules from '../hooks/useAlertRules';
 import useSavedViews from '../hooks/useSavedViews';
 import useUIStore from '../stores/uiStore';
 import useNewsStore from '../stores/newsStore';
-import useSubscriptionStore from '../stores/subscriptionStore';
 import useSubscription from '../hooks/useSubscription';
 import AlertRuleDialog from './AlertRuleDialog';
 
@@ -17,12 +16,13 @@ import AlertRuleDialog from './AlertRuleDialog';
  */
 export default function AlertRulesPanel() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const liveNews = useNewsStore((s) => s.liveNews) || [];
   const { views: savedViews } = useSavedViews(liveNews);
   const { rules, isLoading, needsAuth, deleteRule, toggleActive } = useAlertRules(savedViews, liveNews);
-  const subscriptionStatus = useSubscriptionStore((s) => s.status);
-  const { upgradeToPro } = useSubscription();
-  const isPro = subscriptionStatus === 'pro';
+  const { upgradeToPro, hasFeatureAccess } = useSubscription();
+  const canUseAlertRules = hasFeatureAccess('alertRules');
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
@@ -74,6 +74,11 @@ export default function AlertRulesPanel() {
     }
   }, [toggleActive]);
 
+  const handleSignIn = () => {
+    const returnUrl = encodeURIComponent(location.pathname + location.search);
+    navigate(`/login?returnUrl=${returnUrl}`);
+  };
+
   /* ── Toast notifications for new matches on active rules ── */
   const prevNewMatchesRef = useRef({});
   useEffect(() => {
@@ -110,120 +115,137 @@ export default function AlertRulesPanel() {
 
   return (
     <>
-      <div className="alert-rules-sidebar" role="region" aria-label={t('alertRules.panelLabel', 'Alert Rules')}>
-        <SignedIn>
-          {!isPro && rules.length === 0 ? (
-            <>
-              <div className="saved-views-header micro">
-                <Bell size={12} aria-hidden />
-                <span>{t('alertRules.panelLabel', 'ALERT RULES')}</span>
-              </div>
-              <div className="saved-views-login-prompt" style={{ cursor: 'pointer' }} onClick={() => upgradeToPro().catch(() => {})}>
-                <Crown size={10} aria-hidden />
-                <span>{t('subscription.upgradeToPro', 'Upgrade to Pro')}</span>
-              </div>
-            </>
-          ) : (
-            <>
-          <div className="saved-views-header micro">
-            <Bell size={12} aria-hidden />
-            <span>{t('alertRules.panelLabel', 'ALERT RULES')}</span>
-            {activeCount > 0 && (
-              <span style={{ color: 'var(--sev-red)', marginLeft: 'auto' }}>{activeCount}/{rules.length}</span>
-            )}
-          </div>
-
-          {isLoading && (
-            <div className="saved-views-loading">
-              <Loader2 size={12} className="spin" />
-            </div>
-          )}
-
-          {!isLoading && rules.length === 0 && (
-            <div className="saved-views-empty">
-              {t('alertRules.emptyHint', 'Create alert rules from saved views to get notified of matching events')}
-            </div>
-          )}
-
-          {!isLoading && rules.length > 0 && (
-            <ul className="saved-views-list" role="list">
-              {rules.map((rule) => (
-                <li key={rule.id} className="saved-views-item alert-rules-item">
-                  <div className="alert-rules-item-inner">
-                    {/* Active/inactive toggle */}
-                    <button
-                      type="button"
-                      className="alert-rules-toggle"
-                      onClick={() => handleToggle(rule)}
-                      title={rule.active ? t('alertRules.deactivate', 'Deactivate') : t('alertRules.activate', 'Activate')}
-                      aria-label={rule.active ? t('alertRules.deactivateAria', { name: rule.name }) : t('alertRules.activateAria', { name: rule.name })}
-                      data-active={rule.active || undefined}
-                    >
-                      {rule.active ? <Bell size={11} /> : <BellOff size={11} />}
-                    </button>
-
-                    {/* Rule info */}
-                    <button
-                      type="button"
-                      className="alert-rules-info-btn"
-                      onClick={() => handleEdit(rule)}
-                      title={t('alertRules.editTitle', 'Edit Alert Rule')}
-                    >
-                      <span className="alert-rules-name">{rule.name}</span>
-                      <span className="alert-rules-meta">
-                        {t('alertRules.sevThresholdLabel', '≥')} {rule.severityLabel} · {rule.savedViewName}
-                      </span>
-                    </button>
-
-                    {/* Match count badge */}
-                    <span
-                      className="saved-views-count"
-                      title={t('alertRules.matchCountTitle', { count: rule.matchCount })}
-                      data-alert-count={rule.active && rule.matchCount > 0 ? 'active' : undefined}
-                    >
-                      {rule.matchCount}
-                    </span>
-
-                    {/* Delete button */}
-                    <button
-                      type="button"
-                      className="saved-views-delete alert-rules-delete"
-                      onClick={() => handleDelete(rule)}
-                      title={t('alertRules.delete', 'Delete')}
-                      aria-label={t('alertRules.deleteAria', { name: rule.name })}
-                    >
-                      <Trash2 size={10} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {/* Create new rule button */}
+      {needsAuth ? (
+        <div className="alert-rules-sidebar sidebar-pro-feature-slot" role="region" aria-label={t('alertRules.panelLabel', 'Alert Rules')}>
           <button
             type="button"
-            className="alert-rules-create-btn"
-            onClick={handleCreate}
-            disabled={savedViews.length === 0}
-            title={savedViews.length === 0 ? t('alertRules.needSavedView', 'Save a view first to create alert rules') : t('alertRules.newRule', 'New Alert Rule')}
+            className="sidebar-pro-feature-action"
+            onClick={handleSignIn}
+            title={t('alertRules.signInPrompt', 'Sign in to create alert rules')}
+            aria-label={t('alertRules.signInPrompt', 'Sign in to create alert rules')}
           >
-            <Plus size={11} aria-hidden />
-            {t('alertRules.newRule', 'New Alert Rule')}
+            <Bell size={18} aria-hidden />
+            <span className="sidebar-pro-feature-label">{t('alertRules.panelLabel', 'Alert rules')}</span>
+            <span className="sidebar-pro-badge" aria-label="Pro feature">
+              <Crown size={7} aria-hidden />
+            </span>
           </button>
-          </>
+        </div>
+      ) : (
+      <div className="alert-rules-sidebar" role="region" aria-label={t('alertRules.panelLabel', 'Alert Rules')}>
+        <div className="saved-views-header micro">
+          <Bell size={12} aria-hidden />
+          <span>{t('alertRules.panelLabel', 'ALERT RULES')}</span>
+          {rules.length > 0 && (
+            <span
+              className="saved-views-count sidebar-section-count-badge"
+              title={t('alertRules.activeCountTitle', {
+                active: activeCount,
+                total: rules.length,
+                defaultValue: `${activeCount} active of ${rules.length} alert rules`,
+              })}
+              aria-label={t('alertRules.countAriaLabel', { count: rules.length, defaultValue: `${rules.length} alert rules` })}
+            >
+              {rules.length}
+            </span>
           )}
-        </SignedIn>
+        </div>
 
-        <SignedOut>
-          {needsAuth && (
-            <div className="saved-views-login-prompt">
-              <LogIn size={10} aria-hidden />
-              <span>{t('alertRules.signInPrompt', 'Sign in to create alert rules')}</span>
-            </div>
-          )}
-        </SignedOut>
+        {!canUseAlertRules && rules.length === 0 ? (
+          <div className="saved-views-login-prompt" style={{ cursor: 'pointer' }} onClick={() => upgradeToPro().catch(() => {})}>
+            <Crown size={10} aria-hidden />
+            <span>{t('subscription.upgradeToPro', 'Upgrade to Pro')}</span>
+          </div>
+        ) : (
+          <>
+            {isLoading && (
+              <div className="saved-views-loading">
+                <Loader2 size={12} className="spin" />
+              </div>
+            )}
+
+            {!isLoading && rules.length === 0 && (
+              <div className="saved-views-empty">
+                {t('alertRules.emptyHint', 'Create alert rules from saved views to get notified of matching events')}
+              </div>
+            )}
+
+            {!isLoading && rules.length > 0 && (
+              <ul className="saved-views-list" role="list">
+                {rules.map((rule) => (
+                  <li key={rule.id} className="saved-views-item alert-rules-item">
+                    <div className="alert-rules-item-inner">
+                      {/* Active/inactive toggle */}
+                      <button
+                        type="button"
+                        className="alert-rules-toggle"
+                        onClick={() => handleToggle(rule)}
+                        title={rule.active ? t('alertRules.deactivate', 'Deactivate') : t('alertRules.activate', 'Activate')}
+                        aria-label={rule.active ? t('alertRules.deactivateAria', { name: rule.name }) : t('alertRules.activateAria', { name: rule.name })}
+                        data-active={rule.active || undefined}
+                      >
+                        {rule.active ? <Bell size={11} /> : <BellOff size={11} />}
+                      </button>
+
+                      {/* Rule info */}
+                      <button
+                        type="button"
+                        className="alert-rules-info-btn"
+                        onClick={() => handleEdit(rule)}
+                        title={t('alertRules.editTitle', 'Edit Alert Rule')}
+                      >
+                        <span className="alert-rules-name">{rule.name}</span>
+                        <span className="alert-rules-meta">
+                          {t('alertRules.sevThresholdLabel', '≥')} {rule.severityLabel} · {rule.minConfidence}% conf · {rule.savedViewName}
+                        </span>
+                        <span className="alert-rules-premium-meta">
+                          <ShieldCheck size={9} aria-hidden />
+                          {rule.deliveryMode}
+                          {rule.channels?.email && <><Mail size={9} aria-hidden /> email</>}
+                          {rule.quietHours?.enabled && <> · quiet</>}
+                        </span>
+                      </button>
+
+                      {/* Match count badge */}
+                      <span
+                        className="saved-views-count"
+                        title={t('alertRules.matchCountTitle', { count: rule.matchCount })}
+                        data-alert-count={rule.active && rule.matchCount > 0 ? 'active' : undefined}
+                      >
+                        {rule.matchCount}
+                      </span>
+
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        className="saved-views-delete alert-rules-delete"
+                        onClick={() => handleDelete(rule)}
+                        title={t('alertRules.delete', 'Delete')}
+                        aria-label={t('alertRules.deleteAria', { name: rule.name })}
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Create new rule button */}
+            <button
+              type="button"
+              className="alert-rules-create-btn"
+              onClick={handleCreate}
+              disabled={savedViews.length === 0 || !canUseAlertRules}
+              title={!canUseAlertRules ? t('subscription.proRequired', 'Pro Subscription Required') : savedViews.length === 0 ? t('alertRules.needSavedView', 'Save a view first to create alert rules') : t('alertRules.newRule', 'New Alert Rule')}
+            >
+              <Plus size={11} aria-hidden />
+              {t('alertRules.newRule', 'New Alert Rule')}
+            </button>
+          </>
+        )}
       </div>
+      )}
 
       {/* Create/Edit dialog */}
       <AlertRuleDialog

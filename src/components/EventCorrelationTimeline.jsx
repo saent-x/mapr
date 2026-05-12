@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import useNewsStore from '../stores/newsStore.js';
+import useNewsStore from '../stores/newsStore';
 import {
   buildCorrelationData,
+  buildCorrelationInsights,
   severityColor,
   formatCorrelationTimestamp,
 } from '../utils/correlationBuilder.js';
@@ -17,6 +18,7 @@ const PAD_LEFT = 20;
 const PAD_RIGHT = 20;
 const PAD_TOP = 8;
 const CHART_MIN_WIDTH = 600;
+const MAX_VISIBLE_LANES = 14;
 
 /**
  * Time range options in hours, with corresponding i18n label keys.
@@ -77,19 +79,41 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
     return m;
   }, [events]);
 
-  // Map of correlation lines: key = "fromId|toId"
-  const corrSet = useMemo(() => {
-    const s = new Set();
-    for (const c of correlations) {
-      s.add(`${c.from}|${c.to}`);
-      s.add(`${c.to}|${c.from}`);
-    }
-    return s;
-  }, [correlations]);
+  const insights = useMemo(
+    () => buildCorrelationInsights(correlations, eventMap),
+    [correlations, eventMap],
+  );
 
-  const chartW = Math.max(CHART_MIN_WIDTH, lanes.length > 0 ? 800 : CHART_MIN_WIDTH);
+  const displayLanes = useMemo(() => {
+    const regionScore = new Map();
+    for (const correlation of correlations) {
+      regionScore.set(correlation.fromRegion, (regionScore.get(correlation.fromRegion) || 0) + 1);
+      regionScore.set(correlation.toRegion, (regionScore.get(correlation.toRegion) || 0) + 1);
+    }
+    return [...lanes]
+      .sort((a, b) => {
+        const scoreDiff = (regionScore.get(b.region) || 0) - (regionScore.get(a.region) || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return b.events.length - a.events.length;
+      })
+      .slice(0, MAX_VISIBLE_LANES);
+  }, [correlations, lanes]);
+
+  const displayRegionSet = useMemo(
+    () => new Set(displayLanes.map((lane) => lane.region)),
+    [displayLanes],
+  );
+
+  const displayCorrelations = useMemo(
+    () => correlations.filter((correlation) => (
+      displayRegionSet.has(correlation.fromRegion) && displayRegionSet.has(correlation.toRegion)
+    )),
+    [correlations, displayRegionSet],
+  );
+
+  const chartW = Math.max(CHART_MIN_WIDTH, displayLanes.length > 0 ? 800 : CHART_MIN_WIDTH);
   const plotW = chartW - PAD_LEFT - PAD_RIGHT - LABEL_WIDTH;
-  const chartH = lanes.length * (LANE_HEIGHT + LANE_GAP) + TIME_AXIS_HEIGHT + PAD_TOP + 8;
+  const chartH = displayLanes.length * (LANE_HEIGHT + LANE_GAP) + TIME_AXIS_HEIGHT + PAD_TOP + 8;
 
   const xAt = useCallback((ts) => {
     const pct = tSpan > 0 ? (ts - timeRange.min) / tSpan : 0.5;
@@ -191,8 +215,54 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
         </span>
       </div>
 
-      {/* Lane chart */}
+      <section className="correlation-explainer">
+        <div>
+          <h3>{t('correlation.insightTitle', 'What this represents')}</h3>
+          <p>{t('correlation.insightBody', 'Links are only shown when events in different regions share a specific actor or place and pass a topical relevance check. Use the cards below as the primary evidence, then inspect the timeline for timing.')}</p>
+        </div>
+      </section>
+
+      {insights.topRegionPairs.length > 0 && (
+        <div className="correlation-insight-grid" data-testid="correlation-insights">
+          {insights.topRegionPairs.map((pair) => (
+            <article key={pair.key} className="correlation-insight-card">
+              <div className="correlation-insight-card-head">
+                <span>{pair.key}</span>
+                <span>{pair.linkCount} {t('correlation.linksShort', 'links')}</span>
+              </div>
+              <div className="correlation-insight-meta">
+                <span>{t('correlation.avgSeverity', 'Avg sev')} {(pair.avgSeverity / 10).toFixed(1)}</span>
+                <span>{pair.sharedEntities.map((entity) => entity.name).join(' · ') || '—'}</span>
+              </div>
+              {pair.examples[0] && (
+                <p className="correlation-insight-example">{pair.examples[0]}</p>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      {insights.topEntities.length > 0 && (
+        <div className="correlation-entity-clusters" data-testid="correlation-entity-clusters">
+          <div className="micro">{t('correlation.topSharedEntities', 'TOP SHARED ENTITIES')}</div>
+          <div className="correlation-entity-cluster-list">
+            {insights.topEntities.map((entity) => (
+              <span key={entity.key} className="correlation-entity-cluster">
+                <b>{entity.name}</b>
+                <span>{entity.type}</span>
+                <span>{entity.regions.join(' / ')}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Evidence timeline */}
       <div className="correlation-chart-wrap" data-testid="correlation-chart">
+        <div className="correlation-chart-title">
+          <span>{t('correlation.evidenceTimeline', 'Evidence timeline')}</span>
+          <span>{t('correlation.timelineHint', 'Dots are events; lines are filtered evidence links.')} {t('correlation.showingTopRegions', { shown: displayLanes.length, total: lanes.length, defaultValue: 'Showing {{shown}} of {{total}} regions.' })}</span>
+        </div>
         <svg
           width={chartW}
           height={chartH}
@@ -202,7 +272,7 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
           style={{ display: 'block', width: '100%', minHeight: chartH }}
         >
           {/* Background for lanes */}
-          {lanes.map((lane, li) => (
+          {displayLanes.map((lane, li) => (
             <rect
               key={`bg-${lane.region}`}
               x={LABEL_WIDTH + PAD_LEFT}
@@ -222,7 +292,7 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
                 x1={xAt(tl.ts)}
                 y1={PAD_TOP + 4}
                 x2={xAt(tl.ts)}
-                y2={lanes.length * (LANE_HEIGHT + LANE_GAP) + PAD_TOP + 4}
+                y2={displayLanes.length * (LANE_HEIGHT + LANE_GAP) + PAD_TOP + 4}
                 stroke="var(--line)"
                 strokeWidth="0.5"
                 strokeDasharray="3 3"
@@ -230,7 +300,7 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
               />
               <text
                 x={xAt(tl.ts)}
-                y={lanes.length * (LANE_HEIGHT + LANE_GAP) + PAD_TOP + 18}
+                y={displayLanes.length * (LANE_HEIGHT + LANE_GAP) + PAD_TOP + 18}
                 textAnchor="middle"
                 fontSize="9"
                 fontFamily="var(--ff-mono)"
@@ -242,9 +312,9 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
           ))}
 
           {/* Correlation lines (behind dots) */}
-          {correlations.map((c, ci) => {
-            const fromLane = lanes.findIndex((l) => l.region === c.fromRegion);
-            const toLane = lanes.findIndex((l) => l.region === c.toRegion);
+          {displayCorrelations.map((c, ci) => {
+            const fromLane = displayLanes.findIndex((l) => l.region === c.fromRegion);
+            const toLane = displayLanes.findIndex((l) => l.region === c.toRegion);
             if (fromLane < 0 || toLane < 0) return null;
             const fromEv = eventMap.get(c.from);
             const toEv = eventMap.get(c.to);
@@ -267,7 +337,7 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
           })}
 
           {/* Lane labels */}
-          {lanes.map((lane, li) => (
+          {displayLanes.map((lane, li) => (
             <text
               key={`label-${lane.region}`}
               x={LABEL_WIDTH + PAD_LEFT - 8}
@@ -284,7 +354,7 @@ export default function EventCorrelationTimeline({ prefilterEntity = '' } = {}) 
           ))}
 
           {/* Event dots */}
-          {lanes.map((lane, li) =>
+          {displayLanes.map((lane, li) =>
             lane.events.map((ev) => {
               const ts = ev.firstSeenAt ? new Date(ev.firstSeenAt).getTime() : timeRange.min;
               const cx = xAt(ts);

@@ -15,9 +15,9 @@ import { getRegionCameraTarget, getSelectedStoryCameraTarget } from '../utils/ma
 const DEFAULT_CENTER = { lng: 10, lat: 20 };
 
 const STYLE_DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json';
-const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json';
+const STYLE_LIGHT = 'https://basemaps.cartocdn.com/gl/voyager-nolabels-gl-style/style.json';
 const STYLE_DARK_LABELED = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
-const STYLE_LIGHT_LABELED = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+const STYLE_LIGHT_LABELED = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 /* ──────────────────────────── macro regions (flat-only drill) ──────────────────────────── */
 
@@ -360,7 +360,7 @@ const FlatMap = ({
           backdropFilter: 'blur(8px)',
           padding: '4px 8px',
           borderRadius: '3px',
-          border: `1px solid ${isLight ? 'rgba(0,0,0,0.08)' : 'rgba(0,200,255,0.1)'}`,
+          border: '1px solid var(--line)',
           pointerEvents: 'auto',
         }}>
           {breadcrumb.map((part, i) => (
@@ -376,11 +376,11 @@ const FlatMap = ({
                   onClick={part.onClick}
                   style={{
                     cursor: 'pointer',
-                    color: isLight ? 'rgba(0,0,0,0.7)' : 'rgba(0,200,255,0.7)',
+                    color: 'var(--cyan)',
                     whiteSpace: 'nowrap',
                   }}
-                  onMouseEnter={(e) => e.target.style.color = isLight ? '#000' : '#00d4ff'}
-                  onMouseLeave={(e) => e.target.style.color = isLight ? 'rgba(0,0,0,0.7)' : 'rgba(0,200,255,0.7)'}
+                  onMouseEnter={(e) => e.target.style.color = 'var(--ink-0)'}
+                  onMouseLeave={(e) => e.target.style.color = 'var(--cyan)'}
                 >
                   {part.label}
                 </span>

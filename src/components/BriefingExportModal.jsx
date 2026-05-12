@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Copy, FileDown } from 'lucide-react';
 import useUIStore from '../stores/uiStore';
@@ -21,6 +21,7 @@ const BriefingExportModal = ({ events = [], filters = {}, mapContainerRef }) => 
   const addToast = useUIStore((s) => s.addToast);
   const isOpen = useUIStore((s) => s.showExport);
   const modalRef = useRef(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const handleClose = useCallback(() => {
     setShowExport(false);
@@ -49,27 +50,37 @@ const BriefingExportModal = ({ events = [], filters = {}, mapContainerRef }) => 
   }, [events, filters, addToast, setShowExport, t]);
 
   const handleExportPdf = useCallback(async () => {
+    if (isExportingPdf) return;
     if (events.length === 0) {
       addToast(t('export.noEvents', 'No events to export'), 'info');
       return;
     }
+    setIsExportingPdf(true);
     try {
-      const mapEl = mapContainerRef?.current || document.querySelector('.map-stage, .maplibregl-map, [class*="map-container"]');
-      await generateBriefingPdf(events, filters, {
+      const mapEl = mapContainerRef?.current ||
+        document.querySelector('.map-stage') ||
+        document.querySelector('.maplibregl-map') ||
+        document.querySelector('[class*="map-container"]');
+      const result = await generateBriefingPdf(events, filters, {
         mapElement: mapEl,
-        onSuccess: () => {
-          addToast(t('export.pdfSuccess', 'PDF exported successfully'), 'info');
-          setShowExport(false);
-        },
-        onError: (err) => {
-          addToast(`PDF export failed: ${err.message}`, 'error');
-        },
       });
+      if (!result?.success) {
+        throw new Error(result?.error || t('export.pdfFailed', 'PDF export failed'));
+      }
+      addToast(
+        result.mapSnapshotStatus === 'skipped'
+          ? t('export.pdfPartialSuccess', 'PDF exported; map snapshot was unavailable.')
+          : t('export.pdfSuccess', 'PDF exported successfully'),
+        'info'
+      );
+      setShowExport(false);
     } catch (err) {
       console.warn('PDF export failed:', err);
-      addToast('PDF export failed', 'error');
+      addToast(`${t('export.pdfFailed', 'PDF export failed')}: ${err.message || err}`, 'error');
+    } finally {
+      setIsExportingPdf(false);
     }
-  }, [events, filters, addToast, setShowExport, t, mapContainerRef]);
+  }, [events, filters, addToast, setShowExport, t, mapContainerRef, isExportingPdf]);
 
   // Close on Escape key
   useEffect(() => {
@@ -120,11 +131,11 @@ const BriefingExportModal = ({ events = [], filters = {}, mapContainerRef }) => 
               type="button"
               className="btn"
               onClick={handleExportPdf}
-              disabled={events.length === 0}
+              disabled={events.length === 0 || isExportingPdf}
               aria-label={t('export.exportPdf', 'Export PDF')}
             >
               <FileDown size={14} aria-hidden />
-              <span>{t('export.exportPdf', 'Export PDF')}</span>
+              <span>{isExportingPdf ? t('export.exportingPdf', 'Exporting PDF...') : t('export.exportPdf', 'Export PDF')}</span>
             </button>
           </div>
 

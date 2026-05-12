@@ -22,10 +22,32 @@ import { cn } from "@/lib/utils";
 
 const defaultStyles = {
   dark: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
-  light: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
+  light: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
 };
 
 type Theme = "light" | "dark";
+
+function createOfflineStyle(theme: Theme): MapLibreGL.StyleSpecification {
+  const isLight = theme === "light";
+  return {
+    version: 8,
+    name: `mapr-offline-${theme}`,
+    sources: {},
+    layers: [
+      {
+        id: "mapr-offline-background",
+        type: "background",
+        paint: {
+          "background-color": isLight ? "#d9ded6" : "#071110",
+        },
+      },
+    ],
+  };
+}
+
+function isOfflineStyle(style: MapStyleOption | null): boolean {
+  return typeof style === "object" && style?.name?.startsWith("mapr-offline-");
+}
 
 // Check document class for theme (works with next-themes, etc.)
 function getDocumentTheme(): Theme | null {
@@ -85,6 +107,7 @@ function useResolvedTheme(themeProp?: "light" | "dark"): Theme {
 type MapContextValue = {
   map: MapLibreGL.Map | null;
   isLoaded: boolean;
+  styleRevision: number;
 };
 
 const MapContext = createContext<MapContextValue | null>(null);
@@ -211,10 +234,14 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   const [mapInstance, setMapInstance] = useState<MapLibreGL.Map | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isStyleLoaded, setIsStyleLoaded] = useState(false);
+  const [styleRevision, setStyleRevision] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const loadedRef = useRef(false);
   const currentStyleRef = useRef<MapStyleOption | null>(null);
   const styleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const firstLoadErrorRef = useRef<string | null>(null);
+  const awaitingStyleReadyRef = useRef(true);
   const internalUpdateRef = useRef(false);
   const resolvedTheme = useResolvedTheme(themeProp);
 
@@ -241,6 +268,65 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     }
   }, []);
 
+  const clearLoadWatchdog = useCallback(() => {
+    if (loadWatchdogRef.current) {
+      clearTimeout(loadWatchdogRef.current);
+      loadWatchdogRef.current = null;
+    }
+  }, []);
+
+  const scheduleMapResize = useCallback((map: MapLibreGL.Map) => {
+    const container = containerRef.current;
+    if (!container) return () => {};
+
+    const frames: number[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    const resizeWhenVisible = () => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        map.resize();
+      }
+    };
+
+    const scheduleFrame = (callback: FrameRequestCallback) => {
+      const id = requestAnimationFrame(callback);
+      frames.push(id);
+    };
+
+    const queueResize = () => {
+      scheduleFrame(resizeWhenVisible);
+      scheduleFrame(() => scheduleFrame(resizeWhenVisible));
+      timers.push(setTimeout(resizeWhenVisible, 80));
+      timers.push(setTimeout(resizeWhenVisible, 240));
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") queueResize();
+    };
+
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(queueResize)
+      : null;
+
+    observer?.observe(container);
+    window.addEventListener("resize", queueResize);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    map.on("load", queueResize);
+    map.on("styledata", queueResize);
+    queueResize();
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", queueResize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      map.off("load", queueResize);
+      map.off("styledata", queueResize);
+      frames.forEach((frame) => cancelAnimationFrame(frame));
+      timers.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
   // Initialize the map
   useEffect(() => {
     if (!containerRef.current) return;
@@ -252,7 +338,7 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     const map = new MapLibreGL.Map({
       container: containerRef.current,
       style: initialStyle,
-      renderWorldCopies: false,
+      renderWorldCopies: true,
       attributionControl: {
         compact: true,
       },
@@ -266,7 +352,12 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
       // This is a workaround to avoid race conditions with the style loading
       // else we have to force update every layer on setStyle change
       styleTimeoutRef.current = setTimeout(() => {
+        if (!map.isStyleLoaded()) return;
         setIsStyleLoaded(true);
+        if (awaitingStyleReadyRef.current) {
+          awaitingStyleReadyRef.current = false;
+          setStyleRevision((revision) => revision + 1);
+        }
         if (projection) {
           map.setProjection(projection);
         }
@@ -274,19 +365,50 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     };
     const loadHandler = () => {
       loadedRef.current = true;
+      firstLoadErrorRef.current = null;
+      clearLoadWatchdog();
       setIsLoaded(true);
       setLoadError(null);
+      styleDataHandler();
     };
 
-    // MapLibre emits runtime errors for tile 404s etc.; only treat
-    // pre-load errors as fatal so we can surface a blocked style/CDN.
+    const startLoadWatchdog = () => {
+      clearLoadWatchdog();
+      loadWatchdogRef.current = setTimeout(() => {
+        if (loadedRef.current) return;
+        if (!isOfflineStyle(currentStyleRef.current)) {
+          const fallbackStyle = createOfflineStyle(resolvedTheme);
+          currentStyleRef.current = fallbackStyle;
+          awaitingStyleReadyRef.current = true;
+          setLoadError(null);
+          setIsLoaded(false);
+          setIsStyleLoaded(false);
+          clearStyleTimeout();
+          try {
+            map.setStyle(fallbackStyle, { diff: false });
+            return;
+          } catch {
+            // If even the local style fails, show the explicit error overlay.
+          }
+        }
+        setLoadError(
+          firstLoadErrorRef.current ||
+          "Style or tiles failed to load. Check network and try again.",
+        );
+      }, 7000);
+    };
+
+    // MapLibre emits recoverable source/tile/glyph errors before `load`.
+    // Record them, but only fallback if the first load genuinely stalls.
     const errorHandler = (event: { error?: Error } & Record<string, unknown>) => {
       if (loadedRef.current) return;
       const err = event?.error;
-      const message =
+      firstLoadErrorRef.current =
         err?.message ||
         "Style or tiles failed to load. Check network and try again.";
-      setLoadError(message);
+      if (isOfflineStyle(currentStyleRef.current)) {
+        setLoadError(firstLoadErrorRef.current);
+      }
     };
 
     // Viewport change handler - skip if triggered by internal update
@@ -299,18 +421,25 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
     map.on("styledata", styleDataHandler);
     map.on("error", errorHandler);
     map.on("move", handleMove);
+    const cleanupResize = scheduleMapResize(map);
+    startLoadWatchdog();
     setMapInstance(map);
 
     return () => {
+      cleanupResize();
       clearStyleTimeout();
+      clearLoadWatchdog();
       map.off("load", loadHandler);
       map.off("styledata", styleDataHandler);
       map.off("error", errorHandler);
       map.off("move", handleMove);
       map.remove();
       loadedRef.current = false;
+      firstLoadErrorRef.current = null;
+      awaitingStyleReadyRef.current = true;
       setIsLoaded(false);
       setIsStyleLoaded(false);
+      setStyleRevision(0);
       setLoadError(null);
       setMapInstance(null);
     };
@@ -347,32 +476,38 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
 
   // Handle style change
   useEffect(() => {
-    if (!mapInstance || !resolvedTheme) return;
+    if (!mapInstance || !resolvedTheme || !isLoaded) return;
 
-    const newStyle =
+    const desiredStyle =
       resolvedTheme === "dark" ? mapStyles.dark : mapStyles.light;
+    const newStyle = isOfflineStyle(currentStyleRef.current)
+      ? createOfflineStyle(resolvedTheme)
+      : desiredStyle;
 
     if (currentStyleRef.current === newStyle) return;
 
     clearStyleTimeout();
     currentStyleRef.current = newStyle;
+    awaitingStyleReadyRef.current = true;
     setIsStyleLoaded(false);
 
-    mapInstance.setStyle(newStyle, { diff: true });
-  }, [mapInstance, resolvedTheme, mapStyles, clearStyleTimeout]);
+    mapInstance.setStyle(newStyle, { diff: mapInstance.isStyleLoaded() });
+  }, [mapInstance, resolvedTheme, mapStyles, clearStyleTimeout, isLoaded]);
 
   const contextValue = useMemo(
     () => ({
       map: mapInstance,
       isLoaded: isLoaded && isStyleLoaded,
+      styleRevision,
     }),
-    [mapInstance, isLoaded, isStyleLoaded],
+    [mapInstance, isLoaded, isStyleLoaded, styleRevision],
   );
 
   const handleRetry = useCallback(() => {
     if (!mapInstance) return;
     setLoadError(null);
     loadedRef.current = false;
+    awaitingStyleReadyRef.current = true;
     setIsLoaded(false);
     setIsStyleLoaded(false);
     clearStyleTimeout();

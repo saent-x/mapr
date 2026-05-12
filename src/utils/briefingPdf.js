@@ -26,12 +26,98 @@ const SEVERITY_TIERS = [
  */
 function detectTheme() {
   if (typeof document === 'undefined') return 'dark';
+  const dataTheme = document.documentElement.getAttribute('data-theme');
+  if (dataTheme === 'light' || dataTheme === 'dark') return dataTheme;
   const cls = document.documentElement.className || '';
   if (cls.includes('light') || cls.includes('theme-light')) return 'light';
   // Check for light theme via CSS variable
   const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-0').trim();
   if (bg && (bg.startsWith('#f') || bg.startsWith('rgb(2') || bg.includes('255'))) return 'light';
   return 'dark';
+}
+
+function mapSnapshotPlaceholderReason(error) {
+  if (!error) return 'Map snapshot unavailable';
+  return error instanceof Error ? error.message : String(error);
+}
+
+function shouldIgnoreMapCaptureElement(element) {
+  if (!element || !element.classList) return false;
+  return (
+    element.classList.contains('maplibregl-control-container') ||
+    element.classList.contains('maplibregl-popup') ||
+    element.classList.contains('map-zoom-controls') ||
+    element.classList.contains('map-controls') ||
+    element.classList.contains('map-corner') ||
+    element.classList.contains('intel-ticker') ||
+    element.classList.contains('timeline-panel')
+  );
+}
+
+async function captureMapSnapshot(mapElement, isDark) {
+  if (!mapElement || typeof window === 'undefined') {
+    return { status: 'missing', reason: 'No browser map element available' };
+  }
+
+  try {
+    const html2canvas = (await import('html2canvas')).default;
+    const captureTarget = mapElement.matches?.('.maplibregl-map, .appmap')
+      ? mapElement
+      : (mapElement.querySelector?.('.maplibregl-map, .appmap') || mapElement);
+    const mapCanvas = await html2canvas(captureTarget, {
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: isDark ? '#10141a' : '#f8f8f4',
+      scale: Math.min(window.devicePixelRatio || 1, 1.5),
+      logging: false,
+      imageTimeout: 3000,
+      foreignObjectRendering: false,
+      ignoreElements: shouldIgnoreMapCaptureElement,
+    });
+
+    if (!mapCanvas?.width || !mapCanvas?.height) {
+      return { status: 'skipped', reason: 'Map snapshot was empty' };
+    }
+
+    return {
+      status: 'included',
+      imageData: mapCanvas.toDataURL('image/jpeg', 0.82),
+      width: mapCanvas.width,
+      height: mapCanvas.height,
+    };
+  } catch (error) {
+    console.warn('Map snapshot failed, continuing without map image:', mapSnapshotPlaceholderReason(error));
+    return { status: 'skipped', reason: mapSnapshotPlaceholderReason(error) };
+  }
+}
+
+function downloadPdf(doc, filename) {
+  if (
+    typeof document !== 'undefined' &&
+    typeof URL !== 'undefined' &&
+    typeof URL.createObjectURL === 'function' &&
+    document.body
+  ) {
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    const revoke = () => URL.revokeObjectURL(url);
+    if (typeof window !== 'undefined' && typeof window.setTimeout === 'function') {
+      window.setTimeout(revoke, 1000);
+    } else {
+      revoke();
+    }
+    return;
+  }
+
+  doc.save(filename);
 }
 
 /**
@@ -186,7 +272,13 @@ function drawEventTable(doc, events, startY, pageWidth) {
  * @param {function} [options.onError] - callback on error
  */
 export async function generateBriefingPdf(events = [], filters = {}, options = {}) {
-  const { mapElement, onSuccess, onError } = options;
+  const {
+    mapElement,
+    onSuccess,
+    onError,
+    save = true,
+    filename = `mapr-briefing-${new Date().toISOString().slice(0, 10)}.pdf`,
+  } = options;
 
   try {
     const isDark = detectTheme();
@@ -269,33 +361,23 @@ export async function generateBriefingPdf(events = [], filters = {}, options = {
     }
 
     // ── Map snapshot ──
-    if (mapElement && typeof window !== 'undefined') {
-      try {
-        const html2canvas = (await import('html2canvas')).default;
-        const mapCanvas = await html2canvas(mapElement, {
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: isDark ? '#1a1a2e' : '#ffffff',
-          scale: 1.5,
-          logging: false,
-        });
-
+    const mapSnapshot = await captureMapSnapshot(mapElement, isDark);
+    if (mapElement) {
+      if (mapSnapshot.status === 'included') {
         const mapWidth = pageWidth - margin * 2;
-        const mapHeight = mapWidth * (mapCanvas.height / mapCanvas.width);
+        const mapHeight = mapWidth * (mapSnapshot.height / mapSnapshot.width);
 
         if (y + mapHeight + 5 > pageHeight - 20) {
           doc.addPage();
           y = 20;
         }
 
-        const mapImg = mapCanvas.toDataURL('image/jpeg', 0.85);
-        doc.addImage(mapImg, 'JPEG', margin, y, mapWidth, Math.min(mapHeight, 100));
+        doc.addImage(mapSnapshot.imageData, 'JPEG', margin, y, mapWidth, Math.min(mapHeight, 100));
         y += Math.min(mapHeight, 100) + 8;
-      } catch (mapErr) {
-        console.warn('Map snapshot failed, continuing without map image:', mapErr.message);
+      } else {
         doc.setFontSize(8);
         doc.setTextColor(150);
-        doc.text('(Map snapshot unavailable)', margin, y);
+        doc.text('(Map snapshot unavailable; briefing data exported below.)', margin, y);
         y += 6;
       }
     }
@@ -358,11 +440,10 @@ export async function generateBriefingPdf(events = [], filters = {}, options = {
     }
 
     // ── Save ──
-    const filename = `mapr-briefing-${new Date().toISOString().slice(0, 10)}.pdf`;
-    doc.save(filename);
+    if (save) downloadPdf(doc, filename);
 
     if (onSuccess) onSuccess();
-    return { success: true, filename };
+    return { success: true, filename, mapSnapshotStatus: mapSnapshot.status };
   } catch (err) {
     console.error('PDF generation failed:', err);
     if (onError) onError(err);

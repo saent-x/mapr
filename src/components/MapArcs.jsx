@@ -9,10 +9,12 @@ import {
   buildCountryStoryMap,
 } from '../utils/geopoliticalArcs';
 import { ARC_COLORS, CAUSAL_PAIRS, normalizeCausalCategory } from './MapConstants';
+import { HIGH_FREQUENCY_ENTITIES } from '../utils/geopoliticalArcs';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
 const EMPTY_FC = { type: 'FeatureCollection', features: [] };
+const ARC_HOVER_COLOR = '#2d8a94';
 
 /* ──────────────────────────── component ──────────────────────────── */
 
@@ -21,7 +23,7 @@ const MapArcs = ({
   mapOverlay,
   hoveredArcId = null,
 }) => {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, styleRevision } = useMap();
 
   /* ── arcs GeoJSON ── */
   const arcsGeoJson = useMemo(() => {
@@ -84,6 +86,10 @@ const MapArcs = ({
       if (!story.isoA2) continue;
       for (const org of (story.entities?.organizations || [])) {
         if (!org.name) continue;
+        // Skip global IOs/NGOs that show up everywhere — drawing a "shared-actor"
+        // arc between two countries because both mention "UN" or "Reuters" is
+        // noise, not signal. Same denylist that geopoliticalArcs.js uses.
+        if (HIGH_FREQUENCY_ENTITIES.has(org.name)) continue;
         if (!entityCountryMap[org.name]) entityCountryMap[org.name] = [];
         entityCountryMap[org.name].push({ iso: story.isoA2, severity: story.severity, title: story.title });
       }
@@ -112,7 +118,7 @@ const MapArcs = ({
           if (src.iso === tgt.iso) continue;
           if (!areCountriesAdjacent(src.iso, tgt.iso)) continue;
           const avgSev = Math.round(((src.severity || 0) + (tgt.severity || 0)) / 2);
-          addArc(src.iso, tgt.iso, avgSev, label, `${src.title} → ${tgt.title}`, 'causal-flow', label);
+          addArc(src.iso, tgt.iso, avgSev, label, `${src.title} → ${tgt.title}`, 'category-cooccurrence', label);
         }
       }
     }
@@ -226,7 +232,7 @@ const MapArcs = ({
         id: 'arc-hover', type: 'line', source: 'arcs',
         filter: ['==', 1, 0],
         paint: {
-          'line-color': '#00d4ff',
+          'line-color': ARC_HOVER_COLOR,
           'line-width': 2,
           'line-opacity': 0.7,
         },
@@ -242,14 +248,14 @@ const MapArcs = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   /* ── update arc data ── */
   useEffect(() => {
     if (!isLoaded || !map) return;
     const src = map.getSource('arcs');
     if (src) src.setData(activeArcsGeoJson);
-  }, [isLoaded, map, activeArcsGeoJson]);
+  }, [isLoaded, map, activeArcsGeoJson, styleRevision]);
 
   /* ── update arc paint when overlay mode changes ── */
   useEffect(() => {
@@ -304,7 +310,7 @@ const MapArcs = ({
     for (const [k, v] of Object.entries(linePaint)) {
       try { map.setPaintProperty('arc-lines', k, v); } catch { /* ignore */ }
     }
-  }, [isLoaded, map, mapOverlay]);
+  }, [isLoaded, map, mapOverlay, styleRevision]);
 
   /* ── arc pulses source + layers ── */
   const [arcPulses, setArcPulses] = useState(EMPTY_FC);
@@ -345,13 +351,13 @@ const MapArcs = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map) return;
     const src = map.getSource('arc-pulses');
     if (src) src.setData(arcPulses);
-  }, [isLoaded, map, arcPulses]);
+  }, [isLoaded, map, arcPulses, styleRevision]);
 
   /* ── arc pulse animation ── */
   useEffect(() => {
@@ -421,7 +427,7 @@ const MapArcs = ({
       }
       stop();
     };
-  }, [isLoaded, map, arcsGeoJson, hoveredArcId]);
+  }, [isLoaded, map, arcsGeoJson, hoveredArcId, styleRevision]);
 
   return null;
 };

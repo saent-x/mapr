@@ -226,11 +226,22 @@ export function computeCompositeSeverity(ctx) {
   const entitySignificance = computeEntitySignificance(ctx.entities);
   const significanceBoost = Math.min(12, entitySignificance * 0.12);
 
-  // ── New factor: Geographic clustering (conflict zone boost) ──
-  const conflictBoost = getConflictZoneBoost(ctx.isoA2);
-
-  // ── New factor: Historical baseline comparison ──
+  // ── Historical baseline comparison ──
+  // Anomaly vs. the region's own history is a content-derived signal, so
+  // it stays in the severity composite.
   const baselineAdj = getBaselineAdjustment(ctx.regionalBaselineRatio);
+
+  // ── Geographic context (NOT folded into severity) ──
+  // CONFLICT_ZONES/TENSION_ZONES is a hard-coded political opinion
+  // about which countries deserve a +5/+10 severity bump. Folding it
+  // into the score made it impossible for users to tell whether a
+  // story scored high because of its content or because of its
+  // geography. We compute the boost so callers can render it as a
+  // separate "regional context" badge, but we do not add it to the
+  // composite. Pass `ctx.includeRegionalContextInSeverity = true`
+  // to opt into the legacy behavior (not recommended).
+  const regionalContextBoost = getConflictZoneBoost(ctx.isoA2);
+  const includeRegionalContext = ctx.includeRegionalContextInSeverity === true;
 
   // ── Combine base score with velocity (if present) ──
   let baseScore;
@@ -243,8 +254,11 @@ export function computeCompositeSeverity(ctx) {
     baseScore = keywordScore + corroboration + entityScore + typeScore;
   }
 
-  // ── Apply additive boosts from new factors ──
-  const finalScore = baseScore + significanceBoost + conflictBoost + baselineAdj;
+  // ── Apply additive boosts from content-derived factors only ──
+  const finalScore = baseScore
+    + significanceBoost
+    + baselineAdj
+    + (includeRegionalContext ? regionalContextBoost : 0);
 
   return Math.round(Math.min(100, Math.max(0, finalScore)));
 }

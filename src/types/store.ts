@@ -126,7 +126,9 @@ export interface RegionBackfillEntry {
 export interface NewsState {
   liveNews: Article[] | null;
   backendEvents: Event[];
-  dataSource: 'loading' | 'live' | 'mock';
+  // 'unavailable' replaces the old 'mock' state — when data can't be
+  // fetched the UI shows an honest error, never fabricated mock entries.
+  dataSource: 'loading' | 'live' | 'unavailable';
   dataError: string | null;
   lastDataLoadTime: number | null;
   sourceHealth: { gdelt: unknown; rss: unknown; backend: unknown };

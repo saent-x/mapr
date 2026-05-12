@@ -10,7 +10,10 @@
  * On activate: cleans old caches.
  */
 
-const CACHE_VERSION = 'mapr-v1';
+// `__CACHE_VERSION__` is replaced at build time by the swCacheVersion plugin
+// in vite.config.js. The fallback string lets dev mode load this file without
+// a build step (dev SW is unregistered on load anyway).
+const CACHE_VERSION = '__CACHE_VERSION__'.startsWith('__') ? 'mapr-dev' : '__CACHE_VERSION__';
 const APP_SHELL_CACHE = `mapr-shell-${CACHE_VERSION}`;
 const API_CACHE = `mapr-api-${CACHE_VERSION}`;
 const TILE_CACHE = `mapr-tiles-${CACHE_VERSION}`;
@@ -42,6 +45,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Allow the page to ask a waiting SW to activate immediately.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 /* ── Fetch: route by request type ── */
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -52,6 +62,24 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-http(s) requests (e.g., chrome-extension://)
   if (!url.protocol.startsWith('http')) return;
+
+  // Server-sent event streams must stay outside the service worker. They are
+  // long-lived responses and cannot be safely cached or replayed.
+  if (url.pathname === '/api/stream' || request.headers.get('accept')?.includes('text/event-stream')) {
+    return;
+  }
+
+  // Admin and Stripe API responses must NEVER hit the cache: they contain
+  // privileged or per-user data that must not survive a logout or replay
+  // from devtools by another user on the same browser profile.
+  if (
+    url.pathname.startsWith('/api/admin') ||
+    url.pathname.startsWith('/api/stripe') ||
+    url.pathname === '/api/me' ||
+    url.pathname.startsWith('/api/source-catalog')
+  ) {
+    return;
+  }
 
   // API calls: network-first with cache fallback
   if (url.pathname.startsWith('/api/')) {
@@ -68,7 +96,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin app shell assets: cache-first
+  // Same-origin navigation requests (top-level HTML): network-first so a
+  // freshly deployed shell is delivered without a hard refresh. Falls back
+  // to cached /index.html for offline.
+  if (url.origin === self.location.origin && request.mode === 'navigate') {
+    event.respondWith(networkFirst(request, APP_SHELL_CACHE));
+    return;
+  }
+
+  // Same-origin static assets (hashed JS/CSS/images): cache-first is safe
+  // because the filename embeds a content hash — a new build produces a
+  // new URL. The activate handler purges old shell caches by version.
   if (url.origin === self.location.origin) {
     event.respondWith(cacheFirst(request, APP_SHELL_CACHE));
     return;

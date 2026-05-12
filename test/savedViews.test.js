@@ -31,8 +31,8 @@ test('SavedViewsSidebar component exists', () => {
   assert.ok(existsSync(p), 'SavedViewsSidebar.jsx should exist');
   const content = readFileSync(p, 'utf8');
   assert.ok(content.includes('export default'), 'should export a default component');
-  assert.ok(content.includes('SignedIn'), 'should use SignedIn wrapper');
-  assert.ok(content.includes('SignedOut'), 'should use SignedOut wrapper');
+  assert.ok(content.includes('useNavigate'), 'should use useNavigate for login redirect');
+  assert.ok(content.includes('needsAuth'), 'should check needsAuth for signed-out state');
   assert.ok(content.includes('useSavedViews'), 'should use useSavedViews hook');
   assert.ok(content.includes('saved-views-btn'), 'should render view buttons');
   assert.ok(content.includes('saved-views-delete'), 'should render delete buttons');
@@ -69,6 +69,9 @@ test('VAL-M3-001: saveView creates view with all filter params', () => {
   // Structural verification: the hook exports saveView that calls db.transact
   // with correct payload shape
   const content = readFileSync(resolve(root, 'src/hooks/useSavedViews.js'), 'utf8');
+  assert.ok(content.includes("import { id } from '@instantdb/react'"), 'should import InstantDB UUID helper');
+  assert.ok(content.includes('const viewId = id()'), 'should use UUID entity IDs for InstantDB tx paths');
+  assert.ok(!content.includes('`${name}-${now}`'), 'should not use human-readable strings as InstantDB entity IDs');
   assert.ok(content.includes('filterState'), 'should include filterState in transaction');
   assert.ok(content.includes('mapState'), 'should include mapState in transaction');
   assert.ok(content.includes('createdAt'), 'should include createdAt timestamp');
@@ -84,6 +87,25 @@ test('VAL-M3-002: sidebar computes and displays match counts', () => {
   const content = readFileSync(resolve(root, 'src/components/SavedViewsSidebar.jsx'), 'utf8');
   assert.ok(content.includes('saved-views-count'), 'should render match count badge');
   assert.ok(content.includes('matchCount'), 'should compute match counts');
+});
+
+test('SavedViewsSidebar header shows total saved-view count badge', () => {
+  const content = readFileSync(resolve(root, 'src/components/SavedViewsSidebar.jsx'), 'utf8');
+  assert.ok(content.includes('sidebar-section-count-badge'), 'header should render a section count badge');
+  assert.ok(content.includes('{visibleViews.length}'), 'saved views header count should include the default view');
+  assert.ok(content.includes('{visibleViews.length > 0 && ('), 'saved views header badge should be hidden only when no visible views exist');
+});
+
+test('SavedViewsSidebar always includes a default current view', () => {
+  const content = readFileSync(resolve(root, 'src/components/SavedViewsSidebar.jsx'), 'utf8');
+  assert.ok(content.includes("const DEFAULT_VIEW_ID = 'default'"), 'should define a stable default view id');
+  assert.ok(content.includes('DEFAULT_VIEW_FILTERS'), 'should define default filter state');
+  assert.ok(content.includes('DEFAULT_VIEW_MAP_STATE'), 'should define default map state');
+  assert.ok(content.includes('return [defaultView, ...views]'), 'should prepend the default view to saved views');
+  assert.ok(content.includes('view.isDefault ? !activeViewId : activeViewId === view.id'), 'default view should be current when no saved view is active');
+  assert.ok(content.includes("params.delete('view')"), 'applying default view should clear the shared view URL param');
+  assert.ok(content.includes('saved-views-current'), 'active rows should render a visible current-view indicator');
+  assert.ok(content.includes("className={`saved-views-item ${view.isDefault ? 'is-default-view' : ''}`"), 'default view should have a dedicated row class');
 });
 
 // ---------------------------------------------------------------------------
@@ -152,8 +174,11 @@ test('VAL-M3-006: save dialog shows login prompt when unauthenticated', () => {
 
 test('VAL-M3-007: sidebar shows login prompt when unauthenticated', () => {
   const content = readFileSync(resolve(root, 'src/components/SavedViewsSidebar.jsx'), 'utf8');
-  assert.ok(content.includes('SignedOut'), 'should use SignedOut wrapper');
+  assert.ok(content.includes('needsAuth'), 'should check needsAuth for signed-out state');
   assert.ok(content.includes('signInPrompt'), 'should show sign-in prompt when logged out');
+  assert.ok(content.includes('useNavigate'), 'should redirect to /login when clicked');
+  assert.ok(content.includes('sidebar-pro-feature-action'), 'signed-out sidebar should render an icon action');
+  assert.ok(content.includes('sidebar-pro-badge'), 'signed-out sidebar should mark saved views as Pro');
 
   const hookContent = readFileSync(resolve(root, 'src/hooks/useSavedViews.js'), 'utf8');
   assert.ok(hookContent.includes('user') && hookContent.includes(': null'), 'should pass null query when no user');
@@ -175,12 +200,17 @@ test('VAL-CROSS-013: shared view URL restores filters via queryOnce', () => {
 // ---------------------------------------------------------------------------
 
 test('VAL-CROSS-014: views stored in InstantDB linked to user via owner', () => {
+  // Relationships now live in the dedicated `links:` block per InstantDB docs.
   const schemaContent = readFileSync(resolve(root, 'instant.schema.ts'), 'utf8');
-  assert.ok(schemaContent.includes('owner: i.belongsTo'), 'savedViews should have owner link to $users');
+  assert.match(schemaContent, /userSavedViews:\s*\{[\s\S]*forward:\s*\{\s*on:\s*'savedViews',\s*has:\s*'one',\s*label:\s*'owner'/,
+    'userSavedViews forward link must be savedViews.owner → $users (one)');
+  assert.match(schemaContent, /userSavedViews:\s*\{[\s\S]*reverse:\s*\{\s*on:\s*'\$users',\s*has:\s*'many',\s*label:\s*'savedViews'/,
+    '$users must expose savedViews as the reverse-side label');
 
   const hookContent = readFileSync(resolve(root, 'src/hooks/useSavedViews.js'), 'utf8');
   assert.ok(hookContent.includes('where:'), 'should query with where clause');
-  assert.ok(hookContent.includes('owner: user.id'), 'should filter by owner = user id');
+  assert.ok(hookContent.includes('getUserOwnerWhere(user)'), 'should filter through owner lookup helper');
+  assert.ok(hookContent.includes('getUserOwnerRef(user)'), 'should link through owner lookup helper');
 });
 
 // ---------------------------------------------------------------------------
@@ -223,6 +253,8 @@ test('savedViews namespace exists in all 5 locale files', () => {
     assert.ok(json.savedViews.signInPrompt, `${loc}.json should have signInPrompt`);
     assert.ok(json.savedViews.viewNotFound, `${loc}.json should have viewNotFound`);
     assert.ok(json.savedViews.deleteTitle, `${loc}.json should have deleteTitle`);
+    assert.ok(json.savedViews.defaultName, `${loc}.json should have defaultName`);
+    assert.ok(json.savedViews.current, `${loc}.json should have current`);
   }
 });
 
@@ -245,9 +277,16 @@ test('CSS styles exist for saved views components', () => {
   assert.ok(css.includes('saved-views-sidebar'), 'should have sidebar styles');
   assert.ok(css.includes('saved-views-btn'), 'should have view button styles');
   assert.ok(css.includes('saved-views-count'), 'should have count badge styles');
+  assert.ok(css.includes('sidebar-section-count-badge'), 'should have persistent header count badge styles');
+  assert.ok(!css.includes('.app-sidebar .saved-views-header .saved-views-count,'),
+    'collapsed sidebar should not hide header count badges');
   assert.ok(css.includes('saved-views-delete'), 'should have delete button styles');
+  assert.ok(css.includes('saved-views-current'), 'should have current-view badge styles');
+  assert.ok(css.includes('is-default-view'), 'should have default-view row styles');
   assert.ok(css.includes('save-view-overlay'), 'should have dialog overlay styles');
   assert.ok(css.includes('save-view-dialog'), 'should have dialog styles');
   assert.ok(css.includes('view-not-found-banner'), 'should have not-found banner styles');
   assert.ok(css.includes('saved-views-login-prompt'), 'should have login prompt styles');
+  assert.ok(css.includes('sidebar-pro-feature-action'), 'should have compact Pro sidebar action styles');
+  assert.ok(css.includes('sidebar-pro-badge'), 'should have compact Pro badge styles');
 });

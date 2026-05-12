@@ -6,6 +6,8 @@ import {
   writeSourceCatalog
 } from '../server/sourceCatalog.js';
 import { getSourceCatalogStorageInfo } from '../server/sourceCatalogStore.js';
+import { isAdminAuthorized } from './_lib/adminAuth.js';
+import { isPublicHttpUrl } from '../server/urlGuard.js';
 
 function parseBody(body) {
   if (typeof body === 'string') {
@@ -48,16 +50,20 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') {
-    const authHeader = String(req.headers['x-admin-password'] || '').trim();
-    const adminPassword = String(process.env.ADMIN_PASSWORD || '').trim();
-
-    if (!adminPassword || authHeader !== adminPassword) {
+    if (!isAdminAuthorized(req)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const body = parseBody(req.body);
     if (!Array.isArray(body.feeds)) {
       return res.status(400).json({ error: 'Missing feeds array' });
+    }
+    // Defense-in-depth: even though the caller is admin-authenticated, never
+    // allow an internal/loopback/metadata URL into the feed catalog.
+    for (const feed of body.feeds) {
+      if (!feed || typeof feed !== 'object' || !isPublicHttpUrl(feed.url)) {
+        return res.status(400).json({ error: 'Feed URL must be a public http(s) URL', code: 'BAD_REQUEST' });
+      }
     }
 
     const catalog = await writeSourceCatalog(body.feeds);

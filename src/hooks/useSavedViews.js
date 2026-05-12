@@ -1,8 +1,10 @@
 import { useCallback, useMemo } from 'react';
+import { id } from '@instantdb/react';
 import db from '../services/instantDb';
 import { storyMatchesFilters } from '../utils/storyFilters';
 import { resolveDateFloor } from '../utils/mockData';
 import { getRelatedEvents } from '../utils/entityGraph';
+import { getUserOwnerRef, getUserOwnerWhere } from '../utils/instantUser';
 
 /**
  * Hook for managing saved filter views via InstantDB.
@@ -27,9 +29,7 @@ export default function useSavedViews(activeNews = []) {
       ? {
           savedViews: {
             $: {
-              where: {
-                owner: user.id,
-              },
+              where: getUserOwnerWhere(user),
             },
           },
         }
@@ -65,30 +65,41 @@ export default function useSavedViews(activeNews = []) {
       return {
         id: v.id,
         name: v.name,
+        description: v.description || '',
+        tags: Array.isArray(v.tags) ? v.tags : [],
+        pinned: Boolean(v.pinned),
         filters,
         mapState: v.mapState || {},
         createdAt: v.createdAt,
         updatedAt: v.updatedAt,
+        lastOpenedAt: v.lastOpenedAt || null,
         matchCount,
       };
+    }).sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      return (b.lastOpenedAt || b.updatedAt || b.createdAt || 0) - (a.lastOpenedAt || a.updatedAt || a.createdAt || 0);
     });
   }, [data, activeNews]);
 
   const saveView = useCallback(
-    async (name, filterState, mapState = {}) => {
+    async (name, filterState, mapState = {}, options = {}) => {
       if (!user) throw new Error('Must be authenticated to save a view');
       const now = Date.now();
-      const viewId = `${name}-${now}`; // simple unique id
+      const viewId = id();
       await db.transact(
         db.tx.savedViews[viewId]
           .update({
             name,
+            description: options.description || '',
+            tags: Array.isArray(options.tags) ? options.tags : [],
+            pinned: Boolean(options.pinned),
             filterState,
             mapState,
             createdAt: now,
             updatedAt: now,
+            lastOpenedAt: now,
           })
-          .link({ owner: user.id }),
+          .link({ owner: getUserOwnerRef(user) }),
       );
       return viewId;
     },
@@ -103,6 +114,32 @@ export default function useSavedViews(activeNews = []) {
     [user],
   );
 
+  const updateView = useCallback(
+    async (viewId, updates) => {
+      if (!user) throw new Error('Must be authenticated to update a view');
+      const patch = { updatedAt: Date.now() };
+      if (updates.name !== undefined) patch.name = updates.name;
+      if (updates.description !== undefined) patch.description = updates.description;
+      if (updates.tags !== undefined) patch.tags = Array.isArray(updates.tags) ? updates.tags : [];
+      if (updates.pinned !== undefined) patch.pinned = Boolean(updates.pinned);
+      if (updates.lastOpenedAt !== undefined) patch.lastOpenedAt = updates.lastOpenedAt;
+      await db.transact(db.tx.savedViews[viewId].update(patch));
+    },
+    [user],
+  );
+
+  const duplicateView = useCallback(
+    async (view, name = `${view.name} copy`) => {
+      if (!user) throw new Error('Must be authenticated to duplicate a view');
+      return saveView(name, view.filters || {}, view.mapState || {}, {
+        description: view.description,
+        tags: view.tags,
+        pinned: false,
+      });
+    },
+    [saveView, user],
+  );
+
   return {
     views,
     isLoading: auth.isLoading || queryLoading,
@@ -111,5 +148,7 @@ export default function useSavedViews(activeNews = []) {
     user,
     saveView,
     deleteView,
+    updateView,
+    duplicateView,
   };
 }

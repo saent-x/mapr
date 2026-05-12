@@ -1,23 +1,32 @@
-import React, { lazy, Suspense, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, ExternalLink, MapPin } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Loader2, MapPin } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
 import { getRelatedEvents } from '../utils/entityGraph';
 import { getSourceHost } from '../utils/urlUtils';
 import { getReliabilityTier, getReliabilityMeta, getReliabilityLabel } from '../utils/credibilityMeta';
+import { canonicalizeArticles } from '../utils/newsPipeline';
+import { normalizeArticleText } from '../utils/articleText';
+import { formatConfidencePercent, normalizeConfidenceScore } from '../utils/confidenceScore';
 import { getEventDetailCandidates, resolveEventById } from '../utils/eventDetailResolver';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 import MapErrorBoundary from '../components/MapErrorBoundary';
-import { ArticleDetail } from '../components/NewsPanel';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
 
-function formatTs(ts) {
+function formatTs(ts, locale) {
   if (!ts) return '—';
   const d = typeof ts === 'string' ? new Date(ts) : new Date(ts);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+  try {
+    return new Intl.DateTimeFormat(locale || undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    }).format(d);
+  } catch {
+    return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+  }
 }
 
 function sevTier(sev) {
@@ -42,12 +51,12 @@ function lifecycleMeta(lifecycle) {
 
 function verificationMeta(status) {
   switch (status) {
+    // Legacy 'verified' label is misleading; map to CORROBORATED.
     case 'verified':
-      return { label: 'VERIFIED', color: 'var(--sev-green)' };
-    case 'official':
-      return { label: 'OFFICIAL', color: 'var(--cyan)' };
     case 'corroborated':
       return { label: 'CORROBORATED', color: 'var(--sev-green)' };
+    case 'official':
+      return { label: 'OFFICIAL', color: 'var(--cyan)' };
     case 'single-source':
       return { label: 'SINGLE SOURCE', color: 'var(--sev-amber)' };
     case 'amplified':
@@ -57,28 +66,56 @@ function verificationMeta(status) {
   }
 }
 
+function entityName(entity) {
+  return typeof entity === 'string' ? entity : entity?.name || '';
+}
+
+function entityExplorerLink(type, entity) {
+  const name = entityName(entity);
+  const params = new URLSearchParams({ type, entity: name });
+  return `/entities?${params.toString()}`;
+}
+
 /**
  * /event/:id — dedicated event detail page with full metadata,
  * source links, entity list, map location, and related events.
  */
 export default function EventDetailPage() {
   const { id } = useParams();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n?.language;
   const navigate = useNavigate();
+  const location = useLocation();
 
   const liveNews = useNewsStore((s) => s.liveNews);
   const backendEvents = useNewsStore((s) => s.backendEvents);
   const historicalState = useNewsStore((s) => s.historicalState);
   const regionBackfills = useNewsStore((s) => s.regionBackfills);
+  const dataSource = useNewsStore((s) => s.dataSource);
+  const loadLiveData = useNewsStore((s) => s.loadLiveData);
+  const [requestedDetailLoad, setRequestedDetailLoad] = useState(false);
+  const routedEvent = location.state?.event || null;
 
-  const allEvents = useMemo(() => getEventDetailCandidates({
+  const baseEvents = useMemo(() => getEventDetailCandidates({
     liveNews,
     backendEvents,
     historicalState,
     regionBackfills,
   }), [liveNews, backendEvents, historicalState, regionBackfills]);
 
-  const event = useMemo(() => resolveEventById(allEvents, id), [allEvents, id]);
+  const routedEventCandidate = useMemo(() => {
+    if (!routedEvent || String(routedEvent.id) !== String(id)) return null;
+    return canonicalizeArticles([routedEvent])[0] || routedEvent;
+  }, [id, routedEvent]);
+
+  const event = useMemo(() => (
+    resolveEventById(baseEvents, id) || routedEventCandidate
+  ), [baseEvents, id, routedEventCandidate]);
+
+  const allEvents = useMemo(() => {
+    if (!event) return baseEvents;
+    return baseEvents.some((ev) => String(ev.id) === String(event.id)) ? baseEvents : [event, ...baseEvents];
+  }, [baseEvents, event]);
 
   // Related events — events that share entities with this event.
   // Iterate all entity names (people, organizations, locations), call
@@ -107,10 +144,39 @@ export default function EventDetailPage() {
     return results.slice(0, 8);
   }, [event, allEvents]);
 
+  useEffect(() => {
+    if (event || requestedDetailLoad || dataSource === 'loading') return;
+    const hasAnyLoadedEvents = (backendEvents && backendEvents.length > 0) || (liveNews && liveNews.length > 0);
+    if (hasAnyLoadedEvents) return;
+    setRequestedDetailLoad(true);
+    loadLiveData?.();
+  }, [backendEvents, dataSource, event, liveNews, loadLiveData, requestedDetailLoad]);
+
   // Back button handler
   const handleBack = () => {
     navigate(-1);
   };
+
+  const waitingForEvents = !event && (
+    dataSource === 'loading' ||
+    (!requestedDetailLoad && !((backendEvents && backendEvents.length > 0) || (liveNews && liveNews.length > 0)))
+  );
+
+  if (waitingForEvents) {
+    return (
+      <div className="event-detail-page">
+        <div className="event-detail-not-found">
+          <Loader2 size={22} className="admin-spinner" aria-hidden />
+          <div className="micro" style={{ marginTop: 12, marginBottom: 12 }}>
+            {t('eventDetail.loading', 'LOADING EVENT')}
+          </div>
+          <p style={{ color: 'var(--ink-2)', fontSize: 13, marginBottom: 0 }}>
+            {t('eventDetail.loadingHint', 'Refreshing the current event set before showing detail.')}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Not found state
   if (!event) {
@@ -137,7 +203,7 @@ export default function EventDetailPage() {
   const host = getSourceHost(event.url) || event.source || '';
   const vMeta = verificationMeta(event.verificationStatus);
   const lMeta = lifecycleMeta(event.lifecycle);
-  const confidence = typeof event.confidence === 'number' ? event.confidence : null;
+  const confidence = normalizeConfidenceScore(event.confidence);
   const supporting = Array.isArray(event.supportingArticles)
     ? event.supportingArticles.filter((a) => a && a.url && a.url !== event.url).slice(0, 8)
     : [];
@@ -158,31 +224,6 @@ export default function EventDetailPage() {
         <ArrowLeft size={16} aria-hidden />
         <span>{t('eventDetail.back', 'Back')}</span>
       </button>
-
-      {/* Map section */}
-      {hasCoords && (
-        <div className="event-detail-map">
-          <MapErrorBoundary>
-            <Suspense fallback={<MapLoadingFallback />}>
-              <FlatMap
-                newsList={[event]}
-                regionSeverities={{}}
-                mapOverlay="severity"
-                coverageStatusByIso={{}}
-                perCountryReliability={{}}
-                velocitySpikes={[]}
-                trackingPoints={[]}
-                selectedRegion={null}
-                selectedStory={null}
-                onRegionSelect={() => {}}
-                onStorySelect={() => {}}
-                onArcSelect={() => {}}
-                onCoverageCountryClick={() => {}}
-              />
-            </Suspense>
-          </MapErrorBoundary>
-        </div>
-      )}
 
       <div className="event-detail-layout">
         {/* Left column — main content */}
@@ -221,7 +262,7 @@ export default function EventDetailPage() {
           {/* Title + summary */}
           <h1 className="event-detail-title">{event.title}</h1>
           {event.summary && (
-            <p className="event-detail-summary">{event.summary}</p>
+            <p className="event-detail-summary">{normalizeArticleText(event.summary)}</p>
           )}
 
           {/* Metadata grid */}
@@ -248,12 +289,12 @@ export default function EventDetailPage() {
             </div>
             <div className="event-detail-row">
               <dt>{t('eventDetail.published', 'Published')}</dt>
-              <dd>{formatTs(event.publishedAt)}</dd>
+              <dd>{formatTs(event.publishedAt, locale)}</dd>
             </div>
             {event.firstSeenAt && (
               <div className="event-detail-row">
                 <dt>{t('eventDetail.firstSeen', 'First Seen')}</dt>
-                <dd>{formatTs(event.firstSeenAt)}</dd>
+                <dd>{formatTs(event.firstSeenAt, locale)}</dd>
               </div>
             )}
             {event.region && (
@@ -271,13 +312,13 @@ export default function EventDetailPage() {
             )}
             {confidence != null && (
               <div className="event-detail-row">
-                <dt>{t('eventDetail.confidence', 'Confidence')}</dt>
-                <dd>{confidence}%</dd>
+                <dt>{t('eventDetail.confidence', 'Event Confidence')}</dt>
+                <dd>{formatConfidencePercent(event.confidence)}</dd>
               </div>
             )}
             {event.sourceCredibility != null && (
               <div className="event-detail-row">
-                <dt>{t('eventDetail.sourceReliability', 'Source Reliability')}</dt>
+                <dt>{t('eventDetail.sourceReliability', 'Source Corroboration')}</dt>
                 <dd>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <span style={{
@@ -340,6 +381,36 @@ export default function EventDetailPage() {
 
         {/* Right column — entities + related events */}
         <aside className="event-detail-sidebar">
+          {hasCoords && (
+            <section className="event-detail-section event-detail-location-section">
+              <h2 className="event-detail-section-title">
+                {t('eventDetail.location', 'Location')}
+              </h2>
+              <div className="event-detail-map">
+                <MapErrorBoundary>
+                  <Suspense fallback={<MapLoadingFallback />}>
+                    <FlatMap
+                      newsList={[event]}
+                      regionSeverities={{}}
+                      mapOverlay="severity"
+                      coverageStatusByIso={{}}
+                      perCountryReliability={{}}
+                      velocitySpikes={[]}
+                      trackingPoints={[]}
+                      selectedRegion={event.isoA2 || null}
+                      selectedStory={event}
+                      onRegionSelect={() => {}}
+                      onStorySelect={() => {}}
+                      onArcSelect={() => {}}
+                      onCoverageCountryClick={() => {}}
+                      compact
+                    />
+                  </Suspense>
+                </MapErrorBoundary>
+              </div>
+            </section>
+          )}
+
           {/* Entities */}
           {(orgs.length > 0 || people.length > 0 || locations.length > 0) && (
             <section className="event-detail-section">
@@ -356,12 +427,12 @@ export default function EventDetailPage() {
                     {locations.map((loc, i) => (
                       <Link
                         key={`loc-${i}`}
-                        to={`/entities`}
+                        to={entityExplorerLink('location', loc)}
                         className="event-detail-entity-chip"
-                        title={`${loc.name || loc}`}
+                        title={`${entityName(loc)}`}
                       >
                         <MapPin size={10} aria-hidden />
-                        {loc.name || loc}
+                        {entityName(loc)}
                       </Link>
                     ))}
                   </div>
@@ -377,11 +448,11 @@ export default function EventDetailPage() {
                     {orgs.map((org, i) => (
                       <Link
                         key={`org-${i}`}
-                        to={`/entities`}
+                        to={entityExplorerLink('organization', org)}
                         className="event-detail-entity-chip"
-                        title={`${org.name || org}`}
+                        title={`${entityName(org)}`}
                       >
-                        {org.name || org}
+                        {entityName(org)}
                       </Link>
                     ))}
                   </div>
@@ -397,11 +468,11 @@ export default function EventDetailPage() {
                     {people.map((p, i) => (
                       <Link
                         key={`p-${i}`}
-                        to={`/entities`}
+                        to={entityExplorerLink('person', p)}
                         className="event-detail-entity-chip"
-                        title={`${p.name || p}`}
+                        title={`${entityName(p)}`}
                       >
-                        {p.name || p}
+                        {entityName(p)}
                       </Link>
                     ))}
                   </div>
@@ -423,7 +494,8 @@ export default function EventDetailPage() {
                   return (
                     <Link
                       key={rel.id}
-                      to={`/event/${rel.id}`}
+                      to={`/event/${encodeURIComponent(rel.id)}`}
+                      state={{ event: rel }}
                       className="event-detail-related-item"
                     >
                       <div className="event-detail-related-meta">

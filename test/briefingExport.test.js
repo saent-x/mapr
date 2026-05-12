@@ -135,6 +135,26 @@ test('briefing markdown includes entity mentions section', async () => {
   assert.ok(md.includes('LOC'));
 });
 
+test('briefing exports handle grouped entity objects from live events', async () => {
+  const { generateBriefingMarkdown, getEventEntityList } = await import('../src/utils/briefingMarkdown.js');
+  const event = {
+    id: '1',
+    title: 'Grouped entity event',
+    severity: 70,
+    entities: {
+      people: [{ name: 'Zelensky' }],
+      organizations: [{ name: 'NATO' }],
+      locations: [{ name: 'Ukraine' }],
+    },
+  };
+  const entities = getEventEntityList(event);
+  assert.deepEqual(entities.map((entity) => entity.name), ['Zelensky', 'NATO', 'Ukraine']);
+  const md = generateBriefingMarkdown([event], {});
+  assert.ok(md.includes('Zelensky'));
+  assert.ok(md.includes('NATO'));
+  assert.ok(md.includes('Ukraine'));
+});
+
 test('briefing markdown shows no entities message when none found', async () => {
   const { generateBriefingMarkdown } = await import('../src/utils/briefingMarkdown.js');
   const md = generateBriefingMarkdown([], {});
@@ -162,6 +182,21 @@ test('briefingPdf exports generateBriefingPdf function', async () => {
   assert.ok(typeof mod.generateBriefingPdf === 'function');
 });
 
+test('generateBriefingPdf can build a PDF without triggering a browser download', async () => {
+  const { generateBriefingPdf } = await import('../src/utils/briefingPdf.js');
+  const result = await generateBriefingPdf([], {}, { save: false, filename: 'test-briefing.pdf' });
+  assert.equal(result.success, true);
+  assert.equal(result.filename, 'test-briefing.pdf');
+});
+
+test('briefingPdf map capture is non-fatal and CORS-safe', () => {
+  const src = readFile('src/utils/briefingPdf.js');
+  assert.ok(src.includes('allowTaint: false'), 'Map capture should not intentionally taint the export canvas');
+  assert.ok(src.includes('captureMapSnapshot'), 'Map snapshot capture should be isolated');
+  assert.ok(src.includes('continuing without map image'), 'Map snapshot failures should not fail the PDF export');
+  assert.ok(src.includes('mapSnapshotStatus'), 'PDF result should report whether the map snapshot was included');
+});
+
 // ── Component existence ──
 
 test('BriefingExportModal imports useTranslation and lucide icons', () => {
@@ -172,6 +207,14 @@ test('BriefingExportModal imports useTranslation and lucide icons', () => {
   assert.ok(src.includes('generateBriefingPdf'), 'Should import PDF generator');
   assert.ok(src.includes('Copy'), 'Should have clipboard action');
   assert.ok(src.includes('FileDown'), 'Should have PDF action');
+});
+
+test('BriefingExportModal disables duplicate PDF exports while exporting', () => {
+  const src = readFile('src/components/BriefingExportModal.jsx');
+  assert.ok(src.includes('isExportingPdf'), 'Modal should track PDF export progress');
+  assert.ok(src.includes('setIsExportingPdf(true)'), 'Modal should enter PDF exporting state');
+  assert.ok(src.includes('setIsExportingPdf(false)'), 'Modal should leave PDF exporting state');
+  assert.ok(src.includes('pdfPartialSuccess'), 'Modal should surface partial success when map capture is skipped');
 });
 
 test('Generate Briefing button exists in FilterDrawer', () => {

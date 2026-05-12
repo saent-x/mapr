@@ -7,15 +7,24 @@ import {
   FileText, ChevronDown, ChevronUp, Loader, Lock, ShieldCheck,
   TrendingUp, TrendingDown, Minus,
   Plus, Edit, Trash2, Upload, Download, Power, PowerOff,
-  Sliders,
+  Sliders, ArrowLeft,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { getLocale } from '../utils/formatDate.js';
 import { buildSourceAddPayload } from '../utils/adminSourcePayload.js';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
+import BrandMark from '../components/BrandMark.jsx';
+import {
+  FEATURE_ACCESS_CATALOG,
+  FEATURE_TIER_DISABLED,
+  FEATURE_TIER_FREE,
+  FEATURE_TIER_PRO,
+  normalizeFeatureFlags,
+} from '../utils/featureAccess.js';
 
 /* ── Status helpers ── */
 
+const ADMIN_PAGE_SIZE = 12;
 const STATUS_ORDER = { ok: 0, empty: 1, failed: 2, 'never-checked': 3 };
 
 function normalizeStatus(raw) {
@@ -61,6 +70,35 @@ function formatTime(iso) {
   }
 }
 
+async function readJsonIfOk(response) {
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok || !contentType.includes('application/json')) return null;
+  return response.json();
+}
+
+async function readAdminJson(response, label = 'Admin API') {
+  const contentType = response.headers.get('content-type') || '';
+  let payload = null;
+
+  if (contentType.includes('application/json')) {
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error(`${label}: invalid JSON response`);
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || `${label}: HTTP ${response.status}`);
+  }
+
+  if (!contentType.includes('application/json')) {
+    throw new Error(`${label}: expected JSON but received ${contentType || 'unknown response'}`);
+  }
+
+  return payload;
+}
+
 /* ── Stat card ── */
 
 function StatCard({ label, value, color, icon: Icon }) {
@@ -96,10 +134,54 @@ function Section({ title, subtitle, icon: Icon, children, defaultOpen = true }) 
   );
 }
 
+function AdminPagination({ page, total, pageSize = ADMIN_PAGE_SIZE, onPageChange, label }) {
+  const { t } = useTranslation();
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(Math.max(page, 1), pageCount);
+  const start = total === 0 ? 0 : ((safePage - 1) * pageSize) + 1;
+  const end = Math.min(total, safePage * pageSize);
+
+  if (pageCount <= 1) {
+    return (
+      <div className="admin-pagination admin-pagination-static">
+        <span>{label || t('admin.showingRows', { start, end, total })}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-pagination">
+      <span>{label || t('admin.showingRows', { start, end, total })}</span>
+      <div className="admin-pagination-controls">
+        <button
+          type="button"
+          className="admin-page-btn"
+          onClick={() => onPageChange(safePage - 1)}
+          disabled={safePage <= 1}
+        >
+          {t('admin.previous', 'Previous')}
+        </button>
+        <span className="admin-page-current">
+          {safePage} / {pageCount}
+        </span>
+        <button
+          type="button"
+          className="admin-page-btn"
+          onClick={() => onPageChange(safePage + 1)}
+          disabled={safePage >= pageCount}
+        >
+          {t('admin.next', 'Next')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Password gate ── */
 
 function PasswordGate({ onAuth }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
@@ -134,6 +216,10 @@ function PasswordGate({ onAuth }) {
       <div className="admin-password-gate">
         <Lock size={32} className="admin-password-icon" />
         <h1 className="admin-password-title">{t('admin.passwordRequired')}</h1>
+        <button type="button" className="admin-password-back-link" onClick={() => navigate('/')}>
+          <ArrowLeft size={13} aria-hidden />
+          <span>{t('admin.backToMap', 'Back to map')}</span>
+        </button>
         <form className="admin-password-form" onSubmit={handleSubmit}>
           <input
             type="password"
@@ -191,9 +277,12 @@ export default function AdminPage() {
 
 function AdminDashboard() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState('overview');
   const [catalogData, setCatalogData] = useState(null);
   const [healthData, setHealthData] = useState(null);
   const [reliabilityData, setReliabilityData] = useState(null);
+  const [featureFlags, setFeatureFlags] = useState(() => normalizeFeatureFlags());
   const [reliabilitySortCol, setReliabilitySortCol] = useState('score');
   const [reliabilitySortDir, setReliabilitySortDir] = useState('desc');
   const [loading, setLoading] = useState(true);
@@ -207,37 +296,48 @@ function AdminDashboard() {
   const [editingSource, setEditingSource] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', url: '', country: '', sourceType: '', notes: '' });
   const [showImport, setShowImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [importJson, setImportJson] = useState('');
   const [importFile, setImportFile] = useState(null);
   const [importError, setImportError] = useState('');
   const [sourceActionError, setSourceActionError] = useState('');
   const [sourceActionOk, setSourceActionOk] = useState('');
+  const [featureActionError, setFeatureActionError] = useState('');
+  const [featureActionOk, setFeatureActionOk] = useState('');
+  const [savingFeatureFlags, setSavingFeatureFlags] = useState(false);
 
   /* Filter/search state */
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [manageSearchQuery, setManageSearchQuery] = useState('');
   const [sortCol, setSortCol] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
+  const [sourceHealthPage, setSourceHealthPage] = useState(1);
+  const [sourceManagePage, setSourceManagePage] = useState(1);
+  const [reliabilityPage, setReliabilityPage] = useState(1);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [catalogRes, healthRes, reliabilityRes] = await Promise.all([
+      const [catalogRes, healthRes, reliabilityRes, featureFlagsRes] = await Promise.all([
         fetch('/api/source-catalog/state'),
         fetch('/api/health'),
         fetch('/api/source-reliability'),
+        fetch('/api/admin/feature-flags', { credentials: 'include' }),
       ]);
       if (!catalogRes.ok) throw new Error(`Catalog: HTTP ${catalogRes.status}`);
       if (!healthRes.ok) throw new Error(`Health: HTTP ${healthRes.status}`);
       const [catalog, health, reliability] = await Promise.all([
         catalogRes.json(),
         healthRes.json(),
-        reliabilityRes.ok ? reliabilityRes.json() : null,
+        readJsonIfOk(reliabilityRes),
       ]);
+      const flags = await readAdminJson(featureFlagsRes, 'Feature access');
       setCatalogData(catalog);
       setHealthData(health);
       if (reliability) setReliabilityData(reliability);
+      if (flags) setFeatureFlags(normalizeFeatureFlags(flags));
       setLastRefresh(new Date());
     } catch (err) {
       setError(err.message);
@@ -325,6 +425,40 @@ function AdminDashboard() {
     return result;
   }, [mergedFeeds, statusFilter, searchQuery, sortCol, sortDir]);
 
+  const filteredManageFeeds = useMemo(() => {
+    const q = manageSearchQuery.trim().toLowerCase();
+    if (q.length < 2) return mergedFeeds;
+    return mergedFeeds.filter((f) =>
+      (f.name || '').toLowerCase().includes(q) ||
+      (f.country || '').toLowerCase().includes(q) ||
+      (f.isoA2 || '').toLowerCase().includes(q) ||
+      (f.id || '').toLowerCase().includes(q) ||
+      (f.url || '').toLowerCase().includes(q)
+    );
+  }, [mergedFeeds, manageSearchQuery]);
+
+  useEffect(() => {
+    setSourceHealthPage(1);
+  }, [statusFilter, searchQuery, sortCol, sortDir]);
+
+  useEffect(() => {
+    setSourceManagePage(1);
+  }, [manageSearchQuery]);
+
+  useEffect(() => {
+    setReliabilityPage(1);
+  }, [reliabilitySortCol, reliabilitySortDir, reliabilityData]);
+
+  const paginatedFilteredFeeds = useMemo(() => {
+    const start = (sourceHealthPage - 1) * ADMIN_PAGE_SIZE;
+    return filteredFeeds.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [filteredFeeds, sourceHealthPage]);
+
+  const paginatedManageFeeds = useMemo(() => {
+    const start = (sourceManagePage - 1) * ADMIN_PAGE_SIZE;
+    return filteredManageFeeds.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [filteredManageFeeds, sourceManagePage]);
+
   /* Coverage gaps from health API */
   const coverageDiagnostics = healthData?.coverageDiagnostics || {};
   const coverageMetrics = healthData?.coverageMetrics || {};
@@ -335,6 +469,69 @@ function AdminDashboard() {
   const consecutiveFailures = healthData?.consecutiveFailures ?? 0;
   const refreshInProgress = healthData?.refreshInProgress || false;
   const pipelineStatus = healthData?.status || 'unknown';
+
+  const adminNavItems = useMemo(() => ([
+    { id: 'overview', label: t('admin.overview', 'Overview'), icon: Database, count: summary.totalSources || feeds.length },
+    { id: 'coverage', label: t('admin.coverage', 'Coverage'), icon: Globe, count: coverageMetrics.lowConfidenceCount || null },
+    { id: 'sources', label: t('admin.sources', 'Sources'), icon: Rss, count: mergedFeeds.length },
+    { id: 'manage', label: t('admin.manage', 'Manage'), icon: Sliders, count: filteredManageFeeds.length },
+    { id: 'features', label: t('admin.features', 'Features'), icon: Shield, count: FEATURE_ACCESS_CATALOG.length },
+    { id: 'reliability', label: t('admin.reliability', 'Reliability'), icon: ShieldCheck, count: reliabilityData?.length || null },
+  ]), [t, summary.totalSources, feeds.length, coverageMetrics.lowConfidenceCount, mergedFeeds.length, filteredManageFeeds.length, reliabilityData]);
+
+  const activeNavItem = adminNavItems.find((item) => item.id === activeSection) || adminNavItems[0];
+
+  const sortedReliability = useMemo(() => {
+    if (!reliabilityData) return [];
+    return [...reliabilityData].sort((a, b) => {
+      let cmp = 0;
+      switch (reliabilitySortCol) {
+        case 'sourceKey': cmp = (a.sourceKey || '').localeCompare(b.sourceKey || ''); break;
+        case 'score': cmp = (a.score || 0) - (b.score || 0); break;
+        case 'totalEvents': cmp = (a.totalEvents || 0) - (b.totalEvents || 0); break;
+        case 'corroboratedEvents': cmp = (a.corroboratedEvents || 0) - (b.corroboratedEvents || 0); break;
+        case 'lastUpdatedAt': cmp = new Date(a.lastUpdatedAt || 0) - new Date(b.lastUpdatedAt || 0); break;
+        default: break;
+      }
+      return reliabilitySortDir === 'desc' ? -cmp : cmp;
+    });
+  }, [reliabilityData, reliabilitySortCol, reliabilitySortDir]);
+
+  const paginatedReliabilityData = useMemo(() => {
+    const start = (reliabilityPage - 1) * ADMIN_PAGE_SIZE;
+    return sortedReliability.slice(start, start + ADMIN_PAGE_SIZE);
+  }, [sortedReliability, reliabilityPage]);
+
+  const handleReliabilitySort = useCallback((col) => {
+    setReliabilitySortCol((prev) => {
+      if (prev === col) { setReliabilitySortDir((d) => d === 'asc' ? 'desc' : 'asc'); return col; }
+      setReliabilitySortDir('desc');
+      return col;
+    });
+  }, []);
+
+  const ReliabilitySortIcon = ({ col }) => {
+    if (reliabilitySortCol !== col) return null;
+    return reliabilitySortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />;
+  };
+
+  const getScoreColor = (score) => {
+    if (score >= 0.7) return 'var(--sev-green)';
+    if (score >= 0.4) return 'var(--sev-amber)';
+    return 'var(--sev-red)';
+  };
+
+  const getScoreLabel = (score) => {
+    if (score >= 0.7) return t('admin.reliabilityHigh');
+    if (score >= 0.4) return t('admin.reliabilityMedium');
+    return t('admin.reliabilityLow');
+  };
+
+  const getTrendIcon = (score) => {
+    if (score >= 0.7) return <TrendingUp size={12} color="var(--sev-green)" />;
+    if (score >= 0.4) return <Minus size={12} color="var(--sev-amber)" />;
+    return <TrendingDown size={12} color="var(--sev-red)" />;
+  };
 
   const handleSort = useCallback((col) => {
     setSortCol((prev) => {
@@ -554,6 +751,55 @@ function AdminDashboard() {
     }
   }, [clearSourceMessages, t]);
 
+  const saveFeatureFlags = useCallback(async (nextFlags) => {
+    setSavingFeatureFlags(true);
+    setFeatureActionError('');
+    setFeatureActionOk('');
+    try {
+      const res = await fetch('/api/admin/feature-flags', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextFlags),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `HTTP ${res.status}`);
+      }
+      const saved = normalizeFeatureFlags(await readAdminJson(res, 'Feature access'));
+      setFeatureFlags(saved);
+      setFeatureActionOk(t('admin.featuresSaved', 'Feature access updated'));
+    } catch (err) {
+      setFeatureActionError(err.message);
+    } finally {
+      setSavingFeatureFlags(false);
+    }
+  }, [t]);
+
+  const handleBillingToggle = useCallback(() => {
+    saveFeatureFlags({
+      ...featureFlags,
+      billingEnabled: !featureFlags.billingEnabled,
+    });
+  }, [featureFlags, saveFeatureFlags]);
+
+  const handleFeatureTierChange = useCallback((featureId, tier) => {
+    saveFeatureFlags({
+      ...featureFlags,
+      features: {
+        ...featureFlags.features,
+        [featureId]: tier,
+      },
+    });
+  }, [featureFlags, saveFeatureFlags]);
+
+  const handleBulkFeatureTier = useCallback((tier) => {
+    saveFeatureFlags({
+      ...featureFlags,
+      features: Object.fromEntries(FEATURE_ACCESS_CATALOG.map((feature) => [feature.id, tier])),
+    });
+  }, [featureFlags, saveFeatureFlags]);
+
   /* ── Loading state ── */
   if (loading && !catalogData) {
     return (
@@ -581,29 +827,56 @@ function AdminDashboard() {
   }
 
   return (
-    <div className="admin-page">
-      {/* Header */}
-      <div className="admin-header">
-        <div className="admin-header-left">
-          <Shield size={20} className="admin-header-icon" />
-          <div>
-            <h1 className="admin-title">{t('admin.title')}</h1>
-            <p className="admin-subtitle">{t('admin.subtitle')}</p>
+    <div className="admin-page admin-shell-page">
+      <aside className="admin-sidebar" aria-label={t('admin.navigation', 'Admin navigation')}>
+        <div className="admin-sidebar-brand">
+          <BrandMark className="layout-mapr-nav-icon" size={18} />
+          <span className="side-label">{t('admin.console', 'Admin console')}</span>
+        </div>
+        <nav className="admin-sidebar-nav">
+          {adminNavItems.map(({ id, label, icon: Icon, count }) => (
+            <button
+              key={id}
+              type="button"
+              className={`admin-nav-item ${activeSection === id ? 'is-active' : ''}`}
+              onClick={() => setActiveSection(id)}
+              aria-current={activeSection === id ? 'page' : undefined}
+            >
+              <Icon size={15} aria-hidden />
+              <span>{label}</span>
+              {count != null && <em>{count}</em>}
+            </button>
+          ))}
+        </nav>
+        <button type="button" className="admin-back-link" onClick={() => navigate('/')}>
+          <ArrowLeft size={14} aria-hidden />
+          <span>{t('admin.backToMap', 'Back to map')}</span>
+        </button>
+      </aside>
+
+      <main className="admin-main">
+        {/* Header */}
+        <div className="admin-header">
+          <div className="admin-header-left">
+            <div>
+              <p className="admin-current-section">{activeNavItem?.label}</p>
+              <h1 className="admin-title">{t('admin.title')}</h1>
+              <p className="admin-subtitle">{t('admin.subtitle')}</p>
+            </div>
+          </div>
+          <div className="admin-header-right">
+            {lastRefresh && (
+              <span className="admin-updated">{t('admin.lastUpdated', { time: lastRefresh instanceof Date ? lastRefresh.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : new Date(lastRefresh).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })}</span>
+            )}
+            <button className="admin-refresh-btn" onClick={fetchData} disabled={loading} aria-label={t('admin.refresh')}>
+              <RefreshCw size={14} className={loading ? 'admin-spinner' : ''} />
+              <span>{t('admin.refresh')}</span>
+            </button>
           </div>
         </div>
-        <div className="admin-header-right">
-          {lastRefresh && (
-            <span className="admin-updated">{t('admin.lastUpdated', { time: lastRefresh instanceof Date ? lastRefresh.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : new Date(lastRefresh).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })}</span>
-          )}
-          <button className="admin-refresh-btn" onClick={fetchData} disabled={loading} aria-label={t('admin.refresh')}>
-            <RefreshCw size={14} className={loading ? 'admin-spinner' : ''} />
-            <span>{t('admin.refresh')}</span>
-          </button>
-        </div>
-      </div>
 
       {/* Aggregate Stats */}
-      <Section title={t('admin.aggregateStats')} icon={Database} defaultOpen={true}>
+      {activeSection === 'overview' && <Section title={t('admin.aggregateStats')} icon={Database} defaultOpen={true}>
         <div className="admin-stat-grid">
           <StatCard label={t('admin.totalSources')} value={summary.totalSources || feeds.length} icon={Database} />
           <StatCard label={t('admin.healthySources')} value={healthyCount} color="var(--low)" icon={CheckCircle} />
@@ -615,45 +888,41 @@ function AdminDashboard() {
           <StatCard label={t('admin.officialSources')} value={summary.officialSources || 0} icon={Shield} />
           <StatCard label={t('admin.htmlSources')} value={summary.htmlSources || 0} icon={FileText} />
         </div>
-      </Section>
-
-      {/* Ingestion Health */}
-      <Section title={t('admin.ingestionHealth')} subtitle={t('admin.ingestionHealthDesc')} icon={Activity} defaultOpen={true}>
-        <div className="admin-stat-grid">
-          <StatCard
-            label={t('admin.pipelineStatus')}
-            value={pipelineStatus.toUpperCase()}
-            color={pipelineStatus === 'healthy' ? 'var(--low)' : 'var(--critical)'}
-            icon={Activity}
-          />
-          <StatCard
-            label={t('admin.lastAttempt')}
-            value={formatTime(lastAttemptAt) || t('admin.never')}
-            icon={Clock}
-          />
-          <StatCard
-            label={t('admin.lastSuccess')}
-            value={formatTime(lastSuccessAt) || t('admin.never')}
-            color={lastSuccessAt ? 'var(--low)' : 'var(--watch)'}
-            icon={CheckCircle}
-          />
-          <StatCard
-            label={t('admin.consecutiveFailures')}
-            value={consecutiveFailures}
-            color={consecutiveFailures > 0 ? 'var(--critical)' : 'var(--low)'}
-            icon={consecutiveFailures > 0 ? AlertTriangle : CheckCircle}
-          />
-        </div>
-        {refreshInProgress && (
-          <div className="admin-ingest-active">
-            <Loader size={14} className="admin-spinner" />
-            <span>{t('admin.refreshInProgress')}</span>
+        <div className="admin-overview-pipeline">
+          <div className="admin-overview-pipeline-head">
+            <Activity size={15} aria-hidden />
+            <div>
+              <h3>{t('admin.ingestionHealth')}</h3>
+              <p>{t('admin.ingestionHealthDesc')}</p>
+            </div>
           </div>
-        )}
-      </Section>
+          <div className="admin-stat-grid admin-stat-grid-compact">
+            <StatCard
+              label={t('admin.pipelineStatus')}
+              value={pipelineStatus.toUpperCase()}
+              color={pipelineStatus === 'healthy' ? 'var(--low)' : 'var(--critical)'}
+              icon={Activity}
+            />
+            <StatCard label={t('admin.lastAttempt')} value={formatTime(lastAttemptAt) || t('admin.never')} icon={Clock} />
+            <StatCard label={t('admin.lastSuccess')} value={formatTime(lastSuccessAt) || t('admin.never')} color={lastSuccessAt ? 'var(--low)' : 'var(--watch)'} icon={CheckCircle} />
+            <StatCard label={t('admin.consecutiveFailures')} value={consecutiveFailures} color={consecutiveFailures > 0 ? 'var(--critical)' : 'var(--low)'} icon={consecutiveFailures > 0 ? AlertTriangle : CheckCircle} />
+          </div>
+          {refreshInProgress && (
+            <div className="admin-ingest-active">
+              <Loader size={14} className="admin-spinner" />
+              <span>{t('admin.refreshInProgress')}</span>
+            </div>
+          )}
+        </div>
+      </Section>}
 
       {/* Coverage Gaps */}
-      <Section title={t('admin.coverageGaps')} subtitle={t('admin.coverageGapsDesc')} icon={Globe} defaultOpen={true}>
+      {activeSection === 'coverage' && <Section title={t('admin.coverageGaps')} subtitle={t('admin.coverageGapsDesc')} icon={Globe} defaultOpen={true}>
+        <div className="admin-coverage-summary">
+          <StatCard label={t('admin.lowConfidence')} value={coverageDiagnostics.lowConfidenceRegions?.length || 0} color="var(--watch)" icon={MinusCircle} />
+          <StatCard label={t('admin.ingestionRisk')} value={coverageDiagnostics.ingestionRiskRegions?.length || 0} color={coverageDiagnostics.ingestionRiskRegions?.length ? 'var(--critical)' : 'var(--low)'} icon={AlertTriangle} />
+          <StatCard label={t('admin.sourceSparse')} value={coverageDiagnostics.sourceSparseRegions?.length || 0} color="var(--cyan)" icon={Globe} />
+        </div>
         {(coverageDiagnostics.lowConfidenceRegions?.length > 0 ||
           coverageDiagnostics.ingestionRiskRegions?.length > 0 ||
           coverageDiagnostics.sourceSparseRegions?.length > 0) ? (
@@ -663,12 +932,17 @@ function AdminDashboard() {
                 <h3 className="admin-gap-label admin-gap-critical">
                   <AlertTriangle size={12} /> {t('admin.ingestionRisk')}
                 </h3>
+                <div className="admin-gap-list">
                 {coverageDiagnostics.ingestionRiskRegions.map((r) => (
                   <div key={r.iso} className="admin-gap-item">
                     <span className="admin-gap-region">{r.region || r.iso}</span>
-                    <span className="admin-gap-detail">{r.failedFeeds}/{r.feedCount} {t('admin.failedSources').toLowerCase()}</span>
+                    <span className="admin-gap-detail">
+                      <strong>{r.failedFeeds}</strong>
+                      <span>/ {r.feedCount} {t('admin.failedSources').toLowerCase()}</span>
+                    </span>
                   </div>
                 ))}
+                </div>
               </div>
             )}
             {coverageDiagnostics.lowConfidenceRegions?.length > 0 && (
@@ -676,12 +950,17 @@ function AdminDashboard() {
                 <h3 className="admin-gap-label admin-gap-warning">
                   <MinusCircle size={12} /> {t('admin.lowConfidence')}
                 </h3>
+                <div className="admin-gap-list">
                 {coverageDiagnostics.lowConfidenceRegions.map((r) => (
                   <div key={r.iso} className="admin-gap-item">
                     <span className="admin-gap-region">{r.region || r.iso}</span>
-                    <span className="admin-gap-detail">{r.maxConfidence}%</span>
+                    <span className="admin-gap-detail">
+                      <strong>{r.maxConfidence}%</strong>
+                      <span>{t('admin.confidence', 'confidence')}</span>
+                    </span>
                   </div>
                 ))}
+                </div>
               </div>
             )}
             {coverageDiagnostics.sourceSparseRegions?.length > 0 && (
@@ -689,22 +968,27 @@ function AdminDashboard() {
                 <h3 className="admin-gap-label admin-gap-sparse">
                   <Globe size={12} /> {t('admin.sourceSparse')}
                 </h3>
+                <div className="admin-gap-list">
                 {coverageDiagnostics.sourceSparseRegions.map((r) => (
                   <div key={r.iso} className="admin-gap-item">
                     <span className="admin-gap-region">{r.region || r.iso}</span>
-                    <span className="admin-gap-detail">{t('admin.feedCount', { count: r.feedCount || 0 })}</span>
+                    <span className="admin-gap-detail">
+                      <strong>{r.feedCount || 0}</strong>
+                      <span>{t('admin.feeds', 'feeds')}</span>
+                    </span>
                   </div>
                 ))}
+                </div>
               </div>
             )}
           </div>
         ) : (
           <p className="admin-no-gaps">{t('admin.noCoverageGaps')}</p>
         )}
-      </Section>
+      </Section>}
 
       {/* Source Health Table */}
-      <Section title={t('admin.sourceHealth')} subtitle={t('admin.sourceHealthDesc')} icon={Rss} defaultOpen={true}>
+      {activeSection === 'sources' && <Section title={t('admin.sourceHealth')} subtitle={t('admin.sourceHealthDesc')} icon={Rss} defaultOpen={true}>
         {/* Filters */}
         <div className="admin-table-controls">
           <div className="admin-search-wrapper">
@@ -756,7 +1040,7 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filteredFeeds.map((feed) => (
+                {paginatedFilteredFeeds.map((feed) => (
                   <tr key={feed.id} className="admin-tr">
                     <td className="admin-td admin-td-name" title={feed.url}>{feed.name || feed.id}</td>
                     <td className="admin-td"><StatusBadge status={feed.lastStatus} /></td>
@@ -774,14 +1058,17 @@ function AdminDashboard() {
           </div>
         )}
         <div className="admin-table-footer">
-          <span className="admin-table-showing">
-            {filteredFeeds.length} / {mergedFeeds.length} sources
-          </span>
+          <AdminPagination
+            page={sourceHealthPage}
+            total={filteredFeeds.length}
+            onPageChange={setSourceHealthPage}
+            label={`${filteredFeeds.length} / ${mergedFeeds.length} ${t('admin.sourcesTotal')}`}
+          />
         </div>
-      </Section>
+      </Section>}
 
       {/* Source Management */}
-      <Section title={t('admin.sourceManagement')} subtitle={t('admin.sourceManagementDesc')} icon={Sliders} defaultOpen={true}>
+      {activeSection === 'manage' && <Section title={t('admin.sourceManagement')} subtitle={t('admin.sourceManagementDesc')} icon={Sliders} defaultOpen={true}>
         {/* Status messages */}
         {sourceActionError && (
           <div className="admin-msg admin-msg-error">
@@ -800,20 +1087,21 @@ function AdminDashboard() {
 
         {/* Action bar */}
         <div className="admin-source-actions">
-          <button className="admin-btn admin-btn-primary" onClick={() => { setShowAddForm(!showAddForm); clearSourceMessages(); setEditingSource(null); }}>
+          <button className="admin-btn admin-btn-primary" onClick={() => { setShowAddForm(true); clearSourceMessages(); setEditingSource(null); }}>
             <Plus size={14} /> {t('admin.addSource')}
           </button>
-          <button className="admin-btn admin-btn-secondary" onClick={() => { setShowImport(!showImport); clearSourceMessages(); }}>
+          <button className="admin-btn admin-btn-secondary" onClick={() => { setShowImport(true); clearSourceMessages(); }}>
             <Upload size={14} /> {t('admin.importSources')}
           </button>
-          <button className="admin-btn admin-btn-secondary" onClick={handleExport}>
+          <button className="admin-btn admin-btn-secondary" onClick={() => { setShowExport(true); clearSourceMessages(); }}>
             <Download size={14} /> {t('admin.exportSources')}
           </button>
         </div>
 
         {/* Add source form */}
         {showAddForm && (
-          <form className="admin-source-form" onSubmit={handleAddSource}>
+          <div className="admin-modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowAddForm(false); }}>
+          <form className="admin-source-form admin-modal" onSubmit={handleAddSource} role="dialog" aria-modal="true" aria-label={t('admin.addNewSource')}>
             <h3 className="admin-form-title">{t('admin.addNewSource')}</h3>
             <div className="admin-form-tabs">
               <button
@@ -911,11 +1199,13 @@ function AdminDashboard() {
               </button>
             </div>
           </form>
+          </div>
         )}
 
         {/* Import modal */}
         {showImport && (
-          <div className="admin-source-form">
+          <div className="admin-modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowImport(false); }}>
+          <div className="admin-source-form admin-modal" role="dialog" aria-modal="true" aria-label={t('admin.importSourcesTitle')}>
             <h3 className="admin-form-title">{t('admin.importSourcesTitle')}</h3>
             {importError && (
               <div className="admin-msg admin-msg-error">
@@ -977,6 +1267,24 @@ function AdminDashboard() {
               </button>
             </div>
           </div>
+          </div>
+        )}
+
+        {showExport && (
+          <div className="admin-modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowExport(false); }}>
+            <div className="admin-source-form admin-modal admin-export-modal" role="dialog" aria-modal="true" aria-label={t('admin.exportSources')}>
+              <h3 className="admin-form-title">{t('admin.exportSources')}</h3>
+              <p className="admin-form-help">{t('admin.exportSourcesHelp', 'Download the current source catalog as a JSON file for backup or migration.')}</p>
+              <div className="admin-form-actions">
+                <button type="button" className="admin-btn admin-btn-primary" onClick={() => { handleExport(); setShowExport(false); }}>
+                  <Download size={14} /> {t('admin.exportSources')}
+                </button>
+                <button type="button" className="admin-btn admin-btn-ghost" onClick={() => setShowExport(false)}>
+                  {t('admin.cancel')}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Edit source inline form */}
@@ -1027,13 +1335,13 @@ function AdminDashboard() {
               type="text"
               className="admin-search-input"
               placeholder={t('admin.searchSourcesManage')}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={manageSearchQuery}
+              onChange={(e) => setManageSearchQuery(e.target.value)}
             />
           </div>
         </div>
 
-        {filteredFeeds.length === 0 ? (
+        {filteredManageFeeds.length === 0 ? (
           <p className="admin-no-sources">{t('admin.noSourcesFound')}</p>
         ) : (
           <div className="admin-table-wrap">
@@ -1048,7 +1356,7 @@ function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {mergedFeeds.map((feed) => {
+                {paginatedManageFeeds.map((feed) => {
                   const isAutoDisabled = feed.autoDisabled === true || (feed.enabled === false && feed.lastStatus === 'failed');
                   return (
                     <tr key={feed.id} className={`admin-tr ${isAutoDisabled ? 'admin-tr-disabled' : ''}`}>
@@ -1111,62 +1419,105 @@ function AdminDashboard() {
           </div>
         )}
         <div className="admin-table-footer">
-          <span className="admin-table-showing">
-            {mergedFeeds.length} {t('admin.sourcesTotal')}
-          </span>
+          <AdminPagination
+            page={sourceManagePage}
+            total={filteredManageFeeds.length}
+            onPageChange={setSourceManagePage}
+          />
         </div>
-      </Section>
+      </Section>}
+
+      {/* Feature Access */}
+      {activeSection === 'features' && <Section title={t('admin.featureAccess', 'Feature Access')} subtitle={t('admin.featureAccessDesc', 'Control which account tier can use each product feature.')} icon={Shield} defaultOpen={true}>
+        {featureActionError && (
+          <div className="admin-msg admin-msg-error">
+            <AlertTriangle size={14} />
+            <span>{featureActionError}</span>
+            <button className="admin-msg-close" onClick={() => setFeatureActionError('')}>×</button>
+          </div>
+        )}
+        {featureActionOk && (
+          <div className="admin-msg admin-msg-ok">
+            <CheckCircle size={14} />
+            <span>{featureActionOk}</span>
+            <button className="admin-msg-close" onClick={() => setFeatureActionOk('')}>×</button>
+          </div>
+        )}
+
+        <div className="admin-feature-panel">
+          <div className="admin-feature-billing">
+            <div>
+              <h3>{t('admin.subscriptionService', 'Subscription service')}</h3>
+              <p>{t('admin.subscriptionServiceDesc', 'Enable Stripe upgrade and billing portal flows. When disabled, MAPR ignores plan tiers and treats every product feature as free.')}</p>
+            </div>
+            <button
+              type="button"
+              className={`admin-feature-switch ${featureFlags.billingEnabled ? 'is-on' : 'is-off'}`}
+              onClick={handleBillingToggle}
+              disabled={savingFeatureFlags}
+              aria-pressed={featureFlags.billingEnabled}
+            >
+              {featureFlags.billingEnabled ? <Power size={14} /> : <PowerOff size={14} />}
+              <span>{featureFlags.billingEnabled ? t('admin.enabled', 'Enabled') : t('admin.disabled', 'Disabled')}</span>
+            </button>
+          </div>
+
+          <div className="admin-feature-actions">
+            <button type="button" className="admin-btn admin-btn-secondary" onClick={() => handleBulkFeatureTier(FEATURE_TIER_FREE)} disabled={savingFeatureFlags}>
+              {t('admin.makeAllFree', 'Make all free')}
+            </button>
+            <button type="button" className="admin-btn admin-btn-secondary" onClick={() => handleBulkFeatureTier(FEATURE_TIER_PRO)} disabled={savingFeatureFlags}>
+              {t('admin.requireProForAll', 'Require Pro for all')}
+            </button>
+          </div>
+
+          <div className="admin-feature-list">
+            {FEATURE_ACCESS_CATALOG.map((feature) => {
+              const selectedTier = featureFlags.features[feature.id] || feature.defaultTier;
+              return (
+                <div key={feature.id} className="admin-feature-row">
+                  <div className="admin-feature-copy">
+                    <span className="admin-feature-category">{feature.category}</span>
+                    <h3>{t(`admin.featureNames.${feature.id}`, feature.label)}</h3>
+                    <p>{t(`admin.featureDescriptions.${feature.id}`, feature.description)}</p>
+                  </div>
+                  <div className="admin-feature-tier-group" role="radiogroup" aria-label={feature.label}>
+                    {[
+                      [FEATURE_TIER_FREE, t('admin.freeUsers', 'Free users')],
+                      [FEATURE_TIER_PRO, t('admin.proUsers', 'Pro users')],
+                      [FEATURE_TIER_DISABLED, t('admin.off', 'Off')],
+                    ].map(([tier, label]) => (
+                      <button
+                        key={tier}
+                        type="button"
+                        className={`admin-feature-tier ${selectedTier === tier ? 'is-active' : ''}`}
+                        onClick={() => handleFeatureTierChange(feature.id, tier)}
+                        disabled={savingFeatureFlags}
+                        aria-pressed={selectedTier === tier}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {featureFlags.updatedAt && (
+            <p className="admin-feature-updated">
+              {t('admin.featuresUpdatedAt', { time: new Date(featureFlags.updatedAt).toLocaleString(getLocale()) })}
+            </p>
+          )}
+        </div>
+      </Section>}
 
       {/* Source Reliability Table */}
-      <Section title={t('admin.sourceReliability')} subtitle={t('admin.sourceReliabilityDesc')} icon={ShieldCheck} defaultOpen={true}>
-        {!reliabilityData || reliabilityData.length === 0 ? (
+      {activeSection === 'reliability' && <Section title={t('admin.sourceReliability')} subtitle={t('admin.sourceReliabilityDesc')} icon={ShieldCheck} defaultOpen={true}>
+        {sortedReliability.length === 0 ? (
           <p className="admin-no-sources">{t('admin.noReliabilityData')}</p>
-        ) : (() => {
-          const sortedReliability = [...reliabilityData].sort((a, b) => {
-            let cmp = 0;
-            switch (reliabilitySortCol) {
-              case 'sourceKey': cmp = (a.sourceKey || '').localeCompare(b.sourceKey || ''); break;
-              case 'score': cmp = (a.score || 0) - (b.score || 0); break;
-              case 'totalEvents': cmp = (a.totalEvents || 0) - (b.totalEvents || 0); break;
-              case 'corroboratedEvents': cmp = (a.corroboratedEvents || 0) - (b.corroboratedEvents || 0); break;
-              case 'lastUpdatedAt': cmp = new Date(a.lastUpdatedAt || 0) - new Date(b.lastUpdatedAt || 0); break;
-              default: break;
-            }
-            return reliabilitySortDir === 'desc' ? -cmp : cmp;
-          });
-
-          const handleReliabilitySort = (col) => {
-            setReliabilitySortCol((prev) => {
-              if (prev === col) { setReliabilitySortDir((d) => d === 'asc' ? 'desc' : 'asc'); return col; }
-              setReliabilitySortDir('desc');
-              return col;
-            });
-          };
-
-          const ReliabilitySortIcon = ({ col }) => {
-            if (reliabilitySortCol !== col) return null;
-            return reliabilitySortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />;
-          };
-
-          const getScoreColor = (score) => {
-            if (score >= 0.7) return 'var(--sev-green)';
-            if (score >= 0.4) return 'var(--sev-amber)';
-            return 'var(--sev-red)';
-          };
-
-          const getScoreLabel = (score) => {
-            if (score >= 0.7) return t('admin.reliabilityHigh');
-            if (score >= 0.4) return t('admin.reliabilityMedium');
-            return t('admin.reliabilityLow');
-          };
-
-          const getTrendIcon = (score) => {
-            if (score >= 0.7) return <TrendingUp size={12} color="var(--sev-green)" />;
-            if (score >= 0.4) return <Minus size={12} color="var(--sev-amber)" />;
-            return <TrendingDown size={12} color="var(--sev-red)" />;
-          };
-
-          return (
+        ) : (
+          <>
             <div className="admin-table-wrap">
               <table className="admin-table">
                 <thead>
@@ -1190,7 +1541,7 @@ function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedReliability.map((entry) => (
+                  {paginatedReliabilityData.map((entry) => (
                     <tr key={entry.sourceKey} className="admin-tr">
                       <td className="admin-td admin-td-name" title={entry.sourceKey}>
                         {entry.sourceKey.replace(/-/g, ' ').toUpperCase()}
@@ -1225,9 +1576,17 @@ function AdminDashboard() {
                 </tbody>
               </table>
             </div>
-          );
-        })()}
-      </Section>
+            <div className="admin-table-footer">
+              <AdminPagination
+                page={reliabilityPage}
+                total={sortedReliability.length}
+                onPageChange={setReliabilityPage}
+              />
+            </div>
+          </>
+        )}
+      </Section>}
+      </main>
     </div>
   );
 }

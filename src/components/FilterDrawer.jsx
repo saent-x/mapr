@@ -5,7 +5,7 @@ import { DATE_WINDOWS, SORT_OPTIONS } from '../utils/mockData';
 import useFilterStore from '../stores/filterStore';
 import useUIStore from '../stores/uiStore';
 
-const VERIFICATION_OPTIONS = ['all', 'official', 'verified', 'developing', 'single-source'];
+const VERIFICATION_OPTIONS = ['all', 'official', 'corroborated', 'developing', 'single-source'];
 const SOURCE_TYPE_OPTIONS = ['all', 'official', 'wire', 'global', 'regional', 'local'];
 const LANGUAGE_OPTIONS = ['all', 'en', 'es', 'fr', 'ar', 'zh'];
 

@@ -248,8 +248,14 @@ function buildConfidenceContext(articles) {
     summaryPenalty
   );
 
+  // Honest confidence: when the raw score is below the noise floor we
+  // return null and the UI renders "—" instead of fabricating an 18%
+  // minimum that implied more certainty than we have.
+  const computed = Math.round(rawScore * 100);
+  const confidence = computed < 18 ? null : Math.min(98, computed);
+
   return {
-    confidence: Math.max(18, Math.min(98, Math.round(rawScore * 100))),
+    confidence,
     sourceCount,
     independentSourceCount,
     sourceTypeCount: sourceTypes.size,
@@ -320,8 +326,12 @@ function getVerificationStatus(articles, confidence) {
     return 'official';
   }
 
+  // 'corroborated' replaces the previous 'verified' label. The check is
+  // multi-network corroboration plus a confidence floor — it does NOT imply
+  // human/editorial verification, so the label must not say "verified".
+  // The string identifier is kept lowercase for stable mapping in i18n.
   if (sourceNetworks.size >= 2 && confidence >= 70) {
-    return 'verified';
+    return 'corroborated';
   }
 
   if (sourceNetworks.size >= 2) {
@@ -444,7 +454,7 @@ export function calculateCoverageMetrics(events) {
     };
 
     current.eventCount += 1;
-    if (event.verificationStatus === 'verified' || event.verificationStatus === 'official') {
+    if (['corroborated', 'official', 'verified'].includes(event.verificationStatus)) {
       current.verifiedCount += 1;
     }
     current.maxConfidence = Math.max(current.maxConfidence, event.confidence || 0);

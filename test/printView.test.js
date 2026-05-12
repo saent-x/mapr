@@ -38,6 +38,13 @@ describe('VAL-M6-025: Print button in Header', () => {
     assert.ok(src.includes('window.print()'), 'Header should call window.print()');
   });
 
+  it('Header waits for print styles before invoking browser print', () => {
+    const src = readFileSync(headerPath, 'utf8');
+    assert.ok(src.includes('requestAnimationFrame'), 'Header should wait for the print class to apply');
+    assert.ok(src.includes('is-preparing-print'), 'Header should mark the document as preparing for print');
+    assert.ok(src.includes('10000'), 'Header should keep print preparation active long enough for the dialog');
+  });
+
   it('Print button has aria-label referencing print i18n key', () => {
     const src = readFileSync(headerPath, 'utf8');
     assert.ok(
@@ -46,10 +53,10 @@ describe('VAL-M6-025: Print button in Header', () => {
     );
   });
 
-  it('Mobile menu also has print button', () => {
+  it('Mobile menu also uses the print handler', () => {
     const src = readFileSync(headerPath, 'utf8');
-    const mobilePrintCount = (src.match(/window\.print\(\)/g) || []).length;
-    assert.ok(mobilePrintCount >= 2, 'Both desktop and mobile should have print buttons');
+    const handlerCount = (src.match(/handlePrintClick/g) || []).length;
+    assert.ok(handlerCount >= 3, 'Desktop and mobile print buttons should share the print handler');
   });
 
   it('Print button has header-print-btn class', () => {
@@ -121,6 +128,22 @@ describe('VAL-M6-026/027/028 + VAL-CROSS-027/028: @media print CSS rules', () =>
       printSection.includes('map-zoom-controls'),
       'Print should hide map zoom controls'
     );
+  });
+
+  it('Print resets the fixed app grid so content is not clipped', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const printSection = css.substring(css.indexOf('@media print'));
+    assert.ok(printSection.includes('.layout'), 'Print should override the fixed app layout');
+    assert.ok(printSection.includes('height: auto !important'), 'Print should remove fixed viewport height');
+    assert.ok(printSection.includes('overflow: visible !important'), 'Print should allow content to flow across pages');
+  });
+
+  it('Print gives the absolute map stage a printable box', () => {
+    const css = readFileSync(cssPath, 'utf8');
+    const printSection = css.substring(css.indexOf('@media print'));
+    assert.ok(printSection.includes('.map-stage'), 'Print should explicitly style the map stage');
+    assert.ok(printSection.includes('position: relative !important'), 'Map stage should not remain absolute in print');
+    assert.ok(printSection.includes('height: 140mm !important'), 'Map stage should have a stable print height');
   });
 
   it('Print has event detail page styles', () => {

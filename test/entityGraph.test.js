@@ -616,7 +616,28 @@ describe('EntityRelationshipGraph structure', () => {
     assert.ok(source.includes('rgba(94, 199, 212'), 'should use cyan for path highlights');
   });
 
+  it('uses a theme-aware canvas palette for light and dark modes', () => {
+    assert.ok(source.includes('getGraphPalette'), 'should resolve graph colors from the active theme');
+    assert.ok(source.includes('data-theme'), 'should inspect the document theme');
+    assert.ok(source.includes('graphCanvas'), 'should define canvas surface color in graph palette');
+  });
+
   it('supports Shift+click on nodes via onEntitySelect callback', () => {
     assert.ok(source.includes('shiftKey'), 'should check shiftKey in pointer events');
+  });
+});
+
+describe('Entity relationship graph light theme styles', () => {
+  const css = fs.readFileSync('src/index.css', 'utf-8');
+
+  it('overrides graph status and zoom controls for light theme contrast', () => {
+    assert.ok(
+      css.includes('[data-theme="light"] .entity-graph-status'),
+      'light theme should override entity graph status overlay',
+    );
+    assert.ok(
+      css.includes('[data-theme="light"] .entity-graph-zoom button'),
+      'light theme should override entity graph zoom buttons',
+    );
   });
 });

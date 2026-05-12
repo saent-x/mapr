@@ -107,6 +107,21 @@ const useNewsStore = create<NewsState>()((set, get) => ({
       const prevCount = _prevArticleCount;
       const isWarming = result.kind === 'backend_warming';
 
+      // Freshness must reflect the SERVER's ingest time — not the client's
+      // receive time — so a 30-min-old cached briefing is honestly labeled
+      // 30 min old, not "now". Falls back to Date.now() only if the meta is
+      // unparseable (very old briefings without fetchedAt).
+      const meta = rawBriefing.meta as { fetchedAt?: string | number } | undefined;
+      const serverFetchedAt = (() => {
+        const v = meta?.fetchedAt;
+        if (typeof v === 'number' && Number.isFinite(v)) return v;
+        if (typeof v === 'string') {
+          const parsed = Date.parse(v);
+          if (!Number.isNaN(parsed)) return parsed;
+        }
+        return Date.now();
+      })();
+
       set({
         liveNews: articles,
         backendEvents: Array.isArray(rawBriefing.events) ? rawBriefing.events as Event[] : [],
@@ -114,11 +129,11 @@ const useNewsStore = create<NewsState>()((set, get) => ({
         coverageTrends: (historyPayload as Record<string, unknown>)?.trends || rawBriefing.coverageTrends || null,
         coverageHistory: historyPayload || null,
         velocitySpikes: Array.isArray(rawBriefing.velocitySpikes) ? rawBriefing.velocitySpikes as VelocitySpike[] : [],
-        lastDataLoadTime: Date.now(),
-        // Safety net: if backend_warming returned 0 articles (shouldn't happen
-        // after pipeline fix, but guard against it), mark as mock so the UI
-        // doesn't show "NO ITEMS" under a 'live' label.
-        dataSource: isWarming && count === 0 ? 'mock' : 'live',
+        lastDataLoadTime: serverFetchedAt,
+        // Safety net: if backend_warming returned 0 articles, surface as
+        // `unavailable` so DataErrorBanner shows and FEED says OFFLINE.
+        // No fake data is ever rendered.
+        dataSource: isWarming && count === 0 ? 'unavailable' : 'live',
         dataError: isWarming ? 'Backend briefing not ready yet — ingest may still be running' : null,
       });
 
@@ -180,7 +195,9 @@ const useNewsStore = create<NewsState>()((set, get) => ({
       return;
     }
 
-    set({ liveNews: null, dataSource: 'mock', dataError: result.errorMessage });
+    // Both backend and client-GDELT failed — there is no data. Render an
+    // honest error state with retry. We do NOT substitute mock entries.
+    set({ liveNews: null, dataSource: 'unavailable', dataError: result.errorMessage });
   },
 
   /** Force a full refresh cycle. */

@@ -7,6 +7,7 @@ import useFilterStore from '../stores/filterStore';
 import useDerivedIntel from '../hooks/useDerivedIntel';
 import { COVERAGE_STATUS_ORDER, getCoverageMeta } from '../utils/coverageMeta';
 import { getReliabilityMeta } from '../utils/credibilityMeta';
+import { getGeopoliticalLegend } from '../utils/visualSystem';
 import BottomSheet from './ui/BottomSheet';
 import FilterDrawer from './FilterDrawer';
 
@@ -17,11 +18,7 @@ const SEV_TIERS = [
   { key: 'green', min: 0, label: 'GREEN' },
 ];
 
-const GEO_LEGEND = [
-  { key: 'low', color: 'rgba(0, 212, 255, 0.8)', labelKey: 'legend.geoLow' },
-  { key: 'medium', color: 'rgba(255, 170, 0, 0.8)', labelKey: 'legend.geoMedium' },
-  { key: 'high', color: 'rgba(255, 85, 85, 0.8)', labelKey: 'legend.geoHigh' },
-];
+const GEO_LEGEND = getGeopoliticalLegend();
 
 function IconButton({ id, icon: Icon, label, active, onClick }) {
   return (

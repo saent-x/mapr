@@ -13,9 +13,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Crown, Check, Zap, Loader2, Building2, AlertTriangle } from 'lucide-react';
 import useSubscription from '../hooks/useSubscription';
-import Header from '../components/Header';
 
-export default function BillingPage() {
+export default function BillingPage({ embedded = false }) {
   const { t } = useTranslation();
   const {
     status, isLoading, isFree, isPro, isEnterprise,
@@ -53,8 +52,7 @@ export default function BillingPage() {
 
   if (isLoading) {
     return (
-      <div className="mapr-page">
-        <Header />
+      <div className={embedded ? "mapr-billing-embed" : "mapr-page"}>
         <div className="mapr-billing-loading">
           <Loader2 size={24} className="mapr-spin" />
           <span>{t('subscription.loading')}</span>
@@ -64,8 +62,7 @@ export default function BillingPage() {
   }
 
   return (
-    <div className="mapr-page">
-      <Header />
+    <div className={embedded ? "mapr-billing-embed" : "mapr-page"}>
       <div className="mapr-billing">
         <h1 className="mapr-billing-title">{t('subscription.title')}</h1>
         <p className="mapr-billing-subtitle">{t('subscription.subtitle')}</p>

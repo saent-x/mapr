@@ -53,6 +53,13 @@ describe('VAL-M5-013: Service worker registration on app load', () => {
     assert.ok(swReg.includes("{ scope: '/' }"), 'should set scope to /');
   });
 
+  it('service worker registration unregisters stale workers during Vite development', () => {
+    const swReg = readText('src/services/serviceWorkerRegistration.js');
+    assert.ok(swReg.includes('import.meta.env.DEV'), 'should branch on Vite development mode');
+    assert.ok(swReg.includes('getRegistrations'), 'should inspect existing service worker registrations');
+    assert.ok(swReg.includes('.unregister()'), 'should unregister stale development service workers');
+  });
+
   it('service worker registration handles updatefound event', () => {
     const swReg = readText('src/services/serviceWorkerRegistration.js');
     assert.ok(swReg.includes("'updatefound'"), 'should listen for updatefound');
@@ -105,6 +112,12 @@ describe('VAL-M5-014: Service worker caches core assets', () => {
     // API paths should use network-first
     assert.ok(sw.includes('/api/'), 'should handle /api/ paths');
     assert.ok(sw.includes('networkFirst(request, API_CACHE)'), 'API calls should use networkFirst with API_CACHE');
+  });
+
+  it('sw.js bypasses server-sent event streams', () => {
+    const sw = readText('public/sw.js');
+    assert.ok(sw.includes('/api/stream'), 'should identify the live event stream endpoint');
+    assert.ok(sw.includes('text/event-stream'), 'should identify event-stream requests');
   });
 
   it('sw.js uses stale-while-revalidate for map tiles', () => {

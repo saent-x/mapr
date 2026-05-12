@@ -94,6 +94,7 @@ export default function IntelPage() {
             news={activeNews}
             allEvents={activeNews}
             onStorySelect={handleStorySelect}
+            dataSource={dataSource}
           />
         </div>
       </div>

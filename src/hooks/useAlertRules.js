@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { id } from '@instantdb/react';
 import db from '../services/instantDb';
 import { storyMatchesFilters } from '../utils/storyFilters';
 import { resolveDateFloor } from '../utils/mockData';
 import { getSeverityMeta } from '../utils/mockData';
+import { getUserOwnerRef, getUserOwnerWhere } from '../utils/instantUser';
 
 /**
  * Hook for managing alert rules via InstantDB.
@@ -33,9 +35,7 @@ export default function useAlertRules(savedViews = [], activeNews = []) {
       ? {
           alertRules: {
             $: {
-              where: {
-                owner: user.id,
-              },
+              where: getUserOwnerWhere(user),
             },
           },
         }
@@ -71,19 +71,28 @@ export default function useAlertRules(savedViews = [], activeNews = []) {
 
       // Match articles: pass view filters AND meet severity threshold
       const threshold = r.severityThreshold ?? 0;
+      const confidenceThreshold = r.minConfidence ?? filters.minConfidence ?? 0;
+      const premiumFilterParams = {
+        ...filterParams,
+        minConfidence: Math.max(filterParams.minConfidence || 0, confidenceThreshold),
+      };
       const matchingArticles = activeNews.filter(
-        (s) => storyMatchesFilters(s, filterParams) && (s.severity ?? 0) >= threshold,
+        (s) => storyMatchesFilters(s, premiumFilterParams) && (s.severity ?? 0) >= threshold,
       );
 
       const matchCount = matchingArticles.length;
 
-      // Detect new matches since last check
+      // Detect new matches since last check.
+      // IMPORTANT: useMemo callbacks must be pure — do NOT mutate the ref
+      // here. StrictMode double-invokes memo callbacks in dev, and the old
+      // pattern (mutating prevMatchesRef inside useMemo) caused the "skip
+      // already toasted" guard to be silently bypassed because the second
+      // invocation overwrote the snapshot before the effect could read it.
+      // We only READ here; the WRITE happens in the useEffect below.
       const prevIds = prevMatchesRef.current[r.id] || new Set();
-      const currentIds = new Set(matchingArticles.map((a) => a.id));
-      const newMatchIds = [...currentIds].filter((id) => !prevIds.has(id));
-
-      // Update ref for next check
-      prevMatchesRef.current[r.id] = currentIds;
+      const newMatchIds = matchingArticles
+        .map((a) => a.id)
+        .filter((id) => !prevIds.has(id));
 
       const severityMeta = getSeverityMeta(threshold);
       const viewName = view?.name || r.savedViewId;
@@ -92,9 +101,14 @@ export default function useAlertRules(savedViews = [], activeNews = []) {
         id: r.id,
         name: r.name,
         severityThreshold: threshold,
+        minConfidence: confidenceThreshold,
         severityLabel: severityMeta?.label || 'ANY',
         savedViewId: r.savedViewId,
         savedViewName: viewName,
+        deliveryMode: r.deliveryMode || 'instant',
+        quietHours: r.quietHours || { enabled: false, start: '22:00', end: '07:00' },
+        channels: r.channels || { inApp: true, email: false, digest: false },
+        lastTriggeredAt: r.lastTriggeredAt || null,
         active: r.active !== false, // default true if undefined
         createdAt: r.createdAt,
         matchCount,
@@ -104,21 +118,37 @@ export default function useAlertRules(savedViews = [], activeNews = []) {
     });
   }, [data, savedViews, activeNews]);
 
+  // Snapshot the current match-ID set per rule AFTER render commits, so the
+  // next render's useMemo can compute a correct diff. Decoupled from the memo
+  // body to keep that pure (see comment above).
+  useEffect(() => {
+    for (const rule of rules) {
+      prevMatchesRef.current[rule.id] = new Set(
+        rule.matchingArticles.map((a) => a.id),
+      );
+    }
+  }, [rules]);
+
   const createRule = useCallback(
-    async (name, severityThreshold, savedViewId) => {
+    async (name, severityThreshold, savedViewId, options = {}) => {
       if (!user) throw new Error('Must be authenticated to create an alert rule');
       const now = Date.now();
-      const ruleId = `ar-${name}-${now}`;
+      const ruleId = id();
       await db.transact(
         db.tx.alertRules[ruleId]
           .update({
             name,
             severityThreshold,
+            minConfidence: options.minConfidence ?? 0,
+            deliveryMode: options.deliveryMode || 'instant',
+            quietHours: options.quietHours || { enabled: false, start: '22:00', end: '07:00' },
+            channels: options.channels || { inApp: true, email: false, digest: false },
+            lastTriggeredAt: null,
             savedViewId,
             active: true,
             createdAt: now,
           })
-          .link({ owner: user.id }),
+          .link({ owner: getUserOwnerRef(user) }),
       );
       // Initialize tracking ref for new rule
       prevMatchesRef.current[ruleId] = new Set();
@@ -133,6 +163,11 @@ export default function useAlertRules(savedViews = [], activeNews = []) {
       const patch = {};
       if (updates.name !== undefined) patch.name = updates.name;
       if (updates.severityThreshold !== undefined) patch.severityThreshold = updates.severityThreshold;
+      if (updates.minConfidence !== undefined) patch.minConfidence = updates.minConfidence;
+      if (updates.deliveryMode !== undefined) patch.deliveryMode = updates.deliveryMode;
+      if (updates.quietHours !== undefined) patch.quietHours = updates.quietHours;
+      if (updates.channels !== undefined) patch.channels = updates.channels;
+      if (updates.lastTriggeredAt !== undefined) patch.lastTriggeredAt = updates.lastTriggeredAt;
       if (updates.active !== undefined) patch.active = updates.active;
       await db.transact(db.tx.alertRules[ruleId].update(patch));
     },

@@ -20,6 +20,13 @@ describe('API error handling patterns', () => {
     );
   });
 
+  it('does not serve SPA HTML fallback for unknown API GET routes', () => {
+    assert.ok(
+      serverCode.includes("!url.pathname.startsWith('/api/')"),
+      'Unknown /api/* GET requests must return JSON 404 instead of dist/index.html'
+    );
+  });
+
   it('catch block uses classifyError for proper status codes', () => {
     assert.ok(
       serverCode.includes('classifyError(error)'),

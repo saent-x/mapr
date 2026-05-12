@@ -257,6 +257,7 @@ import {
   sharedEntities,
   eventContainsEntity,
   buildCorrelationData,
+  buildCorrelationInsights,
   severityColor,
 } from '../src/utils/correlationBuilder.js';
 
@@ -375,6 +376,91 @@ test('buildCorrelationData creates cross-lane lines for shared entities', () => 
   assert.ok(hasCrossLink, 'Should have a link between UA and US events sharing Putin');
 });
 
+test('buildCorrelationData ignores broad global organizations without topical evidence', () => {
+  const now = Date.now();
+  const events = [
+    makeEvent({
+      id: 'evt-health',
+      title: 'WHO publishes malaria update for Ghana',
+      primaryCountry: 'GH',
+      firstSeenAt: new Date(now - 3600000).toISOString(),
+      entities: { people: [], organizations: [{ name: 'WHO' }], locations: [] }
+    }),
+    makeEvent({
+      id: 'evt-market',
+      title: 'WHO mentioned in unrelated market roundup from Chile',
+      primaryCountry: 'CL',
+      firstSeenAt: new Date(now - 7200000).toISOString(),
+      entities: { people: [], organizations: [{ name: 'WHO' }], locations: [] }
+    }),
+  ];
+  const { correlations } = buildCorrelationData(events);
+  assert.equal(correlations.length, 0, 'Broad global entities should not create weak correlation lines');
+});
+
+test('buildCorrelationData does not connect regions through location-only mentions', () => {
+  const now = Date.now();
+  const events = [
+    makeEvent({
+      id: 'evt-a',
+      title: 'Markets react to sanctions in Ukraine',
+      primaryCountry: 'US',
+      firstSeenAt: new Date(now - 3600000).toISOString(),
+      entities: { people: [], organizations: [], locations: [{ name: 'Ukraine' }] }
+    }),
+    makeEvent({
+      id: 'evt-b',
+      title: 'Aid convoy reaches Ukraine border',
+      primaryCountry: 'PL',
+      firstSeenAt: new Date(now - 7200000).toISOString(),
+      entities: { people: [], organizations: [], locations: [{ name: 'Ukraine' }] }
+    }),
+  ];
+  const { correlations } = buildCorrelationData(events);
+  assert.equal(correlations.length, 0, 'Location-only overlap should not be enough for a professional correlation');
+});
+
+test('buildCorrelationData ignores entities that appear across too many regions', () => {
+  const now = Date.now();
+  const events = Array.from({ length: 10 }, (_, i) => makeEvent({
+    id: `evt-broad-${i}`,
+    title: `Regional security update ${i}`,
+    primaryCountry: `R${i}`,
+    firstSeenAt: new Date(now - i * 3600000).toISOString(),
+    entities: { people: [{ name: 'Overexposed Actor' }], organizations: [], locations: [] }
+  }));
+  const { correlations } = buildCorrelationData(events, { maxEntityRegions: 8 });
+  assert.equal(correlations.length, 0, 'Over-broad entities should not create a dense unreadable chart');
+});
+
+test('buildCorrelationInsights ranks region pairs and shared entity clusters', () => {
+  const now = Date.now();
+  const events = [
+    makeEvent({
+      id: 'evt-ua',
+      title: 'Zelensky and NATO discuss air defense',
+      primaryCountry: 'UA',
+      severity: 80,
+      firstSeenAt: new Date(now - 3600000).toISOString(),
+      entities: { people: [{ name: 'Zelensky' }], organizations: [], locations: [] }
+    }),
+    makeEvent({
+      id: 'evt-pl',
+      title: 'Zelensky air defense talks continue in Poland',
+      primaryCountry: 'PL',
+      severity: 70,
+      firstSeenAt: new Date(now - 7200000).toISOString(),
+      entities: { people: [{ name: 'Zelensky' }], organizations: [], locations: [] }
+    }),
+  ];
+  const { correlations } = buildCorrelationData(events);
+  const eventMap = new Map(events.map((event) => [event.id, event]));
+  const insights = buildCorrelationInsights(correlations, eventMap);
+  assert.equal(insights.topRegionPairs.length, 1);
+  assert.equal(insights.topEntities[0].name, 'Zelensky');
+  assert.deepEqual(insights.topEntities[0].regions, ['PL', 'UA']);
+});
+
 test('buildCorrelationData filters by entity query', () => {
   const now = Date.now();
   const events = [
@@ -462,6 +548,10 @@ test('EventCorrelationTimeline renders lane chart SVG', () => {
   const src = fs.readFileSync(COMPONENT_PATH, 'utf8');
   assert.ok(src.includes('<svg'), 'Should contain SVG element for lane chart');
   assert.ok(src.includes('data-testid="correlation-timeline"'), 'Should have correlation-timeline testid');
+  assert.ok(src.includes('data-testid="correlation-insights"'), 'Should show ranked correlation insight cards');
+  assert.ok(src.includes('data-testid="correlation-entity-clusters"'), 'Should show shared entity clusters');
+  assert.ok(src.includes('Evidence timeline'), 'Should frame the SVG as secondary evidence, not the whole experience');
+  assert.ok(src.includes('MAX_VISIBLE_LANES'), 'Should cap timeline lanes so the tab is not a very long chart');
   assert.ok(src.includes('data-testid="correlation-chart"'), 'Should have correlation-chart testid');
   assert.ok(src.includes('data-testid="correlation-entity-filter"'), 'Should have entity filter input');
   assert.ok(src.includes('data-testid="correlation-empty"'), 'Should have empty state');

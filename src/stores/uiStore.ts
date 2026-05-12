@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { loadViews, saveViews, createView } from '../utils/viewManager.js';
 import type { UIState, SavedView, SavedViewFilters, SavedViewMapState, PanelCollapsed, SearchResult } from '../types/store';
 
-const PANEL_COLLAPSE_KEY = 'mapr:rightRailCollapsed:v1';
+const PANEL_COLLAPSE_KEY = 'mapr:rightRailCollapsed:v2';
 const LAST_REGION_KEY = 'mapr:lastRegionIso:v1';
 
 function loadLastRegionIso(): string | null {
@@ -27,7 +27,7 @@ function saveLastRegionIso(iso: string | null): void {
 const PANEL_KEYS: (keyof PanelCollapsed)[] = ['anomaly', 'watchlist', 'narrative', 'liveFeed'];
 
 function loadPanelCollapsed(): PanelCollapsed {
-  const fallback: PanelCollapsed = { anomaly: false, watchlist: false, narrative: false, liveFeed: false };
+  const fallback: PanelCollapsed = { anomaly: true, watchlist: true, narrative: true, liveFeed: false };
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(PANEL_COLLAPSE_KEY);

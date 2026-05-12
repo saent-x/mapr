@@ -294,6 +294,7 @@ const MapGLOverlay = ({
         perCountryReliability={perCountryReliability}
         selectedRegion={selectedRegion}
         drillIsos={drillIsos}
+        isLight={isLight}
       />
       <MapVelocity
         velocitySpikes={velocitySpikes}

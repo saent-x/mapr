@@ -177,6 +177,16 @@ describe('VAL-M2-008: j/k navigates entity list', () => {
     assert.match(code, /kbHighlightedEntityId/, 'should compute highlighted entity ID');
     assert.match(code, /navigableEntities/, 'should compute navigableEntities list');
   });
+
+  it('EntityExplorerPage supports typed entity query deep links', () => {
+    const entityPath = path.join(srcDir, 'pages', 'EntityExplorerPage.jsx');
+    const code = readFileSync(entityPath, 'utf-8');
+    assert.match(code, /useSearchParams/, 'should read entity query params');
+    assert.match(code, /searchParams\.get\('entity'\)/, 'should read entity name from URL');
+    assert.match(code, /searchParams\.get\('type'\)/, 'should read entity type from URL');
+    assert.match(code, /entityKey\(entityType,\s*entityName\)/, 'should build typed entity id from URL params');
+    assert.match(code, /setSearchQuery\(entityName\)/, 'should reflect deep-linked entity in search');
+  });
 });
 
 /* ───────────────────────────────────────────────────────────

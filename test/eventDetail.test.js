@@ -43,6 +43,17 @@ describe('Event Detail Page', () => {
     assert.ok(src.includes('lazy'), 'Must lazy-load FlatMap via React.lazy');
   });
 
+  it('EventDetailPage leads with event content instead of a map-first page', () => {
+    const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
+    const layoutIndex = src.indexOf('<div className="event-detail-layout">');
+    const titleIndex = src.indexOf('event-detail-title');
+    const mapIndex = src.indexOf('event-detail-map');
+    assert.ok(layoutIndex !== -1, 'Must render the event detail layout');
+    assert.ok(titleIndex > layoutIndex, 'Event title should be in the primary detail layout');
+    assert.ok(mapIndex > titleIndex, 'Location map should come after the main event content');
+    assert.ok(src.includes('event-detail-location-section'), 'Map should be framed as a location context section');
+  });
+
   it('EventDetailPage displays event severity, title, and summary', () => {
     const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
     assert.ok(src.includes('sev-pill'), 'Must render severity pill');
@@ -70,6 +81,15 @@ describe('Event Detail Page', () => {
     assert.ok(src.includes('people'), 'Must display people');
   });
 
+  it('EventDetailPage links entity chips to typed entity explorer deep links', () => {
+    const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
+    assert.ok(src.includes('entityExplorerLink'), 'Must build typed entity explorer links');
+    assert.ok(src.includes("entityExplorerLink('location'"), 'Location chips must include type=location');
+    assert.ok(src.includes("entityExplorerLink('organization'"), 'Organization chips must include type=organization');
+    assert.ok(src.includes("entityExplorerLink('person'"), 'Person chips must include type=person');
+    assert.ok(src.includes('new URLSearchParams({ type, entity: name })'), 'Must encode entity link params safely');
+  });
+
   it('EventDetailPage shows related events using getRelatedEvents', () => {
     const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
     assert.ok(src.includes('getRelatedEvents'), 'Must use getRelatedEvents utility');
@@ -80,6 +100,30 @@ describe('Event Detail Page', () => {
     const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
     assert.ok(src.includes('notFound') || src.includes('NOT FOUND'), 'Must handle missing event');
     assert.ok(src.includes('Back to Map'), 'Must link back to map from not-found state');
+  });
+
+  it('EventDetailPage waits for event data before showing not-found', () => {
+    const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
+    assert.ok(src.includes('dataSource'), 'Must read dataSource from news store');
+    assert.ok(src.includes('loadLiveData'), 'Must be able to request event data');
+    assert.ok(src.includes('waitingForEvents'), 'Must render a loading state before not-found');
+    assert.ok(src.includes("t('eventDetail.loading'"), 'Must localize loading event state');
+  });
+
+  it('EventDetailPage resolves the same canonical IDs used by feed links', () => {
+    const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
+    assert.ok(src.includes('canonicalizeArticles'), 'Must canonicalize live news before matching route id');
+    assert.ok(
+      src.includes('String(ev.id) === String(id)'),
+      'Must compare route id against canonical event ids',
+    );
+  });
+
+  it('EventDetailPage can render the routed event when store data is not loaded', () => {
+    const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
+    assert.ok(src.includes('useLocation'), 'Must read router state');
+    assert.ok(src.includes('location.state?.event'), 'Must accept clicked event state');
+    assert.ok(src.includes('canonicalizeArticles([routedEvent])'), 'Must normalize routed event fallback');
   });
 
   it('EventDetailPage uses i18n via useTranslation', () => {
@@ -116,9 +160,10 @@ describe('Event Detail Page', () => {
     const src = readFileSync(join(SRC, 'components', 'NewsPanel.jsx'), 'utf8');
     assert.ok(src.includes('useNavigate'), 'NewsPanel must import useNavigate');
     assert.ok(
-      src.includes('navigate(`/event/${story.id}`)'),
+      src.includes('navigate(`/event/${encodeURIComponent(story.id)}`, { state: { event: story } })'),
       'NewsPanel must navigate to /event/:id',
     );
+    assert.ok(src.includes('state={{ event: story }}'), 'Expanded detail link should carry event state');
     assert.ok(
       src.includes('VIEW FULL DETAIL') || src.includes('eventDetail.viewDetail'),
       'NewsPanel must have link to event detail',
@@ -148,7 +193,7 @@ describe('Event Detail Page', () => {
       'back', 'viewDetail', 'notFound', 'notFoundHint', 'backToMap',
       'source', 'openArticle', 'published', 'firstSeen', 'region',
       'confidence', 'sourceReliability', 'sources', 'independent',
-      'precision', 'supportingArticles', 'entities', 'locations',
+      'precision', 'supportingArticles', 'location', 'entities', 'locations',
       'organizations', 'people', 'relatedEvents', 'noRelatedEvents',
     ];
 
@@ -203,5 +248,13 @@ describe('Event Detail Page', () => {
       src.includes('.event-detail-entity-chip'),
       'index.css must contain entity chip styles',
     );
+  });
+
+  it('Event detail page owns vertical scrolling inside app shell', () => {
+    const src = readFileSync(join(SRC, 'index.css'), 'utf8');
+    const match = src.match(/\.event-detail-page\s*\{[\s\S]*?\}/);
+    assert.ok(match, 'Must have event-detail-page CSS block');
+    assert.match(match[0], /height:\s*100%/, 'Event detail page should fill app shell height');
+    assert.match(match[0], /overflow-y:\s*auto/, 'Event detail page should scroll vertically');
   });
 });

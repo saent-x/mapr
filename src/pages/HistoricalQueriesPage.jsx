@@ -1,10 +1,11 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, LogIn, UserCircle } from 'lucide-react';
 import HistoricalQueriesPanel from '../components/HistoricalQueriesPanel';
 import UpgradePrompt from '../components/UpgradePrompt';
-import useSubscriptionStore from '../stores/subscriptionStore';
+import useAuth from '../hooks/useAuth';
+import useSubscription from '../hooks/useSubscription';
 
 /**
  * HistoricalQueriesPage — dedicated page for historical time-range queries,
@@ -14,14 +15,27 @@ import useSubscriptionStore from '../stores/subscriptionStore';
 export default function HistoricalQueriesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const subscriptionStatus = useSubscriptionStore((s) => s.status);
-  const isPro = subscriptionStatus === 'pro';
+  const location = useLocation();
+  const { user, isLoading } = useAuth();
+  const { hasFeatureAccess } = useSubscription();
+  const canUseHistoricalQueries = hasFeatureAccess('historicalQueries');
+  const returnUrl = encodeURIComponent(location.pathname + location.search);
 
   const handleClose = () => {
     navigate('/');
   };
 
-  if (!isPro) {
+  if (isLoading) {
+    return (
+      <div className="mapr-historical-page">
+        <div className="mapr-historical-page-content mapr-historical-page-content--locked">
+          <div className="account-loading">{t('auth.loading', 'Loading account…')}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
     return (
       <div className="mapr-historical-page">
         <div className="mapr-historical-page-header">
@@ -33,9 +47,46 @@ export default function HistoricalQueriesPage() {
             <ArrowLeft size={18} />
             <span>{t('nav.backToMap')}</span>
           </button>
-          <h2 className="mapr-historical-page-title">{t('historicalQueries.title', 'Historical Queries')}</h2>
+          <div>
+            <span className="mapr-historical-page-label">Archive</span>
+            <h2 className="mapr-historical-page-title">{t('historicalQueries.title', 'Historical Queries')}</h2>
+            <p className="mapr-historical-page-copy">Sign in to query earlier windows, compare periods, and recover historical signal.</p>
+          </div>
         </div>
-        <div style={{ padding: '40px 20px', display: 'flex', justifyContent: 'center' }}>
+        <div className="mapr-historical-page-content mapr-historical-page-content--locked">
+          <section className="account-auth-gate">
+            <UserCircle size={28} aria-hidden />
+            <h1>{t('account.signInTitle', 'Sign in to manage your account')}</h1>
+            <p>{t('account.signInBody', 'Create or access your MAPR account to manage billing, preferences, saved views, and alert settings.')}</p>
+            <Link className="account-primary-link" to={`/login?returnUrl=${returnUrl}`}>
+              <LogIn size={14} aria-hidden />
+              {t('auth.signIn')}
+            </Link>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (!canUseHistoricalQueries) {
+    return (
+      <div className="mapr-historical-page">
+        <div className="mapr-historical-page-header">
+          <button
+            className="mapr-back-btn"
+            onClick={() => navigate(-1)}
+            type="button"
+          >
+            <ArrowLeft size={18} />
+            <span>{t('nav.backToMap')}</span>
+          </button>
+          <div>
+            <span className="mapr-historical-page-label">Archive</span>
+            <h2 className="mapr-historical-page-title">{t('historicalQueries.title', 'Historical Queries')}</h2>
+            <p className="mapr-historical-page-copy">Query earlier windows, compare periods, and recover historical signal.</p>
+          </div>
+        </div>
+        <div className="mapr-historical-page-content mapr-historical-page-content--locked">
           <UpgradePrompt feature="historical" />
         </div>
       </div>
@@ -53,50 +104,15 @@ export default function HistoricalQueriesPage() {
         >
           <ArrowLeft size={18} />
         </button>
-        <h2 className="mapr-historical-page-title">{t('historicalQueries.pageTitle')}</h2>
+        <div>
+          <span className="mapr-historical-page-label">Archive</span>
+          <h2 className="mapr-historical-page-title">{t('historicalQueries.pageTitle')}</h2>
+          <p className="mapr-historical-page-copy">Run historical time-range queries and compare periods without leaving the console.</p>
+        </div>
       </div>
       <div className="mapr-historical-page-content">
         <HistoricalQueriesPanel onClose={handleClose} />
       </div>
-      <style>{`
-        .mapr-historical-page {
-          padding: 16px;
-          max-width: 640px;
-          margin: 0 auto;
-        }
-        .mapr-historical-page-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-        .mapr-back-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 32px;
-          height: 32px;
-          border: 1px solid var(--border);
-          border-radius: 6px;
-          background: var(--bg-1);
-          color: var(--text-1);
-          cursor: pointer;
-        }
-        .mapr-back-btn:hover {
-          color: var(--amber);
-          border-color: var(--amber);
-        }
-        .mapr-historical-page-title {
-          font-size: 1rem;
-          font-weight: 600;
-          color: var(--text-0);
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-        }
-        .mapr-historical-page-content {
-          /* constrained width for form */
-        }
-      `}</style>
     </div>
   );
 }

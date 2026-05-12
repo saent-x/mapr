@@ -8,7 +8,7 @@ import { buildSourceCoverageAudit } from '../utils/sourceCoverage';
 import { sortStories, storyMatchesFilters } from '../utils/storyFilters';
 import { getRelatedEvents } from '../utils/entityGraph';
 import { computeSilenceEntries } from '../utils/anomalyUtils';
-import { calculateRegionSeverity, getMockNews, resolveDateFloor } from '../utils/mockData';
+import { calculateRegionSeverity, resolveDateFloor } from '../utils/mockData';
 
 /**
  * Shared filter + derivation pipeline used by App.jsx, IntelPage, FiltersPage.
@@ -40,9 +40,9 @@ export default function useDerivedIntel() {
   const scrubTime = useUIStore((s) => s.scrubTime);
 
   const baseArticles = useMemo(() => {
-    if (dataSource !== 'live') return liveNews || getMockNews();
+    // No mock fallback — see App.jsx; show empty state + DataErrorBanner.
     return liveNews || [];
-  }, [dataSource, liveNews]);
+  }, [liveNews]);
 
   const canonicalNews = useMemo(() => canonicalizeArticles(baseArticles), [baseArticles]);
   const dateFloor = useMemo(() => resolveDateFloor(dateWindow), [dateWindow]);

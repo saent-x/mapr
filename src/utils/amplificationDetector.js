@@ -1,25 +1,55 @@
 import { getSourceNetworkKey } from './sourceMetadata.js';
 import { tokenizeHeadline, jaccardSimilarity } from './newsPipeline.js';
+import stateAffiliatedDataset from '../data/stateAffiliatedNetworks.json' with { type: 'json' };
 
 const WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 const MIN_ARTICLES = 5;
 const MAX_NETWORKS = 2;
 const MIN_JACCARD = 0.5;
 
-// Exact-match overrides for short/ambiguous source names that share a network
-const EXACT_NETWORK_OVERRIDES = new Map([
-  ['rt', 'russian-state-media'],
-  ['tass', 'russian-state-media'],
-  ['sputnik', 'russian-state-media'],
-  ['ria novosti', 'russian-state-media'],
-  ['rossiya', 'russian-state-media'],
-  ['interfax', 'russian-state-media']
-]);
+// Build a (lower-cased name → group key) map from the dataset so that
+// state-affiliated outlets across every region collapse into a single
+// "network" — not just Russian state media. Coverage is intentionally
+// global; see src/data/stateAffiliatedNetworks.json metadata for sources.
+//
+// `state-controlled` and `state-affiliated` collapse together for the
+// amplification heuristic (both reflect the state position by design).
+// `publicly-funded` (BBC/NHK/etc.) is NOT loaded here — those keep their
+// own per-outlet identity via getSourceNetworkKey.
+const STATE_NETWORK_OVERRIDES = (() => {
+  const map = new Map();
+  const flagged = new Set(['state-controlled', 'state-affiliated']);
+  for (const entry of stateAffiliatedDataset.networks || []) {
+    if (!flagged.has(entry.category)) continue;
+    const groupKey = `state-media-${(entry.country || 'XX').toLowerCase()}`;
+    const aliases = [entry.name, ...(entry.aliases || [])];
+    for (const alias of aliases) {
+      if (!alias) continue;
+      map.set(String(alias).toLowerCase().trim(), groupKey);
+    }
+  }
+  return map;
+})();
+
+/**
+ * Test-only escape hatch — returns the live override map. Do NOT use in
+ * production code; call resolveNetworkKey instead.
+ */
+export function _getStateNetworkOverrides() {
+  return STATE_NETWORK_OVERRIDES;
+}
 
 function resolveNetworkKey(article) {
   const normalized = (article.source || '').toLowerCase().trim();
-  if (EXACT_NETWORK_OVERRIDES.has(normalized)) {
-    return EXACT_NETWORK_OVERRIDES.get(normalized);
+  if (STATE_NETWORK_OVERRIDES.has(normalized)) {
+    return STATE_NETWORK_OVERRIDES.get(normalized);
+  }
+  // Try a hostname match too — some feeds use the URL as the source field.
+  if (article.url) {
+    try {
+      const host = new URL(article.url).hostname.replace(/^www\./, '').toLowerCase();
+      if (STATE_NETWORK_OVERRIDES.has(host)) return STATE_NETWORK_OVERRIDES.get(host);
+    } catch { /* ignore malformed url */ }
   }
   return getSourceNetworkKey({ source: article.source, url: article.url });
 }

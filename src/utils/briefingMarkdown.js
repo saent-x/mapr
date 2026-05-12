@@ -44,37 +44,42 @@ function formatDate(dateVal) {
   }
 }
 
-function normalizeEntityEntries(entities, fallbackType = 'unknown') {
-  if (!entities) return [];
+function entityTypeFromGroup(group) {
+  if (group === 'people') return 'person';
+  if (group === 'organizations') return 'organization';
+  if (group === 'locations') return 'location';
+  return group || 'unknown';
+}
 
-  if (typeof entities === 'string') {
-    return [{ name: entities, type: fallbackType }];
+function normalizeEntity(entity, fallbackType) {
+  if (!entity) return null;
+  if (typeof entity === 'string') return { name: entity, type: fallbackType || 'unknown' };
+  if (typeof entity !== 'object') return null;
+  const name = entity.name || entity.text || entity.label || entity.value;
+  if (!name) return null;
+  return {
+    ...entity,
+    name,
+    type: entity.type || fallbackType || 'unknown',
+  };
+}
+
+export function getEventEntityList(event = {}) {
+  const rawEntities = event.entities || event.enrichedEntities || [];
+  if (Array.isArray(rawEntities)) {
+    return rawEntities
+      .map((entity) => normalizeEntity(entity))
+      .filter(Boolean);
   }
+  if (!rawEntities || typeof rawEntities !== 'object') return [];
 
-  if (Array.isArray(entities)) {
-    return entities.flatMap((entity) => normalizeEntityEntries(entity, fallbackType));
-  }
-
-  if (typeof entities !== 'object') {
-    return [];
-  }
-
-  const bucketSpecs = [
-    ['people', 'person'],
-    ['organizations', 'organization'],
-    ['locations', 'location'],
-  ];
-  const bucketed = [];
-  for (const [key, type] of bucketSpecs) {
-    if (Array.isArray(entities[key])) {
-      bucketed.push(...normalizeEntityEntries(entities[key], type));
-    }
-  }
-  if (bucketed.length > 0) return bucketed;
-
-  const name = entities.name?.trim?.() || entities.text?.trim?.() || entities.label?.trim?.();
-  if (!name) return [];
-  return [{ ...entities, name, type: entities.type || fallbackType }];
+  return Object.entries(rawEntities).flatMap(([group, value]) => {
+    if (!Array.isArray(value)) return [];
+    const fallbackType = entityTypeFromGroup(group);
+    return value
+      .map((entity) => normalizeEntity(entity, fallbackType))
+      .filter(Boolean);
+  });
 }
 
 /**
@@ -85,7 +90,7 @@ function normalizeEntityEntries(entities, fallbackType = 'unknown') {
 export function extractEntityMentions(events) {
   const entityMap = new Map();
   for (const event of events) {
-    const entities = normalizeEntityEntries(event.entities || event.enrichedEntities || []);
+    const entities = getEventEntityList(event);
     for (const entity of entities) {
       const name = entity.name?.trim() || entity.text?.trim();
       if (!name || name.length < 2) continue;

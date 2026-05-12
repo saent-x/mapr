@@ -10,6 +10,7 @@ import { sortStories, storyMatchesFilters } from '../utils/storyFilters';
 import { canonicalizeArticles } from '../utils/newsPipeline';
 import { resolveDateFloor } from '../utils/mockData';
 import { getSourceHost } from '../utils/urlUtils';
+import { getArticleTextPreview } from '../utils/articleText';
 import MapLoadingFallback from '../components/MapLoadingFallback';
 import { ArticleDetail } from '../components/NewsPanel';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
@@ -255,7 +256,7 @@ function RegionBrief({ iso }) {
               </div>
               <div className="news-title">{story.title}</div>
               {story.summary && (
-                <div className="news-summary-preview">{story.summary}</div>
+                <div className="news-summary-preview">{getArticleTextPreview(story.summary, 180).text}</div>
               )}
               <div className="news-src">
                 <span className="mono">{story.id}</span>

@@ -6,7 +6,7 @@ import { useMap } from '@/components/ui/map';
 const MapTracking = ({
   trackingPoints = [],
 }) => {
-  const { map, isLoaded } = useMap();
+  const { map, isLoaded, styleRevision } = useMap();
 
   /* ── tracking GeoJSON ── */
   const trackingGeoJson = useMemo(() => ({
@@ -75,7 +75,7 @@ const MapTracking = ({
       try { map.addImage('ship-icon', shipImageData, { sdf: true }); } catch { /* ignore */ }
     }
     return undefined;
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   /* ── tracking source + layers ── */
   useEffect(() => {
@@ -118,13 +118,13 @@ const MapTracking = ({
       } catch { /* ignore */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, map]);
+  }, [isLoaded, map, styleRevision]);
 
   useEffect(() => {
     if (!isLoaded || !map) return;
     const src = map.getSource('tracking-markers');
     if (src) src.setData(trackingGeoJson);
-  }, [isLoaded, map, trackingGeoJson]);
+  }, [isLoaded, map, trackingGeoJson, styleRevision]);
 
   return null;
 };

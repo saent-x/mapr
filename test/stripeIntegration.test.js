@@ -150,16 +150,16 @@ test('VAL-M6-005: Feature gating for export', () => {
     'App.jsx must import UpgradePrompt'
   );
   assert.ok(
-    app.includes('subscriptionStatus') || app.includes('isPro'),
-    'App.jsx must check subscription status'
+    app.includes('hasFeatureAccess') || app.includes('canExportBriefings'),
+    'App.jsx must check admin-configurable feature access'
   );
 });
 
 test('VAL-M6-005: Alert rules gated for free users', () => {
   const panel = read('src/components/AlertRulesPanel.jsx');
   assert.ok(
-    panel.includes('useSubscriptionStore') || panel.includes('isPro'),
-    'AlertRulesPanel must check subscription status'
+    panel.includes('hasFeatureAccess') || panel.includes('canUseAlertRules'),
+    'AlertRulesPanel must check admin-configurable feature access'
   );
 });
 
@@ -206,11 +206,28 @@ test('VAL-M6-007: Enterprise toggle OFF by default', () => {
   );
 });
 
-test('VAL-M6-007: Billing page route registered', () => {
+test('VAL-M6-007: Billing page is registered under Account', () => {
   const main = read('src/main.jsx');
   assert.ok(
-    main.includes('/billing') && main.includes('BillingPage'),
-    '/billing route must be registered with BillingPage'
+    main.includes('/account/billing') && main.includes('AccountPage'),
+    '/account/billing route must be registered with AccountPage'
+  );
+  assert.ok(
+    main.includes('to="/account/billing"'),
+    '/billing should redirect to /account/billing for old links'
+  );
+});
+
+test('VAL-M6-007: Billing is not a primary sidebar item', () => {
+  const page = read('src/pages/BillingPage.jsx');
+  const layout = read('src/components/Layout.jsx');
+  assert.ok(
+    !page.includes("from '../components/Header'") && !page.includes('<Header />'),
+    'BillingPage must not render Header because it is embedded in Account/Layout'
+  );
+  assert.ok(
+    !layout.includes('to="/billing"') && !layout.includes("to='/billing'"),
+    'Billing must not be rendered as a primary app sidebar link'
   );
 });
 
@@ -257,16 +274,16 @@ test('VAL-M6-009: Webhook handles customer.subscription.updated', () => {
 test('VAL-CROSS-002: Export gated for free users', () => {
   const app = read('src/App.jsx');
   assert.ok(
-    app.includes('!isPro') && app.includes('UpgradePrompt'),
-    'Export modal must show UpgradePrompt when not Pro'
+    app.includes('!canExportBriefings') && app.includes('UpgradePrompt'),
+    'Export modal must show UpgradePrompt when feature access is denied'
   );
 });
 
 test('VAL-CROSS-002: Historical queries gated for free users', () => {
   const page = read('src/pages/HistoricalQueriesPage.jsx');
   assert.ok(
-    page.includes('!isPro') || page.includes('subscriptionStatus'),
-    'Historical queries must check subscription'
+    page.includes('!canUseHistoricalQueries') || page.includes('hasFeatureAccess'),
+    'Historical queries must check admin-configurable feature access'
   );
 });
 
@@ -278,8 +295,8 @@ test('VAL-CROSS-003: Pro user condition passes through features', () => {
   const app = read('src/App.jsx');
   // When isPro is true, BriefingExportModal renders normally
   assert.ok(
-    app.includes('isPro') && app.includes('subscriptionStatus'),
-    'App must have isPro conditional for feature gating'
+    app.includes('canExportBriefings') && app.includes('BriefingExportModal'),
+    'App must pass through export modal when feature access is granted'
   );
 });
 
