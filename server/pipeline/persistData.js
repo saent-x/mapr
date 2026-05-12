@@ -18,6 +18,28 @@ import {
   writeCoverageHistory,
   writeSnapshot
 } from '../storage.js';
+import { getQueue, QUEUE_NAMES, isQueueEnabled } from '../queue/index.js';
+
+const EMBED_BATCH_SIZE = 32;
+
+async function enqueueEmbeddingJobs(articles) {
+  if (!isQueueEnabled() || !articles?.length) return;
+  const queue = getQueue(QUEUE_NAMES.EMBED_ARTICLE);
+  if (!queue) return;
+  const ids = articles.map((a) => a.id).filter(Boolean);
+  const jobs = [];
+  for (let i = 0; i < ids.length; i += EMBED_BATCH_SIZE) {
+    const batch = ids.slice(i, i + EMBED_BATCH_SIZE);
+    jobs.push({
+      name: QUEUE_NAMES.EMBED_ARTICLE,
+      data: { articleIds: batch },
+    });
+  }
+  if (jobs.length) {
+    try { await queue.addBulk(jobs); }
+    catch (err) { console.warn('[ingest] embed enqueue failed:', err.message); }
+  }
+}
 
 /**
  * Persist articles to the database.
@@ -29,6 +51,11 @@ export async function persistArticles(articles) {
   console.log(`[ingest] Persisting ${articles.length} articles...`);
   await upsertArticles(articles);
   console.log(`[ingest] Articles persisted.`);
+  // Best-effort: enqueue embedding jobs for the freshly upserted set.
+  // Silent no-op when REDIS_URL isn't set or the queue connection drops.
+  await enqueueEmbeddingJobs(articles).catch((err) => {
+    console.warn('[ingest] enqueueEmbeddingJobs failed:', err.message);
+  });
 }
 
 /**

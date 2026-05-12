@@ -105,6 +105,8 @@ import { requireUser, getRequestUserRecord } from './auth.js';
 import { listThreadsForUser, createThread, archiveThread } from './storyThreads.js';
 import { runDigestSweep } from './alerts/dispatch.js';
 import { runDailyDigestSweep } from './alerts/dailyDigest.js';
+import { isQueueEnabled, startWorker, QUEUE_NAMES } from './queue/index.js';
+import { handleEmbedArticle } from './queue/workers/embedArticle.js';
 import { buildCredibilityForEvent } from './sourceCredibility.js';
 import { generateBrief, readLatestBrief } from './briefs.js';
 import { readEventById } from './storage.js';
@@ -1281,6 +1283,16 @@ server.listen(PORT, HOST, async () => {
       });
     }, DAILY_DIGEST_INTERVAL_MS).unref();
     log.info('daily_digest_sweep_started', { intervalMs: DAILY_DIGEST_INTERVAL_MS });
+  }
+
+  // BullMQ workers — only spin up when REDIS_URL is set. Each worker
+  // pulls from its named queue; concurrency is conservative on a CPU-only
+  // host so the LLM/embed sidecar isn't hammered.
+  if (isQueueEnabled()) {
+    startWorker(QUEUE_NAMES.EMBED_ARTICLE, handleEmbedArticle, { concurrency: 4 });
+    log.info('queue_workers_started', { queues: [QUEUE_NAMES.EMBED_ARTICLE] });
+  } else {
+    log.info('queue_workers_disabled', { reason: 'REDIS_URL_NOT_SET' });
   }
 
   // Railway sleep is enabled — no keep-alive ping needed.

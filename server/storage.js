@@ -54,6 +54,17 @@ function getPool() {
 async function ensureSchema() {
   const db = getPool();
 
+  // pgvector is required for embedding-driven event clustering and the
+  // story-thread auto-collation worker. Coolify's pgvector Postgres image
+  // ships with it preinstalled. If a host without it shows up, the CREATE
+  // fails and we log + skip — embedding-driven features then no-op rather
+  // than crashing the server.
+  try {
+    await db.query('CREATE EXTENSION IF NOT EXISTS vector');
+  } catch (err) {
+    console.warn('[storage] pgvector extension unavailable — embedding-backed features will be disabled:', err.message);
+  }
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS metadata (
       key TEXT PRIMARY KEY,
@@ -187,6 +198,27 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_story_threads_lastActivity ON story_threads("lastActivityAt");
     CREATE INDEX IF NOT EXISTS idx_story_thread_articles_thread ON story_thread_articles("threadId", "addedAt");
   `);
+
+  // Embedding column + HNSW cosine index. Skipped silently when pgvector
+  // didn't install — the worker checks the column before writing so the
+  // pipeline keeps running on a vanilla Postgres host.
+  try {
+    await db.query(`
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1024);
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding_model TEXT;
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedded_at TEXT;
+      ALTER TABLE events   ADD COLUMN IF NOT EXISTS centroid  vector(1024);
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS articles_embedding_hnsw
+        ON articles USING hnsw (embedding vector_cosine_ops)
+        WITH (m=16, ef_construction=64);
+    `).catch((err) => {
+      console.warn('[storage] HNSW index create skipped:', err.message);
+    });
+  } catch (err) {
+    console.warn('[storage] embedding columns skipped (pgvector not installed):', err.message);
+  }
 
   // Fix schema: drop url UNIQUE constraint/index that causes spurious conflicts
   // during ON CONFLICT (id) upserts.  The id column is the canonical dedup key.
