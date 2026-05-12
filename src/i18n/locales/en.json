@@ -652,6 +652,19 @@
     "viewThread": "Open thread",
     "comingSoon": "Story thread auto-collation will activate once the AI sidecar is online. Pinned events are recorded now and will backfill on first run."
   },
+  "verification": {
+    "title": "Verify this story",
+    "loading": "CHECKING ARCHIVES…",
+    "noSources": "No source data to verify yet.",
+    "intro": "Cross-check the timeline below. Sources are listed in first-publish order so you can see who broke the story and how the wave spread.",
+    "firstMover": "FIRST",
+    "openOriginal": "Open original",
+    "wayback": "Wayback",
+    "save": "Snapshot",
+    "saveTooltip": "Save a fresh snapshot to archive.org",
+    "aiSignal": "AI-content signals detected",
+    "singleSource": "Only one outlet has reported this — no independent corroboration yet."
+  },
   "credibility": {
     "title": "Source credibility",
     "loading": "LOADING SOURCES…",

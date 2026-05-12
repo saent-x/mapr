@@ -18,6 +18,7 @@ import MapErrorBoundary from '../components/MapErrorBoundary';
 const FlatMap = lazy(() => import('../components/FlatMap'));
 const SourceCredibilityPanel = lazy(() => import('../components/SourceCredibilityPanel.jsx'));
 const BriefGenerator = lazy(() => import('../components/BriefGenerator.jsx'));
+const VerificationHelper = lazy(() => import('../components/VerificationHelper.jsx'));
 
 function formatTs(ts, locale) {
   if (!ts) return '—';
@@ -446,6 +447,10 @@ export default function EventDetailPage() {
 
           <Suspense fallback={null}>
             <BriefGenerator event={event} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <VerificationHelper event={event} />
           </Suspense>
 
           {hasCoords && (
