@@ -116,3 +116,42 @@ export function fetchSnapshotTimestamps({ from, to } = {}) {
   if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
   return request(`/snapshot-history/timestamps?${params.toString()}`, { auth: true });
 }
+
+export function listThreads({ status = 'active' } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  return request(`/threads?${params.toString()}`, { auth: true });
+}
+
+export function createThread({ title, seedEventId = null, seedArticleId = null } = {}) {
+  return request('/threads', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, seedEventId, seedArticleId }),
+    auth: true,
+  });
+}
+
+export function archiveThread(threadId) {
+  return request(`/threads/${encodeURIComponent(threadId)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function fetchEventCredibility(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/credibility`);
+}
+
+export function fetchEventBrief(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/brief`);
+}
+
+export function generateEventBrief(eventId, { force = false } = {}) {
+  return request(`/events/${encodeURIComponent(eventId)}/brief`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force }),
+    auth: true,
+  });
+}

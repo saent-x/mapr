@@ -126,6 +126,55 @@ async function ensureSchema() {
       "articleCount" INTEGER DEFAULT 0,
       PRIMARY KEY (iso, "bucketAt")
     );
+
+    CREATE TABLE IF NOT EXISTS story_threads (
+      id TEXT PRIMARY KEY,
+      "ownerUserId" TEXT NOT NULL,
+      title TEXT NOT NULL,
+      "seedEventId" TEXT,
+      "seedArticleId" TEXT,
+      "pinnedAt" TEXT NOT NULL,
+      "lastActivityAt" TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active'
+    );
+
+    CREATE TABLE IF NOT EXISTS story_thread_articles (
+      "threadId" TEXT NOT NULL REFERENCES story_threads(id) ON DELETE CASCADE,
+      "articleId" TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      similarity REAL,
+      diff TEXT,
+      "addedAt" TEXT NOT NULL,
+      PRIMARY KEY ("threadId", "articleId")
+    );
+
+    CREATE TABLE IF NOT EXISTS briefs (
+      "eventId" TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      "eventLastUpdatedAt" TEXT NOT NULL,
+      lede TEXT,
+      summary TEXT,
+      actors TEXT,
+      citations TEXT,
+      angle TEXT,
+      "modelUsed" TEXT,
+      "generatedAt" TEXT NOT NULL,
+      "ownerUserId" TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS credibility_explanations (
+      "sourceKey" TEXT PRIMARY KEY,
+      "scoreAtGeneration" REAL NOT NULL,
+      explanation TEXT NOT NULL,
+      "generatedAt" TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS alert_digest_state (
+      "ownerUserId" TEXT NOT NULL,
+      "ruleId" TEXT NOT NULL,
+      "lastSentAt" TEXT,
+      "nextDueAt" TEXT,
+      "lastMatchCount" INTEGER DEFAULT 0,
+      PRIMARY KEY ("ownerUserId", "ruleId")
+    );
   `);
 
   // Create indexes (IF NOT EXISTS is supported in Postgres)
@@ -134,6 +183,9 @@ async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_events_lastUpdated ON events("lastUpdatedAt");
     CREATE INDEX IF NOT EXISTS idx_articles_isoA2 ON articles("isoA2");
     CREATE INDEX IF NOT EXISTS idx_articles_publishedAt ON articles("publishedAt");
+    CREATE INDEX IF NOT EXISTS idx_story_threads_owner ON story_threads("ownerUserId", status);
+    CREATE INDEX IF NOT EXISTS idx_story_threads_lastActivity ON story_threads("lastActivityAt");
+    CREATE INDEX IF NOT EXISTS idx_story_thread_articles_thread ON story_thread_articles("threadId", "addedAt");
   `);
 
   // Fix schema: drop url UNIQUE constraint/index that causes spurious conflicts
@@ -193,7 +245,7 @@ async function ensureSchema() {
 
 let schemaReady = null;
 
-async function ensureDatabase() {
+export async function ensureDatabase() {
   if (!schemaReady) {
     schemaReady = ensureSchema().catch(err => {
       schemaReady = null;
@@ -533,6 +585,22 @@ export async function updateEventLifecycle(eventId, lifecycle) {
     `UPDATE events SET lifecycle = $1, "lastUpdatedAt" = $2 WHERE id = $3`,
     [lifecycle, new Date().toISOString(), eventId]
   );
+}
+
+export async function readEventById(eventId) {
+  if (!eventId) return null;
+  const db = await ensureDatabase();
+  const { rows } = await db.query('SELECT * FROM events WHERE id = $1', [eventId]);
+  if (!rows[0]) return null;
+  const row = rows[0];
+  const enrichment = parseJson(row.enrichment, {});
+  return {
+    ...row,
+    ...enrichment,
+    countries: parseJson(row.countries, []),
+    topicFingerprint: parseJson(row.topicFingerprint, []),
+    coordinates: parseJson(row.coordinates, null),
+  };
 }
 
 export async function readActiveEvents({ maxAgeHours } = {}) {

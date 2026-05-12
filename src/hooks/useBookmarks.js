@@ -175,6 +175,41 @@ export default function useBookmarks() {
     [user],
   );
 
+  const bulkUpdate = useCallback(
+    async (bookmarkIds, updates) => {
+      if (!user) throw new Error('Must be authenticated to update bookmark');
+      if (!bookmarkIds?.length) return;
+      const ts = Date.now();
+      const ops = bookmarkIds.map((bid) => {
+        const patch = { updatedAt: ts };
+        if (updates.status !== undefined) patch.status = updates.status;
+        if (updates.priority !== undefined) patch.priority = updates.priority;
+        if (updates.addTags?.length) {
+          const existing = bookmarks.find((b) => b.id === bid);
+          const merged = new Set([...(existing?.tags || []), ...updates.addTags]);
+          patch.tags = [...merged];
+        }
+        if (updates.removeTags?.length) {
+          const existing = bookmarks.find((b) => b.id === bid);
+          const rm = new Set(updates.removeTags);
+          patch.tags = (existing?.tags || []).filter((t) => !rm.has(t));
+        }
+        return db.tx.bookmarks[bid].update(patch);
+      });
+      await db.transact(ops);
+    },
+    [user, bookmarks],
+  );
+
+  const bulkDelete = useCallback(
+    async (bookmarkIds) => {
+      if (!user) throw new Error('Must be authenticated to delete bookmark');
+      if (!bookmarkIds?.length) return;
+      await db.transact(bookmarkIds.map((bid) => db.tx.bookmarks[bid].delete()));
+    },
+    [user],
+  );
+
   return {
     bookmarks,
     filteredBookmarks,
@@ -185,6 +220,8 @@ export default function useBookmarks() {
     isBookmarked,
     toggleBookmark,
     updateBookmark,
+    bulkUpdate,
+    bulkDelete,
     // Filters
     filterRegion,
     setFilterRegion,

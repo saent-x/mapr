@@ -1,8 +1,10 @@
 import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, ExternalLink, Loader2, MapPin } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Loader2, MapPin, Pin } from 'lucide-react';
 import useNewsStore from '../stores/newsStore';
+import useSubscriptionStore from '../stores/subscriptionStore';
+import { createThread } from '../services/backendService.js';
 import { getRelatedEvents } from '../utils/entityGraph';
 import { getSourceHost } from '../utils/urlUtils';
 import { getReliabilityTier, getReliabilityMeta, getReliabilityLabel } from '../utils/credibilityMeta';
@@ -14,6 +16,9 @@ import MapLoadingFallback from '../components/MapLoadingFallback';
 import MapErrorBoundary from '../components/MapErrorBoundary';
 
 const FlatMap = lazy(() => import('../components/FlatMap'));
+const SourceCredibilityPanel = lazy(() => import('../components/SourceCredibilityPanel.jsx'));
+const BriefGenerator = lazy(() => import('../components/BriefGenerator.jsx'));
+const VerificationHelper = lazy(() => import('../components/VerificationHelper.jsx'));
 
 function formatTs(ts, locale) {
   if (!ts) return '—';
@@ -74,6 +79,58 @@ function entityExplorerLink(type, entity) {
   const name = entityName(entity);
   const params = new URLSearchParams({ type, entity: name });
   return `/entities?${params.toString()}`;
+}
+
+function PinThreadButton({ event }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const isAuthenticated = useSubscriptionStore((s) => s.isAuthenticated);
+  const [state, setState] = useState('idle'); // idle | pending | pinned | error
+  const [errMsg, setErrMsg] = useState('');
+
+  if (!event || !event.id) return null;
+
+  const handlePin = async () => {
+    if (!isAuthenticated) {
+      navigate('/account');
+      return;
+    }
+    setState('pending');
+    setErrMsg('');
+    try {
+      await createThread({
+        title: event.title || 'Untitled event',
+        seedEventId: event.id,
+        seedArticleId: event.articleId || event.id,
+      });
+      setState('pinned');
+    } catch (err) {
+      setErrMsg(err.message || 'Failed');
+      setState('error');
+    }
+  };
+
+  if (state === 'pinned') {
+    return (
+      <Link to="/trends?tab=threads" className="btn" data-testid="pin-thread-pinned">
+        <Pin size={14} aria-hidden /> {t('threads.pinned')}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="btn"
+      onClick={handlePin}
+      disabled={state === 'pending'}
+      data-testid="pin-thread-btn"
+      title={state === 'error' ? errMsg : undefined}
+    >
+      <Pin size={14} aria-hidden />
+      <span>{state === 'pending' ? t('threads.pinning', 'Pinning…') : t('threads.pin')}</span>
+    </button>
+  );
 }
 
 /**
@@ -214,16 +271,19 @@ export default function EventDetailPage() {
 
   return (
     <div className="event-detail-page">
-      {/* Back button */}
-      <button
-        type="button"
-        className="event-detail-back"
-        onClick={handleBack}
-        aria-label={t('eventDetail.back', 'Back')}
-      >
-        <ArrowLeft size={16} aria-hidden />
-        <span>{t('eventDetail.back', 'Back')}</span>
-      </button>
+      {/* Back + actions row */}
+      <div className="event-detail-toolbar">
+        <button
+          type="button"
+          className="event-detail-back"
+          onClick={handleBack}
+          aria-label={t('eventDetail.back', 'Back')}
+        >
+          <ArrowLeft size={16} aria-hidden />
+          <span>{t('eventDetail.back', 'Back')}</span>
+        </button>
+        <PinThreadButton event={event} />
+      </div>
 
       <div className="event-detail-layout">
         {/* Left column — main content */}
@@ -381,6 +441,18 @@ export default function EventDetailPage() {
 
         {/* Right column — entities + related events */}
         <aside className="event-detail-sidebar">
+          <Suspense fallback={<div className="event-detail-section credibility-loading mono">Loading…</div>}>
+            <SourceCredibilityPanel eventId={event.id} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <BriefGenerator event={event} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <VerificationHelper event={event} />
+          </Suspense>
+
           {hasCoords && (
             <section className="event-detail-section event-detail-location-section">
               <h2 className="event-detail-section-title">

@@ -6,11 +6,11 @@ import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { canonicalizeArticles } from '../utils/newsPipeline.js';
 import { buildRegionalSeries, buildByCategory, buildSourceVelocity, buildSeverityDistribution, buildLangMix } from '../utils/trendBuilders.js';
 
-const EventCorrelationTimeline = lazy(() => import('../components/EventCorrelationTimeline.jsx'));
+const StoryThreadsPanel = lazy(() => import('../components/StoryThreadsPanel.jsx'));
 
 const VALID_RANGES = ['7d', '30d', '90d'];
 const DEFAULT_RANGE = '30d';
-const VALID_TABS = ['charts', 'correlation'];
+const VALID_TABS = ['charts', 'threads'];
 const DEFAULT_TAB = 'charts';
 
 const SERIES_COLORS = ['var(--amber)', 'var(--cyan)', 'var(--sev-red)', 'var(--sev-green)', 'var(--sev-amber)'];
@@ -292,10 +292,10 @@ export default function TrendAnalysisPage() {
         ))}
       </div>
 
-      {/* Correlation tab */}
-      {tab === 'correlation' && (
+      {/* Story Threads tab */}
+      {tab === 'threads' && (
         <Suspense fallback={<div className="trend-card"><div className="body" style={{ padding: 40 }}>{t('loading.page')}</div></div>}>
-          <EventCorrelationTimeline prefilterEntity={entityParam} />
+          <StoryThreadsPanel prefilterEntity={entityParam} />
         </Suspense>
       )}
 

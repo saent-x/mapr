@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import useWatchStore from '../stores/watchStore';
 import useUIStore from '../stores/uiStore';
 import useFilterStore from '../stores/filterStore';
+import useWatchlistSync from '../hooks/useWatchlistSync';
 import { isoToCountry } from '../utils/geocoder.js';
 import { SEVERITY_TIER_NAMES } from '../utils/watchUtils.js';
 
@@ -84,6 +85,11 @@ const WatchlistPanel = ({ onRegionSelect }) => {
   const setSearchQuery = useFilterStore((s) => s.setSearchQuery);
   const setEntityFilter = useFilterStore((s) => s.setEntityFilter);
 
+  // Mirror watchlist changes into InstantDB (no source-of-truth switch yet —
+  // store stays authoritative client-side; the sync hook pushes local items
+  // up so other devices see them once they sign in).
+  const watchlistSync = useWatchlistSync();
+
   const [addType, setAddType] = useState('topic');
   const [addValue, setAddValue] = useState('');
 
@@ -91,8 +97,11 @@ const WatchlistPanel = ({ onRegionSelect }) => {
     e?.preventDefault?.();
     if (!addValue.trim()) return;
     addWatch(addType, addValue.trim());
+    if (watchlistSync?.isAuthenticated) {
+      watchlistSync.addItem({ type: addType, value: addValue.trim() }).catch(() => {});
+    }
     setAddValue('');
-  }, [addType, addValue, addWatch]);
+  }, [addType, addValue, addWatch, watchlistSync]);
 
   const handleClick = (item) => {
     if (item.type === 'region' && onRegionSelect) {
@@ -185,7 +194,16 @@ const WatchlistPanel = ({ onRegionSelect }) => {
                 {count}
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); removeWatch(item.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeWatch(item.id);
+                    if (watchlistSync?.isAuthenticated) {
+                      const dbItem = watchlistSync.dbItems.find(
+                        (d) => d.type === item.type && d.value?.toLowerCase() === String(item.value || '').toLowerCase(),
+                      );
+                      if (dbItem) watchlistSync.removeItem(dbItem.id).catch(() => {});
+                    }
+                  }}
                   aria-label={`Remove ${label}`}
                   style={{ marginLeft: 6, color: 'var(--ink-2)' }}
                 >

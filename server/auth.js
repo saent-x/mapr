@@ -14,6 +14,7 @@ const INSTANT_APP_ID = process.env.INSTANT_APP_ID || '';
 const INSTANT_ADMIN_TOKEN = process.env.INSTANT_ADMIN_TOKEN || '';
 
 let _db = null;
+export function getInstantDb() { return getDb(); }
 function getDb() {
   if (!_db) {
     if (!INSTANT_APP_ID || !INSTANT_ADMIN_TOKEN) {

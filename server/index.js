@@ -102,6 +102,12 @@ import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
 import { createCheckoutSession, createPortalSession, handleStripeWebhook } from './stripe.js';
 import { requireUser, getRequestUserRecord } from './auth.js';
+import { listThreadsForUser, createThread, archiveThread } from './storyThreads.js';
+import { runDigestSweep } from './alerts/dispatch.js';
+import { runDailyDigestSweep } from './alerts/dailyDigest.js';
+import { buildCredibilityForEvent } from './sourceCredibility.js';
+import { generateBrief, readLatestBrief } from './briefs.js';
+import { readEventById } from './storage.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
@@ -956,6 +962,146 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // ── Story Threads ──
+    if (request.method === 'GET' && url.pathname === '/api/threads') {
+      try {
+        const user = await requireUser(request);
+        const status = url.searchParams.get('status') || 'active';
+        const threads = await withTimeout(() => listThreadsForUser({ userId: user.id, status }));
+        sendJson(response, 200, { threads });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/alerts/digest-sweep') {
+      if (!adminAuthorized(request)) { sendJson(response, 401, { error: 'admin required' }); return; }
+      try {
+        const dryRun = url.searchParams.get('dry') === '1';
+        const out = await withTimeout(() => runDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL, dryRun }), 60_000);
+        sendJson(response, 200, out);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/alerts/daily-digest') {
+      if (!adminAuthorized(request)) { sendJson(response, 401, { error: 'admin required' }); return; }
+      try {
+        const dryRun = url.searchParams.get('dry') === '1';
+        const out = await withTimeout(() => runDailyDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL, dryRun }), 60_000);
+        sendJson(response, 200, out);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/threads') {
+      try {
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        const thread = await withTimeout(() => createThread({
+          userId: user.id,
+          title: body.title,
+          seedEventId: body.seedEventId || null,
+          seedArticleId: body.seedArticleId || null,
+        }));
+        sendJson(response, 201, { thread });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/brief')) {
+      try {
+        const eventId = url.pathname.replace(/^\/api\/events\//, '').replace(/\/brief$/, '');
+        if (!eventId) {
+          sendJson(response, 400, { error: 'Missing event id' });
+          return;
+        }
+        const brief = await withTimeout(() => readLatestBrief(eventId));
+        sendJson(response, 200, { brief, cached: Boolean(brief) });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/brief')) {
+      try {
+        const user = await requireUser(request);
+        const eventId = url.pathname.replace(/^\/api\/events\//, '').replace(/\/brief$/, '');
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body OK */ }
+        const event = await readEventById(eventId);
+        if (!event) {
+          sendJson(response, 404, { error: 'Event not found' });
+          return;
+        }
+        try {
+          const result = await withTimeout(
+            () => generateBrief({ event, force: Boolean(body.force), ownerUserId: user.id }),
+            60_000,
+          );
+          sendJson(response, 200, result);
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, { error: e.message, code: 'AI_NOT_CONFIGURED' });
+            return;
+          }
+          if (e?.code === 'NO_ARTICLES') {
+            sendJson(response, 409, { error: e.message, code: 'NO_ARTICLES' });
+            return;
+          }
+          throw e;
+        }
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/credibility')) {
+      try {
+        const id = url.pathname.replace(/^\/api\/events\//, '').replace(/\/credibility$/, '');
+        if (!id) {
+          sendJson(response, 400, { error: 'Missing event id' });
+          return;
+        }
+        const result = await withTimeout(() => buildCredibilityForEvent(id));
+        sendJson(response, 200, result);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/threads/')) {
+      try {
+        const user = await requireUser(request);
+        const threadId = url.pathname.replace('/api/threads/', '');
+        const ok = await withTimeout(() => archiveThread({ userId: user.id, threadId }));
+        sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
     // Server-of-record subscription state. Clients should prefer this over the
     // local InstantDB $users field (which is read-only after the perms file is
     // applied) for any UI that drives access control.
@@ -1112,6 +1258,30 @@ server.listen(PORT, HOST, async () => {
     });
   }
   console.log('Scheduler and trackers started.');
+
+  // Alert digest sweep — runs every 15 min. No-ops when InstantDB admin
+  // token or Resend API key are unset.
+  const DIGEST_INTERVAL_MS = Number(process.env.MAPR_DIGEST_INTERVAL_MS || 15 * 60 * 1000);
+  if (DIGEST_INTERVAL_MS > 0 && process.env.DISABLE_DIGEST_SWEEP !== 'true') {
+    setInterval(() => {
+      runDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL }).catch((err) => {
+        log.warn('digest_sweep_error', { msg: err.message });
+      });
+    }, DIGEST_INTERVAL_MS).unref();
+    log.info('digest_sweep_started', { intervalMs: DIGEST_INTERVAL_MS });
+  }
+
+  // Daily watchlist digest — runs every hour; per-user cadence enforced
+  // inside the sweep against $users.lastDailyDigestSentAt.
+  const DAILY_DIGEST_INTERVAL_MS = Number(process.env.MAPR_DAILY_DIGEST_INTERVAL_MS || 60 * 60 * 1000);
+  if (DAILY_DIGEST_INTERVAL_MS > 0 && process.env.DISABLE_DAILY_DIGEST !== 'true') {
+    setInterval(() => {
+      runDailyDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL }).catch((err) => {
+        log.warn('daily_digest_sweep_error', { msg: err.message });
+      });
+    }, DAILY_DIGEST_INTERVAL_MS).unref();
+    log.info('daily_digest_sweep_started', { intervalMs: DAILY_DIGEST_INTERVAL_MS });
+  }
 
   // Railway sleep is enabled — no keep-alive ping needed.
   // The app will sleep after inactivity and wake on incoming requests.

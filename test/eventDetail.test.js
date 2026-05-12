@@ -170,14 +170,6 @@ describe('Event Detail Page', () => {
     );
   });
 
-  it('EventCorrelationTimeline navigates to /event/:id', () => {
-    const src = readFileSync(join(SRC, 'components', 'EventCorrelationTimeline.jsx'), 'utf8');
-    assert.ok(
-      src.includes('navigate(`/event/${selectedEvent.id}`)'),
-      'Correlation timeline must navigate to /event/:id',
-    );
-  });
-
   it('EntityExplorerPage links event mentions to /event/:id', () => {
     const src = readFileSync(join(SRC, 'pages', 'EntityExplorerPage.jsx'), 'utf8');
     assert.ok(src.includes('Link'), 'EntityExplorerPage must import Link');
