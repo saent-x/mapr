@@ -79,10 +79,25 @@ export default function useKeyboardNavigation({
   const callbacksRef = useRef({ onSelect, onBookmark, onSaveView, onEscape, onHelp });
   callbacksRef.current = { onSelect, onBookmark, onSaveView, onEscape, onHelp };
 
+  // Subscriber pattern replaces a 50ms-poll in consumers. Listeners are
+  // notified synchronously when the keyboard navigation index changes.
+  const subscribersRef = useRef(new Set());
+  const subscribe = useCallback((fn) => {
+    subscribersRef.current.add(fn);
+    return () => subscribersRef.current.delete(fn);
+  }, []);
+  const notify = useCallback(() => {
+    const idx = selectedIndexRef.current;
+    for (const fn of subscribersRef.current) {
+      try { fn(idx); } catch { /* one bad subscriber shouldn't break the rest */ }
+    }
+  }, []);
+
   const getSelectedIndex = useCallback(() => selectedIndexRef.current, []);
   const setSelectedIndex = useCallback((idx) => {
     selectedIndexRef.current = idx;
-  }, []);
+    notify();
+  }, [notify]);
 
   // Auto-disable keyboard shortcuts on touch devices and small viewports
   const effectiveDisabled = disabled || isTouchOrMobile;
@@ -108,6 +123,7 @@ export default function useKeyboardNavigation({
           let next = selectedIndexRef.current + 1;
           if (next >= items.length) next = 0; // wrap to top
           selectedIndexRef.current = next;
+          notify();
           // Scroll highlighted element into view
           requestAnimationFrame(() => {
             const el = document.querySelector('[data-kb-highlighted="true"]');
@@ -123,6 +139,7 @@ export default function useKeyboardNavigation({
           let next = selectedIndexRef.current - 1;
           if (next < 0) next = items.length - 1; // wrap to bottom
           selectedIndexRef.current = next;
+          notify();
           requestAnimationFrame(() => {
             const el = document.querySelector('[data-kb-highlighted="true"]');
             if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -146,6 +163,7 @@ export default function useKeyboardNavigation({
             // and we let it propagate (e.g., to close parent modals)
             if (handled !== false) {
               selectedIndexRef.current = -1;
+              notify();
             }
           }
           break;
@@ -198,7 +216,7 @@ export default function useKeyboardNavigation({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [effectiveDisabled, searchSelector]);
+  }, [effectiveDisabled, searchSelector, notify]);
 
-  return { getSelectedIndex, setSelectedIndex };
+  return { getSelectedIndex, setSelectedIndex, subscribe };
 }

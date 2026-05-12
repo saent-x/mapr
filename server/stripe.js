@@ -22,7 +22,7 @@
 import Stripe from 'stripe';
 import { init } from '@instantdb/admin';
 import { log } from './logger.js';
-import { claimStripeEvent } from './stripeIdempotency.js';
+import { claimStripeEvent, markStripeEventProcessed } from './stripeIdempotency.js';
 
 // ── Configuration ──
 
@@ -35,7 +35,18 @@ const INSTANT_ADMIN_TOKEN = process.env.INSTANT_ADMIN_TOKEN || '';
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || '2024-06-20';
 
 function appBaseUrl() {
-  return process.env.APP_URL || 'http://localhost:5173';
+  const value = String(process.env.APP_URL || '').trim();
+  if (value) return value;
+  const isProd = process.env.NODE_ENV === 'production'
+    || !!process.env.RAILWAY_ENVIRONMENT
+    || !!process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (isProd) {
+    throw Object.assign(new Error('APP_URL must be set in production'), {
+      code: 'CONFIG_ERROR',
+      statusCode: 500,
+    });
+  }
+  return 'http://localhost:5173';
 }
 
 function sameOriginReturnUrl(value, fallbackPath) {
@@ -232,22 +243,34 @@ export async function handleStripeWebhook(rawBody, signature) {
     });
   }
 
-  // Idempotency: if we have already processed this event, short-circuit.
-  let isFirst = true;
+  // Two-phase idempotency: claim first, mark processed only after success.
+  // A handler crash between claim and mark leaves processed_at NULL so the
+  // next retry resumes processing instead of being silently deduped.
+  let claim = { shouldProcess: true, isFirst: true };
   try {
-    isFirst = await claimStripeEvent(event.id, event.type);
+    claim = await claimStripeEvent(event.id, event.type);
   } catch (err) {
     // If the idempotency layer is down, prefer to process (at-least-once)
     // rather than skip — but log loudly so we notice.
     log.error('stripe_idempotency_unavailable', { msg: err.message, eventId: event.id });
   }
-  if (!isFirst) {
+
+  if (!claim.shouldProcess) {
     log.info('stripe_webhook_deduped', { type: event.type, eventId: event.id });
     return { received: true, type: event.type, deduped: true };
   }
 
+  if (!claim.isFirst) {
+    log.warn('stripe_webhook_replay_after_crash', { type: event.type, eventId: event.id });
+  }
+
   try {
     await dispatchEvent(event);
+    try {
+      await markStripeEventProcessed(event.id);
+    } catch (err) {
+      log.error('stripe_idempotency_mark_failed', { msg: err.message, eventId: event.id });
+    }
     return { received: true, type: event.type, ok: true };
   } catch (err) {
     // Do NOT propagate to Stripe — we own retries from here.
@@ -295,15 +318,14 @@ async function handleCheckoutCompleted(event) {
   }
 
   // Verify the underlying subscription contains our PRICE_ID before granting Pro.
+  // If we can't fetch the subscription, throw so the outer handler returns
+  // `deferred` and the next webhook retry re-attempts the upgrade. Swallowing
+  // here would charge the user but never flip them to Pro.
   let granted = false;
   if (subscriptionId && typeof subscriptionId === 'string') {
-    try {
-      const stripe = getStripe();
-      const sub = await stripe.subscriptions.retrieve(subscriptionId);
-      granted = subscriptionGrantsPro(sub);
-    } catch (err) {
-      log.warn('stripe_checkout_sub_fetch_failed', { sessionId: session.id, msg: err.message });
-    }
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(subscriptionId);
+    granted = subscriptionGrantsPro(sub);
   }
 
   // For one-shot or incomplete subs we still record the customer link, but only

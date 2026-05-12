@@ -15,6 +15,7 @@
  */
 
 import net from 'node:net';
+import { promises as dnsPromises } from 'node:dns';
 
 function ipv4InCidr(ip, base, bits) {
   const ipNum = ipv4ToInt(ip);
@@ -115,4 +116,39 @@ export function isPublicHttpUrl(value) {
   }
 
   return true;
+}
+
+/**
+ * Resolve the URL's host via DNS and verify every returned IP is public.
+ * Defends against DNS-rebinding: even if the hostname looks public, the
+ * resolved IPs may point at internal/loopback ranges.
+ *
+ * Returns `{ ok: true, ips }` on success or `{ ok: false, reason }` on failure.
+ *
+ * Note: does not pin the IP into the subsequent fetch, so a fast TTL flip
+ * between check and connect can still rebind. For most pipeline use this is
+ * adequate; if you need full mitigation, do the fetch with a custom Agent
+ * whose `lookup` returns one of these IPs verbatim.
+ */
+export async function assertPublicHost(value) {
+  if (!isPublicHttpUrl(value)) return { ok: false, reason: 'invalid_or_private_url' };
+  let url;
+  try { url = new URL(String(value)); } catch { return { ok: false, reason: 'parse_error' }; }
+  const rawHost = url.hostname.toLowerCase();
+  const host = rawHost.startsWith('[') && rawHost.endsWith(']') ? rawHost.slice(1, -1) : rawHost;
+  if (net.isIP(host)) return { ok: true, ips: [host] };
+  let records;
+  try {
+    records = await dnsPromises.lookup(host, { all: true });
+  } catch {
+    return { ok: false, reason: 'dns_lookup_failed' };
+  }
+  const ips = records.map((r) => r.address).filter(Boolean);
+  if (ips.length === 0) return { ok: false, reason: 'no_dns_records' };
+  for (const ip of ips) {
+    const v = net.isIP(ip);
+    if (v === 4 && isPrivateOrReservedIPv4(ip)) return { ok: false, reason: 'private_ipv4', ip };
+    if (v === 6 && isPrivateOrReservedIPv6(ip)) return { ok: false, reason: 'private_ipv6', ip };
+  }
+  return { ok: true, ips };
 }

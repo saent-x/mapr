@@ -1,12 +1,19 @@
 /**
- * Stripe webhook idempotency.
+ * Stripe webhook idempotency — two-phase claim.
  *
  * Stripe retries failed webhook deliveries for up to 3 days. Without
- * deduplication, repeat events double-fire any side-effect (status
- * change, audit log, email). We persist `event.id` in `stripe_events`
- * with a creation timestamp; any repeat is short-circuited.
+ * deduplication, repeat events double-fire side effects. We use a
+ * two-phase commit so that if the handler crashes between claim and
+ * completion, the next retry can resume processing instead of being
+ * silently deduped.
  *
- * The table is created lazily on first call.
+ * Workflow:
+ *   1. `claimStripeEvent(eventId, type)` returns `{ shouldProcess, isFirst }`.
+ *      - First time seen → row inserted, shouldProcess=true, isFirst=true.
+ *      - Retry of an in-flight event (processed_at IS NULL) → shouldProcess=true.
+ *      - Retry of a completed event (processed_at IS NOT NULL) → shouldProcess=false.
+ *   2. After successful dispatch, call `markStripeEventProcessed(eventId)`
+ *      so subsequent retries are deduped.
  */
 
 import pg from 'pg';
@@ -40,9 +47,11 @@ async function ensureTable() {
       CREATE TABLE IF NOT EXISTS stripe_events (
         event_id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
-        seen_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        processed_at TIMESTAMPTZ NULL
       );
     `);
+    await db.query(`ALTER TABLE stripe_events ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ NULL;`);
   })().catch((err) => {
     _ready = null;
     throw err;
@@ -52,18 +61,43 @@ async function ensureTable() {
 
 /**
  * Try to claim a Stripe event for processing.
- * Returns true if we are the first to see it; false if already processed.
+ * Returns `{ shouldProcess, isFirst }`.
+ *   - shouldProcess=true means dispatch should run.
+ *   - isFirst=true on the very first delivery; false on a recovery retry.
+ * If the event was already fully processed, shouldProcess=false.
  */
 export async function claimStripeEvent(eventId, eventType) {
-  if (!eventId) return true; // Cannot dedupe without an id; let it proceed.
+  if (!eventId) return { shouldProcess: true, isFirst: true };
   await ensureTable();
   const db = getPool();
-  const { rowCount } = await db.query(
+  // Atomic insert-or-fetch.
+  const inserted = await db.query(
     `INSERT INTO stripe_events (event_id, type) VALUES ($1, $2)
-     ON CONFLICT (event_id) DO NOTHING`,
+     ON CONFLICT (event_id) DO NOTHING
+     RETURNING event_id`,
     [eventId, eventType || 'unknown'],
   );
-  return rowCount > 0;
+  if (inserted.rowCount > 0) return { shouldProcess: true, isFirst: true };
+
+  const existing = await db.query(
+    `SELECT processed_at FROM stripe_events WHERE event_id = $1`,
+    [eventId],
+  );
+  const processedAt = existing.rows[0]?.processed_at || null;
+  return { shouldProcess: processedAt === null, isFirst: false };
+}
+
+/**
+ * Mark an event as fully processed so future retries are deduped.
+ */
+export async function markStripeEventProcessed(eventId) {
+  if (!eventId) return;
+  await ensureTable();
+  const db = getPool();
+  await db.query(
+    `UPDATE stripe_events SET processed_at = now() WHERE event_id = $1 AND processed_at IS NULL`,
+    [eventId],
+  );
 }
 
 /**

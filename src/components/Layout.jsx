@@ -18,8 +18,6 @@ import useSubscriptionStore from '../stores/subscriptionStore';
 import useDataFreshness from '../hooks/useDataFreshness';
 import useAuth from '../hooks/useAuth';
 
-let _layoutAutoRefreshActive = false;
-
 function formatClock(d) {
   return d.toISOString().replace('T', ' ').slice(0, 19) + 'Z';
 }
@@ -130,12 +128,11 @@ export default function Layout() {
   }, [loadFeatureFlags]);
 
   useEffect(() => {
-    if (_layoutAutoRefreshActive) return undefined;
-    _layoutAutoRefreshActive = true;
+    // newsStore.startAutoRefresh is idempotent: it clears its prior interval
+    // before installing a new one, so StrictMode/HMR double-mount is safe.
     useNewsStore.getState().startAutoRefresh(addToast);
     useNewsStore.getState().loadSnapshotHistory();
     return () => {
-      _layoutAutoRefreshActive = false;
       useNewsStore.getState().stopAutoRefresh();
     };
   }, [addToast]);

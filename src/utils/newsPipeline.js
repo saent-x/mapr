@@ -342,7 +342,24 @@ function getVerificationStatus(articles, confidence) {
 }
 
 function buildCanonicalEvent(articles) {
-  const latestPublishedAt = Math.max(...articles.map((article) => new Date(article.publishedAt).getTime() || 0), 0);
+  if (!articles || articles.length === 0) return null;
+  const now = Date.now();
+  // reduce avoids the spread-args stack overflow that `Math.max(...arr)` hits
+  // on arrays >~10k items, and lets us silently drop NaN/Infinity timestamps.
+  let latestPublishedAt = 0;
+  let firstSeenMs = Number.POSITIVE_INFINITY;
+  let hasAnyTime = false;
+  for (const article of articles) {
+    const t = new Date(article.publishedAt).getTime();
+    if (!Number.isFinite(t)) continue;
+    hasAnyTime = true;
+    if (t > latestPublishedAt) latestPublishedAt = t;
+    if (t < firstSeenMs) firstSeenMs = t;
+  }
+  if (!hasAnyTime) {
+    firstSeenMs = now;
+    latestPublishedAt = now;
+  }
   const primaryArticle = [...articles].sort(
     (left, right) => getPrimaryArticleScore(right, latestPublishedAt) - getPrimaryArticleScore(left, latestPublishedAt)
   )[0];
@@ -355,11 +372,15 @@ function buildCanonicalEvent(articles) {
   const confidence = confidenceContext.confidence;
   const confidenceReasons = getConfidenceReasons(confidenceContext);
   const verificationStatus = getVerificationStatus(articles, confidence);
-  const severities = articles.map((article) => article.severity || 0).sort((a, b) => b - a);
-  const averageSeverity = severities.reduce((total, severity) => total + severity, 0) / severities.length;
-  const severity = Math.round(severities[0] * 0.58 + averageSeverity * 0.42);
-  const firstSeenAt = new Date(Math.min(...articles.map((article) => new Date(article.publishedAt).getTime() || Date.now()))).toISOString();
-  const lastSeenAt = new Date(Math.max(...articles.map((article) => new Date(article.publishedAt).getTime() || 0))).toISOString();
+  const severities = articles.map((article) => Number.isFinite(article.severity) ? article.severity : 0).sort((a, b) => b - a);
+  const averageSeverity = severities.length > 0
+    ? severities.reduce((total, severity) => total + severity, 0) / severities.length
+    : 0;
+  const severity = severities.length > 0
+    ? Math.round(severities[0] * 0.58 + averageSeverity * 0.42)
+    : 0;
+  const firstSeenAt = new Date(firstSeenMs).toISOString();
+  const lastSeenAt = new Date(latestPublishedAt).toISOString();
   const bestPrecision = [...articles]
     .map((article) => getEffectivePrecision(article))
     .sort((left, right) => (PRECISION_RANK[right] || 0) - (PRECISION_RANK[left] || 0))[0] || 'unknown';

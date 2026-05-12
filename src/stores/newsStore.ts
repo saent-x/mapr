@@ -30,7 +30,9 @@ let _refreshTimer: ReturnType<typeof setInterval> | null = null;
 let _prevArticleCount = 0;
 let _isFirstLoad = true;
 let _sessionDiffInit = false;
-let _prevLiveNewsRef: Article[] | null = null;
+// Monotonic id per loadLiveData call. Older calls drop their results so a
+// slow first response can't clobber a faster second response.
+let _loadRequestSeq = 0;
 
 /* ── helpers ── */
 function upsertRegionBackfill(
@@ -90,6 +92,7 @@ const useNewsStore = create<NewsState>()((set, get) => ({
    * Optionally triggers server-side refresh via POST.
    */
   loadLiveData: async ({ forceRefresh = false, addToast } = {}) => {
+    const requestId = ++_loadRequestSeq;
     const result = await runLoadLiveDataPipeline({ forceRefresh }) as {
       kind: string;
       briefing?: Record<string, unknown>;
@@ -98,6 +101,9 @@ const useNewsStore = create<NewsState>()((set, get) => ({
       gdeltHealth?: unknown;
       errorMessage?: string | null;
     };
+    // Discard out-of-order responses. A subsequent loadLiveData has already
+    // bumped the seq; its (newer) result wins.
+    if (requestId !== _loadRequestSeq) return;
 
     if (result.kind === 'backend' || result.kind === 'backend_warming') {
       const { briefing, historyPayload } = result;
@@ -137,10 +143,10 @@ const useNewsStore = create<NewsState>()((set, get) => ({
         dataError: isWarming ? 'Backend briefing not ready yet — ingest may still be running' : null,
       });
 
-      if (_prevLiveNewsRef !== articles) {
-        set({ regionBackfills: {} });
-      }
-      _prevLiveNewsRef = articles;
+      // Wipe regionBackfills only on user-initiated full refresh. Reference
+      // equality fires on every successful pipeline run (always a new array),
+      // which silently invalidates the backfill cache after each tick.
+      if (forceRefresh) set({ regionBackfills: {} });
 
       fetchBackendHealth().then((h) => set({ opsHealth: h })).catch(() => set({ opsHealth: null }));
 
@@ -180,10 +186,10 @@ const useNewsStore = create<NewsState>()((set, get) => ({
         lastDataLoadTime: Date.now(),
       });
 
-      if (_prevLiveNewsRef !== articles) {
-        set({ regionBackfills: {} });
-      }
-      _prevLiveNewsRef = articles;
+      // Wipe regionBackfills only on user-initiated full refresh. Reference
+      // equality fires on every successful pipeline run (always a new array),
+      // which silently invalidates the backfill cache after each tick.
+      if (forceRefresh) set({ regionBackfills: {} });
 
       if (!_isFirstLoad && addToast) {
         addToast(`Client-side refresh · ${count} stories`, 'refresh');
@@ -216,6 +222,12 @@ const useNewsStore = create<NewsState>()((set, get) => ({
 
   /** Start the auto-refresh interval. Call once from a React effect. */
   startAutoRefresh: (addToast) => {
+    // Always clear before reassigning so HMR / StrictMode double-mount /
+    // explicit-double-call paths don't leak a stale interval.
+    if (_refreshTimer) {
+      clearInterval(_refreshTimer);
+      _refreshTimer = null;
+    }
     get().loadLiveData({ addToast });
     _refreshTimer = setInterval(() => get().loadLiveData({ addToast }), REFRESH_INTERVAL);
   },

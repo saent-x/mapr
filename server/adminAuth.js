@@ -1,14 +1,11 @@
 /**
- * Constant-time admin-password verification for serverless handlers.
- * Mirrors the behavior of `server/adminSession.js` so timing-attacks
- * against the password are not viable on either entry point.
+ * Constant-time admin-password verification.
  */
 import crypto from 'node:crypto';
 
 export function timingSafeEqualString(a, b) {
   const bufA = Buffer.from(String(a || ''), 'utf8');
   const bufB = Buffer.from(String(b || ''), 'utf8');
-  // crypto.timingSafeEqual requires equal length, so pad to max length.
   const len = Math.max(bufA.length, bufB.length, 1);
   const padA = Buffer.alloc(len);
   const padB = Buffer.alloc(len);

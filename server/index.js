@@ -78,12 +78,14 @@ import {
   reEnableSourceInCatalog,
   autoDisableFailingSources
 } from './sourceCatalog.js';
+import { getSourceCatalogStorageInfo } from './sourceCatalogStore.js';
 import { getCircuitSummary } from './circuitBreaker.js';
 import {
   addClient as addSseClient,
   removeClient as removeSseClient,
   broadcast as sseBroadcast,
-  clientCount as sseClientCount
+  clientCount as sseClientCount,
+  canAcceptClient as canAcceptSseClient
 } from './sse.js';
 import { getCachedAircraft, startFlightTracking, stopFlightTracking, getLastPollTime } from './flightTracker.js';
 import { getCachedVessels, startShipTracking, stopShipTracking, startBatchPush } from './shipTracker.js';
@@ -96,12 +98,12 @@ import {
   verifySessionToken
 } from './adminSession.js';
 import { log } from './logger.js';
-
-// Shared route handlers (originally written for serverless; invoked from this Node server)
-import gdeltProxyHandler from '../api/gdelt-proxy.js';
-import sourceCatalogHandler from '../api/source-catalog.js';
+import { isPublicHttpUrl } from './urlGuard.js';
+import { timingSafeEqualString } from './adminAuth.js';
 import { createCheckoutSession, createPortalSession, handleStripeWebhook } from './stripe.js';
 import { requireUser, getRequestUserRecord } from './auth.js';
+
+const GDELT_DOC_URL = 'https://api.gdeltproject.org/api/v2/doc/doc';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
@@ -335,38 +337,89 @@ function classifyError(error) {
   return { status: 500, body: { error: 'Internal server error', code: code || 'INTERNAL_ERROR' } };
 }
 
-/**
- * Adapter: run a handler written for (req, res) using Node's http request/response.
- * Handlers use res.status(N).json(obj) — we shim that interface.
- */
-async function runVercelHandler(handler, request, response, url) {
-  // Read body for POST requests
-  let bodyRaw = '';
-  if (request.method === 'POST') {
-    const chunks = [];
-    for await (const chunk of request) chunks.push(chunk);
-    bodyRaw = Buffer.concat(chunks).toString();
+async function handleSourceCatalog(request, response, url) {
+  if (request.method === 'GET') {
+    const [catalog, sourceState] = await Promise.all([readSourceCatalog(), readSourceState()]);
+    sendJson(response, 200, {
+      storage: getSourceCatalogStorageInfo(),
+      summary: summarizeSourceCatalog(catalog, sourceState),
+      feeds: hydrateSourceCatalog(catalog, sourceState)
+    });
+    return;
   }
 
-  // Build a Vercel-compatible req object
-  const req = {
-    method: request.method,
-    headers: request.headers,
-    query: Object.fromEntries(url.searchParams),
-    body: bodyRaw ? (() => { try { return JSON.parse(bodyRaw); } catch { return bodyRaw; } })() : undefined,
-  };
+  if (request.method === 'POST') {
+    if (!adminAuthorized(request)) {
+      sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+      return;
+    }
+    let body;
+    try {
+      body = await readJsonBody(request, 256 * 1024);
+    } catch (e) {
+      const { status, body: b } = classifyError(e);
+      sendJson(response, status, b);
+      return;
+    }
+    if (!Array.isArray(body.feeds)) {
+      sendJson(response, 400, { error: 'Missing feeds array', code: 'BAD_REQUEST' });
+      return;
+    }
+    for (const feed of body.feeds) {
+      if (!feed || typeof feed !== 'object' || !isPublicHttpUrl(feed.url)) {
+        sendJson(response, 400, { error: 'Feed URL must be a public http(s) URL', code: 'BAD_REQUEST' });
+        return;
+      }
+    }
+    const catalog = await writeSourceCatalog(body.feeds);
+    const sourceState = await readSourceState();
+    sendJson(response, 200, {
+      storage: getSourceCatalogStorageInfo(),
+      summary: summarizeSourceCatalog(catalog, sourceState),
+      feeds: hydrateSourceCatalog(catalog, sourceState)
+    });
+    return;
+  }
 
-  // Build a Vercel-compatible res object
-  let statusCode = 200;
-  const res = {
-    setHeader: () => res,
-    status: (code) => { statusCode = code; return res; },
-    json: (data) => sendJson(response, statusCode, data),
-    send: (data) => sendText(response, statusCode, typeof data === 'string' ? data : JSON.stringify(data)),
-    end: (data) => { if (data) response.end(data); else response.end(); },
-  };
+  sendJson(response, 405, { error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' });
+}
 
-  await handler(req, res);
+async function handleGdeltProxy(request, response, url) {
+  const query = url.searchParams.get('query');
+  if (!query) {
+    sendJson(response, 400, { error: 'Missing query parameter', code: 'BAD_REQUEST' });
+    return;
+  }
+
+  let timespan = url.searchParams.get('timespan');
+  if (!timespan || !/^\d+[mhd]$/.test(timespan)) timespan = '15min';
+
+  let maxrecords = parseInt(url.searchParams.get('maxrecords'), 10);
+  if (Number.isNaN(maxrecords) || maxrecords < 1) maxrecords = 250;
+  else if (maxrecords > 500) maxrecords = 500;
+
+  const params = new URLSearchParams({
+    query,
+    mode: 'artlist',
+    format: 'json',
+    timespan,
+    maxrecords: String(maxrecords),
+    sort: 'DateDesc',
+  });
+
+  try {
+    const upstream = await fetch(`${GDELT_DOC_URL}?${params}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!upstream.ok) {
+      sendJson(response, 502, { error: `GDELT returned ${upstream.status}`, code: 'UPSTREAM_ERROR' });
+      return;
+    }
+    const data = await upstream.json();
+    sendJson(response, 200, data, { 'cache-control': 's-maxage=120, stale-while-revalidate=300' });
+  } catch (err) {
+    sendJson(response, 502, { error: 'GDELT proxy request failed', code: 'UPSTREAM_ERROR' });
+  }
 }
 
 /** Build the admin-health response from the local server's cached briefing */
@@ -526,14 +579,19 @@ const server = http.createServer(async (request, response) => {
 
     // ── SSE: real-time event stream ──
     if (request.method === 'GET' && url.pathname === '/api/stream') {
-      // Reject if the SSE pool is at capacity rather than letting the
-      // client set grow unbounded. Returning 503 lets the client retry.
-      // Set socket-level keepalive so an idle proxy doesn't quietly close
-      // without firing the request.close handler.
+      // Reject BEFORE writing the 200/preamble so a refused client sees a
+      // real 503 instead of a misleading "200 then immediate disconnect".
+      if (!canAcceptSseClient()) {
+        sendJson(response, 503, { error: 'SSE pool at capacity', code: 'SSE_CAPACITY' });
+        return;
+      }
       try {
         request.socket?.setKeepAlive?.(true, 30_000);
         request.socket?.setNoDelay?.(true);
       } catch { /* best-effort */ }
+      // Wire the close handler BEFORE adding to the pool so a TCP-RST race
+      // can't leave a dead client in the broadcast set.
+      request.on('close', () => removeSseClient(response));
       response.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Connection': 'keep-alive',
@@ -546,7 +604,6 @@ const server = http.createServer(async (request, response) => {
         try { response.end(); } catch { /* ignore */ }
         return;
       }
-      request.on('close', () => removeSseClient(response));
       return;
     }
 
@@ -568,7 +625,8 @@ const server = http.createServer(async (request, response) => {
     }
 
     if ((request.method === 'GET' || request.method === 'POST') && url.pathname === '/api/source-catalog') {
-      return withTimeout(() => runVercelHandler(sourceCatalogHandler, request, response, url));
+      await withTimeout(() => handleSourceCatalog(request, response, url));
+      return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/source-reliability') {
@@ -818,6 +876,16 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
         return;
       }
+      // Cool-down: an admin loop calling /api/refresh in tight succession can
+      // still hammer the backend even though only admins reach this point.
+      // 60s between consecutive runs is comfortably above ingest duration.
+      const now = Date.now();
+      if (now - lastManualRefreshAt < MANUAL_REFRESH_COOLDOWN_MS) {
+        const retryAfter = Math.ceil((MANUAL_REFRESH_COOLDOWN_MS - (now - lastManualRefreshAt)) / 1000);
+        sendJson(response, 429, { error: 'Refresh cooldown active', code: 'RATE_LIMITED', retryAfter }, { 'retry-after': String(retryAfter) });
+        return;
+      }
+      lastManualRefreshAt = now;
       const briefing = await withTimeout(() => refreshSnapshot({ force: true, reason: 'manual' }), 120_000);
       sendJson(response, 200, briefing);
       return;
@@ -980,8 +1048,11 @@ const server = http.createServer(async (request, response) => {
       catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
       const signature = String(request.headers['stripe-signature'] || '').trim();
       if (!signature) { sendJson(response, 400, { error: 'Missing Stripe-Signature header' }); return; }
+      // No timeout wrapper here: handler is already two-phase idempotent. A
+      // 504 to Stripe after we mark `processed_at` would trigger a retry that
+      // dedupes; if we 504 *before* mark, the retry resumes processing.
       try {
-        const result = await withTimeout(() => handleStripeWebhook(rawBody, signature));
+        const result = await handleStripeWebhook(rawBody, signature);
         sendJson(response, 200, result);
       } catch (err) {
         console.error('[api] stripe webhook error:', err.message);
@@ -996,7 +1067,13 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === '/api/gdelt-proxy') {
-      return withTimeout(() => runVercelHandler(gdeltProxyHandler, request, response, url));
+      if (request.method === 'OPTIONS') {
+        response.writeHead(204, corsHeadersForPath(url.pathname));
+        response.end();
+        return;
+      }
+      await withTimeout(() => handleGdeltProxy(request, response, url));
+      return;
     }
 
     // ── Serve static frontend from dist/ ──
@@ -1032,18 +1109,30 @@ const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
 const rateLimitMap = new Map();
 
+// Manual /api/refresh cooldown — admins still shouldn't be able to chain
+// full ingests faster than the pipeline can complete.
+const MANUAL_REFRESH_COOLDOWN_MS = 60_000;
+let lastManualRefreshAt = 0;
+
+// Number of trusted proxy hops between this server and the public client.
+// On Railway = 1 (Railway proxy). If behind a CDN that also writes XFF, set
+// to 2. Defaults to 1 to avoid trusting attacker-controlled XFF entries.
+const TRUSTED_PROXY_HOPS = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS) || 1);
+
 function getClientIp(request) {
-  // x-forwarded-for is comma-separated, client-controlled values on the left,
-  // trusted proxy (Railway) appends real IP on the right. Take the last entry.
+  // Right-most TRUSTED_PROXY_HOPS entries are written by trusted proxies; the
+  // last of those is the closest trusted hop's view of the real client. Any
+  // entries further left are attacker-controlled and must be ignored.
   const forwarded = String(request.headers['x-forwarded-for'] || '');
   if (forwarded) {
-    const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
-    if (ips.length > 0) return ips[ips.length - 1];
+    const ips = forwarded.split(',').map((s) => s.trim()).filter(Boolean);
+    if (ips.length >= TRUSTED_PROXY_HOPS) {
+      const idx = ips.length - TRUSTED_PROXY_HOPS;
+      const candidate = ips[idx];
+      if (candidate) return candidate;
+    }
   }
-  return String(
-    request.socket?.remoteAddress ||
-    'unknown'
-  );
+  return String(request.socket?.remoteAddress || 'unknown');
 }
 
 /** Returns true if the request should be rate-limited (blocked). */
@@ -1072,16 +1161,10 @@ setInterval(() => {
   }
 }, 300_000).unref();
 
-/** Constant-time string comparison to prevent timing attacks on secrets. */
-function timingSafeEqual(a, b) {
-  const bufA = Buffer.from(String(a));
-  const bufB = Buffer.from(String(b));
-  if (bufA.length !== bufB.length) {
-    crypto.timingSafeEqual(bufA, bufA);
-    return false;
-  }
-  return crypto.timingSafeEqual(bufA, bufB);
-}
+// Constant-time comparison lives in ./adminAuth.js (timingSafeEqualString) so
+// the server route handlers and the shared isAdminAuthorized helper agree on
+// implementation. Re-exported here under a short local alias.
+const timingSafeEqual = timingSafeEqualString;
 
 // Start server FIRST so healthcheck passes, then initialize data in background
 const HOST = process.env.HOST || '0.0.0.0';

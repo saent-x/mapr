@@ -3,29 +3,45 @@
  * Identifies regions with abnormal event count spikes.
  */
 
+// Cap z-scores so a zero-variance baseline with sudden activity doesn't
+// inject `Infinity` into severity / baseline-ratio math downstream.
+const MAX_Z_SCORE = 10;
+
+function clampZScore(z) {
+  if (!Number.isFinite(z)) return z > 0 ? MAX_Z_SCORE : 0;
+  if (z > MAX_Z_SCORE) return MAX_Z_SCORE;
+  if (z < -MAX_Z_SCORE) return -MAX_Z_SCORE;
+  return z;
+}
+
 /**
  * Compute the z-score of a current value relative to a historical baseline.
  *
  * @param {number} current - The current observation.
  * @param {number[]} history - Array of past observations.
- * @returns {number} The z-score, or 0 if history is empty or has zero std dev.
+ * @returns {number} The z-score, or 0 if history is empty / zero stddev / zero mean.
  */
 export function computeZScore(current, history) {
   if (!history || history.length === 0) return 0;
+  if (!Number.isFinite(current)) return 0;
 
-  const n = history.length;
-  const mean = history.reduce((sum, v) => sum + v, 0) / n;
-  const variance = history.reduce((sum, v) => sum + (v - mean) ** 2, 0) / n;
+  const finite = history.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) return 0;
+
+  const n = finite.length;
+  const mean = finite.reduce((sum, v) => sum + v, 0) / n;
+  const variance = finite.reduce((sum, v) => sum + (v - mean) ** 2, 0) / n;
   const stddev = Math.sqrt(variance);
 
   if (stddev === 0) {
-    // All history values are identical; use half the mean as a proxy for scale
-    // so that a meaningful z-score can still be returned.
-    if (mean === 0) return current > 0 ? Infinity : 0;
-    return (current - mean) / (mean / 2);
+    if (mean === 0) {
+      // Flat-zero baseline: any positive current is "a spike" but capped, not Infinity.
+      return current > 0 ? clampZScore(MAX_Z_SCORE) : 0;
+    }
+    return clampZScore((current - mean) / (mean / 2));
   }
 
-  return (current - mean) / stddev;
+  return clampZScore((current - mean) / stddev);
 }
 
 /**

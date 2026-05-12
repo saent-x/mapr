@@ -72,19 +72,18 @@ export function deriveSeverity(title, summary, entityContext) {
     }
   }
 
-  // Phase 2: AFINN sentiment boost (English titles only)
-  const sentiment = scoreSentiment(title);
-  // sentiment is [-1, 1]: -1 = very negative (high severity), +1 = very positive (low severity)
+  // Phase 2: AFINN sentiment boost (English titles only). scoreSentiment can
+  // return NaN for empty/garbled input; coerce to 0 so it never poisons severity.
+  const sentimentRaw = scoreSentiment(title);
+  const sentiment = Number.isFinite(sentimentRaw) ? sentimentRaw : 0;
   const afinnBoost = Math.round(sentiment * -15); // range: [-15, +15]
 
   let keywordSeverity;
   if (keywordBase != null) {
-    // Keyword matched: use AFINN to nudge within the band (±15 points)
     keywordSeverity = Math.max(10, Math.min(95, keywordBase + afinnBoost));
   } else {
-    // No keyword match: use AFINN to differentiate from the baseline
-    // Also check summary for sentiment if title is neutral
-    const summarySentiment = summary ? scoreSentiment(summary) : 0;
+    const summaryRaw = summary ? scoreSentiment(summary) : 0;
+    const summarySentiment = Number.isFinite(summaryRaw) ? summaryRaw : 0;
     const combinedBoost = Math.round(((sentiment * 0.7) + (summarySentiment * 0.3)) * -15);
     keywordSeverity = Math.max(10, Math.min(95, 20 + baseVariance + combinedBoost));
   }
@@ -138,14 +137,47 @@ function normalizeTitle(title) {
     .slice(0, 80);
 }
 
+// Query params that are pure attribution noise — strip from dedup key but
+// keep all other params so query-id'd articles (?story=42) stay distinct.
+const TRACKING_PARAM_PATTERNS = [
+  /^utm_/i,
+  /^fbclid$/i,
+  /^gclid$/i,
+  /^msclkid$/i,
+  /^mc_(cid|eid)$/i,
+  /^_ga$/i,
+  /^igshid$/i,
+  /^ref$/i,
+  /^ref_(src|url)$/i,
+  /^s_(cid|kwcid)$/i,
+  /^yclid$/i,
+];
+
+function isTrackingParam(name) {
+  return TRACKING_PARAM_PATTERNS.some((re) => re.test(name));
+}
+
 function normalizeUrl(url) {
   if (!url) return '';
-  return url
-    .toLowerCase()
-    .replace(/^https?:\/\//, '')
-    .replace(/^www\./, '')
-    .replace(/[?#].*$/, '')
-    .replace(/\/$/, '');
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // Fall back to legacy string normalization for unparseable URLs.
+    return url.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/\/$/, '');
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  const path = parsed.pathname.replace(/\/+$/, '') || '/';
+  const params = [];
+  for (const [k, v] of parsed.searchParams.entries()) {
+    if (isTrackingParam(k)) continue;
+    params.push([k.toLowerCase(), v]);
+  }
+  params.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const query = params.length
+    ? '?' + params.map(([k, v]) => `${k}=${v}`).join('&')
+    : '';
+  return `${host}${path}${query}`;
 }
 
 // --- Title similarity helpers for cross-source deduplication ---
