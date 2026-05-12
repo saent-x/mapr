@@ -1,0 +1,98 @@
+# Coolify "Service" deploy for the Mapr AI sidecar.
+#
+# Drop this file into a Coolify Service (Docker Compose). Coolify will spin
+# up four containers on the same internal network:
+#
+#   ollama        — local LLM runtime (Qwen 2.5 3B Q4 served on :11434)
+#   ai-worker     — FastAPI: /embed (bge-m3 ONNX), /ner (GLiNER), /generate (proxies to ollama)
+#   cloudflared   — Cloudflare Tunnel that publishes ai-llm.<your-domain> + ai-embed.<your-domain>
+#   model-puller  — one-shot init: pulls the Qwen model into the ollama volume on first boot
+#
+# Required Coolify environment variables (set under the Service → "Environment"):
+#   MAPR_AI_BEARER           — random 32+ byte token shared with the Mapr server
+#   CF_TUNNEL_TOKEN          — Cloudflare Tunnel token (from CF dashboard → Zero Trust → Tunnels)
+#   OLLAMA_MODEL             — defaults to "qwen2.5:3b-instruct-q4_K_M"
+#   N_THREADS                — defaults to "$(nproc)" inside the container
+#
+# Coolify pins persistent volumes to its storage dir, so models survive
+# re-deploys.  Health checks let Coolify auto-restart on failure.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=30m
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 6g
+
+  model-puller:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        echo "Pulling $${OLLAMA_MODEL} via ollama at $${OLLAMA_HOST}…"
+        until ollama list >/dev/null 2>&1; do sleep 2; done
+        ollama pull "$${OLLAMA_MODEL}"
+        echo "Model warm."
+
+  ai-worker:
+    build:
+      context: ./app
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - MAPR_AI_BEARER=${MAPR_AI_BEARER:?must set}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      - EMBED_MODEL=BAAI/bge-m3
+      - NER_MODEL=urchade/gliner_multi-v2.1
+      - N_THREADS=${N_THREADS:-4}
+      - MAX_CONCURRENT_LLM=1
+      - MAX_CONCURRENT_EMBED=2
+      - HF_HOME=/cache/huggingface
+    volumes:
+      - hf-cache:/cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/healthz', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN:?must set}
+    depends_on:
+      ai-worker:
+        condition: service_healthy
+
+volumes:
+  ollama-data:
+  hf-cache:
