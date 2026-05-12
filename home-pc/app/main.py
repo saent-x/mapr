@@ -8,9 +8,9 @@ Endpoints:
                     serving Qwen 2.5 3B Instruct (Q4_K_M)
   GET  /healthz   — liveness + resource snapshot
 
-Auth: all POST requests must carry `x-mapr-token: $MAPR_AI_BEARER`.
-Cloudflare Access service tokens are forwarded by the tunnel and do not
-need to be verified here — the bearer is the second factor.
+Auth: every public endpoint must carry `x-mapr-token: $MAPR_AI_BEARER`.
+This deployment relies on Cloudflare Tunnel for ingress and the app bearer
+as the public-facing auth layer.
 """
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ def _load_ner():
 
 
 # ── Routes ────────────────────────────────────────────────────────────
-@app.get("/healthz")
+@app.get("/healthz", dependencies=[Depends(require_bearer)])
 async def healthz():
     return {
         "ok": True,
