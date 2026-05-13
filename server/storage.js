@@ -1001,24 +1001,65 @@ export async function updateSourceCredibility(sourceKey, wasCorroborated) {
  * @param {Iterable<[string, { total: number, corroborated: number }]>} entries
  */
 export async function updateSourceCredibilityBatch(entries) {
-  const list = Array.from(entries).filter(([k]) => k);
-  if (list.length === 0) return;
+  // Coerce + dedupe defensively. Caller passes a JS Map (already unique by
+  // key), but the previous multi-row VALUES form raised
+  // `duplicate key value violates unique constraint "source_credibility_pkey"`
+  // in production. unnest + GROUP BY guarantees one row per key reaches
+  // INSERT regardless of caller-side key collisions.
+  const agg = new Map();
+  for (const [rawKey, counts] of entries) {
+    const key = String(rawKey || '').trim();
+    if (!key) continue;
+    const cur = agg.get(key) || { total: 0, corroborated: 0 };
+    cur.total += Number(counts?.total) || 0;
+    cur.corroborated += Number(counts?.corroborated) || 0;
+    agg.set(key, cur);
+  }
+  if (agg.size === 0) return;
+
+  const keys = [];
+  const totals = [];
+  const corroborated = [];
+  for (const [k, v] of agg) {
+    keys.push(k);
+    totals.push(v.total);
+    corroborated.push(v.corroborated);
+  }
+
   const db = await ensureDatabase();
-  const values = [];
-  const params = [];
-  list.forEach(([sourceKey, { total, corroborated }], idx) => {
-    const base = idx * 3;
-    values.push(`($${base + 1}, $${base + 2}::int, $${base + 3}::int, now()::text)`);
-    params.push(sourceKey, Number(total) || 0, Number(corroborated) || 0);
-  });
-  await db.query(`
-    INSERT INTO source_credibility ("sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt")
-    VALUES ${values.join(',')}
-    ON CONFLICT ("sourceKey") DO UPDATE SET
-      "totalEvents" = source_credibility."totalEvents" + EXCLUDED."totalEvents",
-      "corroboratedEvents" = source_credibility."corroboratedEvents" + EXCLUDED."corroboratedEvents",
-      "lastUpdatedAt" = EXCLUDED."lastUpdatedAt"
-  `, params);
+  try {
+    await db.query(`
+      INSERT INTO source_credibility ("sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt")
+      SELECT key, sum(t)::int, sum(c)::int, now()::text
+      FROM unnest($1::text[], $2::int[], $3::int[]) AS u(key, t, c)
+      GROUP BY key
+      ON CONFLICT ("sourceKey") DO UPDATE SET
+        "totalEvents" = source_credibility."totalEvents" + EXCLUDED."totalEvents",
+        "corroboratedEvents" = source_credibility."corroboratedEvents" + EXCLUDED."corroboratedEvents",
+        "lastUpdatedAt" = EXCLUDED."lastUpdatedAt"
+    `, [keys, totals, corroborated]);
+  } catch (err) {
+    // Per-row fallback so one bad key doesn't drop the whole cycle's
+    // credibility data, and the offending key gets logged.
+    console.warn('[storage] credibility batch failed, retrying per-row:', err.message);
+    let failed = 0;
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        await db.query(`
+          INSERT INTO source_credibility ("sourceKey", "totalEvents", "corroboratedEvents", "lastUpdatedAt")
+          VALUES ($1, $2::int, $3::int, now()::text)
+          ON CONFLICT ("sourceKey") DO UPDATE SET
+            "totalEvents" = source_credibility."totalEvents" + EXCLUDED."totalEvents",
+            "corroboratedEvents" = source_credibility."corroboratedEvents" + EXCLUDED."corroboratedEvents",
+            "lastUpdatedAt" = EXCLUDED."lastUpdatedAt"
+        `, [keys[i], totals[i], corroborated[i]]);
+      } catch (rowErr) {
+        failed++;
+        console.warn('[storage] credibility row failed', { key: keys[i], msg: rowErr.message });
+      }
+    }
+    if (failed > 0) console.warn(`[storage] credibility per-row fallback: ${failed}/${keys.length} rows dropped`);
+  }
 }
 
 /**
