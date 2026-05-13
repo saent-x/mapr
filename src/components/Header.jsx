@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw, Share2, Printer, CreditCard, Settings } from 'lucide-react';
+import { Search, Menu, X, LogOut, LogIn, Sun, Moon, RefreshCw, Share2, Printer, CreditCard, Settings, MessageSquare } from 'lucide-react';
 import useFilterStore from '../stores/filterStore';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
@@ -262,6 +262,17 @@ export default function Header() {
               aria-label={t('share.shareButton', 'Share view')}
             >
               <Share2 size={14} aria-hidden />
+            </button>
+            <button
+              type="button"
+              className="header-agent-btn"
+              onClick={() => useUIStore.getState().toggleAgentSidebar()}
+              title={t('agent.toggleTooltip')}
+              aria-label={t('agent.toggleAria')}
+              data-testid="header-agent-toggle"
+            >
+              <MessageSquare size={14} aria-hidden />
+              <span className="header-agent-btn-label">{t('agent.title')}</span>
             </button>
             <button
               type="button"

@@ -77,6 +77,29 @@ const _schema = i.schema({
       matchCount: i.number().optional(),
     }),
 
+    // AI Q&A sidebar — owned by the user. Messages are server-only writes
+    // (see instant.perms.ts) so the agent can't be hijacked client-side.
+    qaConversations: i.entity({
+      title: i.string(),
+      createdAt: i.number(),
+      updatedAt: i.number(),
+      archived: i.boolean().optional(),
+      lastMessageAt: i.number().optional(),
+      messageCount: i.number().optional(),
+      useCurrentFilters: i.boolean().optional(),
+    }),
+
+    qaMessages: i.entity({
+      conversationId: i.string().indexed(),
+      role: i.string(),
+      content: i.string(),
+      citations: i.json().optional(),
+      modelUsed: i.string().optional(),
+      tokensIn: i.number().optional(),
+      tokensOut: i.number().optional(),
+      createdAt: i.number().indexed(),
+    }),
+
     bookmarks: i.entity({
       storyId: i.string(),
       storyTitle: i.string(),
@@ -128,6 +151,10 @@ const _schema = i.schema({
     userWatchlistItems: {
       forward: { on: 'watchlistItems', has: 'one', label: 'owner' },
       reverse: { on: '$users', has: 'many', label: 'watchlistItems' },
+    },
+    userQaConversations: {
+      forward: { on: 'qaConversations', has: 'one', label: 'owner' },
+      reverse: { on: '$users', has: 'many', label: 'qaConversations' },
     },
   },
 });

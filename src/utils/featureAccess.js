@@ -73,6 +73,13 @@ export const FEATURE_ACCESS_CATALOG = [
     category: 'Analysis',
     defaultTier: FEATURE_TIER_FREE,
   },
+  {
+    id: 'aiQa',
+    label: 'AI Q&A agent',
+    description: 'Conversational search over the news corpus with inline citations. 10 messages / 30d on Free, 200 on Pro.',
+    category: 'Analysis',
+    defaultTier: FEATURE_TIER_FREE,
+  },
 ];
 
 const VALID_TIERS = new Set([FEATURE_TIER_FREE, FEATURE_TIER_PRO, FEATURE_TIER_DISABLED]);
