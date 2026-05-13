@@ -63,6 +63,34 @@ const rules = {
     },
   },
 
+  // AI Q&A conversations live in the user's account. Reads/writes via
+  // the regular owner check; the server (admin token) also writes
+  // through them when appending messages.
+  qaConversations: {
+    bind: {
+      isOwner: "data.id in auth.ref('$user.qaConversations.id')",
+    },
+    allow: {
+      view: 'isOwner',
+      create: "auth.id in data.ref('owner.id')",
+      update: 'isOwner',
+      delete: 'isOwner',
+    },
+  },
+
+  // Messages are server-owned. Clients NEVER write them directly so the
+  // agent can't be hijacked or have its citations forged client-side.
+  // Reads also go through the server route, which authorizes the user
+  // against the parent conversation before returning rows.
+  qaMessages: {
+    allow: {
+      view: 'false',
+      create: 'false',
+      update: 'false',
+      delete: 'false',
+    },
+  },
+
   alertRules: {
     bind: {
       isOwner: "data.id in auth.ref('$user.alertRules.id')",
