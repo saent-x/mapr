@@ -108,16 +108,29 @@ async def get_embedder():
     global embedder
     if embedder is None:
         # Done in a thread so the FastAPI loop isn't blocked while the
-        # 570 MB ONNX model loads.
+        # ~2 GB bge-m3 weights load into memory.
         loop = asyncio.get_event_loop()
         embedder = await loop.run_in_executor(None, _load_embedder)
     return embedder
 
 
 def _load_embedder():
+    """
+    Use the default torch backend rather than ONNX.
+
+    BAAI/bge-m3 doesn't publish a vanilla `model.onnx` at the path
+    sentence-transformers' ONNX backend expects, so requesting
+    `backend="onnx"` crashes at load time with FileNotFoundError. Torch
+    fp32 on CPU is ~2x slower than ONNX int8 in theory, but for this
+    workload (a few hundred article titles per ingest cycle) it's still
+    sub-second per batch. If we ever need the ONNX speedup, the right
+    path is `optimum-cli` exporting + quantizing bge-m3 ourselves and
+    pointing model_kwargs.file_name at our own file — not the upstream
+    repo's missing one.
+    """
     from sentence_transformers import SentenceTransformer
-    log.info("loading embed model: %s", EMBED_MODEL)
-    return SentenceTransformer(EMBED_MODEL, backend="onnx", model_kwargs={"file_name": "model.onnx"})
+    log.info("loading embed model: %s (backend=torch)", EMBED_MODEL)
+    return SentenceTransformer(EMBED_MODEL)
 
 
 async def get_ner():

@@ -2,7 +2,8 @@
  * InstantDB Schema — MAPR
  *
  * Apply via:
- *   npx instant-cli@latest push schema
+ *   npx instant-cli@latest push perms      # behavior changes (rules)
+ *   npx instant-cli@latest push schema     # type changes (entities + links)
  *
  * Layout follows the InstantDB docs exactly:
  *   - Entities declare scalar fields only
@@ -10,6 +11,23 @@
  *   - `$users.email` is `i.any().unique().indexed()` for legacy owner-link
  *     fallbacks; client writes prefer the authenticated `$users` UUID when it
  *     is available.
+ *
+ * If `push schema` errors with "`owner` already exists on `savedViews`"
+ * (or similar `<label> already exists on <entity>`), it's almost always
+ * because Instant has an **inferred attribute** in production that
+ * conflicts with a declared link here. Fix order:
+ *   1. `push perms` alone — behavior usually only needs this; defer
+ *      the schema push.
+ *   2. Dashboard → Schema → the entity → drop the conflicting attribute
+ *      column → re-run `push schema`. Existing data triples are
+ *      preserved; only the inferred-attribute metadata is replaced.
+ *   3. `pull-schema` → `git diff instant.schema.ts` → reconcile shape
+ *      differences → `push schema --rename oldField:newField` if needed.
+ *
+ * InstantDB is schemaless underneath: new optional attributes here work
+ * the moment a client writes them, so a temporary mismatch between the
+ * file and the deployed schema doesn't block feature behavior — only
+ * SDK type-safety.
  */
 
 import { i } from '@instantdb/core';
