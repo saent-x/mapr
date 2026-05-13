@@ -519,7 +519,7 @@ const NewsPanel = ({
           <span className="dot" />
           <span className="news-panel-title">FEED · {sourceLabel}</span>
           <span className="spacer" />
-          <span className="news-panel-count">{items.length} items</span>
+          <span className="news-panel-count tnum">{items.length} items</span>
         </div>
         <div className="panel-body">{listBody}</div>
       </div>
@@ -554,7 +554,7 @@ const NewsPanel = ({
         <span className="dot" />
         <span className="news-panel-title">FEED · {sourceLabel}</span>
         <span className="spacer" />
-        <span className="news-panel-count">{items.length} items</span>
+        <span className="news-panel-count tnum">{items.length} items</span>
         <button
           type="button"
           className="news-panel-briefing-btn"
