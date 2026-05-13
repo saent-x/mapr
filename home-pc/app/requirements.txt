@@ -8,6 +8,7 @@ python-dotenv==1.0.1
 # inference fast without pulling Torch's CUDA stack.
 sentence-transformers==3.3.1
 onnxruntime==1.20.1
-torch==2.5.1+cpu --index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
 gliner==0.2.13
 huggingface_hub==0.27.0
