@@ -80,6 +80,13 @@ export const FEATURE_ACCESS_CATALOG = [
     category: 'Analysis',
     defaultTier: FEATURE_TIER_FREE,
   },
+  {
+    id: 'beatAlerts',
+    label: 'Beat-aware alerts',
+    description: 'Describe your beat in plain English; new articles are scored semantically and the top matches surface in your digest.',
+    category: 'Workflow',
+    defaultTier: FEATURE_TIER_FREE,
+  },
 ];
 
 const VALID_TIERS = new Set([FEATURE_TIER_FREE, FEATURE_TIER_PRO, FEATURE_TIER_DISABLED]);

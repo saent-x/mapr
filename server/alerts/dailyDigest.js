@@ -14,6 +14,7 @@ import { readActiveEvents } from '../storage.js';
 import { getInstantDb } from '../auth.js';
 import { sendEmail, isEmailConfigured } from '../email.js';
 import { generate } from '../ai/client.js';
+import { matchBeatForUser } from '../beats/match.js';
 
 const SEVERITY_LABEL = (s) => (s >= 70 ? 'CRITICAL' : s >= 40 ? 'ELEVATED' : s >= 20 ? 'WATCH' : 'LOW');
 
@@ -121,7 +122,7 @@ async function summarizeDigest({ user, buckets }) {
   }
 }
 
-function renderDigestHtml({ user, buckets, summary, baseUrl }) {
+function renderDigestHtml({ user, buckets, beatMatches = [], summary, baseUrl }) {
   const intro = summary?.body
     ? `<p style="margin:0 0 16px;color:#333;">${escape(summary.body)}</p>`
     : `<p style="margin:0 0 16px;color:#333;">${buckets.length} of your watchlist items had new matches in the last day.</p>`;
@@ -141,21 +142,37 @@ function renderDigestHtml({ user, buckets, summary, baseUrl }) {
       </section>
     `;
   }).join('');
+  const beatHtml = beatMatches.length ? `
+    <section style="margin:24px 0 18px;">
+      <h3 style="font-size:14px;margin:0 0 8px;letter-spacing:0.04em;color:#111;">
+        From your beat <span style="color:#888;font-weight:normal;font-size:11px;">· ${beatMatches.length} semantic match${beatMatches.length === 1 ? '' : 'es'}</span>
+      </h3>
+      <ul style="margin:0;padding-left:18px;font-size:13px;">
+        ${beatMatches.slice(0, 8).map((m) => `
+          <li style="margin:4px 0;">
+            <a href="${m.eventId ? `${baseUrl}/event/${encodeURIComponent(m.eventId)}` : escape(m.url || '#')}"
+               style="color:#1659a6;text-decoration:none;">${escape(m.title || 'Untitled')}</a>
+            <span style="color:#888;font-size:11px;"> · ${Math.round(m.similarity * 100)}% match${m.source ? ` · ${escape(m.source)}` : ''}</span>
+          </li>
+        `).join('')}
+      </ul>
+    </section>` : '';
   return `<!doctype html>
 <html><body style="font:14px/1.6 -apple-system,Helvetica,sans-serif;color:#111;background:#fafafa;padding:24px;">
   <div style="max-width:620px;margin:auto;background:#fff;border:1px solid #ddd;border-radius:4px;padding:20px;">
     <h2 style="margin:0 0 4px;">${escape(summary?.headline || 'Your Mapr daily digest')}</h2>
-    <p style="margin:0 0 12px;color:#666;font-size:12px;">Hi ${escape(user.email || '')} — here's what your watchlist surfaced.</p>
+    <p style="margin:0 0 12px;color:#666;font-size:12px;">Hi ${escape(user.email || '')} — here's what your watchlist and beat surfaced.</p>
     ${intro}
-    ${bucketHtml || '<p>No new matches in this digest window.</p>'}
+    ${bucketHtml || (beatMatches.length ? '' : '<p>No new matches in this digest window.</p>')}
+    ${beatHtml}
     <p style="margin-top:18px;color:#888;font-size:11px;">
-      <a href="${baseUrl}/account" style="color:#888;">Manage your digest schedule and watchlist in Mapr.</a>
+      <a href="${baseUrl}/account" style="color:#888;">Manage your digest schedule, watchlist, and beat in Mapr.</a>
     </p>
   </div>
 </body></html>`;
 }
 
-function renderDigestText({ user, buckets, summary, baseUrl }) {
+function renderDigestText({ user, buckets, beatMatches = [], summary, baseUrl }) {
   const lines = [
     summary?.headline || 'Your Mapr daily digest',
     '',
@@ -166,6 +183,14 @@ function renderDigestText({ user, buckets, summary, baseUrl }) {
     lines.push(`• ${b.item.label || b.item.value} (${b.events.length} matches)`);
     for (const ev of b.events.slice(0, 5)) {
       lines.push(`    – ${ev.title || 'Untitled'} — ${baseUrl}/event/${encodeURIComponent(ev.id)}`);
+    }
+    lines.push('');
+  }
+  if (beatMatches.length) {
+    lines.push(`From your beat (${beatMatches.length} semantic matches)`);
+    for (const m of beatMatches.slice(0, 8)) {
+      const url = m.eventId ? `${baseUrl}/event/${encodeURIComponent(m.eventId)}` : (m.url || '');
+      lines.push(`    – ${m.title || 'Untitled'} — ${Math.round(m.similarity * 100)}% match — ${url}`);
     }
     lines.push('');
   }
@@ -187,9 +212,8 @@ async function markUserDigestSent(userId, ts = Date.now()) {
 
 export async function buildDigestForUser(user, { baseUrl = process.env.MAPR_PUBLIC_URL || 'https://mapr.app', dryRun = false } = {}) {
   if (!user?.id || !user.email) return { skipped: true, reason: 'NO_USER_EMAIL' };
-  if (!Array.isArray(user.watchlistItems) || user.watchlistItems.length === 0) {
-    return { skipped: true, reason: 'NO_WATCHLIST' };
-  }
+  // A user with no watchlist AND no beat profile has nothing to digest;
+  // a beat profile alone is enough to send the digest.
   const cadence = userCadenceMs(user);
   const last = user.lastDailyDigestSentAt || 0;
   if (Date.now() - last < cadence) {
@@ -204,22 +228,41 @@ export async function buildDigestForUser(user, { baseUrl = process.env.MAPR_PUBL
   const recent = events.filter((ev) => new Date(ev.lastUpdatedAt || ev.firstSeenAt || 0).toISOString() > sinceIso);
 
   const matches = [];
-  for (const item of user.watchlistItems) {
+  for (const item of (user.watchlistItems || [])) {
     for (const event of recent) {
       if (eventMatchesItem(event, item)) matches.push({ item, event });
     }
   }
-  if (matches.length === 0) return { skipped: true, reason: 'NO_MATCHES' };
+
+  // D2: beat-matched articles for the last 24 h (or since the last
+  // digest if it's been less). Pulled directly from articles (not
+  // events) so we capture stories that haven't yet been clustered.
+  const beatMatches = await matchBeatForUser({
+    userId: user.id,
+    limit: 8,
+    minSimilarity: 0.55,
+    sinceIso,
+  }).catch(() => []);
+
+  if (matches.length === 0 && beatMatches.length === 0) {
+    return { skipped: true, reason: 'NO_MATCHES' };
+  }
   const buckets = bucketize(matches);
 
   if (dryRun) {
-    return { dryRun: true, recipient: user.email, buckets: buckets.length, totalEvents: matches.length };
+    return {
+      dryRun: true,
+      recipient: user.email,
+      buckets: buckets.length,
+      totalEvents: matches.length,
+      beatMatches: beatMatches.length,
+    };
   }
   if (!isEmailConfigured()) return { skipped: true, reason: 'EMAIL_NOT_CONFIGURED' };
 
   const summary = await summarizeDigest({ user, buckets });
-  const html = renderDigestHtml({ user, buckets, summary, baseUrl });
-  const text = renderDigestText({ user, buckets, summary, baseUrl });
+  const html = renderDigestHtml({ user, buckets, beatMatches, summary, baseUrl });
+  const text = renderDigestText({ user, buckets, beatMatches, summary, baseUrl });
 
   const subject = summary?.headline
     ? `[Mapr] ${summary.headline.slice(0, 80)}`

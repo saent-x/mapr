@@ -10110,3 +10110,95 @@ h1, h2, h3, h4, h5, h6 {
   border-color: transparent;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
+/* ── Beat section (D2) ──────────────────────────────────────────────── */
+.beat-section { display: flex; flex-direction: column; gap: 16px; }
+.account-section-head h2 { margin: 0 0 4px; font-size: 14px; letter-spacing: 0.04em; }
+.account-section-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.beat-editor { display: flex; flex-direction: column; gap: 8px; }
+.beat-editor-textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 10px 12px;
+  font-family: var(--ff-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-0);
+}
+.beat-editor-textarea:focus { outline: none; border-color: var(--amber); }
+.beat-editor-meta {
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+.beat-editor-actions { display: flex; gap: 8px; }
+.beat-error {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--sev-red);
+  background: rgba(255, 70, 70, 0.06);
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--ink-0);
+}
+.beat-empty {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  color: var(--ink-2);
+}
+.beat-matches { display: flex; flex-direction: column; gap: 8px; }
+.account-subhead {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.beat-matches-empty {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  color: var(--ink-3);
+}
+.beat-matches-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.beat-match {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.beat-match-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+.beat-match-title {
+  color: var(--ink-0);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 13px;
+}
+.beat-match-title:hover { text-decoration: underline; }
+.beat-match-score { color: var(--cyan); }
+.beat-match-meta { color: var(--ink-3); }
