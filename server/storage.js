@@ -209,6 +209,27 @@ async function runSchemaMigration(db) {
       "ownerUserId" TEXT
     );
 
+    -- D6: per-event reporter prompt — questions the sources didn't answer
+    -- + reporters who cover the beat. Cached by (eventId, lastUpdatedAt).
+    CREATE TABLE IF NOT EXISTS event_reporter_prompts (
+      "eventId"            TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      "eventLastUpdatedAt" TEXT NOT NULL,
+      questions            TEXT NOT NULL,
+      reporters            TEXT NOT NULL,
+      "modelUsed"          TEXT,
+      "generatedAt"        TEXT NOT NULL
+    );
+
+    -- D7: "why now?" historical context for an event. Cached the same way.
+    CREATE TABLE IF NOT EXISTS event_why_now (
+      "eventId"            TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      "eventLastUpdatedAt" TEXT NOT NULL,
+      context              TEXT NOT NULL,
+      precedents           TEXT NOT NULL,
+      "modelUsed"          TEXT,
+      "generatedAt"        TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS credibility_explanations (
       "sourceKey" TEXT PRIMARY KEY,
       "scoreAtGeneration" REAL NOT NULL,

@@ -702,20 +702,30 @@
     "modelLabel": "Model",
     "deletedNotice": "Conversation archived."
   },
-  "dossier": {
-    "title": "Dossier",
-    "loading": "BUILDING DOSSIER…",
-    "notRunYet": "Run the AI compiler to build a dossier from the recent corpus.",
-    "signInToGenerate": "Sign in to build a dossier.",
-    "generate": "Build dossier",
-    "generating": "Building…",
-    "regenerate": "Refresh",
+  "reporterPrompt": {
+    "title": "What's missing",
+    "subtitle": "Questions sources didn't answer + reporters who cover this beat.",
+    "loading": "READING SOURCES…",
+    "notRunYet": "Run the AI extractor to surface unanswered questions for this event.",
+    "signInToGenerate": "Sign in to run the AI extractor.",
+    "generate": "Surface unanswered questions",
+    "regenerate": "Regenerate",
+    "generating": "Working…",
     "notConfigured": "AI service offline — try again later.",
-    "recentActivity": "RECENT ACTIVITY",
-    "relationships": "KEY RELATIONSHIPS",
-    "quotes": "NOTABLE QUOTES",
-    "articlesScanned": "articles scanned",
-    "lastBuilt": "built {{relative}}"
+    "unansweredHeading": "QUESTIONS SOURCES DIDN'T ANSWER",
+    "reportersHeading": "REPORTERS ON THIS BEAT"
+  },
+  "whyNow": {
+    "title": "Why now",
+    "subtitle": "What trend this event continues + which precedents it mirrors.",
+    "loading": "READING THE ARCHIVE…",
+    "notRunYet": "Run the AI extractor to compile a brief 'why now?' note from the corpus.",
+    "signInToGenerate": "Sign in to run the AI extractor.",
+    "generate": "Surface historical context",
+    "regenerate": "Regenerate",
+    "generating": "Working…",
+    "notConfigured": "AI service offline — try again later.",
+    "precedentsHeading": "RELATED PRECEDENTS"
   },
   "verification": {
     "title": "Verify this story",
