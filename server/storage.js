@@ -136,15 +136,13 @@ async function runSchemaMigration(db) {
       "lastUpdatedAt" TEXT
     );
 
-    -- D2: per-user beat profile. The embedding column is created in the
-    -- post-extension block below so a host without pgvector still gets
-    -- the description text (the match endpoint then returns []).
-    CREATE TABLE IF NOT EXISTS user_beat_profiles (
-      "userId"          TEXT PRIMARY KEY,
-      description       TEXT NOT NULL,
-      "embeddingModel"  TEXT,
-      "updatedAt"       TEXT NOT NULL,
-      "createdAt"       TEXT NOT NULL DEFAULT (now()::text)
+    -- D3: cached per-event LLM-extracted source contradictions.
+    CREATE TABLE IF NOT EXISTS event_contradictions (
+      "eventId"            TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+      "eventLastUpdatedAt" TEXT NOT NULL,
+      contradictions       TEXT NOT NULL,
+      "modelUsed"          TEXT,
+      "generatedAt"        TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS velocity_history (

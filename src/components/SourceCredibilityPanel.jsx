@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck, ShieldAlert, ShieldX, ExternalLink, AlertTriangle, Info } from 'lucide-react';
 import { fetchEventCredibility } from '../services/backendService.js';
+import EventContradictions from './credibility/EventContradictions.jsx';
 
 function tierIcon(tier) {
   switch (tier) {
@@ -91,6 +92,13 @@ export default function SourceCredibilityPanel({ eventId }) {
           <div className="credibility-summary mono micro">
             {t('credibility.outletCount', { count: data.uniqueSourceCount, defaultValue: '{{count}} outlets' })}
           </div>
+
+          <EventContradictions
+            eventId={eventId}
+            contradictions={data.contradictions || []}
+            generatedAt={data.contradictionsGeneratedAt || null}
+            sourcesByKey={Object.fromEntries((data.sources || []).map((s) => [s.sourceKey, s]))}
+          />
 
           <ul className="credibility-source-list" role="list">
             {data.sources.map((src) => (

@@ -106,6 +106,10 @@ import { listThreadsForUser, createThread, archiveThread } from './storyThreads.
 import { runDigestSweep } from './alerts/dispatch.js';
 import { runDailyDigestSweep } from './alerts/dailyDigest.js';
 import { buildCredibilityForEvent } from './sourceCredibility.js';
+import {
+  readLatestContradictions,
+  generateContradictionsForEvent,
+} from './contradictions.js';
 import { generateBrief, readLatestBrief } from './briefs.js';
 import { readEventById } from './storage.js';
 import {
@@ -1169,8 +1173,55 @@ const server = http.createServer(async (request, response) => {
           sendJson(response, 400, { error: 'Missing event id' });
           return;
         }
-        const result = await withTimeout(() => buildCredibilityForEvent(id));
+        const [result, contradictionRow] = await Promise.all([
+          withTimeout(() => buildCredibilityForEvent(id)),
+          withTimeout(() => readLatestContradictions(id)).catch(() => null),
+        ]);
+        result.contradictions = contradictionRow?.contradictions || [];
+        result.contradictionsGeneratedAt = contradictionRow?.generatedAt || null;
         sendJson(response, 200, result);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && /^\/api\/events\/[^/]+\/contradictions$/.test(url.pathname)) {
+      try {
+        const id = url.pathname.split('/')[3];
+        const row = await withTimeout(() => readLatestContradictions(id));
+        sendJson(response, 200, {
+          contradictions: row?.contradictions || [],
+          generatedAt: row?.generatedAt || null,
+          modelUsed: row?.modelUsed || null,
+        });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && /^\/api\/events\/[^/]+\/contradictions$/.test(url.pathname)) {
+      try {
+        await requireUser(request);
+        const id = url.pathname.split('/')[3];
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* allow empty body */ }
+        try {
+          const row = await withTimeout(
+            () => generateContradictionsForEvent({ eventId: id, force: Boolean(body.force) }),
+            60_000,
+          );
+          sendJson(response, 200, row);
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, { error: e.message, code: 'AI_NOT_CONFIGURED' });
+            return;
+          }
+          throw e;
+        }
       } catch (err) {
         const { status, body: b } = classifyError(err);
         sendJson(response, status, b);

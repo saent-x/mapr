@@ -182,3 +182,17 @@ export function fetchBeatMatches({ limit = 10, minSimilarity = 0.5, windowHours 
   if (windowHours) p.set('windowHours', String(windowHours));
   return request(`/me/beat/matches?${p.toString()}`, { auth: true });
 }
+// ── D3: source contradictions ─────────────────────────────────────────
+
+export function fetchEventContradictions(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/contradictions`);
+}
+
+export function regenerateEventContradictions(eventId, { force = true } = {}) {
+  return request(`/events/${encodeURIComponent(eventId)}/contradictions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force }),
+    auth: true,
+  });
+}
