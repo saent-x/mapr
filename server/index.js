@@ -108,6 +108,18 @@ import { runDailyDigestSweep } from './alerts/dailyDigest.js';
 import { buildCredibilityForEvent } from './sourceCredibility.js';
 import { generateBrief, readLatestBrief } from './briefs.js';
 import { readEventById } from './storage.js';
+import {
+  createConversation as createQaConversation,
+  listConversations as listQaConversations,
+  getConversation as getQaConversation,
+  appendMessage as appendQaMessage,
+  readMessages as readQaMessages,
+  archiveConversation as archiveQaConversation,
+  setConversationUseFilters as setQaConversationUseFilters,
+  userMessageCountInLastDays as qaUserMessageCount,
+} from './qa/conversations.js';
+import { retrieveTopK as qaRetrieveTopK } from './qa/retrieve.js';
+import { generateAnswer as qaGenerateAnswer } from './qa/generate.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
@@ -1097,6 +1109,184 @@ const server = http.createServer(async (request, response) => {
         const user = await requireUser(request);
         const threadId = url.pathname.replace('/api/threads/', '');
         const ok = await withTimeout(() => archiveThread({ userId: user.id, threadId }));
+        sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── AI Q&A sidebar (Workstream D1) ─────────────────────────────────
+    // Free tier: 10 user messages / trailing 30 days. Pro: 200.
+    if (request.method === 'GET' && url.pathname === '/api/qa/conversations') {
+      try {
+        const user = await requireUser(request);
+        const includeArchived = url.searchParams.get('archived') === '1';
+        const conversations = await withTimeout(
+          () => listQaConversations({ user, archived: includeArchived }),
+        );
+        sendJson(response, 200, { conversations });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/qa/conversations') {
+      try {
+        const user = await requireUser(request);
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body ok */ }
+        const conversation = await withTimeout(() => createQaConversation({
+          user,
+          title: body?.title,
+          useCurrentFilters: Boolean(body?.useCurrentFilters),
+        }));
+        sendJson(response, 201, { conversation });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // GET /api/qa/conversations/:id/messages
+    if (request.method === 'GET' && /^\/api\/qa\/conversations\/[^/]+\/messages$/.test(url.pathname)) {
+      try {
+        const user = await requireUser(request);
+        const conversationId = url.pathname.split('/')[4];
+        const messages = await withTimeout(() => readQaMessages({ user, conversationId }));
+        sendJson(response, 200, { messages });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // POST /api/qa/conversations/:id/messages  — the central handler.
+    if (request.method === 'POST' && /^\/api\/qa\/conversations\/[^/]+\/messages$/.test(url.pathname)) {
+      try {
+        const { authedUser: user, record } = await getRequestUserRecord(request);
+        const tier = record?.subscriptionStatus === 'pro' || record?.subscriptionStatus === 'pro_plus'
+          ? 'pro'
+          : 'free';
+        const quotaLimit = tier === 'pro' ? 200 : 10;
+
+        const conversationId = url.pathname.split('/')[4];
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        const content = String(body?.content || '').trim();
+        if (!content) { sendJson(response, 400, { error: 'content required' }); return; }
+
+        // Quota check FIRST so we don't spend tokens on a rejected request.
+        const used = await qaUserMessageCount({ user });
+        if (used >= quotaLimit) {
+          sendJson(response, 429, {
+            error: 'monthly quota exceeded',
+            code: 'QUOTA_EXCEEDED',
+            quota: { used, limit: quotaLimit, tier },
+          });
+          return;
+        }
+
+        // Verify conversation ownership (throws 404 otherwise) + capture
+        // current useCurrentFilters preference for retrieval scoping.
+        const parent = await getQaConversation({ user, conversationId });
+
+        // Filter-context support: clients pass current filter state in
+        // body.filters when the conversation is set to "use current filters".
+        // The retrieval module reads region/timeWindow from it.
+        const filters = (parent.useCurrentFilters || body?.useCurrentFilters)
+          ? (body?.filters || {})
+          : {};
+        // If the body indicates a desire to flip the sticky setting, persist it.
+        if (typeof body?.useCurrentFilters === 'boolean'
+            && body.useCurrentFilters !== Boolean(parent.useCurrentFilters)) {
+          await setQaConversationUseFilters({
+            user, conversationId, value: body.useCurrentFilters,
+          }).catch(() => {});
+        }
+
+        // Persist the user message first so the UI sees an immediate write.
+        const userMessage = await appendQaMessage({
+          user, conversationId, role: 'user', content,
+        });
+
+        // Read prior messages for conversational context (incl. the new user msg).
+        const priorMessages = await readQaMessages({ user, conversationId });
+
+        // Retrieval. The composite question is "<previous question if any>\n<question>"
+        // for better follow-up handling.
+        const lastAssistant = [...priorMessages].reverse().find((m) => m.role === 'assistant');
+        const compositeQuery = lastAssistant
+          ? `Previous answer: ${String(lastAssistant.content).slice(0, 400)}\n\nQuestion: ${content}`
+          : content;
+
+        let retrieved = [];
+        try {
+          retrieved = await qaRetrieveTopK(compositeQuery, {
+            k: 8,
+            timeWindowHours: filters.timeWindowHours || 168,
+            region: filters.region || null,
+            minSimilarity: 0.3,
+          });
+        } catch (e) {
+          log.warn('qa_retrieve_failed', { msg: e.message, code: e.code });
+        }
+
+        // Generation — falls back to Workers AI internally via ai/client.
+        let assistantMessage;
+        try {
+          const result = await withTimeout(() => qaGenerateAnswer({
+            question: content,
+            retrieved,
+            priorMessages,
+          }), 60_000);
+          assistantMessage = await appendQaMessage({
+            user, conversationId,
+            role: 'assistant',
+            content: result.answer || (retrieved.length === 0
+              ? "I couldn't find recent coverage on that in our corpus."
+              : 'No answer was produced — please try rephrasing.'),
+            citations: result.citations,
+            modelUsed: result.modelUsed,
+            tokensIn: result.tokensIn,
+            tokensOut: result.tokensOut,
+          });
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, {
+              error: e.message,
+              code: 'AI_NOT_CONFIGURED',
+              userMessage,
+            });
+            return;
+          }
+          throw e;
+        }
+
+        sendJson(response, 200, {
+          userMessage,
+          assistantMessage,
+          quota: { used: used + 1, limit: quotaLimit, tier },
+        });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // DELETE /api/qa/conversations/:id  → archive (soft delete)
+    if (request.method === 'DELETE' && /^\/api\/qa\/conversations\/[^/]+$/.test(url.pathname)) {
+      try {
+        const user = await requireUser(request);
+        const conversationId = url.pathname.split('/')[4];
+        const ok = await withTimeout(() => archiveQaConversation({ user, conversationId }));
         sendJson(response, ok ? 200 : 404, { ok });
       } catch (err) {
         const { status, body: b } = classifyError(err);
