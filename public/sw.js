@@ -52,6 +52,28 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// Allowlist of API paths that are safe to cache offline. These are global
+// (not per-user) read-only endpoints. Everything else bypasses the SW.
+const CACHEABLE_API_PATHS = new Set([
+  '/api/briefing',
+  '/api/events',
+  '/api/health',
+  '/api/coverage-history',
+  '/api/coverage-region',
+  '/api/region-briefing',
+  '/api/flights',
+  '/api/vessels',
+  '/api/source-reliability',
+  '/api/source-catalog/state',
+]);
+
+function isCacheableApi(pathname) {
+  if (CACHEABLE_API_PATHS.has(pathname)) return true;
+  // Static enum endpoints reach with trailing-slash variations in some clients.
+  if (pathname.endsWith('/')) return CACHEABLE_API_PATHS.has(pathname.replace(/\/+$/, ''));
+  return false;
+}
+
 /* ── Fetch: route by request type ── */
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -69,21 +91,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Admin and Stripe API responses must NEVER hit the cache: they contain
-  // privileged or per-user data that must not survive a logout or replay
-  // from devtools by another user on the same browser profile.
-  if (
-    url.pathname.startsWith('/api/admin') ||
-    url.pathname.startsWith('/api/stripe') ||
-    url.pathname === '/api/me' ||
-    url.pathname.startsWith('/api/source-catalog')
-  ) {
-    return;
-  }
-
-  // API calls: network-first with cache fallback
+  // API caching is opt-IN, not opt-out. New per-user endpoints added to the
+  // backend default to "never cached" so a future /api/bookmarks, /api/me,
+  // etc. can't accidentally leak across logout on a shared browser profile.
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request, API_CACHE));
+    if (isCacheableApi(url.pathname)) {
+      event.respondWith(networkFirst(request, API_CACHE));
+    }
+    // else: not in allowlist → bypass SW entirely.
     return;
   }
 

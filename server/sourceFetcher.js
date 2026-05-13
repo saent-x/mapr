@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { parseFeedItems } from './rssParser.js';
 import { parseHtmlSourceItems } from './htmlSourceParser.js';
 import { geocodeArticleAll, countryToIso } from '../src/utils/geocoder.js';
@@ -6,6 +7,16 @@ import { classifySourceType } from '../src/utils/sourceMetadata.js';
 import { getFeedCoverageCountries, getFeedCoverageIsos } from '../src/utils/sourceCoverage.js';
 import { detectLanguage } from '../src/utils/languageUtils.js';
 import { isPublicHttpUrl } from './urlGuard.js';
+
+// Reject feeds that timestamp items further than 5 min into the future —
+// almost always clock skew or hostile data. Clamp to now to keep lifecycle
+// math (`hoursSinceUpdate`) non-negative.
+const FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+function hashArticleKey(...parts) {
+  const text = parts.filter(Boolean).join('::');
+  return crypto.createHash('sha1').update(text, 'utf8').digest('hex').slice(0, 16);
+}
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 14000;
 // Hard cap on a single feed response. Keeps a hostile or buggy feed
@@ -69,7 +80,7 @@ export async function fetchText(url, {
   }
 }
 
-function normalizeSourceArticle(item, feed, index, { idPrefix = 'source' } = {}) {
+function normalizeSourceArticle(item, feed, { idPrefix = 'source' } = {}) {
   if (!item?.title) {
     return [];
   }
@@ -79,11 +90,22 @@ function normalizeSourceArticle(item, feed, index, { idPrefix = 'source' } = {})
     return [];
   }
 
-  const publishedDate = new Date(item.publishedAt || Date.now());
-  const publishedAt = Number.isNaN(publishedDate.getTime())
-    ? new Date().toISOString()
-    : publishedDate.toISOString();
-  const baseId = `${feed.fetchMode || 'rss'}-${idPrefix}-${feed.id}-${index}`;
+  // Parse publishedAt; treat missing/invalid as now, and clamp far-future
+  // dates (clock skew or hostile feeds) so downstream lifecycle/velocity
+  // math doesn't go negative.
+  const now = Date.now();
+  let publishedMs = item.publishedAt ? new Date(item.publishedAt).getTime() : now;
+  if (!Number.isFinite(publishedMs)) publishedMs = now;
+  if (publishedMs > now + FUTURE_CLOCK_SKEW_MS) publishedMs = now;
+  const publishedAt = new Date(publishedMs).toISOString();
+  // Stable id: hash of feed + canonical URL (or title + pubdate fallback).
+  // Positional indices change every time a feed reorders its <item> list,
+  // re-ingesting the same content as new articles and breaking event
+  // correlation. Hashing content keeps the id constant across reorders.
+  const contentKey = item.link
+    ? item.link
+    : `${item.title || ''}::${publishedAt}`;
+  const baseId = `${feed.fetchMode || 'rss'}-${idPrefix}-${feed.id}-${hashArticleKey(contentKey)}`;
 
   return geos.map((geo, geoIdx) => ({
     id: geos.length > 1 ? `${baseId}-${geoIdx}` : baseId,
@@ -140,7 +162,7 @@ export async function fetchCatalogSource(feed, { idPrefix = 'source' } = {}) {
     const parsedItems = fetchMode === 'html'
       ? parseHtmlSourceItems(rawText, feed.url)
       : parseFeedItems(rawText);
-    const articles = parsedItems.flatMap((item, index) => normalizeSourceArticle(item, feed, index, { idPrefix }));
+    const articles = parsedItems.flatMap((item) => normalizeSourceArticle(item, feed, { idPrefix }));
     return buildSourceResult(feed, articles);
   } catch (error) {
     return buildSourceResult(feed, [], { error: error.message });

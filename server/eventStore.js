@@ -57,12 +57,34 @@ function computeTemporalProximity(articlePublishedAt, eventLastUpdatedAt, window
   return 1 - (diffHours / windowHours);
 }
 
-function findMatchingEvent(article, events) {
+function buildCountryEventIndex(events) {
+  // Map ISO → events that include that country (primary or secondary). Lets
+  // findMatchingEvent skip the country-share check + the full event scan and
+  // turns the inner loop into O(events-in-country) instead of O(total-events).
+  const index = new Map();
+  for (const event of events) {
+    const isos = new Set();
+    if (event.primaryCountry) isos.add(event.primaryCountry);
+    for (const c of event.countries || []) if (c) isos.add(c);
+    for (const iso of isos) {
+      let bucket = index.get(iso);
+      if (!bucket) { bucket = []; index.set(iso, bucket); }
+      bucket.push(event);
+    }
+  }
+  return index;
+}
+
+function findMatchingEvent(article, events, countryIndex) {
   const articleTokens = tokenizeHeadline(article.title);
   let bestMatch = null;
   let bestScore = 0;
 
-  for (const event of events) {
+  const candidates = countryIndex && article.isoA2
+    ? (countryIndex.get(article.isoA2) || [])
+    : events;
+
+  for (const event of candidates) {
     const articleCountry = article.isoA2;
     const sharesCountry = event.countries.includes(articleCountry) ||
                           event.primaryCountry === articleCountry;
@@ -133,23 +155,32 @@ export function aggregateEntities(articles) {
   };
 }
 
+// All distinct source-type classifications we recognize. diversityScore is
+// types-present / total-known-types, so an event covering every type lands at
+// 1.0. Previously the denominator was hard-coded `/ 4`, which both inflated
+// the score and capped it >1.0 for the 5-type universe.
+const KNOWN_SOURCE_TYPES = ['wire', 'global', 'regional', 'official', 'state'];
+
 export function computeSourceProfile(articles) {
   const types = new Set();
-  const counts = { wire: 0, independent: 0, state: 0, ngo: 0 };
+  const counts = { wire: 0, independent: 0, state: 0, ngo: 0, official: 0 };
   for (const article of articles) {
     const type = classifySourceType(article);
     types.add(type);
     if (type === 'wire') counts.wire++;
-    else if (type === 'official') counts.ngo++;
+    else if (type === 'official') counts.official++;
     else if (type === 'global' || type === 'regional') counts.independent++;
-    else counts.state++; // default bucket
+    else if (type === 'state') counts.state++;
   }
   return {
     wireCount: counts.wire,
     independentCount: counts.independent,
     stateMediaCount: counts.state,
-    ngoCount: counts.ngo,
-    diversityScore: Math.min(1, types.size / 4)
+    // Backward-compat alias; old callers read `ngoCount` but the bucket is
+    // actually "official" sources (UN, OCHA, etc).
+    ngoCount: counts.official,
+    officialCount: counts.official,
+    diversityScore: Math.min(1, types.size / KNOWN_SOURCE_TYPES.length),
   };
 }
 
@@ -206,16 +237,41 @@ export function mergeArticlesIntoEvents(articles, existingEvents) {
       locations: [...(e.entities.locations || [])]
     } : { people: [], organizations: [], locations: [] }
   }));
-  const newEvents = [];
+
+  // Clamp article timestamps to the present so far-future feed dates (clock
+  // skew, hostile data) don't push `lastUpdatedAt` into the future and break
+  // every downstream `hoursSinceUpdate` calculation.
+  const nowIso = new Date().toISOString();
+  const safeArticleTimestamp = (raw) => {
+    const t = new Date(raw).getTime();
+    if (!Number.isFinite(t) || t > Date.now()) return nowIso;
+    return raw;
+  };
+
+  // Build a country→events index once and incrementally extend it with
+  // newly-created events. Avoids the O(articles × events) full scan that
+  // dominated this loop at scale.
+  const countryIndex = buildCountryEventIndex(events);
+  const indexNewEvent = (event) => {
+    const isos = new Set();
+    if (event.primaryCountry) isos.add(event.primaryCountry);
+    for (const c of event.countries || []) if (c) isos.add(c);
+    for (const iso of isos) {
+      let bucket = countryIndex.get(iso);
+      if (!bucket) { bucket = []; countryIndex.set(iso, bucket); }
+      bucket.push(event);
+    }
+  };
 
   for (const article of articles) {
-    const match = findMatchingEvent(article, [...events, ...newEvents]);
+    const articleAt = safeArticleTimestamp(article.publishedAt);
+    const match = findMatchingEvent(article, events, countryIndex);
     if (match) {
       if (!match.articleIds.includes(article.id)) {
         match.articleIds.push(article.id);
       }
-      if (new Date(article.publishedAt) > new Date(match.lastUpdatedAt)) {
-        match.lastUpdatedAt = article.publishedAt;
+      if (new Date(articleAt) > new Date(match.lastUpdatedAt)) {
+        match.lastUpdatedAt = articleAt;
       }
       if (article.isoA2 && !match.countries.includes(article.isoA2)) {
         match.countries.push(article.isoA2);
@@ -233,8 +289,8 @@ export function mergeArticlesIntoEvents(articles, existingEvents) {
         lifecycle: 'emerging',
         severity: article.severity || 0,
         category: article.category || 'General',
-        firstSeenAt: article.publishedAt || new Date().toISOString(),
-        lastUpdatedAt: article.publishedAt || new Date().toISOString(),
+        firstSeenAt: articleAt,
+        lastUpdatedAt: articleAt,
         topicFingerprint: fp,
         coordinates: article.coordinates || null,
         articleIds: [article.id],
@@ -243,9 +299,10 @@ export function mergeArticlesIntoEvents(articles, existingEvents) {
       };
       // Populate initial entities from first article
       mergeArticleEntities(newEvent, article);
-      newEvents.push(newEvent);
+      events.push(newEvent);
+      indexNewEvent(newEvent);
     }
   }
 
-  return [...events, ...newEvents];
+  return [...events];
 }

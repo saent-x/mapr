@@ -202,25 +202,46 @@ function matchGazetteer(text) {
   return [...found.values()];
 }
 
+// Tokens that strongly signal a capitalized multi-word phrase is an
+// organization (corporate suffixes), not a person.
+const ORG_SUFFIX_TOKENS = new Set([
+  'inc', 'inc.', 'corp', 'corp.', 'corporation', 'co', 'co.', 'company',
+  'ltd', 'ltd.', 'llc', 'plc', 'ag', 'gmbh', 'sa', 'nv', 'pty',
+  'group', 'holdings', 'industries', 'partners', 'systems', 'technologies',
+  'foundation', 'institute', 'university', 'college', 'school',
+  'ministry', 'department', 'bureau', 'agency', 'commission', 'council',
+  'committee', 'union', 'association', 'federation', 'organization',
+  'organisation', 'authority', 'office',
+]);
+
+function looksLikeOrg(name) {
+  const tokens = name.toLowerCase().split(/\s+/);
+  return tokens.some((t) => ORG_SUFFIX_TOKENS.has(t));
+}
+
 /**
  * Extract capitalized multi-word tokens that look like proper nouns.
  * Matches sequences of 2+ capitalized words (supporting accented characters).
- * Filters out known single-word stop-words and gazetteer orgs already found.
+ * Returns `{ people, orgs }` instead of dumping everything into the people
+ * bucket — corporate-suffix heuristics route obvious orgs correctly.
  */
 function extractCapitalizedNames(text, knownOrgNames) {
   const MULTI_WORD_PROPER = /\b([A-Z][a-zà-ÿ]+(?:\s+[A-Z][a-zà-ÿ]+)+)\b/g;
-  const results = new Set();
+  const people = [];
+  const orgs = [];
+  const seen = new Set();
   let m;
   while ((m = MULTI_WORD_PROPER.exec(text)) !== null) {
     const candidate = m[1];
-    // Skip if this is already covered by a gazetteer org name or alias.
     const lower = candidate.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
     if (GAZETTEER_INDEX.has(lower)) continue;
-    // Skip if it overlaps with any known org name found via gazetteer/compromise.
     if (knownOrgNames.some(n => n.toLowerCase().includes(lower) || lower.includes(n.toLowerCase()))) continue;
-    results.add(candidate);
+    if (looksLikeOrg(candidate)) orgs.push({ name: candidate });
+    else people.push({ name: candidate });
   }
-  return [...results].map(name => ({ name }));
+  return { people, orgs };
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -261,21 +282,26 @@ export async function extractEntities(text) {
   const knownOrgNames = organizations.map(o => o.name);
   const knownPersonNames = nlpPeople.map(p => p.name);
 
-  const capitalizedCandidates = extractCapitalizedNames(text, knownOrgNames);
+  const { people: capPeople, orgs: capOrgs } = extractCapitalizedNames(text, knownOrgNames);
 
-  // Separate candidates into people vs. orgs/locations heuristically.
-  // For now, treat all multi-word capitalized candidates not already classified
-  // as people (they're most commonly person names in non-English headlines).
-  const extraPeople = capitalizedCandidates.filter(c => {
-    const lower = c.name.toLowerCase();
-    return !knownPersonNames.some(n => n.toLowerCase() === lower);
-  });
-
-  // ── 4. Merge people ───────────────────────────────────────────────────────
+  // Merge people: nlp results + capitalized candidates that look like people.
   const personMap = new Map();
-  for (const p of nlpPeople)   personMap.set(p.name.toLowerCase(), p);
-  for (const p of extraPeople) personMap.set(p.name.toLowerCase(), p);
+  for (const p of nlpPeople) personMap.set(p.name.toLowerCase(), p);
+  for (const p of capPeople) {
+    const lower = p.name.toLowerCase();
+    if (!knownPersonNames.some((n) => n.toLowerCase() === lower)) {
+      personMap.set(lower, p);
+    }
+  }
   const people = [...personMap.values()];
+
+  // Merge org-suffix candidates into the orgs list.
+  for (const o of capOrgs) {
+    const lower = o.name.toLowerCase();
+    if (!orgMap.has(lower)) orgMap.set(lower, o);
+  }
+  organizations.length = 0;
+  for (const o of orgMap.values()) organizations.push(o);
 
   // ── 5. Classify event ─────────────────────────────────────────────────────
   const category = classifyEvent(text);

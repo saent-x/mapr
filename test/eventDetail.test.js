@@ -113,9 +113,11 @@ describe('Event Detail Page', () => {
   it('EventDetailPage resolves the same canonical IDs used by feed links', () => {
     const src = readFileSync(join(SRC, 'pages', 'EventDetailPage.jsx'), 'utf8');
     assert.ok(src.includes('canonicalizeArticles'), 'Must canonicalize live news before matching route id');
+    // Page delegates id resolution to the shared resolveEventById helper;
+    // covered behaviorally by test/eventDetailResolution.test.js.
     assert.ok(
-      src.includes('String(ev.id) === String(id)'),
-      'Must compare route id against canonical event ids',
+      src.includes('resolveEventById'),
+      'Must compare route id against canonical event ids via shared helper',
     );
   });
 

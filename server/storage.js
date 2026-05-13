@@ -51,9 +51,25 @@ function getPool() {
   return pool;
 }
 
+// Advisory lock id used to serialize schema migration across concurrently
+// starting server instances. Two boots racing on ALTER TABLE can leave the
+// `articles` table without a primary key — this lock keeps them sequential.
+const SCHEMA_ADVISORY_LOCK_ID = 0x4D415052; // 'MAPR'
+
 async function ensureSchema() {
   const db = getPool();
+  const client = await db.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock($1)', [SCHEMA_ADVISORY_LOCK_ID]);
+    await runSchemaMigration(client);
+  } finally {
+    try { await client.query('SELECT pg_advisory_unlock($1)', [SCHEMA_ADVISORY_LOCK_ID]); }
+    catch { /* lock release best-effort */ }
+    client.release();
+  }
+}
 
+async function runSchemaMigration(db) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS metadata (
       key TEXT PRIMARY KEY,
@@ -206,36 +222,30 @@ async function ensureSchema() {
   } catch { /* table may not exist yet on first run */ }
 
   // Ensure id column is the primary key (older DB instances may have url as PK).
-  // Wrap the migration in a single transaction on a dedicated client so a crash
-  // mid-migration cannot leave `articles` without a primary key (which would
-  // silently allow duplicates).
+  // Run in a transaction on the same locked client so a crash mid-migration
+  // can never leave `articles` without a primary key.
   try {
     const pkCheck = await db.query(`
       SELECT a.attname FROM pg_constraint c
       JOIN pg_attribute a ON a.attnum = ANY(c.conkey) AND a.attrelid = c.conrelid
       WHERE c.conrelid = 'articles'::regclass AND c.contype = 'p'
     `);
-    const pkCols = pkCheck.rows.map(r => r.attname);
+    const pkCols = pkCheck.rows.map((r) => r.attname);
     if (pkCols.length > 0 && !pkCols.includes('id')) {
       console.log('[storage] Fixing articles primary key: currently on', pkCols.join(','), '→ id');
-      const client = await db.connect();
       try {
-        await client.query('BEGIN');
-        await client.query('ALTER TABLE articles DROP CONSTRAINT articles_pkey CASCADE');
-        await client.query(`DELETE FROM articles a USING articles b WHERE a.id = b.id AND a.ctid < b.ctid`);
-        await client.query('ALTER TABLE articles ADD PRIMARY KEY (id)');
-        // Recreate event_articles FK after CASCADE drop. IF NOT EXISTS isn't
-        // available for ADD CONSTRAINT pre-PG14, so we DROP defensively.
-        await client.query('ALTER TABLE event_articles DROP CONSTRAINT IF EXISTS event_articles_articleId_fkey');
-        await client.query(
+        await db.query('BEGIN');
+        await db.query('ALTER TABLE articles DROP CONSTRAINT articles_pkey CASCADE');
+        await db.query(`DELETE FROM articles a USING articles b WHERE a.id = b.id AND a.ctid < b.ctid`);
+        await db.query('ALTER TABLE articles ADD PRIMARY KEY (id)');
+        await db.query('ALTER TABLE event_articles DROP CONSTRAINT IF EXISTS event_articles_articleId_fkey');
+        await db.query(
           'ALTER TABLE event_articles ADD CONSTRAINT event_articles_articleId_fkey FOREIGN KEY ("articleId") REFERENCES articles(id) ON DELETE CASCADE'
         );
-        await client.query('COMMIT');
+        await db.query('COMMIT');
       } catch (txErr) {
-        try { await client.query('ROLLBACK'); } catch { /* already rolled back */ }
+        try { await db.query('ROLLBACK'); } catch { /* already rolled back */ }
         throw txErr;
-      } finally {
-        client.release();
       }
     }
   } catch (pkErr) {
@@ -448,6 +458,7 @@ export async function upsertArticles(articles) {
   const BATCH_SIZE = 50;
   let inserted = 0;
   let skipped = 0;
+  const errorCounts = new Map();
 
   // Deduplicate by id within the batch (last occurrence wins)
   const dedupMap = new Map();
@@ -506,11 +517,30 @@ export async function upsertArticles(articles) {
           inserted++;
         } catch (err) {
           skipped++;
-          if (err?.code !== '23505') {
-            console.warn('[storage] upsertArticle failed for', article.id, ':', err.message);
+          const code = err?.code || 'unknown';
+          errorCounts.set(code, (errorCounts.get(code) || 0) + 1);
+          if (code !== '23505') {
+            console.warn('[storage] upsertArticle failed for', article.id, ':', err.message, '(code:', code + ')');
           }
         }
       }
+    }
+  }
+  if (errorCounts.size > 0) {
+    const summary = Array.from(errorCounts.entries())
+      .map(([code, n]) => `${code}=${n}`)
+      .join(', ');
+    console.warn(`[storage] upsertArticles errors by code: ${summary}`);
+    // If more than 10% of rows failed for reasons OTHER than unique-conflict,
+    // surface it — almost always a schema bug, not transient pressure.
+    const nonConflict = Array.from(errorCounts.entries())
+      .filter(([code]) => code !== '23505')
+      .reduce((sum, [, n]) => sum + n, 0);
+    if (articles.length > 0 && nonConflict / articles.length > 0.1) {
+      throw Object.assign(new Error(`upsertArticles: ${nonConflict}/${articles.length} non-conflict failures — likely schema issue`), {
+        code: 'STORAGE_BATCH_FAILURE',
+        breakdown: Object.fromEntries(errorCounts),
+      });
     }
   }
   console.log(`[storage] upsertArticles: ${inserted} inserted/updated, ${skipped} skipped (of ${articles.length} input)`);

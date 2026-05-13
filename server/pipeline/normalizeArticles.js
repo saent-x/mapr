@@ -10,6 +10,32 @@
 import { deduplicateArticles } from '../../src/utils/articleUtils.js';
 import { mergeRssArticles, retainPreviousGdeltArticles } from './fetchSources.js';
 
+const TRACKING_PARAM_PATTERNS = [
+  /^utm_/i, /^fbclid$/i, /^gclid$/i, /^msclkid$/i, /^mc_(cid|eid)$/i,
+  /^_ga$/i, /^igshid$/i, /^ref$/i, /^ref_(src|url)$/i, /^s_(cid|kwcid)$/i, /^yclid$/i,
+];
+
+function isTrackingParam(name) {
+  return TRACKING_PARAM_PATTERNS.some((re) => re.test(name));
+}
+
+function normalizeUrlForDedup(url) {
+  if (!url) return '';
+  let parsed;
+  try { parsed = new URL(url); }
+  catch { return String(url).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/\/$/, ''); }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
+  const path = parsed.pathname.replace(/\/+$/, '') || '/';
+  const params = [];
+  for (const [k, v] of parsed.searchParams.entries()) {
+    if (isTrackingParam(k)) continue;
+    params.push([k.toLowerCase(), v]);
+  }
+  params.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const query = params.length ? '?' + params.map(([k, v]) => `${k}=${v}`).join('&') : '';
+  return `${host}${path}${query}`;
+}
+
 /**
  * Merge source metadata when the same article appears in multiple feeds.
  *
@@ -29,12 +55,7 @@ export function mergeSourceMetadata(articles, allCandidates, catalog = []) {
   const sourceMap = new Map();
 
   for (const candidate of (allCandidates || [])) {
-    const urlKey = (candidate.url || '')
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/[?#].*$/, '')
-      .replace(/\/$/, '');
+    const urlKey = normalizeUrlForDedup(candidate.url);
 
     if (!urlKey) continue;
 
@@ -95,12 +116,7 @@ export function mergeSourceMetadata(articles, allCandidates, catalog = []) {
 
   // Enrich each surviving article with merged source metadata
   return articles.map((article) => {
-    const urlKey = (article.url || '')
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .replace(/[?#].*$/, '')
-      .replace(/\/$/, '');
+    const urlKey = normalizeUrlForDedup(article.url);
 
     const titleKey = normalizeForLookup(article.title);
 

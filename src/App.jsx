@@ -198,8 +198,14 @@ function App() {
   /* ── URL hydration ── */
   const urlInitRef = useRef(false);
   const viewUrlHandledRef = useRef(false);
+  // Last URL search string we wrote OUT from the store. If the incoming
+  // searchParams differ from this we know the change came from outside (back
+  // button, deep link, paste) and re-hydrate the store.
+  const lastSyncedQsRef = useRef(null);
   useEffect(() => {
-    if (urlInitRef.current) return;
+    const currentQs = searchParams.toString();
+    const isExternalChange = urlInitRef.current && lastSyncedQsRef.current !== currentQs;
+    if (urlInitRef.current && !isExternalChange) return;
     urlInitRef.current = true;
     const { filters, mapState } = useFilterStore.getState().initFromURL(searchParams);
     useUIStore.getState().initFromURL(searchParams, mapState);
@@ -224,7 +230,6 @@ function App() {
           }
         })
         .catch(() => {
-          // Silently ignore — view may not exist or user may not have access
           useUIStore.getState().setViewNotFound(true);
         });
     }
@@ -345,8 +350,24 @@ function App() {
 
   useEffect(() => {
     fetchSourceCredibility();
-    const interval = setInterval(fetchSourceCredibility, 120_000); // every 2 min
-    return () => clearInterval(interval);
+    let interval = null;
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(fetchSourceCredibility, 120_000);
+    };
+    const stop = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const handleVisibility = () => {
+      if (document.hidden) stop();
+      else { fetchSourceCredibility(); start(); }
+    };
+    start();
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchSourceCredibility]);
 
   // Enrich articles with source credibility score for display
@@ -480,7 +501,7 @@ function App() {
   }, [kbSelectedIdx, activeNews]);
 
   /* ── Keyboard: j/k navigation, Enter expand, s save, b bookmark ── */
-  const { getSelectedIndex, setSelectedIndex } = useKeyboardNavigation({
+  const { getSelectedIndex, setSelectedIndex, subscribe: subscribeKbIdx } = useKeyboardNavigation({
     items: activeNews,
     searchSelector: '.search-input, .header-search input',
     onSelect: useCallback((story) => {
@@ -506,14 +527,12 @@ function App() {
     }, []),
   });
 
-  // Keep selectedIndex in React state for re-renders (ref-based in hook for perf)
+  // Mirror the ref-based selected index into React state via subscription so
+  // the consumer re-renders on keypress instead of polling every 50ms.
   useEffect(() => {
-    const interval = setInterval(() => {
-      const current = getSelectedIndex();
-      setKbSelectedIdx((prev) => (prev !== current ? current : prev));
-    }, 50);
-    return () => clearInterval(interval);
-  }, [getSelectedIndex]);
+    setKbSelectedIdx(getSelectedIndex());
+    return subscribeKbIdx((idx) => setKbSelectedIdx(idx));
+  }, [getSelectedIndex, subscribeKbIdx]);
 
   /* ── Keyboard: global shortcuts (r refresh, g globe, f filters) ── */
   useEffect(() => {
@@ -544,6 +563,9 @@ function App() {
     else params.delete('story');
     if (activeViewId) params.set('view', activeViewId);
     else params.delete('view');
+    // Record this as the store-authored URL so the hydration effect can tell
+    // it apart from an external (back/forward) URL change.
+    lastSyncedQsRef.current = params.toString();
     setSearchParams(params, { replace: true });
   }, [debouncedSearch, minSeverity, minConfidence, dateWindow, sortMode, selectedRegion, entityFilter, mapMode, mapOverlay, selectedStoryId, activeViewId, setSearchParams]);
 

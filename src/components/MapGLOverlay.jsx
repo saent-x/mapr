@@ -51,14 +51,24 @@ const MapGLOverlay = ({
 
   /* ──────────────────────────── event handlers ──────────────────────────── */
 
+  // Refs writes happen in an effect (not during render) so StrictMode's
+  // double-invocation of render doesn't double-fire any side effects that
+  // might read them.
   const latestHandlers = useRef({ onStorySelect, onRegionSelect, onArcSelect, onCoverageCountryClick });
-  latestHandlers.current = { onStorySelect, onRegionSelect, onArcSelect, onCoverageCountryClick };
-
   const latestData = useRef({ newsList, trackingPoints, regionSeverities, coverageStatusByIso });
-  latestData.current = { newsList, trackingPoints, regionSeverities, coverageStatusByIso };
-
   const latestOverlay = useRef(mapOverlay);
-  latestOverlay.current = mapOverlay;
+
+  useEffect(() => {
+    latestHandlers.current = { onStorySelect, onRegionSelect, onArcSelect, onCoverageCountryClick };
+  }, [onStorySelect, onRegionSelect, onArcSelect, onCoverageCountryClick]);
+
+  useEffect(() => {
+    latestData.current = { newsList, trackingPoints, regionSeverities, coverageStatusByIso };
+  }, [newsList, trackingPoints, regionSeverities, coverageStatusByIso]);
+
+  useEffect(() => {
+    latestOverlay.current = mapOverlay;
+  }, [mapOverlay]);
 
   useEffect(() => {
     if (!isLoaded || !map) return undefined;

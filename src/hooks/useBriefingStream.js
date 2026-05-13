@@ -1,6 +1,10 @@
 import { useEffect, useRef } from 'react';
 
 const API_BASE = import.meta.env.VITE_MAPR_API_BASE || '/api';
+// Stop reconnecting after this many consecutive native retry-failures. The
+// browser otherwise reconnects every few seconds forever — useless on a hard
+// 401/403/503, and a real battery / network drag.
+const MAX_CONSECUTIVE_ERRORS = 6;
 
 function briefingStreamUrl() {
   const path = `${String(API_BASE).replace(/\/$/, '')}/stream`;
@@ -28,7 +32,11 @@ export default function useBriefingStream(onBriefingUpdated, debounceMs = 500) {
     }
 
     let timer;
+    let consecutiveErrors = 0;
+    let closed = false;
+
     const schedule = () => {
+      consecutiveErrors = 0; // a successful event resets the retry counter
       clearTimeout(timer);
       timer = setTimeout(() => {
         try {
@@ -40,11 +48,23 @@ export default function useBriefingStream(onBriefingUpdated, debounceMs = 500) {
     };
 
     es.addEventListener('briefing-updated', schedule);
+    es.onopen = () => { consecutiveErrors = 0; };
     es.onerror = () => {
-      /* browser will retry; avoid spamming */
+      if (closed) return;
+      // EventSource fires `onerror` whenever the connection drops; the browser
+      // auto-retries. If the server is hard-down (401/503), the retries are
+      // useless — cap them.
+      if (es.readyState === EventSource.CLOSED) {
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          closed = true;
+          try { es.close(); } catch { /* ignore */ }
+        }
+      }
     };
 
     return () => {
+      closed = true;
       clearTimeout(timer);
       es.close();
     };

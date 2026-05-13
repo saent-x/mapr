@@ -104,10 +104,13 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
     const now = Date.now();
     const twoHoursAgo = now - 2 * 60 * 60 * 1000;
     const fourHoursAgo = now - 4 * 60 * 60 * 1000;
-    const currWindow = allEventArticles.filter(a => new Date(a.publishedAt).getTime() >= twoHoursAgo).length;
-    const prevWindow = allEventArticles.filter(a => {
+    const currWindow = allEventArticles.filter((a) => {
       const t = new Date(a.publishedAt).getTime();
-      return t >= fourHoursAgo && t < twoHoursAgo;
+      return Number.isFinite(t) && t >= twoHoursAgo;
+    }).length;
+    const prevWindow = allEventArticles.filter((a) => {
+      const t = new Date(a.publishedAt).getTime();
+      return Number.isFinite(t) && t >= fourHoursAgo && t < twoHoursAgo;
     }).length;
 
     event.lifecycle = computeLifecycleTransition({
@@ -144,10 +147,12 @@ export async function correlateAndEnrichEvents({ articles, velocitySpikes }) {
       isoA2: event.primaryCountry || null
     };
     if (regionSpike) {
-      severityCtx.velocitySignal = Math.min(100, regionSpike.zScore * 30);
-      // Derive regional baseline ratio from z-score:
+      // zScore is already clamped in velocityTracker.js, but guard against
+      // NaN propagating from upstream code paths that haven't been migrated.
+      const z = Number.isFinite(regionSpike.zScore) ? regionSpike.zScore : 0;
+      severityCtx.velocitySignal = Math.min(100, Math.max(0, z * 30));
       // z-score of 2 means ~2x normal activity (assuming std ≈ mean/2)
-      severityCtx.regionalBaselineRatio = 1 + Math.max(0, regionSpike.zScore * 0.5);
+      severityCtx.regionalBaselineRatio = 1 + Math.max(0, z * 0.5);
     }
     event.severity = computeCompositeSeverity(severityCtx);
 

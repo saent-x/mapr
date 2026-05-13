@@ -1,13 +1,9 @@
 /**
- * Real test for the constant-time admin password compare used by every
- * serverless admin handler (api/admin-*.js, api/refresh.js, api/source-catalog.js).
- *
- * Replaces the previous grep-style assertions that only verified the literal
- * `timingSafeEqual` substring existed in the file.
+ * Real test for the constant-time admin password compare.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { timingSafeEqualString, isAdminAuthorized } from '../api/_lib/adminAuth.js';
+import { timingSafeEqualString, isAdminAuthorized } from '../server/adminAuth.js';
 
 describe('timingSafeEqualString', () => {
   it('returns true for identical strings', () => {

@@ -31,6 +31,11 @@ export function addClient(res) {
   return true;
 }
 
+/** Returns true iff a new client would be accepted right now. */
+export function canAcceptClient() {
+  return clients.size < MAX_CLIENTS;
+}
+
 /**
  * Remove a disconnected SSE response from the client set.
  * @param {import('node:http').ServerResponse} res
@@ -55,14 +60,19 @@ function dropClient(res) {
  * @param {object} data - JSON-serializable payload
  */
 export function broadcast(event, data) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of clients) {
+  let payload;
+  try {
+    payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  } catch {
+    // Non-serializable data (circular ref) shouldn't kill the broadcast loop.
+    return;
+  }
+  // Snapshot to avoid mutation-during-iteration if a handler synchronously
+  // calls dropClient/removeClient from somewhere else (e.g. a future hook).
+  for (const res of Array.from(clients)) {
     try {
       const ok = res.write(payload);
-      if (!ok) {
-        // Socket buffer full → backpressure. Don't queue in memory.
-        dropClient(res);
-      }
+      if (!ok) dropClient(res); // socket-buffer full → drop rather than queue.
     } catch {
       dropClient(res);
     }
@@ -82,7 +92,7 @@ export function clientCapacity() {
 function ensureHeartbeat() {
   if (heartbeatTimer) return;
   heartbeatTimer = setInterval(() => {
-    for (const res of clients) {
+    for (const res of Array.from(clients)) {
       try {
         const ok = res.write(': heartbeat\n\n');
         if (!ok) dropClient(res);
@@ -91,4 +101,6 @@ function ensureHeartbeat() {
       }
     }
   }, 30_000);
+  // `.unref()` so the heartbeat timer doesn't block graceful shutdown.
+  heartbeatTimer.unref?.();
 }

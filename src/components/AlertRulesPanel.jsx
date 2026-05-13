@@ -81,22 +81,34 @@ export default function AlertRulesPanel() {
 
   /* ── Toast notifications for new matches on active rules ── */
   const prevNewMatchesRef = useRef({});
+  // Guards against the "every existing match looks new on first load" toast
+  // storm. We seed `prevNewMatchesRef` on the first non-empty rules render
+  // and only toast on subsequent diffs.
+  const seededRef = useRef(false);
   useEffect(() => {
     if (!rules.length) return;
     const addToast = useUIStore.getState().addToast;
+
+    if (!seededRef.current) {
+      for (const rule of rules) {
+        prevNewMatchesRef.current[rule.id] = new Set(
+          (rule.newMatchArticles || []).map((a) => a.id),
+        );
+      }
+      seededRef.current = true;
+      return;
+    }
+
     for (const rule of rules) {
       if (!rule.active) continue;
       const newArticles = rule.newMatchArticles || [];
       if (newArticles.length === 0) continue;
 
-      // Skip if we've already toasted these matches
       const prevIds = prevNewMatchesRef.current[rule.id] || new Set();
       const trulyNew = newArticles.filter((a) => !prevIds.has(a.id));
       if (trulyNew.length === 0) continue;
 
-      // Update tracking
-      const currentIds = new Set(newArticles.map((a) => a.id));
-      prevNewMatchesRef.current[rule.id] = currentIds;
+      prevNewMatchesRef.current[rule.id] = new Set(newArticles.map((a) => a.id));
 
       if (trulyNew.length === 1) {
         const article = trulyNew[0];
@@ -111,7 +123,9 @@ export default function AlertRulesPanel() {
         );
       }
     }
-  }, [rules, t]);
+    // Intentionally exclude `t` — locale changes shouldn't replay alerts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rules]);
 
   return (
     <>
