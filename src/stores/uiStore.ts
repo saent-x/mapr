@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { loadViews, saveViews, createView } from '../utils/viewManager.js';
+import type { UIState, SavedView, SavedViewFilters, SavedViewMapState, PanelCollapsed, SearchResult } from '../types/store';
 
-const PANEL_COLLAPSE_KEY = 'mapr:rightRailCollapsed:v1';
+const PANEL_COLLAPSE_KEY = 'mapr:rightRailCollapsed:v2';
 const LAST_REGION_KEY = 'mapr:lastRegionIso:v1';
 
-function loadLastRegionIso() {
+function loadLastRegionIso(): string | null {
   if (typeof window === 'undefined') return null;
   try {
     return window.localStorage.getItem(LAST_REGION_KEY) || null;
@@ -13,7 +14,7 @@ function loadLastRegionIso() {
   }
 }
 
-function saveLastRegionIso(iso) {
+function saveLastRegionIso(iso: string | null): void {
   if (typeof window === 'undefined') return;
   try {
     if (iso) window.localStorage.setItem(LAST_REGION_KEY, iso);
@@ -23,10 +24,10 @@ function saveLastRegionIso(iso) {
   }
 }
 
-const PANEL_KEYS = ['anomaly', 'watchlist', 'narrative', 'liveFeed'];
+const PANEL_KEYS: (keyof PanelCollapsed)[] = ['anomaly', 'watchlist', 'narrative', 'liveFeed'];
 
-function loadPanelCollapsed() {
-  const fallback = { anomaly: false, watchlist: false, narrative: false, liveFeed: false };
+function loadPanelCollapsed(): PanelCollapsed {
+  const fallback: PanelCollapsed = { anomaly: true, watchlist: true, narrative: true, liveFeed: false };
   if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(PANEL_COLLAPSE_KEY);
@@ -43,7 +44,7 @@ function loadPanelCollapsed() {
   }
 }
 
-function savePanelCollapsed(state) {
+function savePanelCollapsed(state: PanelCollapsed): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(PANEL_COLLAPSE_KEY, JSON.stringify(state));
@@ -55,7 +56,7 @@ function savePanelCollapsed(state) {
 /**
  * UI store — map mode, drawer state, selection, toasts, saved views, timeline.
  */
-const useUIStore = create((set, get) => ({
+const useUIStore = create<UIState>()((set, get) => ({
   /* ── map ── */
   mapMode: 'flat',
 
@@ -70,6 +71,9 @@ const useUIStore = create((set, get) => ({
   /* ── export modal ── */
   showExport: false,
 
+  /* ── AI agent sidebar (Workstream D1) ── */
+  agentSidebarOpen: false,
+
   /* ── timeline ── */
   scrubTime: null, // null = live, Date = historical
 
@@ -83,8 +87,9 @@ const useUIStore = create((set, get) => ({
   lastRegionIso: loadLastRegionIso(),
 
   /* ── saved views ── */
-  savedViews: typeof window !== 'undefined' ? loadViews() : [],
+  savedViews: (typeof window !== 'undefined' ? loadViews() : []) as SavedView[],
   activeViewId: null,
+  viewNotFound: false, // true when shared view URL references a deleted view
 
   /* ────────── actions ────────── */
 
@@ -123,6 +128,8 @@ const useUIStore = create((set, get) => ({
   }),
 
   setShowExport: (v) => set({ showExport: v }),
+  setAgentSidebarOpen: (v) => set({ agentSidebarOpen: Boolean(v) }),
+  toggleAgentSidebar: () => set((s) => ({ agentSidebarOpen: !s.agentSidebarOpen })),
   setScrubTime: (v) => set({ scrubTime: v }),
 
   setLastRegionIso: (iso) => set(() => {
@@ -144,7 +151,7 @@ const useUIStore = create((set, get) => ({
   toggleAllPanelsCollapsed: () => set((s) => {
     const collapsedCount = PANEL_KEYS.reduce((n, k) => n + (s.panelCollapsed[k] ? 1 : 0), 0);
     const target = collapsedCount > PANEL_KEYS.length / 2 ? false : true;
-    const next = PANEL_KEYS.reduce((acc, k) => { acc[k] = target; return acc; }, {});
+    const next = PANEL_KEYS.reduce((acc, k) => { acc[k] = target; return acc; }, {} as PanelCollapsed);
     savePanelCollapsed(next);
     return { panelCollapsed: next };
   }),
@@ -163,7 +170,7 @@ const useUIStore = create((set, get) => ({
   /* ── saved views ── */
   saveCurrentView: (name, filterState, mapState) => {
     if (!name?.trim()) return;
-    const view = createView(name.trim(), filterState, mapState);
+    const view = createView(name.trim(), filterState, mapState) as SavedView;
     set((s) => {
       const next = [...s.savedViews, view];
       saveViews(next);
@@ -172,6 +179,10 @@ const useUIStore = create((set, get) => ({
   },
 
   selectView: (view) => set({ activeViewId: view.id }),
+
+  setActiveViewId: (id) => set({ activeViewId: id, viewNotFound: false }),
+
+  setViewNotFound: (v) => set({ viewNotFound: v }),
 
   deleteView: (view) => set((s) => {
     const next = s.savedViews.filter((v) => v.id !== view.id);
@@ -183,18 +194,18 @@ const useUIStore = create((set, get) => ({
   }),
 
   /** Convenience handler for search-result selection (region or story). */
-  handleSearchSelect: (result) => {
+  handleSearchSelect: (result: SearchResult) => {
     if (result.type === 'region') {
       set({ selectedRegion: result.iso, selectedStoryId: null });
     } else if (result.type === 'story') {
-      set({ selectedStoryId: result.story.id, selectedRegion: result.story.isoA2 });
+      set({ selectedStoryId: result.story.id, selectedRegion: result.story.isoA2 || null });
     }
   },
 
   /** Read from URL params on mount (region, story, mapMode). */
   initFromURL: (searchParams, mapState) => {
-    const updates = {};
-    if (mapState?.mapMode) updates.mapMode = mapState.mapMode;
+    const updates: Partial<UIState> = {};
+    if (mapState?.mapMode) updates.mapMode = mapState.mapMode as 'flat' | 'globe';
     const selectedRegion = searchParams.get('region') || null;
     if (selectedRegion) updates.selectedRegion = selectedRegion;
     const story = searchParams.get('story') || null;

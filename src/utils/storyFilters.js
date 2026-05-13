@@ -1,3 +1,5 @@
+import { normalizeConfidenceScore } from './confidenceScore.js';
+
 function passesAccuracyMode(story, accuracyMode) {
   if (accuracyMode !== 'strict') {
     return true;
@@ -10,7 +12,7 @@ function passesAccuracyMode(story, accuracyMode) {
     return false;
   }
 
-  if ((story.confidence || 0) < 65) {
+  if ((normalizeConfidenceScore(story.confidence) || 0) < 65) {
     return false;
   }
 
@@ -38,7 +40,7 @@ export function storyMatchesFilters(story, filters) {
     return false;
   }
 
-  if ((story.confidence || 0) < minConfidence) {
+  if ((normalizeConfidenceScore(story.confidence) || 0) < minConfidence) {
     return false;
   }
 

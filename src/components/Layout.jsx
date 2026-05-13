@@ -1,37 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Network, TrendingUp, MapPin } from 'lucide-react';
+import BrandMark from './BrandMark';
 import Header from './Header';
 import MobileBottomNav from './MobileBottomNav';
+import OfflineBanner from './OfflineBanner';
+import ShortcutHelp from './ShortcutHelp';
+import OnboardingOverlay from './OnboardingOverlay';
+import AgentSidebar from './AgentSidebar';
+import SavedViewsSidebar from './SavedViewsSidebar';
+import AlertRulesPanel from './AlertRulesPanel';
+import BookmarksPanel from './BookmarksPanel';
+import ErrorBoundary from './ErrorBoundary';
 import useNewsStore from '../stores/newsStore';
 import useUIStore from '../stores/uiStore';
+import useSubscriptionStore from '../stores/subscriptionStore';
+import useDataFreshness from '../hooks/useDataFreshness';
+import useAuth from '../hooks/useAuth';
 
 let _layoutAutoRefreshActive = false;
-
-const Ico = {
-  map: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z"/><path d="M9 3v15M15 6v15"/>
-    </svg>
-  ),
-  entities: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/>
-      <circle cx="12" cy="11" r="2"/><path d="M7.5 7l3 3M16.5 7l-3 3M12 13v3"/>
-    </svg>
-  ),
-  trends: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <path d="M3 17l5-5 4 4 9-9"/><path d="M14 7h7v7"/>
-    </svg>
-  ),
-  region: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-      <path d="M12 2C8 2 5 5 5 9c0 5.5 7 13 7 13s7-7.5 7-13c0-4-3-7-7-7z"/>
-      <circle cx="12" cy="9" r="2.5"/>
-    </svg>
-  ),
-};
 
 function formatClock(d) {
   return d.toISOString().replace('T', ' ').slice(0, 19) + 'Z';
@@ -41,13 +29,19 @@ function StatusBar() {
   const { t, i18n } = useTranslation();
   const [now, setNow] = useState(() => new Date());
   const liveNews = useNewsStore((s) => s.liveNews) || [];
+  const dataSource = useNewsStore((s) => s.dataSource);
   const sourceHealth = useNewsStore((s) => s.sourceHealth);
   const opsHealth = useNewsStore((s) => s.opsHealth);
+  const { ageValue, ageUnit, ageColor } = useDataFreshness();
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  const freshnessText = ageValue != null && ageUnit
+    ? t(`freshness.${ageUnit === 's' ? 'secondsAgo' : ageUnit === 'm' ? 'minutesAgo' : ageUnit === 'h' ? 'hoursAgo' : 'daysAgo'}`, { value: ageValue })
+    : null;
 
   const red = liveNews.filter((e) => (e.severity ?? 0) >= 70).length;
   const amber = liveNews.filter((e) => {
@@ -60,15 +54,42 @@ function StatusBar() {
   const totalSources = Object.keys(sources).length || 312;
   const degraded = Object.values(sources).filter((x) => x?.status && x.status !== 'ok').length;
 
-  const opsLabel = opsHealth?.status
-    ? opsHealth.status.toUpperCase()
-    : 'NOMINAL';
+  const feedStatusLabel = dataSource === 'live'
+    ? 'LIVE'
+    : dataSource === 'loading'
+      ? 'LOADING'
+      : 'OFFLINE';
+
+  const opsLabel = dataSource === 'unavailable'
+    ? 'OFFLINE'
+    : dataSource === 'loading'
+      ? 'LOADING'
+      : opsHealth?.status
+        ? opsHealth.status.toUpperCase()
+        : 'NOMINAL';
+
+  const freshnessColorVar = ageColor === 'green'
+    ? 'var(--sev-green)'
+    : ageColor === 'amber'
+      ? 'var(--sev-amber)'
+      : 'var(--sev-red)';
 
   return (
     <div className="app-status" role="status" aria-live="polite">
       <div className="status-item">● <b className="tnum">{formatClock(now)}</b></div>
       <div className="status-sep" />
-      <div className="status-item">FEED · <b className="tnum">{liveNews.length}</b> evt</div>
+      {freshnessText && (
+        <>
+          <div
+            className="status-item status-freshness"
+            style={{ color: freshnessColorVar }}
+          >
+            {freshnessText}
+          </div>
+          <div className="status-sep" />
+        </>
+      )}
+      <div className="status-item">FEED · <b>{feedStatusLabel}</b> · <span className="tnum">{liveNews.length}</span> evt</div>
       <div className="status-item">RED <b className="tnum" style={{ color: 'var(--sev-red)' }}>{red}</b></div>
       <div className="status-item">AMBER <b className="tnum" style={{ color: 'var(--sev-amber)' }}>{amber}</b></div>
       <div className="status-item">GREEN <b className="tnum" style={{ color: 'var(--sev-green)' }}>{green}</b></div>
@@ -96,6 +117,18 @@ export default function Layout() {
   const lastRegionIso = useUIStore((s) => s.lastRegionIso);
   const addToast = useUIStore((s) => s.addToast);
   const regionTarget = lastRegionIso ? `/region/${lastRegionIso}` : '/region';
+  const { user } = useAuth();
+  const initFromUser = useSubscriptionStore((s) => s.initFromUser);
+  const loadFeatureFlags = useSubscriptionStore((s) => s.loadFeatureFlags);
+
+  // Initialize subscription status from InstantDB when auth state changes
+  useEffect(() => {
+    initFromUser(user);
+  }, [user, initFromUser]);
+
+  useEffect(() => {
+    loadFeatureFlags();
+  }, [loadFeatureFlags]);
 
   useEffect(() => {
     if (_layoutAutoRefreshActive) return undefined;
@@ -111,6 +144,7 @@ export default function Layout() {
   return (
     <div className="layout">
       <Header />
+      <OfflineBanner />
 
       <aside className="app-sidebar" aria-label={t('nav.ariaLabel')}>
         <nav className="layout-nav-links">
@@ -120,7 +154,7 @@ export default function Layout() {
             className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
             title={t('nav.map')}
           >
-            {Ico.map}
+            <BrandMark className="layout-mapr-nav-icon" size={18} />
             <span className="side-label">{t('nav.map')}</span>
           </NavLink>
           <NavLink
@@ -128,7 +162,7 @@ export default function Layout() {
             className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
             title={t('nav.entities')}
           >
-            {Ico.entities}
+            <Network size={18} aria-hidden />
             <span className="side-label">{t('nav.entities')}</span>
           </NavLink>
           <NavLink
@@ -137,7 +171,7 @@ export default function Layout() {
             className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
             title={t('nav.region', 'Region') + (lastRegionIso ? ` · ${lastRegionIso}` : '')}
           >
-            {Ico.region}
+            <MapPin size={18} aria-hidden />
             <span className="side-label">
               {t('nav.region', 'Region')}
               {lastRegionIso && <span className="side-label-sub"> · {lastRegionIso}</span>}
@@ -148,18 +182,29 @@ export default function Layout() {
             className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
             title={t('nav.trends')}
           >
-            {Ico.trends}
+            <TrendingUp size={18} aria-hidden />
             <span className="side-label">{t('nav.trends')}</span>
           </NavLink>
         </nav>
+
+        <SavedViewsSidebar />
+        <AlertRulesPanel />
+        <BookmarksPanel />
       </aside>
 
       <main className="layout-content app-main" data-route={location.pathname}>
-        <Outlet />
+        {/* Per-route ErrorBoundary so a crash inside one page doesn't blank
+            the whole app shell (sidebar, header, status bar stay rendered). */}
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <StatusBar />
       <MobileBottomNav />
+      <ShortcutHelp />
+      <AgentSidebar />
+      {location.pathname === '/' && <OnboardingOverlay />}
     </div>
   );
 }

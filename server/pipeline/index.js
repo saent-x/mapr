@@ -24,7 +24,7 @@ export {
   retainPreviousGdeltArticles
 } from './fetchSources.js';
 
-export { mergeAndDeduplicateArticles } from './normalizeArticles.js';
+export { mergeAndDeduplicateArticles, mergeSourceMetadata } from './normalizeArticles.js';
 
 export { enrichArticlesWithEntities } from './enrichEntities.js';
 

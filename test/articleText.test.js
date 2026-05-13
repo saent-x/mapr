@@ -16,6 +16,12 @@ test('normalizeArticleText collapses whitespace after stripping html', () => {
   assert.equal(text, 'Flooding in Lagos');
 });
 
+test('normalizeArticleText strips escaped RSS image tags', () => {
+  const text = normalizeArticleText('&lt;img align="right" src="https://example.test/a.jpg"&gt;Border attack suspect named');
+
+  assert.equal(text, 'Border attack suspect named');
+});
+
 test('getArticleTextPreview truncates long text without trailing partial words', () => {
   const preview = getArticleTextPreview(
     'Emergency teams are clearing blocked roads while rural clinics wait for delayed fuel deliveries.',

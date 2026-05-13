@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.cline
+bun.lock
 
 # Editor directories and files
 .vscode/*
@@ -24,3 +26,5 @@ dist-ssr
 *.sw?
 .env
 .superpowers/
+.deepseek/
+.factory/mission-scratch/

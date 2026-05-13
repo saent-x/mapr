@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppMap from './AppMap';
 import MapGLOverlay from './MapGLOverlay';
 import useBreakpoint from '../hooks/useBreakpoint';
+import { getCountryBbox } from '../utils/countryBbox';
+import { getRegionCameraTarget, getSelectedStoryCameraTarget } from '../utils/mapCamera';
 
 /* ──────────────────────────── constants ──────────────────────────── */
 
@@ -32,6 +34,7 @@ const Globe = ({
   regionSeverities,
   mapOverlay,
   coverageStatusByIso = {},
+  perCountryReliability = {},
   velocitySpikes = [],
   trackingPoints = [],
   selectedRegion,
@@ -39,6 +42,7 @@ const Globe = ({
   onRegionSelect,
   onStorySelect,
   onArcSelect,
+  onCoverageCountryClick,
 }) => {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
@@ -122,14 +126,35 @@ const Globe = ({
     // Don't steal the camera from the entry animation.
     if (entryInProgressRef.current) return;
 
+    const fitCountry = (iso) => {
+      let cancelled = false;
+      getCountryBbox(iso).then((bbox) => {
+        if (cancelled || !bbox) return;
+        try {
+          map.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], {
+            padding: 40,
+            duration: 1200,
+          });
+        } catch { /* ignore */ }
+      });
+      return () => { cancelled = true; };
+    };
+
     if (selectedStory && selectedStory.id !== prevStoryRef.current) {
-      try {
-        map.flyTo({
-          center: [selectedStory.coordinates[1], selectedStory.coordinates[0]],
-          zoom: STORY_ZOOM,
-          duration: 1200,
-        });
-      } catch { /* ignore */ }
+      const target = getSelectedStoryCameraTarget(selectedStory);
+      if (target.type === 'point') {
+        try {
+          map.flyTo({
+            center: target.center,
+            zoom: STORY_ZOOM,
+            duration: 1200,
+          });
+        } catch { /* ignore */ }
+      } else if (target.type === 'country') {
+        prevStoryRef.current = selectedStory.id;
+        hadSelectionRef.current = true;
+        return fitCountry(target.iso);
+      }
       prevStoryRef.current = selectedStory.id;
       hadSelectionRef.current = true;
       return;
@@ -139,14 +164,19 @@ const Globe = ({
       const focal =
         regionSeverities[selectedRegion]?.peakStory ||
         newsList.find((s) => s.isoA2 === selectedRegion);
-      if (focal) {
+      const target = getRegionCameraTarget(selectedRegion, focal);
+      if (target.type === 'point') {
         try {
           map.flyTo({
-            center: [focal.coordinates[1], focal.coordinates[0]],
+            center: target.center,
             zoom: REGION_ZOOM,
             duration: 1200,
           });
         } catch { /* ignore */ }
+      } else if (target.type === 'country') {
+        prevRegionRef.current = selectedRegion;
+        hadSelectionRef.current = true;
+        return fitCountry(target.iso);
       }
       prevRegionRef.current = selectedRegion;
       hadSelectionRef.current = true;
@@ -274,6 +304,7 @@ const Globe = ({
           regionSeverities={regionSeverities}
           mapOverlay={mapOverlay}
           coverageStatusByIso={coverageStatusByIso}
+          perCountryReliability={perCountryReliability}
           velocitySpikes={velocitySpikes}
           trackingPoints={trackingPoints}
           selectedRegion={selectedRegion}
@@ -281,6 +312,7 @@ const Globe = ({
           onRegionSelect={onRegionSelect}
           onStorySelect={onStorySelect}
           onArcSelect={onArcSelect}
+          onCoverageCountryClick={onCoverageCountryClick}
         />
       </AppMap>
     </div>

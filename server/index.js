@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +39,20 @@ function serveStaticFile(response, filePath) {
   createReadStream(filePath).pipe(response);
 }
 import { buildAdminHealthPayload, mergeAdminHealthPayloads } from '../src/utils/healthSummary.js';
-import { closeStorage, enforceDbSizeLimit, getDbSize, getDbSizeLimits, getTableSizes } from './storage.js';
+import { DEFAULT_FEATURE_FLAGS, normalizeFeatureFlags } from '../src/utils/featureAccess.js';
+import {
+  closeStorage,
+  enforceDbSizeLimit,
+  getDbSize,
+  getDbSizeLimits,
+  getDroppedArticleLinkCount,
+  getTableSizes,
+  readMetadataJson,
+  readSnapshotHistory,
+  readSnapshotTimestamps,
+  readSourceCredibilityScores,
+  writeMetadataJson
+} from './storage.js';
 import {
   getBriefing,
   getCoverageHistory,
@@ -51,6 +65,19 @@ import {
   startScheduler,
   stopScheduler
 } from './ingest.js';
+import {
+  readSourceCatalog,
+  writeSourceCatalog,
+  readSourceState,
+  hydrateSourceCatalog,
+  summarizeSourceCatalog,
+  addSourceToCatalog,
+  updateSourceInCatalog,
+  removeSourceFromCatalog,
+  importSourcesToCatalog,
+  reEnableSourceInCatalog,
+  autoDisableFailingSources
+} from './sourceCatalog.js';
 import { getCircuitSummary } from './circuitBreaker.js';
 import {
   addClient as addSseClient,
@@ -73,19 +100,73 @@ import { log } from './logger.js';
 // Shared route handlers (originally written for serverless; invoked from this Node server)
 import gdeltProxyHandler from '../api/gdelt-proxy.js';
 import sourceCatalogHandler from '../api/source-catalog.js';
+import { createCheckoutSession, createPortalSession, handleStripeWebhook } from './stripe.js';
+import { requireUser, getRequestUserRecord } from './auth.js';
+import { listThreadsForUser, createThread, archiveThread } from './storyThreads.js';
+import { runDigestSweep } from './alerts/dispatch.js';
+import { runDailyDigestSweep } from './alerts/dailyDigest.js';
+import { buildCredibilityForEvent } from './sourceCredibility.js';
+import { generateBrief, readLatestBrief } from './briefs.js';
+import { readEventById } from './storage.js';
+import {
+  createConversation as createQaConversation,
+  listConversations as listQaConversations,
+  getConversation as getQaConversation,
+  appendMessage as appendQaMessage,
+  readMessages as readQaMessages,
+  archiveConversation as archiveQaConversation,
+  setConversationUseFilters as setQaConversationUseFilters,
+  userMessageCountInLastDays as qaUserMessageCount,
+} from './qa/conversations.js';
+import { retrieveTopK as qaRetrieveTopK } from './qa/retrieve.js';
+import { generateAnswer as qaGenerateAnswer } from './qa/generate.js';
 
 const PORT = Number(process.env.PORT || process.env.MAPR_API_PORT || 3030);
 const API_TIMEOUT_MS = 30_000; // 30s timeout for API request handlers
+const FEATURE_FLAGS_METADATA_KEY = 'feature_flags';
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET,POST,OPTIONS',
-  'access-control-allow-headers': 'Content-Type, X-Admin-Password',
+  'access-control-allow-methods': 'GET,POST,PUT,OPTIONS',
+  'access-control-allow-headers': 'Content-Type, X-Admin-Password, Authorization',
 };
 
-function sendJson(response, statusCode, payload, extraHeaders = {}) {
+// Sent on every response. CSP belongs in index.html so it covers static
+// assets too; here we add transport-layer hardening that the browser
+// applies regardless of route.
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
+  'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+};
+
+const SENSITIVE_API_PREFIXES = [
+  '/api/admin',
+  '/api/admin-auth',
+  '/api/admin-health',
+  '/api/source-catalog',
+  '/api/stripe',
+  '/api/me',
+  '/api/refresh',
+];
+
+function corsHeadersForPath(pathname) {
+  if (!SENSITIVE_API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+    return CORS_HEADERS;
+  }
+  return {
+    'access-control-allow-methods': CORS_HEADERS['access-control-allow-methods'],
+    'access-control-allow-headers': CORS_HEADERS['access-control-allow-headers'],
+    vary: 'Origin',
+  };
+}
+
+function sendJson(response, statusCode, payload, extraHeaders = {}, requestPath = '') {
   response.writeHead(statusCode, {
-    ...CORS_HEADERS,
+    ...corsHeadersForPath(requestPath || response._maprPath || ''),
+    ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'content-type': 'application/json; charset=utf-8',
     ...extraHeaders
@@ -94,10 +175,11 @@ function sendJson(response, statusCode, payload, extraHeaders = {}) {
 }
 
 /** @param {string[]} setCookieValues */
-function sendJsonWithCookies(response, statusCode, payload, setCookieValues) {
+function sendJsonWithCookies(response, statusCode, payload, setCookieValues, requestPath = '') {
   response.statusCode = statusCode;
   for (const [k, v] of Object.entries({
-    ...CORS_HEADERS,
+    ...corsHeadersForPath(requestPath || response._maprPath || ''),
+    ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'content-type': 'application/json; charset=utf-8'
   })) {
@@ -131,6 +213,20 @@ function adminAuthorized(request) {
   return Boolean(tok && verifySessionToken(tok));
 }
 
+async function readFeatureFlags() {
+  const stored = await readMetadataJson(FEATURE_FLAGS_METADATA_KEY, DEFAULT_FEATURE_FLAGS);
+  return normalizeFeatureFlags(stored);
+}
+
+async function writeFeatureFlags(payload) {
+  const flags = normalizeFeatureFlags({
+    ...payload,
+    updatedAt: new Date().toISOString(),
+  });
+  await writeMetadataJson(FEATURE_FLAGS_METADATA_KEY, flags);
+  return flags;
+}
+
 async function readJsonBody(request, maxBytes = 32_768) {
   const chunks = [];
   let total = 0;
@@ -150,13 +246,48 @@ async function readJsonBody(request, maxBytes = 32_768) {
   }
 }
 
+/** Read the raw request body as a UTF-8 string (for webhook signatures). */
+async function readRawBody(request, maxBytes = 256_000) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of request) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      throw Object.assign(new Error('Request body too large'), { code: 'PAYLOAD_TOO_LARGE', statusCode: 413 });
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 function sendText(response, statusCode, text) {
   response.writeHead(statusCode, {
     ...CORS_HEADERS,
+    ...SECURITY_HEADERS,
     'cache-control': 'no-store',
     'content-type': 'text/plain; charset=utf-8'
   });
   response.end(text);
+}
+
+/**
+ * Verify a paywall: requires an authenticated user whose subscription
+ * grants access to `featureId` per the current feature flags.
+ * Throws with statusCode 401 (no/invalid token) or 402 (auth ok but
+ * subscription does not grant the feature).
+ */
+async function requireProFeature(request, featureId) {
+  const { record } = await getRequestUserRecord(request);
+  const flags = await readFeatureFlags();
+  const status = record?.subscriptionStatus || 'free';
+  const required = flags.features[featureId] || 'pro';
+  if (flags.billingEnabled === false) return record;
+  if (required === 'disabled') {
+    throw Object.assign(new Error('Feature disabled'), { code: 'FEATURE_DISABLED', statusCode: 403 });
+  }
+  if (required === 'free') return record;
+  if (status === 'pro' || status === 'enterprise') return record;
+  throw Object.assign(new Error('Subscription required'), { code: 'PAYMENT_REQUIRED', statusCode: 402 });
 }
 
 /**
@@ -178,6 +309,7 @@ function withTimeout(asyncFn, timeoutMs = API_TIMEOUT_MS) {
 /**
  * Classify an error into an HTTP status code and structured response.
  * Maps known error patterns to appropriate status codes.
+ * Default 500 uses a generic message to avoid leaking internal details.
  */
 function classifyError(error) {
   const message = error?.message || 'Internal server error';
@@ -185,24 +317,40 @@ function classifyError(error) {
 
   // Timeout errors → 504
   if (code === 'REQUEST_TIMEOUT' || error?.statusCode === 504) {
-    return { status: 504, body: { error: message, code: 'REQUEST_TIMEOUT' } };
+    return { status: 504, body: { error: 'Request timed out', code: 'REQUEST_TIMEOUT' } };
   }
 
   if (code === 'PAYLOAD_TOO_LARGE' || error?.statusCode === 413) {
-    return { status: 413, body: { error: message, code: 'PAYLOAD_TOO_LARGE' } };
+    return { status: 413, body: { error: 'Request body too large', code: 'PAYLOAD_TOO_LARGE' } };
+  }
+
+  if (code === 'UNAUTHORIZED' || error?.statusCode === 401) {
+    return { status: 401, body: { error: message || 'Unauthorized', code: 'UNAUTHORIZED' } };
+  }
+
+  if (code === 'PAYMENT_REQUIRED' || error?.statusCode === 402) {
+    return { status: 402, body: { error: 'Subscription required', code: 'PAYMENT_REQUIRED' } };
+  }
+
+  if (code === 'FEATURE_DISABLED' || code === 'NO_CUSTOMER' || error?.statusCode === 403 || error?.statusCode === 404) {
+    return { status: error?.statusCode || 403, body: { error: message, code: code || 'FORBIDDEN' } };
+  }
+
+  if (code === 'AUTH_NOT_CONFIGURED' || error?.statusCode === 503) {
+    return { status: 503, body: { error: 'Service unavailable', code: code || 'SERVICE_UNAVAILABLE' } };
   }
 
   if (code === 'BAD_REQUEST' && error?.statusCode === 400) {
     return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
   }
 
-  // Bad request patterns (missing/invalid parameters)
+  // Bad request patterns (missing/invalid parameters) — safe to expose
   if (/^Missing\b/i.test(message) || /^Unknown region/i.test(message) || /^Invalid\b/i.test(message)) {
     return { status: 400, body: { error: message, code: 'BAD_REQUEST' } };
   }
 
-  // Default → 500
-  return { status: 500, body: { error: message, code: code || 'INTERNAL_ERROR' } };
+  // Default → 500 with generic message (don't leak internal error details)
+  return { status: 500, body: { error: 'Internal server error', code: code || 'INTERNAL_ERROR' } };
 }
 
 /**
@@ -246,11 +394,17 @@ async function buildAdminHealthResponse() {
   });
   const healthPayload = await getHealth();
 
-  return mergeAdminHealthPayloads(briefingPayload, {
+  const merged = mergeAdminHealthPayloads(briefingPayload, {
     sourceHealth: healthPayload.sourceHealth,
     coverageMetrics: healthPayload.coverageMetrics,
     coverageDiagnostics: healthPayload.coverageDiagnostics
   });
+  // Surface integrity counters separately so dropped links don't disappear
+  // silently. Spike here means UI is missing sources for some events.
+  merged.integrity = {
+    droppedArticleLinks: getDroppedArticleLinkCount()
+  };
+  return merged;
 }
 
 const server = http.createServer(async (request, response) => {
@@ -260,38 +414,59 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (request.method === 'OPTIONS') {
-    response.writeHead(204, CORS_HEADERS);
+    const optionsUrl = new URL(request.url, `http://127.0.0.1:${PORT}`);
+    response.writeHead(204, corsHeadersForPath(optionsUrl.pathname));
     response.end();
     return;
   }
 
   const url = new URL(request.url, `http://127.0.0.1:${PORT}`);
+  response._maprPath = url.pathname;
 
   try {
     // ── Stateful routes (use server's cache/SQLite) ──
 
+    // /api/briefing & /api/events: response is identical for all viewers, so
+    // public 60s cache is safe. If per-user data is ever added, switch to `private`.
     if (request.method === 'GET' && url.pathname === '/api/briefing') {
       const briefing = await withTimeout(() => getBriefing());
       const hasSnapshot = briefing.meta.fetchedAt || briefing.articles.length > 0;
-      sendJson(response, hasSnapshot ? 200 : 503, briefing);
+      const cacheHeaders = hasSnapshot
+        ? { 'cache-control': 'public, max-age=60, stale-while-revalidate=120', vary: 'Origin, Accept-Encoding' }
+        : {};
+      sendJson(response, hasSnapshot ? 200 : 503, briefing, cacheHeaders);
       return;
     }
 
     if (request.method === 'GET' && url.pathname === '/api/events') {
       const briefing = await withTimeout(() => getBriefing());
       const hasSnapshot = briefing.meta.fetchedAt || briefing.events.length > 0;
+      const cacheHeaders = hasSnapshot
+        ? { 'cache-control': 'public, max-age=60, stale-while-revalidate=120', vary: 'Origin, Accept-Encoding' }
+        : {};
       sendJson(response, hasSnapshot ? 200 : 503, {
         meta: briefing.meta,
         events: briefing.events,
         sourceHealth: briefing.sourceHealth,
         ingestHealth: briefing.ingestHealth
-      });
+      }, cacheHeaders);
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/api/health') {
+    // Liveness: process is up. Always 200 unless we're in the middle of
+    // shutdown. Used by orchestrators (Railway, K8s) to decide whether to
+    // restart the container.
+    if (request.method === 'GET' && url.pathname === '/api/health/live') {
+      sendJson(response, _shuttingDown ? 503 : 200, { ok: !_shuttingDown });
+      return;
+    }
+
+    // Readiness: are we ready to serve traffic? Postgres reachable, snapshot
+    // primed. Used by load balancers to decide whether to route requests.
+    if (request.method === 'GET' && (url.pathname === '/api/health/ready' || url.pathname === '/api/health')) {
       const health = await withTimeout(() => getHealth());
       health.circuitBreaker = getCircuitSummary();
+      let dbOk = false;
       try {
         const size = await getDbSize();
         const limits = getDbSizeLimits();
@@ -301,8 +476,44 @@ const server = http.createServer(async (request, response) => {
           hardMb: limits.hardMb,
           capacityMb: limits.capacityMb
         };
-      } catch { /* ignore */ }
-      sendJson(response, 200, health);
+        dbOk = true;
+      } catch (err) {
+        // Surface the failure honestly — a healthy 200 here would route
+        // traffic to a broken instance.
+        health.database = { error: err.message };
+      }
+      const briefingReady = health.snapshotStatus !== 'cold';
+      const ready = dbOk && briefingReady && !_shuttingDown;
+      const subscriptionStatus = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+        ? 'configured'
+        : 'disabled';
+      sendJson(response, ready ? 200 : 503, { ...health, ready, subscription_status: subscriptionStatus });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/feature-flags') {
+      sendJson(response, 200, await readFeatureFlags());
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/admin/feature-flags') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      sendJson(response, 200, await readFeatureFlags());
+      return;
+    }
+
+    if (request.method === 'PUT' && url.pathname === '/api/admin/feature-flags') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 64_768); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      sendJson(response, 200, await writeFeatureFlags(body));
       return;
     }
 
@@ -336,6 +547,14 @@ const server = http.createServer(async (request, response) => {
 
     // ── SSE: real-time event stream ──
     if (request.method === 'GET' && url.pathname === '/api/stream') {
+      // Reject if the SSE pool is at capacity rather than letting the
+      // client set grow unbounded. Returning 503 lets the client retry.
+      // Set socket-level keepalive so an idle proxy doesn't quietly close
+      // without firing the request.close handler.
+      try {
+        request.socket?.setKeepAlive?.(true, 30_000);
+        request.socket?.setNoDelay?.(true);
+      } catch { /* best-effort */ }
       response.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Connection': 'keep-alive',
@@ -343,7 +562,11 @@ const server = http.createServer(async (request, response) => {
         ...CORS_HEADERS
       });
       response.write(': connected\n\n');
-      addSseClient(response);
+      const accepted = addSseClient(response);
+      if (!accepted) {
+        try { response.end(); } catch { /* ignore */ }
+        return;
+      }
       request.on('close', () => removeSseClient(response));
       return;
     }
@@ -369,8 +592,188 @@ const server = http.createServer(async (request, response) => {
       return withTimeout(() => runVercelHandler(sourceCatalogHandler, request, response, url));
     }
 
+    if (request.method === 'GET' && url.pathname === '/api/source-reliability') {
+      try {
+        const scores = await readSourceCredibilityScores();
+        sendJson(response, 200, scores);
+      } catch (err) {
+        console.error('[api] source-reliability error:', err.message);
+        sendJson(response, 500, { error: 'Failed to read source reliability data' });
+      }
+      return;
+    }
     if (request.method === 'GET' && url.pathname === '/api/source-catalog/state') {
       sendJson(response, 200, getSourceCatalogStatus());
+      return;
+    }
+
+    // ── Admin source management CRUD ──────────────────────────────────────────
+
+    if (request.method === 'POST' && url.pathname === '/api/source-catalog/add') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 64_768); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      if (!body.name || !body.url) {
+        sendJson(response, 400, { error: 'Missing required fields: name, url', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        const updated = addSourceToCatalog(catalog, body);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const newEntry = updated[updated.length - 1];
+        sendJson(response, 200, { ok: true, source: newEntry, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog add error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'PUT' && url.pathname.startsWith('/api/source-catalog/') && !url.pathname.endsWith('/add') && !url.pathname.endsWith('/import') && !url.pathname.endsWith('/re-enable') && !url.pathname.endsWith('/state')) {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const id = url.pathname.replace('/api/source-catalog/', '');
+      if (!id) {
+        sendJson(response, 400, { error: 'Missing source ID', code: 'BAD_REQUEST' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 64_768); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      try {
+        const catalog = await readSourceCatalog();
+        if (!catalog.some((e) => e.id === id)) {
+          sendJson(response, 404, { error: 'Source not found', code: 'NOT_FOUND' });
+          return;
+        }
+        const updated = updateSourceInCatalog(catalog, id, body);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const updatedEntry = updated.find((e) => e.id === id);
+        sendJson(response, 200, { ok: true, source: updatedEntry, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog edit error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/source-catalog/') && !url.pathname.endsWith('/add') && !url.pathname.endsWith('/import') && !url.pathname.endsWith('/re-enable') && !url.pathname.endsWith('/state')) {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      const id = url.pathname.replace('/api/source-catalog/', '');
+      if (!id) {
+        sendJson(response, 400, { error: 'Missing source ID', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        if (!catalog.some((e) => e.id === id)) {
+          sendJson(response, 404, { error: 'Source not found', code: 'NOT_FOUND' });
+          return;
+        }
+        const updated = removeSourceFromCatalog(catalog, id);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        sendJson(response, 200, { ok: true, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog delete error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/source-catalog/import') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request, 512_000); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      if (!Array.isArray(body.feeds) || body.feeds.length === 0) {
+        sendJson(response, 400, { error: 'Missing or empty feeds array', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        const previousCount = catalog.length;
+        const updated = importSourcesToCatalog(catalog, body.feeds);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const addedCount = updated.length - previousCount;
+        sendJson(response, 200, { ok: true, addedCount, totalCount: updated.length, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog import error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/source-catalog/re-enable') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      let body;
+      try { body = await readJsonBody(request); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      const id = String(body.id || '').trim();
+      if (!id) {
+        sendJson(response, 400, { error: 'Missing source ID', code: 'BAD_REQUEST' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        if (!catalog.some((e) => e.id === id)) {
+          sendJson(response, 404, { error: 'Source not found', code: 'NOT_FOUND' });
+          return;
+        }
+        const updated = reEnableSourceInCatalog(catalog, id);
+        await writeSourceCatalog(updated);
+        const sourceState = await readSourceState();
+        const reEnabledEntry = updated.find((e) => e.id === id);
+        sendJson(response, 200, { ok: true, source: reEnabledEntry, summary: summarizeSourceCatalog(updated, sourceState) });
+      } catch (err) {
+        console.error('[api] source-catalog re-enable error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── Source catalog export (raw JSON download) ────────────────────────────
+    if (request.method === 'GET' && url.pathname === '/api/source-catalog/export') {
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
+      try {
+        const catalog = await readSourceCatalog();
+        const sourceState = await readSourceState();
+        const hydrated = hydrateSourceCatalog(catalog, sourceState);
+        sendJson(response, 200, { feeds: hydrated, exportedAt: new Date().toISOString() }, {
+          'content-disposition': 'attachment; filename="source-catalog-export.json"'
+        });
+      } catch (err) {
+        console.error('[api] source-catalog export error:', err.message);
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
       return;
     }
 
@@ -392,6 +795,33 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // ── Historical snapshot queries ──
+
+    if (request.method === 'GET' && url.pathname === '/api/snapshot-history/timestamps') {
+      try { await requireProFeature(request, 'historicalQueries'); }
+      catch (err) { const { status, body: b } = classifyError(err); sendJson(response, status, b); return; }
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      const timestamps = await withTimeout(() => readSnapshotTimestamps(from, to));
+      sendJson(response, 200, { timestamps }, {
+        'cache-control': 'public, max-age=60, stale-while-revalidate=120'
+      });
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/snapshot-history') {
+      try { await requireProFeature(request, 'historicalQueries'); }
+      catch (err) { const { status, body: b } = classifyError(err); sendJson(response, status, b); return; }
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      const limit = Math.max(1, Math.min(168, Number(url.searchParams.get('limit') || 48)));
+      const snapshots = await withTimeout(() => readSnapshotHistory(from, to, limit));
+      sendJson(response, 200, { snapshots }, {
+        'cache-control': 'public, max-age=60, stale-while-revalidate=120'
+      });
+      return;
+    }
+
     if (request.method === 'GET' && url.pathname === '/api/region-briefing') {
       const iso = (url.searchParams.get('iso') || '').trim().toUpperCase();
       if (!iso) { sendJson(response, 400, { error: 'Missing iso query parameter', code: 'BAD_REQUEST' }); return; }
@@ -400,6 +830,15 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === 'POST' && url.pathname === '/api/refresh') {
+      // Admin-only — full ingest is heavy, so it must not be a public DoS surface.
+      if (!adminPasswordConfigured()) {
+        sendJson(response, 503, { error: 'ADMIN_PASSWORD not configured', code: 'SERVICE_UNAVAILABLE' });
+        return;
+      }
+      if (!adminAuthorized(request)) {
+        sendJson(response, 401, { error: 'Unauthorized', code: 'UNAUTHORIZED' });
+        return;
+      }
       const briefing = await withTimeout(() => refreshSnapshot({ force: true, reason: 'manual' }), 120_000);
       sendJson(response, 200, briefing);
       return;
@@ -423,6 +862,10 @@ const server = http.createServer(async (request, response) => {
     // ── Admin session (httpOnly cookie; optional X-Admin-Password for scripts) ──
 
     if (request.method === 'POST' && url.pathname === '/api/admin/session') {
+      if (checkAdminRateLimit(request)) {
+        sendJson(response, 429, { error: 'Too many attempts', code: 'RATE_LIMITED' });
+        return;
+      }
       if (!adminPasswordConfigured()) {
         sendJson(response, 503, { error: 'ADMIN_PASSWORD not configured', code: 'SERVICE_UNAVAILABLE' });
         return;
@@ -440,17 +883,17 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const password = String(body.password || '').trim();
-      if (password !== getAdminPassword()) {
+      if (!timingSafeEqual(password, getAdminPassword())) {
         sendJson(response, 401, { error: 'Invalid password', code: 'UNAUTHORIZED' });
         return;
       }
       const token = createSessionToken();
       if (!token) {
-        sendJson(response, 500, { error: 'Could not create session', code: 'INTERNAL_ERROR' });
+        sendJson(response, 500, { error: 'Internal server error', code: 'INTERNAL_ERROR' });
         return;
       }
       const secure = isHttpsRequest(request);
-      sendJsonWithCookies(response, 200, { ok: true }, [buildSetSessionCookie(token, secure)]);
+      sendJsonWithCookies(response, 200, { ok: true }, [buildSetSessionCookie(token, secure)], url.pathname);
       return;
     }
 
@@ -463,12 +906,16 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'POST' && url.pathname === '/api/admin/logout') {
       const secure = isHttpsRequest(request);
-      sendJsonWithCookies(response, 200, { ok: true }, [buildClearSessionCookie(secure)]);
+      sendJsonWithCookies(response, 200, { ok: true }, [buildClearSessionCookie(secure)], url.pathname);
       return;
     }
 
     // Legacy JSON check (no cookie) — used by some API clients
     if (request.method === 'POST' && url.pathname === '/api/admin-auth') {
+      if (checkAdminRateLimit(request)) {
+        sendJson(response, 429, { error: 'Too many attempts', code: 'RATE_LIMITED' });
+        return;
+      }
       if (!adminPasswordConfigured()) {
         sendJson(response, 500, { error: 'ADMIN_PASSWORD not configured' });
         return;
@@ -481,11 +928,410 @@ const server = http.createServer(async (request, response) => {
         sendJson(response, status, b);
         return;
       }
-      const password = body.password;
-      if (String(password || '').trim() === getAdminPassword()) {
+      const password = String(body.password || '').trim();
+      if (timingSafeEqual(password, getAdminPassword())) {
         return sendJson(response, 200, { ok: true });
       }
       return sendJson(response, 401, { error: 'Invalid password' });
+    }
+
+    // ── Stripe Integration ──
+
+    if (request.method === 'POST' && url.pathname === '/api/stripe/create-checkout-session') {
+      try {
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        // userId/email are derived from the verified token. Body fields are ignored.
+        const successUrl = String(body.successUrl || '').trim();
+        const cancelUrl = String(body.cancelUrl || '').trim();
+        const result = await withTimeout(() =>
+          createCheckoutSession({ user, successUrl, cancelUrl }),
+        );
+        sendJson(response, 200, result);
+      } catch (err) {
+        log.warn('stripe_checkout_error', { msg: err.message, code: err.code });
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/stripe/create-portal-session') {
+      try {
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        // customerId is NEVER trusted from the body. createPortalSession looks
+        // it up server-side from the authenticated user's $users record.
+        const returnUrl = String(body.returnUrl || '').trim();
+        const result = await withTimeout(() => createPortalSession({ user, returnUrl }));
+        sendJson(response, 200, result);
+      } catch (err) {
+        log.warn('stripe_portal_error', { msg: err.message, code: err.code });
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── Story Threads ──
+    if (request.method === 'GET' && url.pathname === '/api/threads') {
+      try {
+        const user = await requireUser(request);
+        const status = url.searchParams.get('status') || 'active';
+        const threads = await withTimeout(() => listThreadsForUser({ userId: user.id, status }));
+        sendJson(response, 200, { threads });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/alerts/digest-sweep') {
+      if (!adminAuthorized(request)) { sendJson(response, 401, { error: 'admin required' }); return; }
+      try {
+        const dryRun = url.searchParams.get('dry') === '1';
+        const out = await withTimeout(() => runDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL, dryRun }), 60_000);
+        sendJson(response, 200, out);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/alerts/daily-digest') {
+      if (!adminAuthorized(request)) { sendJson(response, 401, { error: 'admin required' }); return; }
+      try {
+        const dryRun = url.searchParams.get('dry') === '1';
+        const out = await withTimeout(() => runDailyDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL, dryRun }), 60_000);
+        sendJson(response, 200, out);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/threads') {
+      try {
+        const user = await requireUser(request);
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        const thread = await withTimeout(() => createThread({
+          userId: user.id,
+          title: body.title,
+          seedEventId: body.seedEventId || null,
+          seedArticleId: body.seedArticleId || null,
+        }));
+        sendJson(response, 201, { thread });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/brief')) {
+      try {
+        const eventId = url.pathname.replace(/^\/api\/events\//, '').replace(/\/brief$/, '');
+        if (!eventId) {
+          sendJson(response, 400, { error: 'Missing event id' });
+          return;
+        }
+        const brief = await withTimeout(() => readLatestBrief(eventId));
+        sendJson(response, 200, { brief, cached: Boolean(brief) });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/brief')) {
+      try {
+        const user = await requireUser(request);
+        const eventId = url.pathname.replace(/^\/api\/events\//, '').replace(/\/brief$/, '');
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body OK */ }
+        const event = await readEventById(eventId);
+        if (!event) {
+          sendJson(response, 404, { error: 'Event not found' });
+          return;
+        }
+        try {
+          const result = await withTimeout(
+            () => generateBrief({ event, force: Boolean(body.force), ownerUserId: user.id }),
+            60_000,
+          );
+          sendJson(response, 200, result);
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, { error: e.message, code: 'AI_NOT_CONFIGURED' });
+            return;
+          }
+          if (e?.code === 'NO_ARTICLES') {
+            sendJson(response, 409, { error: e.message, code: 'NO_ARTICLES' });
+            return;
+          }
+          throw e;
+        }
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/credibility')) {
+      try {
+        const id = url.pathname.replace(/^\/api\/events\//, '').replace(/\/credibility$/, '');
+        if (!id) {
+          sendJson(response, 400, { error: 'Missing event id' });
+          return;
+        }
+        const result = await withTimeout(() => buildCredibilityForEvent(id));
+        sendJson(response, 200, result);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE' && url.pathname.startsWith('/api/threads/')) {
+      try {
+        const user = await requireUser(request);
+        const threadId = url.pathname.replace('/api/threads/', '');
+        const ok = await withTimeout(() => archiveThread({ userId: user.id, threadId }));
+        sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── AI Q&A sidebar (Workstream D1) ─────────────────────────────────
+    // Free tier: 10 user messages / trailing 30 days. Pro: 200.
+    if (request.method === 'GET' && url.pathname === '/api/qa/conversations') {
+      try {
+        const user = await requireUser(request);
+        const includeArchived = url.searchParams.get('archived') === '1';
+        const conversations = await withTimeout(
+          () => listQaConversations({ user, archived: includeArchived }),
+        );
+        sendJson(response, 200, { conversations });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/qa/conversations') {
+      try {
+        const user = await requireUser(request);
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body ok */ }
+        const conversation = await withTimeout(() => createQaConversation({
+          user,
+          title: body?.title,
+          useCurrentFilters: Boolean(body?.useCurrentFilters),
+        }));
+        sendJson(response, 201, { conversation });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // GET /api/qa/conversations/:id/messages
+    if (request.method === 'GET' && /^\/api\/qa\/conversations\/[^/]+\/messages$/.test(url.pathname)) {
+      try {
+        const user = await requireUser(request);
+        const conversationId = url.pathname.split('/')[4];
+        const messages = await withTimeout(() => readQaMessages({ user, conversationId }));
+        sendJson(response, 200, { messages });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // POST /api/qa/conversations/:id/messages  — the central handler.
+    if (request.method === 'POST' && /^\/api\/qa\/conversations\/[^/]+\/messages$/.test(url.pathname)) {
+      try {
+        const { authedUser: user, record } = await getRequestUserRecord(request);
+        const tier = record?.subscriptionStatus === 'pro' || record?.subscriptionStatus === 'pro_plus'
+          ? 'pro'
+          : 'free';
+        const quotaLimit = tier === 'pro' ? 200 : 10;
+
+        const conversationId = url.pathname.split('/')[4];
+        let body;
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        const content = String(body?.content || '').trim();
+        if (!content) { sendJson(response, 400, { error: 'content required' }); return; }
+
+        // Quota check FIRST so we don't spend tokens on a rejected request.
+        const used = await qaUserMessageCount({ user });
+        if (used >= quotaLimit) {
+          sendJson(response, 429, {
+            error: 'monthly quota exceeded',
+            code: 'QUOTA_EXCEEDED',
+            quota: { used, limit: quotaLimit, tier },
+          });
+          return;
+        }
+
+        // Verify conversation ownership (throws 404 otherwise) + capture
+        // current useCurrentFilters preference for retrieval scoping.
+        const parent = await getQaConversation({ user, conversationId });
+
+        // Filter-context support: clients pass current filter state in
+        // body.filters when the conversation is set to "use current filters".
+        // The retrieval module reads region/timeWindow from it.
+        const filters = (parent.useCurrentFilters || body?.useCurrentFilters)
+          ? (body?.filters || {})
+          : {};
+        // If the body indicates a desire to flip the sticky setting, persist it.
+        if (typeof body?.useCurrentFilters === 'boolean'
+            && body.useCurrentFilters !== Boolean(parent.useCurrentFilters)) {
+          await setQaConversationUseFilters({
+            user, conversationId, value: body.useCurrentFilters,
+          }).catch(() => {});
+        }
+
+        // Persist the user message first so the UI sees an immediate write.
+        const userMessage = await appendQaMessage({
+          user, conversationId, role: 'user', content,
+        });
+
+        // Read prior messages for conversational context (incl. the new user msg).
+        const priorMessages = await readQaMessages({ user, conversationId });
+
+        // Retrieval. The composite question is "<previous question if any>\n<question>"
+        // for better follow-up handling.
+        const lastAssistant = [...priorMessages].reverse().find((m) => m.role === 'assistant');
+        const compositeQuery = lastAssistant
+          ? `Previous answer: ${String(lastAssistant.content).slice(0, 400)}\n\nQuestion: ${content}`
+          : content;
+
+        let retrieved = [];
+        try {
+          retrieved = await qaRetrieveTopK(compositeQuery, {
+            k: 8,
+            timeWindowHours: filters.timeWindowHours || 168,
+            region: filters.region || null,
+            minSimilarity: 0.3,
+          });
+        } catch (e) {
+          log.warn('qa_retrieve_failed', { msg: e.message, code: e.code });
+        }
+
+        // Generation — falls back to Workers AI internally via ai/client.
+        let assistantMessage;
+        try {
+          const result = await withTimeout(() => qaGenerateAnswer({
+            question: content,
+            retrieved,
+            priorMessages,
+          }), 60_000);
+          assistantMessage = await appendQaMessage({
+            user, conversationId,
+            role: 'assistant',
+            content: result.answer || (retrieved.length === 0
+              ? "I couldn't find recent coverage on that in our corpus."
+              : 'No answer was produced — please try rephrasing.'),
+            citations: result.citations,
+            modelUsed: result.modelUsed,
+            tokensIn: result.tokensIn,
+            tokensOut: result.tokensOut,
+          });
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, {
+              error: e.message,
+              code: 'AI_NOT_CONFIGURED',
+              userMessage,
+            });
+            return;
+          }
+          throw e;
+        }
+
+        sendJson(response, 200, {
+          userMessage,
+          assistantMessage,
+          quota: { used: used + 1, limit: quotaLimit, tier },
+        });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // DELETE /api/qa/conversations/:id  → archive (soft delete)
+    if (request.method === 'DELETE' && /^\/api\/qa\/conversations\/[^/]+$/.test(url.pathname)) {
+      try {
+        const user = await requireUser(request);
+        const conversationId = url.pathname.split('/')[4];
+        const ok = await withTimeout(() => archiveQaConversation({ user, conversationId }));
+        sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // Server-of-record subscription state. Clients should prefer this over the
+    // local InstantDB $users field (which is read-only after the perms file is
+    // applied) for any UI that drives access control.
+    if (request.method === 'GET' && url.pathname === '/api/me') {
+      try {
+        const { authedUser, record } = await getRequestUserRecord(request);
+        sendJson(response, 200, {
+          user: { id: authedUser.id, email: authedUser.email },
+          subscriptionStatus: record?.subscriptionStatus || 'free',
+          stripeCustomerId: record?.stripeCustomerId || null,
+        });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/stripe/webhook') {
+      let rawBody;
+      try { rawBody = await readRawBody(request); }
+      catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+      const signature = String(request.headers['stripe-signature'] || '').trim();
+      if (!signature) { sendJson(response, 400, { error: 'Missing Stripe-Signature header' }); return; }
+      try {
+        const result = await withTimeout(() => handleStripeWebhook(rawBody, signature));
+        sendJson(response, 200, result);
+      } catch (err) {
+        console.error('[api] stripe webhook error:', err.message);
+        if (err.code === 'INVALID_SIGNATURE') {
+          sendJson(response, 400, { error: 'Invalid webhook signature' });
+        } else {
+          const { status, body: b } = classifyError(err);
+          sendJson(response, status, b);
+        }
+      }
+      return;
     }
 
     if (url.pathname === '/api/gdelt-proxy') {
@@ -493,11 +1339,15 @@ const server = http.createServer(async (request, response) => {
     }
 
     // ── Serve static frontend from dist/ ──
-    if (HAS_DIST && request.method === 'GET') {
-      // Try exact file match (e.g. /assets/index-abc.js)
-      const safePath = url.pathname.replace(/\.\./g, '');
-      const filePath = join(DIST_DIR, safePath);
-      if (existsSync(filePath) && statSync(filePath).isFile()) {
+    if (HAS_DIST && request.method === 'GET' && !url.pathname.startsWith('/api/')) {
+      // Strip .. and leading slash, then join. Verify result stays within DIST_DIR.
+      const safeName = url.pathname.replace(/\.\./g, '').replace(/^\/+/, '');
+      const filePath = join(DIST_DIR, safeName);
+      if (!filePath.startsWith(DIST_DIR)) {
+        sendJson(response, 403, { error: 'Forbidden', code: 'FORBIDDEN' });
+        return;
+      }
+      if (safeName && existsSync(filePath) && statSync(filePath).isFile()) {
         serveStaticFile(response, filePath);
         return;
       }
@@ -516,6 +1366,62 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+// ── Rate limiter for admin auth endpoints ──
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_ATTEMPTS = 5;
+const rateLimitMap = new Map();
+
+function getClientIp(request) {
+  // x-forwarded-for is comma-separated, client-controlled values on the left,
+  // trusted proxy (Railway) appends real IP on the right. Take the last entry.
+  const forwarded = String(request.headers['x-forwarded-for'] || '');
+  if (forwarded) {
+    const ips = forwarded.split(',').map(s => s.trim()).filter(Boolean);
+    if (ips.length > 0) return ips[ips.length - 1];
+  }
+  return String(
+    request.socket?.remoteAddress ||
+    'unknown'
+  );
+}
+
+/** Returns true if the request should be rate-limited (blocked). */
+function checkAdminRateLimit(request) {
+  const ip = getClientIp(request);
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now > entry.windowEnd) {
+    rateLimitMap.set(ip, { count: 1, windowEnd: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX_ATTEMPTS) {
+    return true;
+  }
+  return false;
+}
+
+// Periodic cleanup of expired rate-limit entries (every 5 min)
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitMap) {
+    if (now > entry.windowEnd) rateLimitMap.delete(ip);
+  }
+}, 300_000).unref();
+
+/** Constant-time string comparison to prevent timing attacks on secrets. */
+function timingSafeEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 // Start server FIRST so healthcheck passes, then initialize data in background
 const HOST = process.env.HOST || '0.0.0.0';
 log.info('mapr_server_starting', { host: HOST, port: PORT, databaseUrl: process.env.DATABASE_URL ? 'set' : 'not_set' });
@@ -525,8 +1431,7 @@ server.listen(PORT, HOST, async () => {
   try {
     await initializeIngestion();
   } catch (err) {
-    console.error('Ingestion initialization failed:', err.message);
-    console.error(err.stack);
+    log.error('Ingestion initialization failed', { message: err.message });
   }
 
   startScheduler();
@@ -547,30 +1452,85 @@ server.listen(PORT, HOST, async () => {
   }
   console.log('Scheduler and trackers started.');
 
-  // Keep-alive: self-ping every 4 minutes to prevent Railway from scaling to zero
-  if (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.RAILWAY_ENVIRONMENT) {
-    const keepAliveUrl = `http://127.0.0.1:${PORT}/api/health`;
+  // Alert digest sweep — runs every 15 min. No-ops when InstantDB admin
+  // token or Resend API key are unset.
+  const DIGEST_INTERVAL_MS = Number(process.env.MAPR_DIGEST_INTERVAL_MS || 15 * 60 * 1000);
+  if (DIGEST_INTERVAL_MS > 0 && process.env.DISABLE_DIGEST_SWEEP !== 'true') {
     setInterval(() => {
-      fetch(keepAliveUrl).catch(() => {});
-    }, 4 * 60 * 1000);
-    console.log('Keep-alive ping enabled (every 4 min).');
+      runDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL }).catch((err) => {
+        log.warn('digest_sweep_error', { msg: err.message });
+      });
+    }, DIGEST_INTERVAL_MS).unref();
+    log.info('digest_sweep_started', { intervalMs: DIGEST_INTERVAL_MS });
   }
+
+  // Daily watchlist digest — runs every hour; per-user cadence enforced
+  // inside the sweep against $users.lastDailyDigestSentAt.
+  const DAILY_DIGEST_INTERVAL_MS = Number(process.env.MAPR_DAILY_DIGEST_INTERVAL_MS || 60 * 60 * 1000);
+  if (DAILY_DIGEST_INTERVAL_MS > 0 && process.env.DISABLE_DAILY_DIGEST !== 'true') {
+    setInterval(() => {
+      runDailyDigestSweep({ baseUrl: process.env.MAPR_PUBLIC_URL }).catch((err) => {
+        log.warn('daily_digest_sweep_error', { msg: err.message });
+      });
+    }, DAILY_DIGEST_INTERVAL_MS).unref();
+    log.info('daily_digest_sweep_started', { intervalMs: DAILY_DIGEST_INTERVAL_MS });
+  }
+
+  // Railway sleep is enabled — no keep-alive ping needed.
+  // The app will sleep after inactivity and wake on incoming requests.
 });
 
 server.on('error', (err) => {
-  console.error('Server error:', err.message);
-  process.exit(1);
+  log.error('server_error', { msg: err.message });
+  // Do NOT process.exit(1) directly — drop in-flight requests, leak PG conns,
+  // and skip closeStorage. Let shutdown() run with a hard timeout.
+  shutdown('server_error').catch(() => process.exit(1));
 });
 
-function shutdown() {
-  stopScheduler();
-  stopFlightTracking();
-  stopShipTracking();
-  server.close(() => {
-    closeStorage();
+let _shuttingDown = false;
+async function shutdown(reason = 'signal') {
+  if (_shuttingDown) return;
+  _shuttingDown = true;
+  log.info('server_shutdown_begin', { reason });
+
+  // Hard timeout — Railway/K8s SIGKILLs at 30s by default. Bail out before that
+  // so we always run closeStorage and don't leak PG connections.
+  const hardKill = setTimeout(() => {
+    log.error('server_shutdown_timeout');
+    process.exit(1);
+  }, 10_000);
+  hardKill.unref();
+
+  try {
+    stopScheduler();
+    stopFlightTracking();
+    stopShipTracking();
+    await new Promise((resolve) => server.close(() => resolve()));
+    await closeStorage();
+    log.info('server_shutdown_done');
     process.exit(0);
-  });
+  } catch (err) {
+    log.error('server_shutdown_failed', { msg: err.message });
+    process.exit(1);
+  }
 }
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => { shutdown('SIGINT'); });
+process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+
+// Without these, any unhandled async error tears down the process with no
+// structured log and leaks connections. Log loudly, then trigger graceful
+// shutdown so the next deploy/restart starts clean.
+process.on('unhandledRejection', (reason) => {
+  log.error('unhandled_rejection', {
+    msg: reason?.message || String(reason),
+    stack: reason?.stack,
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  log.error('uncaught_exception', { msg: err.message, stack: err.stack });
+  // Per Node docs, after uncaughtException the process is in an undefined
+  // state — best to shut down rather than continue serving.
+  shutdown('uncaughtException').catch(() => process.exit(1));
+});

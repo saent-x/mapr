@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, ChevronDown, ChevronUp, Maximize2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ExternalLink, ChevronDown, ChevronUp, Maximize2, FileText } from 'lucide-react';
 import useProgressiveList from '../hooks/useProgressiveList.js';
-import useUIStore from '../stores/uiStore.js';
+import useUIStore from '../stores/uiStore';
 import useBreakpoint from '../hooks/useBreakpoint.js';
 import BottomSheet from './ui/BottomSheet';
+import BookmarkButton from './BookmarkButton';
 import { getSourceHost } from '../utils/urlUtils';
+import { getReliabilityTier, getReliabilityMeta, getReliabilityLabel } from '../utils/credibilityMeta';
+import { getArticleTextPreview, normalizeArticleText } from '../utils/articleText';
+import { formatConfidencePercent, normalizeConfidenceScore } from '../utils/confidenceScore';
 
 function ago(ts) {
   if (!ts) return '—';
@@ -27,17 +32,35 @@ function sevTier(sev) {
   return 'green';
 }
 
-function formatTs(ts) {
+function formatTs(ts, locale) {
   if (!ts) return '—';
   const d = typeof ts === 'string' ? new Date(ts) : new Date(ts);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+  // Locale-aware short timestamp. Falls back to the user's runtime locale
+  // when the i18n locale isn't passed.
+  try {
+    return new Intl.DateTimeFormat(locale || undefined, {
+      year: 'numeric', month: 'short', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    }).format(d);
+  } catch {
+    return d.toISOString().replace('T', ' ').slice(0, 16) + 'Z';
+  }
+}
+
+function feedSourceLabel(dataSource) {
+  if (dataSource === 'loading') return 'LOADING';
+  if (dataSource === 'live') return 'LIVE';
+  return 'OFFLINE';
 }
 
 function verificationMeta(status) {
   switch (status) {
+    case 'corroborated':
+      return { label: 'CORROBORATED', color: 'var(--sev-green)' };
+    // Backwards-compat for any legacy snapshot; same meaning, new label.
     case 'verified':
-      return { label: 'VERIFIED', color: 'var(--sev-green)' };
+      return { label: 'CORROBORATED', color: 'var(--sev-green)' };
     case 'official':
       return { label: 'OFFICIAL', color: 'var(--cyan)' };
     case 'corroborated':
@@ -63,9 +86,22 @@ function lifecycleMeta(lifecycle) {
   return map[lifecycle] || null;
 }
 
+function safeImageSrc(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const srcMatch = raw.match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+  const candidate = (srcMatch?.[1] || raw).trim();
+  try {
+    const url = new URL(candidate);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 function NewsThumb({ story }) {
   const [failed, setFailed] = useState(false);
-  const src = story.socialimage || story.image || null;
+  const src = safeImageSrc(story.socialimage || story.image);
   if (!src || failed) return null;
   return (
     <img
@@ -79,6 +115,8 @@ function NewsThumb({ story }) {
 }
 
 export function ArticleDetail({ story }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n?.language;
   if (!story) return null;
   const tier = sevTier(story.severity);
   const sev = ((story.severity ?? 0) / 10).toFixed(1);
@@ -89,12 +127,16 @@ export function ArticleDetail({ story }) {
     ? story.languages
     : (story.language ? [story.language] : []);
   const srcTypes = Array.isArray(story.sourceTypes) ? story.sourceTypes : [];
-  const supporting = Array.isArray(story.supportingArticles)
-    ? story.supportingArticles.filter((a) => a && a.url && a.url !== story.url).slice(0, 6)
+  // Keep the full list so the count is honest (label says "SUPPORTING (N)"
+  // where N is the real total) and only slice when rendering the visible cards.
+  const supportingAll = Array.isArray(story.supportingArticles)
+    ? story.supportingArticles.filter((a) => a && a.url && a.url !== story.url)
     : [];
+  const supporting = supportingAll.slice(0, 6);
+  const supportingTotal = supportingAll.length;
   const orgs = story.entities?.organizations?.slice(0, 6) || [];
   const people = story.entities?.people?.slice(0, 6) || [];
-  const confidence = typeof story.confidence === 'number' ? story.confidence : null;
+  const confidence = normalizeConfidenceScore(story.confidence);
   const reasons = Array.isArray(story.confidenceReasons) ? story.confidenceReasons : [];
 
   return (
@@ -123,7 +165,7 @@ export function ArticleDetail({ story }) {
         )}
       </div>
       <h2>{story.title}</h2>
-      <p className="news-card-summary">{story.summary || '—'}</p>
+      <p className="news-card-summary">{normalizeArticleText(story.summary) || '—'}</p>
 
       <dl className="news-card-detail-grid">
         <div className="news-card-detail-row">
@@ -132,12 +174,12 @@ export function ArticleDetail({ story }) {
         </div>
         <div className="news-card-detail-row">
           <dt>PUBLISHED</dt>
-          <dd>{formatTs(story.publishedAt)}</dd>
+          <dd>{formatTs(story.publishedAt, locale)}</dd>
         </div>
         {story.firstSeenAt && (
           <div className="news-card-detail-row">
             <dt>FIRST SEEN</dt>
-            <dd>{formatTs(story.firstSeenAt)}</dd>
+            <dd>{formatTs(story.firstSeenAt, locale)}</dd>
           </div>
         )}
         {story.category && (
@@ -154,8 +196,32 @@ export function ArticleDetail({ story }) {
         )}
         {confidence != null && (
           <div className="news-card-detail-row">
-            <dt>CONFIDENCE</dt>
-            <dd>{confidence}%</dd>
+            <dt>{t('eventDetail.confidence', 'Event Confidence')}</dt>
+            <dd>{formatConfidencePercent(story.confidence)}</dd>
+          </div>
+        )}
+        {story.sourceCredibility != null && (
+          <div className="news-card-detail-row">
+            <dt>{t('eventDetail.sourceReliability', 'Source Corroboration')}</dt>
+            <dd>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: getReliabilityMeta(getReliabilityTier(story.sourceCredibility)).dotColor,
+                }} />
+                <span>{getReliabilityLabel(story.sourceCredibility)}</span>
+                <span style={{ color: 'var(--ink-2)' }}>
+                  ({Math.round(story.sourceCredibility * 100)}%)
+                </span>
+              </span>
+            </dd>
           </div>
         )}
         {typeof story.sourceCount === 'number' && (
@@ -239,7 +305,7 @@ export function ArticleDetail({ story }) {
       {supporting.length > 0 && (
         <div className="news-card-source-block">
           <div className="micro" style={{ marginBottom: 10 }}>
-            SUPPORTING ({supporting.length})
+            SUPPORTING ({supportingTotal}){supportingTotal > supporting.length ? ` · SHOWING ${supporting.length}` : ''}
           </div>
           <ul className="news-card-source-list">
             {supporting.map((a, i) => (
@@ -257,6 +323,18 @@ export function ArticleDetail({ story }) {
           </ul>
         </div>
       )}
+
+      <div className="news-card-source-block">
+        <Link
+          to={`/event/${encodeURIComponent(story.id)}`}
+          state={{ event: story }}
+          className="btn primary sm"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+        >
+          <Maximize2 size={11} aria-hidden />
+          {t('eventDetail.viewDetail', 'View event detail')}
+        </Link>
+      </div>
     </>
   );
 }
@@ -273,23 +351,47 @@ const NewsPanel = ({
   news = [],
   allEvents = [],
   selectedStoryId,
+  kbHighlightedStoryId,
   onStorySelect,
   onClose,
   variant,
+  dataSource = 'live',
 }) => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isMobile } = useBreakpoint();
   const [expandedId, setExpandedId] = useState(null);
+  const collapsedSelectedStoryRef = useRef(null);
   const items = (news && news.length > 0) ? news : allEvents;
 
   const collapsed = useUIStore((s) => s.panelCollapsed.liveFeed);
   const togglePanelCollapsed = useUIStore((s) => s.togglePanelCollapsed);
+  const sourceLabel = feedSourceLabel(dataSource);
+  const regionLabel = regionName || 'News';
+  const ariaLabel = sourceLabel === 'LIVE'
+    ? 'Live news feed'
+    : `${sourceLabel.toLowerCase()} news feed`;
 
   const { visibleItems: visibleNews, hasMore, sentinelRef } = useProgressiveList(items, {
     initialCount: 30,
     batchSize: 20,
     resetKey: regionName || 'all',
   });
+
+  useEffect(() => {
+    if (!selectedStoryId) return;
+    if (collapsedSelectedStoryRef.current === selectedStoryId) return;
+    if (items.some((story) => story.id === selectedStoryId)) {
+      setExpandedId(selectedStoryId);
+    }
+  }, [items, selectedStoryId]);
+
+  useEffect(() => {
+    if (!expandedId) return;
+    if (!items.some((story) => story.id === expandedId)) {
+      setExpandedId(null);
+    }
+  }, [expandedId, items]);
 
   const listBody = (
     <>
@@ -313,12 +415,19 @@ const NewsPanel = ({
         const sev = ((story.severity ?? 0) / 10).toFixed(1);
         const active = selectedStoryId === story.id;
         const expanded = expandedId === story.id;
+        const kbHighlighted = kbHighlightedStoryId === story.id;
         const host = getSourceHost(story.url) || story.source || '';
-        const conf = typeof story.confidence === 'number' ? story.confidence : null;
+        const conf = normalizeConfidenceScore(story.confidence);
         const lMeta = lifecycleMeta(story.lifecycle);
         const toggle = () => {
+          if (expanded) {
+            collapsedSelectedStoryRef.current = story.id;
+            setExpandedId(null);
+            return;
+          }
+          collapsedSelectedStoryRef.current = null;
           onStorySelect?.(story);
-          setExpandedId((id) => (id === story.id ? null : story.id));
+          setExpandedId(story.id);
         };
         return (
           <div
@@ -326,6 +435,7 @@ const NewsPanel = ({
             className="news-item"
             data-active={active || undefined}
             data-expanded={expanded || undefined}
+            data-kb-highlighted={kbHighlighted ? 'true' : undefined}
             role="button"
             tabIndex={0}
             aria-label={story.title}
@@ -344,19 +454,42 @@ const NewsPanel = ({
                   {lMeta.label}
                 </span>
               )}
+              {story.sourceCredibility != null && (
+                <span
+                  className="news-reliability-dot"
+                  style={{
+                    background: getReliabilityMeta(getReliabilityTier(story.sourceCredibility)).dotColor,
+                  }}
+                  title={`Source corroboration: ${getReliabilityLabel(story.sourceCredibility)} (${Math.round(story.sourceCredibility * 100)}%)`}
+                  aria-label={`Source corroboration: ${Math.round(story.sourceCredibility * 100)}%`}
+                />
+              )}
+              <BookmarkButton story={story} className="news-bookmark-btn" />
+              <button
+                type="button"
+                className="news-detail-link-btn"
+                title={t('eventDetail.viewDetail', 'View event detail')}
+                aria-label={t('eventDetail.viewDetail', 'View event detail')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/event/${encodeURIComponent(story.id)}`, { state: { event: story } });
+                }}
+              >
+                <Maximize2 size={12} aria-hidden />
+              </button>
               <span style={{ marginLeft: 'auto' }}>{(story.language || 'EN').toUpperCase()}</span>
               <span>·</span>
               <span>{ago(story.firstSeenAt || story.publishedAt)}</span>
             </div>
             <div className="news-title">{story.title}</div>
             {story.summary && (
-              <div className="news-summary-preview">{story.summary}</div>
+              <div className="news-summary-preview">{getArticleTextPreview(story.summary, 180).text}</div>
             )}
             <div className="news-src">
               <span className="mono">{story.id}</span>
               {host && <> · {host}</>}
               {story.isoA2 && <> · {story.isoA2}</>}
-              {conf != null && <> · <span style={{ color: 'var(--ink-1)' }}>{conf}%</span></>}
+              {conf != null && <> · <span style={{ color: 'var(--ink-1)' }}>{formatConfidencePercent(story.confidence)}</span></>}
             </div>
             {expanded && (
               <div
@@ -381,12 +514,12 @@ const NewsPanel = ({
 
   if (variant === 'inline') {
     return (
-      <div className="news-panel news-panel-inline" role="region" aria-label="Live news feed">
+      <div className="news-panel news-panel-inline" role="region" aria-label={ariaLabel}>
         <div className="panel-header">
           <span className="dot" />
-          <span>FEED · LIVE</span>
+          <span className="news-panel-title">FEED · {sourceLabel}</span>
           <span className="spacer" />
-          <span className="tnum" style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+          <span className="news-panel-count tnum">{items.length} items</span>
         </div>
         <div className="panel-body">{listBody}</div>
       </div>
@@ -399,7 +532,7 @@ const NewsPanel = ({
       <BottomSheet
         open={isOpen}
         onClose={onClose}
-        title={regionName || 'News'}
+        title={regionLabel}
         peekVh={50}
         maxHeightVh={90}
       >
@@ -415,13 +548,22 @@ const NewsPanel = ({
       className="floating-panel news-panel"
       data-collapsed={collapsed || undefined}
       role="region"
-      aria-label="Live news feed"
+      aria-label={ariaLabel}
     >
       <div className="panel-header">
         <span className="dot" />
-        <span>FEED · LIVE</span>
+        <span className="news-panel-title">FEED · {sourceLabel}</span>
         <span className="spacer" />
-        <span className="tnum" style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+        <span className="news-panel-count tnum">{items.length} items</span>
+        <button
+          type="button"
+          className="news-panel-briefing-btn"
+          onClick={() => useUIStore.getState().setShowExport(true)}
+          aria-label={t('export.generateBriefing', 'Generate Briefing')}
+          title={t('export.generateBriefing', 'Generate Briefing')}
+        >
+          <FileText size={12} aria-hidden />
+        </button>
         <button
           type="button"
           className="panel-collapse-btn"

@@ -47,7 +47,7 @@ import {
 import {
   DATABASE_PATH,
   readCoverageHistory,
-  readEventArticles,
+  readEventArticlesBatch,
   readHistory,
   readSnapshot,
   writeCoverageHistory,
@@ -77,13 +77,15 @@ import {
 } from './pipeline/persistData.js';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const DEFAULT_TIMESPAN = '24h';
-const DEFAULT_MAX_RECORDS = 750;
-const REGION_BACKFILL_TIMESPAN = '168h';
-const REGION_BACKFILL_MAX_RECORDS = 80;
-const REGION_BACKFILL_FEED_LIMIT = 12;
-const REFRESH_INTERVAL_MS = Number(process.env.MAPR_REFRESH_MS || 10 * 60 * 1000);
-const STALE_AFTER_MS = Number(process.env.MAPR_STALE_AFTER_MS || 30 * 60 * 1000);
+const DEPLOYMENT_PROFILE = (process.env.MAPR_DEPLOYMENT_PROFILE || (process.env.RAILWAY_ENVIRONMENT ? 'railway-hobby' : 'standard')).toLowerCase();
+const LOW_RESOURCE_MODE = process.env.MAPR_LOW_RESOURCE_MODE === '1' || DEPLOYMENT_PROFILE === 'railway-hobby';
+const DEFAULT_TIMESPAN = process.env.MAPR_GDELT_TIMESPAN || '24h';
+const DEFAULT_MAX_RECORDS = Number(process.env.MAPR_GDELT_MAX_RECORDS || (LOW_RESOURCE_MODE ? 100 : 750));
+const REGION_BACKFILL_TIMESPAN = process.env.MAPR_REGION_BACKFILL_TIMESPAN || (LOW_RESOURCE_MODE ? '24h' : '168h');
+const REGION_BACKFILL_MAX_RECORDS = Number(process.env.MAPR_REGION_BACKFILL_MAX_RECORDS || (LOW_RESOURCE_MODE ? 15 : 80));
+const REGION_BACKFILL_FEED_LIMIT = Number(process.env.MAPR_REGION_BACKFILL_FEED_LIMIT || (LOW_RESOURCE_MODE ? 3 : 12));
+const REFRESH_INTERVAL_MS = Number(process.env.MAPR_REFRESH_MS || (LOW_RESOURCE_MODE ? 6 * 60 * 60 * 1000 : 30 * 60 * 1000));
+const STALE_AFTER_MS = Number(process.env.MAPR_STALE_AFTER_MS || (LOW_RESOURCE_MODE ? 12 * 60 * 60 * 1000 : 30 * 60 * 1000));
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let currentSnapshot = null;
@@ -178,16 +180,16 @@ async function createResponsePayload() {
   });
 
   let enrichedEvents;
+  const events = currentSnapshot?.events || [];
   try {
-    enrichedEvents = await Promise.all(
-      (currentSnapshot?.events || []).map(async (evt) => {
-        const articles = await readEventArticles(evt.id);
-        return { ...evt, supportingArticles: articles, articleCount: articles.length };
-      })
-    );
+    const articlesByEvent = await readEventArticlesBatch(events.map((e) => e.id));
+    enrichedEvents = events.map((evt) => {
+      const articles = articlesByEvent.get(evt.id) || [];
+      return { ...evt, supportingArticles: articles, articleCount: articles.length };
+    });
   } catch (err) {
     console.warn('[briefing] Failed to enrich events from DB:', err.message);
-    enrichedEvents = (currentSnapshot?.events || []).map((evt) => ({
+    enrichedEvents = events.map((evt) => ({
       ...evt,
       supportingArticles: [],
       articleCount: evt.articleIds?.length || 0
@@ -490,12 +492,15 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
     }
 
     try {
+      // Always read the latest catalog to pick up admin writes
+      const latestCatalog = await readSourceCatalog();
+
       // ── Stage 1: Fetch from all sources (GDELT + RSS + HTML) ──
       const { gdeltArticles, rssResult, updatedSourceState, gdeltHealth } = await fetchAllSources({
         force,
         timespan: DEFAULT_TIMESPAN,
         maxRecords: DEFAULT_MAX_RECORDS,
-        catalog: getSourceCatalog(),
+        catalog: latestCatalog,
         sourceState
       });
       sourceState = updatedSourceState;
@@ -505,7 +510,7 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
         gdeltArticles,
         rssResult,
         previousArticles: currentSnapshot?.articles || [],
-        catalog: getSourceCatalog()
+        catalog: latestCatalog
       });
 
       if (mergedArticles.length === 0) {
@@ -545,11 +550,8 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       const diagnostics = buildCoverageDiagnostics(coverageMetrics, nextSourceHealth);
       const fetchedAt = new Date().toISOString();
 
-      coverageHistory = mergeCoverageHistory(
-        coverageHistory,
-        buildCoverageSnapshot(diagnostics, fetchedAt),
-        48
-      );
+      const coverageEntry = buildCoverageSnapshot(diagnostics, fetchedAt);
+      coverageHistory = mergeCoverageHistory(coverageHistory, coverageEntry, 48);
       coverageTrends = summarizeCoverageTrends(coverageHistory);
 
       currentSnapshot = {
@@ -570,7 +572,9 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       persistIngestHealth(currentSnapshot);
 
       await persistSnapshot(currentSnapshot);
-      await persistCoverageHistory(coverageHistory);
+      // Append-only: pass the new entry, not the full array (one INSERT + prune
+      // instead of DELETE-all + reinsert N rows every cycle).
+      await persistCoverageHistory(coverageEntry);
       await persistHistoryEntry(buildHistoryEntry({
         status: 'ok',
         reason,
@@ -598,8 +602,6 @@ export async function refreshSnapshot({ force = false, reason = 'manual' } = {})
       return await createResponsePayload();
     } catch (error) {
       log.error('ingest_refresh_failed', { reason, message: error.message });
-      console.error('[ingest] refreshSnapshot FAILED:', error.message);
-      console.error('[ingest] Stack:', error.stack?.split('\n').slice(0, 4).join('\n'));
 
       ingestHealth = {
         lastAttemptAt: attemptedAt,

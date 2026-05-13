@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 // ── filterStore ──────────────────────────────────────────────────────────────
 
 describe('filterStore', async () => {
-  const { default: useFilterStore } = await import('../src/stores/filterStore.js');
+  const { default: useFilterStore } = await import('../src/stores/filterStore.ts');
 
   const DEFAULTS = {
     searchQuery: '',
@@ -99,7 +99,7 @@ describe('filterStore', async () => {
 // ── uiStore ──────────────────────────────────────────────────────────────────
 
 describe('uiStore', async () => {
-  const { default: useUIStore } = await import('../src/stores/uiStore.js');
+  const { default: useUIStore } = await import('../src/stores/uiStore.ts');
 
   const DEFAULTS = {
     mapMode: 'flat',

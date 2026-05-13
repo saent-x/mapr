@@ -81,7 +81,7 @@ export default function useEventData({ onNewData } = {}) {
     }
 
     setLiveNews(null);
-    setDataSource('mock');
+    setDataSource('unavailable');
     setDataError(result.errorMessage);
   }, []);
 

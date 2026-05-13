@@ -15,13 +15,16 @@ import {
   mergeSourceState,
   selectSourcesForRun,
   summarizeSourceCatalog,
-  writeSourceState
+  writeSourceState,
+  autoDisableFailingSources
 } from '../sourceCatalog.js';
 import { isCircuitOpen, recordSuccess, recordFailure, getCircuitSummary } from '../circuitBreaker.js';
 import { fetchCatalogSource } from '../sourceFetcher.js';
 
-const RSS_BATCH_SIZE = 6;
-const RSS_BATCH_DELAY_MS = 400;
+const LOW_RESOURCE_MODE = process.env.MAPR_LOW_RESOURCE_MODE === '1';
+const RSS_BATCH_SIZE = Number(process.env.MAPR_RSS_BATCH_SIZE || (LOW_RESOURCE_MODE ? 3 : 6));
+const RSS_BATCH_DELAY_MS = Number(process.env.MAPR_RSS_BATCH_DELAY_MS || (LOW_RESOURCE_MODE ? 800 : 400));
+const RSS_FEED_LIMIT = Number(process.env.MAPR_RSS_FEED_LIMIT || (LOW_RESOURCE_MODE ? 24 : 0));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,7 +154,10 @@ async function fetchRssFeed(feed) {
  * Returns articles, checked feed IDs, health summary, and updated source state.
  */
 export async function fetchRssNewsDirect({ force = false, catalog, sourceState: inputSourceState } = {}) {
-  const allSelectedFeeds = selectSourcesForRun(catalog, inputSourceState, { force });
+  const allSelectedFeeds = selectSourcesForRun(catalog, inputSourceState, {
+    force,
+    limit: RSS_FEED_LIMIT > 0 ? RSS_FEED_LIMIT : null
+  });
 
   // Filter out feeds with open circuit breakers
   const skippedByCircuitBreaker = [];
@@ -217,6 +223,20 @@ export async function fetchRssNewsDirect({ force = false, catalog, sourceState: 
   articles.sort((left, right) => right.severity - left.severity);
   const updatedSourceState = mergeSourceState(catalog, inputSourceState, feeds, checkedAt);
   await writeSourceState(updatedSourceState);
+
+  // Auto-disable sources with 3+ consecutive failures
+  try {
+    const { catalog: autoDisabledCatalog, disabled } = autoDisableFailingSources(catalog, updatedSourceState);
+    if (disabled.length > 0) {
+      const { writeSourceCatalog } = await import('../sourceCatalog.js');
+      await writeSourceCatalog(autoDisabledCatalog);
+      console.log(`[ingest] Auto-disabled ${disabled.length} source(s) with 3+ consecutive failures: ${disabled.join(', ')}`);
+      // Update local catalog reference for the health summary
+      Object.assign(catalog, autoDisabledCatalog);
+    }
+  } catch (err) {
+    console.warn('[ingest] Auto-disable check failed:', err.message);
+  }
 
   return {
     articles,

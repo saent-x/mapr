@@ -10,14 +10,32 @@ async function parseJsonResponse(response) {
   return payload;
 }
 
+// Lazy import to avoid circular and to make this util work in non-React envs.
+async function authHeader() {
+  try {
+    const mod = await import('./instantDb.js');
+    const u = await mod.default?.getAuth?.();
+    const token = u?.refresh_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, options);
+  const headers = { ...(options.headers || {}) };
+  if (options.auth) {
+    Object.assign(headers, await authHeader());
+    delete options.auth;
+  }
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const payload = await parseJsonResponse(response);
 
   if (!response.ok) {
     const message = payload?.error || `Backend request failed (${response.status})`;
     const error = new Error(message);
     error.status = response.status;
+    error.code = payload?.code;
     error.payload = payload;
     throw error;
   }
@@ -82,4 +100,101 @@ export function fetchBackendRegionBriefing({ iso } = {}) {
 
 export function fetchBackendHealth() {
   return request('/health');
+}
+
+export function fetchSnapshotHistory({ from, to, limit = 48 } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', typeof from === 'number' ? new Date(from).toISOString() : from);
+  if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
+  params.set('limit', String(limit));
+  return request(`/snapshot-history?${params.toString()}`, { auth: true });
+}
+
+export function fetchSnapshotTimestamps({ from, to } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', typeof from === 'number' ? new Date(from).toISOString() : from);
+  if (to) params.set('to', typeof to === 'number' ? new Date(to).toISOString() : to);
+  return request(`/snapshot-history/timestamps?${params.toString()}`, { auth: true });
+}
+
+export function listThreads({ status = 'active' } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  return request(`/threads?${params.toString()}`, { auth: true });
+}
+
+export function createThread({ title, seedEventId = null, seedArticleId = null } = {}) {
+  return request('/threads', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, seedEventId, seedArticleId }),
+    auth: true,
+  });
+}
+
+export function archiveThread(threadId) {
+  return request(`/threads/${encodeURIComponent(threadId)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function fetchEventCredibility(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/credibility`);
+}
+
+export function fetchEventBrief(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/brief`);
+}
+
+export function generateEventBrief(eventId, { force = false } = {}) {
+  return request(`/events/${encodeURIComponent(eventId)}/brief`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force }),
+    auth: true,
+  });
+}
+
+// ── AI Q&A sidebar (Workstream D1) ───────────────────────────────────
+
+export function listQaConversations({ archived = false } = {}) {
+  const params = new URLSearchParams();
+  if (archived) params.set('archived', '1');
+  return request(`/qa/conversations?${params.toString()}`, { auth: true });
+}
+
+export function createQaConversation({ title = '', useCurrentFilters = false } = {}) {
+  return request('/qa/conversations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, useCurrentFilters }),
+    auth: true,
+  });
+}
+
+export function archiveQaConversation(conversationId) {
+  return request(`/qa/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function fetchQaMessages(conversationId) {
+  return request(
+    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { auth: true },
+  );
+}
+
+export function sendQaMessage(conversationId, { content, useCurrentFilters, filters } = {}) {
+  return request(
+    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content, useCurrentFilters, filters }),
+      auth: true,
+    },
+  );
 }

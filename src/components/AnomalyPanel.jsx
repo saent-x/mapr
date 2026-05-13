@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { isoToCountry } from '../utils/geocoder.js';
 import { buildAnomalyList } from '../utils/anomalyUtils.js';
-import useUIStore from '../stores/uiStore.js';
+import useUIStore from '../stores/uiStore';
 
 // Deterministic PRNG seeded by iso code so sparkline stays stable across
 // parent re-renders. Previously used Math.random() inline which re-jittered

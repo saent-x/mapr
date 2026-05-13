@@ -242,3 +242,74 @@ export function getRelatedEvents(events, entityName, entityType) {
     );
   });
 }
+
+/**
+ * Find the shortest path between two entities in the co-occurrence graph
+ * using breadth-first search (BFS).
+ *
+ * Returns an ordered array of typed entity keys forming the path from
+ * sourceId to targetId (inclusive on both ends), or null if no path exists.
+ *
+ * @param {string} sourceId - Typed entity key of the starting node
+ * @param {string} targetId - Typed entity key of the target node
+ * @param {Array} edges - Array of edge objects with source/target typed keys
+ * @returns {Array<string>|null} - Ordered path array or null if no path
+ */
+export function findShortestPath(sourceId, targetId, edges) {
+  if (sourceId === targetId) return [sourceId];
+  if (!edges || edges.length === 0) return null;
+
+  // Build adjacency list
+  const adjacency = new Map();
+  for (const edge of edges) {
+    if (!adjacency.has(edge.source)) adjacency.set(edge.source, []);
+    if (!adjacency.has(edge.target)) adjacency.set(edge.target, []);
+    adjacency.get(edge.source).push(edge.target);
+    adjacency.get(edge.target).push(edge.source);
+  }
+
+  if (!adjacency.has(sourceId) || !adjacency.has(targetId)) return null;
+
+  // BFS
+  const visited = new Set([sourceId]);
+  const parent = new Map();
+  const queue = [sourceId];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === targetId) {
+      // Reconstruct path
+      const path = [];
+      let node = targetId;
+      while (node !== undefined) {
+        path.unshift(node);
+        node = parent.get(node);
+      }
+      return path;
+    }
+    for (const neighbor of adjacency.get(current) || []) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        parent.set(neighbor, current);
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  return null; // No path found
+}
+
+/**
+ * Search/filter entities by name substring (case-insensitive).
+ * Returns nodes whose name contains the search query.
+ *
+ * @param {Array} nodes - Array of entity node objects
+ * @param {string} query - Search query string
+ * @returns {Array} - Filtered nodes
+ */
+export function searchEntitiesByName(nodes, query) {
+  if (!nodes || !Array.isArray(nodes)) return [];
+  if (!query || query.trim().length === 0) return nodes;
+  const lower = query.toLowerCase().trim();
+  return nodes.filter((n) => n.name && n.name.toLowerCase().includes(lower));
+}

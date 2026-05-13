@@ -6,13 +6,13 @@ import {
 } from '@/components/ui/map';
 import './AppMap.css';
 
-// Default tile/style URLs: CARTO basemap-gl tiles (same source as legacy FlatMap
-// and mapcn's built-in defaults). Free, no API key, light/dark variants match
-// existing app theming.
+// Default tile/style URLs: CARTO basemap-gl tiles. Light theme uses Voyager
+// instead of Positron so the map remains light but has clearer land/water
+// contrast behind severity, coverage, arc, and tracking overlays.
 const DEFAULT_STYLE_DARK =
   'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const DEFAULT_STYLE_LIGHT =
-  'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+  'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 export type AppMapSurface = 'flat' | 'globe';
 

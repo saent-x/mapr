@@ -60,6 +60,25 @@ const EventTimeline = ({
     const frac = Math.max(0, Math.min(1, x / rect.width));
     if (frac >= 0.995) onScrub?.(null);
     else onScrub?.(fractionToTimestamp(frac));
+
+    // Select the highest-severity event from the clicked bucket
+    if (onEventSelect && events.length > 0) {
+      const bucketSize = WINDOW_MS / BUCKET_COUNT;
+      const nowMs = Date.now();
+      const bucketIdx = Math.min(Math.floor(frac * BUCKET_COUNT), BUCKET_COUNT - 1);
+      const bucketStart = nowMs - WINDOW_MS + bucketIdx * bucketSize;
+      const bucketEnd = bucketStart + bucketSize;
+      let topEvent = null;
+      let topSev = -1;
+      for (const ev of events) {
+        const ts = ev.firstSeenAt ? new Date(ev.firstSeenAt).getTime() : null;
+        if (ts && ts >= bucketStart && ts < bucketEnd && (ev.severity || 0) > topSev) {
+          topSev = ev.severity || 0;
+          topEvent = ev;
+        }
+      }
+      if (topEvent) onEventSelect(topEvent);
+    }
   };
 
   const cursorTs = scrubTime == null ? now : scrubTime;

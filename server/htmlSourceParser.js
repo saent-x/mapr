@@ -307,3 +307,176 @@ export function parseHtmlSourceItems(html, baseUrl, { limit = 24 } = {}) {
     sourceHost: getHostName(baseUrl)
   }));
 }
+
+/**
+ * Boilerplate removal tags: elements whose content is stripped before
+ * body extraction to avoid nav/footer/sidebar/ads contaminating results.
+ */
+const BOILERPLATE_TAGS = new Set([
+  'nav', 'footer', 'header', 'aside', 'script', 'style', 'noscript',
+  'iframe', 'form', 'figure', 'figcaption', 'button', 'select',
+  'template', 'details', 'dialog'
+]);
+
+const BOILERPLATE_CLASS_PATTERNS = [
+  /\bnav\b/i, /\bfooter\b/i, /\bsidebar\b/i, /\bmenu\b/i,
+  /\bcomment/i, /\bad(s|vertisement)?\b/i, /\bsocial\b/i,
+  /\bshare\b/i, /\bwidget\b/i, /\brelated\b/i, /\bsticky\b/i,
+  /\bbanner\b/i, /\bpopup\b/i, /\bmodal\b/i, /\bcookie\b/i,
+  /\btoolbar\b/i, /\bpagination\b/i, /\bbreadcrumb\b/i,
+  /\bsubscribe\b/i, /\bnewsletter\b/i, /\bpromo\b/i,
+  /\bstory\-?links\b/i, /\bauthor\-?bio\b/i, /\brecommend/i
+];
+
+const ARTICLE_CANDIDATE_TAGS = ['article', 'main', 'section', 'div'];
+
+const ARTICLE_CANDIDATE_ROLES = ['main', 'article'];
+
+function isBoilerplateByClass(className) {
+  if (!className) return false;
+  return BOILERPLATE_CLASS_PATTERNS.some((pattern) => pattern.test(className));
+}
+
+function isBoilerplateByRole(role) {
+  if (!role) return false;
+  const lowered = role.toLowerCase();
+  return ['navigation', 'banner', 'contentinfo', 'complementary', 'search',
+    'menubar', 'form', 'dialog', 'alert'].includes(lowered);
+}
+
+function stripBoilerplateElements(html) {
+  // Remove all boilerplate tags and their content
+  let cleaned = html;
+  for (const tag of BOILERPLATE_TAGS) {
+    cleaned = cleaned.replace(
+      new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi'),
+      ' '
+    );
+  }
+
+  // Remove elements with boilerplate class names or roles
+  cleaned = cleaned.replace(
+    /<(\w+)\b([^>]*)\bclass=["']([^"']*)["']([^>]*)>([\s\S]*?)<\/\1>/gi,
+    (match, tag, beforeClass, className, afterClass, content) => {
+      if (isBoilerplateByClass(className)) return ' ';
+      return match;
+    }
+  );
+
+  cleaned = cleaned.replace(
+    /<(\w+)\b([^>]*)\brole=["']([^"']*)["']([^>]*)>([\s\S]*?)<\/\1>/gi,
+    (match, tag, beforeRole, role, afterRole, content) => {
+      if (isBoilerplateByRole(role)) return ' ';
+      return match;
+    }
+  );
+
+  return cleaned;
+}
+
+function findArticleContainer(html) {
+  // Try <article> or <main> first
+  const articleMatch = html.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i);
+  if (articleMatch) return articleMatch[1];
+
+  const mainMatch = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
+  if (mainMatch) return mainMatch[1];
+
+  // Look for divs with content/article-related role, class, or id
+  const candidatePattern = /<(\w+)\b([^>]*?)>([\s\S]*?)<\/\1>/gi;
+  let bestMatch = null;
+  let bestTextLength = 0;
+
+  let match;
+  while ((match = candidatePattern.exec(html)) !== null) {
+    const attrs = match[2] || '';
+    const content = match[3] || '';
+
+    const roleMatch = attrs.match(/role=["']([^"']*)["']/i);
+    const classMatch = attrs.match(/class=["']([^"']*)["']/i);
+    const idMatch = attrs.match(/id=["']([^"']*)["']/i);
+
+    const role = roleMatch?.[1]?.toLowerCase() || '';
+    const className = classMatch?.[1]?.toLowerCase() || '';
+    const id = idMatch?.[1]?.toLowerCase() || '';
+
+    if (
+      ARTICLE_CANDIDATE_ROLES.includes(role) ||
+      /\b(article|content|post|story|entry|body\-content|main\-content)\b/i.test(className) ||
+      /\b(article|content|post|story|entry|main)\b/i.test(id)
+    ) {
+      // Count words in text content as a quality heuristic
+      const textOnly = stripTags(content);
+      const wordCount = textOnly.split(/\s+/).filter(w => w.length > 2).length;
+
+      if (wordCount > bestTextLength) {
+        bestTextLength = wordCount;
+        bestMatch = content;
+      }
+    }
+  }
+
+  return bestMatch || html;
+}
+
+function extractParagraphTexts(containerHtml) {
+  // Extract text from <p> tags within the container
+  const paragraphs = [];
+  const pRegex = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+  let match;
+
+  while ((match = pRegex.exec(containerHtml)) !== null) {
+    const text = stripTags(match[1]);
+    if (text.length > 20) {
+      paragraphs.push(text);
+    }
+  }
+
+  return paragraphs;
+}
+
+/**
+ * Extract the article body text using readability-style heuristics.
+ *
+ * Strips nav, footer, header, aside, scripts, styles, and elements with
+ * boilerplate class names or ARIA roles. Then attempts to locate the main
+ * article content container and extracts paragraph text from it.
+ *
+ * @param {string} html - Raw HTML of the page
+ * @returns {{ bodyText: string, paragraphs: string[], method: string }}
+ *   bodyText is the full concatenated article text, paragraphs is the
+ *   individual paragraph array, and method describes how the content was found.
+ */
+export function extractArticleBody(html) {
+  if (!html) {
+    return { bodyText: '', paragraphs: [], method: 'empty' };
+  }
+
+  // Step 1: Strip boilerplate elements
+  const cleaned = stripBoilerplateElements(html);
+
+  // Step 2: Find the article content container
+  const container = findArticleContainer(cleaned);
+
+  // Step 3: Extract paragraph texts
+  const paragraphs = extractParagraphTexts(container);
+
+  if (paragraphs.length === 0) {
+    // Fallback: extract any remaining text
+    const remainingText = stripTags(container);
+    const trimmed = remainingText.replace(/\s+/g, ' ').trim();
+    if (trimmed.length > 40) {
+      return { bodyText: trimmed, paragraphs: [trimmed], method: 'fallback-text' };
+    }
+    return { bodyText: '', paragraphs: [], method: 'no-content' };
+  }
+
+  const bodyText = paragraphs.join('\n\n');
+
+  const isContainer = container !== cleaned && container !== html;
+  return {
+    bodyText,
+    paragraphs,
+    method: isContainer ? 'article-container' : 'whole-page'
+  };
+}

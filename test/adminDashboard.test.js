@@ -79,6 +79,65 @@ describe('AdminPage dashboard', () => {
       'Must have auto-refresh or periodic fetch',
     );
   });
+
+  it('uses its own admin shell with sidebar sections', () => {
+    const content = readFileSync(pagePath, 'utf8');
+    assert.match(content, /admin-shell-page/, 'Admin must render its own full-page shell');
+    assert.match(content, /admin-sidebar/, 'Admin must have its own sidebar');
+    assert.match(content, /BrandMark/, 'Admin sidebar should use the same MAPR mark as the main sidebar');
+    assert.match(content, /adminNavItems/, 'Admin sidebar must be driven by section nav items');
+    assert.match(content, /activeSection === 'overview'/, 'Admin overview must be a sidebar section');
+    assert.match(content, /activeSection === 'manage'/, 'Admin source management must be a sidebar section');
+    assert.match(content, /activeSection === 'features'/, 'Admin feature access must be a sidebar section');
+    assert.doesNotMatch(content, /id:\s*'pipeline'/, 'Pipeline should be merged into overview, not remain a separate sidebar page');
+  });
+
+  it('has admin controls for feature access tiers', () => {
+    const content = readFileSync(pagePath, 'utf8');
+    assert.match(content, /FEATURE_ACCESS_CATALOG/, 'Admin should render the shared feature catalog');
+    assert.match(content, /\/api\/admin\/feature-flags/, 'Admin should persist feature flags through the admin API');
+    assert.match(content, /FEATURE_TIER_FREE/, 'Admin should support free-user access');
+    assert.match(content, /FEATURE_TIER_PRO/, 'Admin should support Pro-only access');
+    assert.match(content, /FEATURE_TIER_DISABLED/, 'Admin should support disabling a feature');
+  });
+
+  it('validates feature-flag API responses before rendering or saving admin controls', () => {
+    const content = readFileSync(pagePath, 'utf8');
+    assert.match(content, /readAdminJson/, 'Admin should use a strict JSON helper for admin APIs');
+    assert.doesNotMatch(
+      content,
+      /readJsonIfOk\(featureFlagsRes\)/,
+      'Feature flags must not silently fall back when the admin API returns HTML or 401'
+    );
+    assert.match(
+      content,
+      /const flags = await readAdminJson\(featureFlagsRes,\s*['"]Feature access['"]\)/,
+      'Initial feature-flag load should fail loudly when the admin API is unavailable'
+    );
+    assert.match(
+      content,
+      /const saved = normalizeFeatureFlags\(await readAdminJson\(res,\s*['"]Feature access['"]\)\)/,
+      'Feature-flag saves should validate the JSON response before updating state'
+    );
+  });
+
+  it('paginates dense admin tables', () => {
+    const content = readFileSync(pagePath, 'utf8');
+    assert.match(content, /ADMIN_PAGE_SIZE\s*=\s*12/, 'Admin tables should show 12 rows per page');
+    assert.match(content, /AdminPagination/, 'Admin must render pagination controls');
+    assert.match(content, /paginatedFilteredFeeds\.map/, 'Source health table must use paginated rows');
+    assert.match(content, /paginatedManageFeeds\.map/, 'Source management table must use paginated rows');
+    assert.match(content, /paginatedReliabilityData\.map/, 'Reliability table must use paginated rows');
+  });
+
+  it('uses modals for source add, import, and export actions', () => {
+    const content = readFileSync(pagePath, 'utf8');
+    assert.match(content, /admin-modal-backdrop/, 'Admin source actions should render modal backdrops');
+    assert.match(content, /role="dialog"/, 'Admin source modals should expose dialog semantics');
+    assert.match(content, /showExport/, 'Admin export action should use a confirmation modal state');
+    assert.match(content, /setShowAddForm\(true\)/, 'Add source button should open a modal');
+    assert.match(content, /setShowImport\(true\)/, 'Import button should open a modal');
+  });
 });
 
 describe('AdminPage i18n keys', () => {
@@ -90,5 +149,17 @@ describe('AdminPage i18n keys', () => {
     assert.ok(en.admin.sourceHealth, 'admin.sourceHealth must exist');
     assert.ok(en.admin.ingestionHealth, 'admin.ingestionHealth must exist');
     assert.ok(en.admin.aggregateStats, 'admin.aggregateStats must exist');
+    assert.ok(en.admin.featureAccess, 'admin.featureAccess must exist');
+  });
+
+  it('all locales have the admin pagination label', () => {
+    for (const locale of ['en', 'es', 'fr', 'ar', 'zh']) {
+      const localePath = join(SRC, 'i18n', 'locales', `${locale}.json`);
+      const messages = JSON.parse(readFileSync(localePath, 'utf8'));
+      assert.ok(
+        messages.admin?.showingRows,
+        `${locale}.json should define admin.showingRows so table footers never render the raw i18n key`,
+      );
+    }
   });
 });

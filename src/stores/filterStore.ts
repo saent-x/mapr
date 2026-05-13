@@ -1,15 +1,16 @@
 import { create } from 'zustand';
 import { decodeURLToFilters, encodeViewToURL } from '../utils/viewManager.js';
 import { resolveDateFloor } from '../utils/mockData.js';
+import type { FilterState, SavedView, URLFilterParams, SavedViewMapState, EntityFilter } from '../types/store';
 
 /* ── module-level debounce timer (not in state to avoid re-renders) ── */
-let _debounceTimer = null;
+let _debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Filter store — all filter state: severity, search, time range, sort mode,
  * verification, source type, language, accuracy, precision, amplification.
  */
-const useFilterStore = create((set, get) => ({
+const useFilterStore = create<FilterState>()((set, get) => ({
   searchQuery: '',
   debouncedSearch: '',
   dateWindow: '168h',
@@ -31,27 +32,27 @@ const useFilterStore = create((set, get) => ({
   entityFilter: null, // null | { id: string, name: string, type: string }
 
   /* ── setters ── */
-  setSearchQuery: (q) => {
-    clearTimeout(_debounceTimer);
+  setSearchQuery: (q: string) => {
+    if (_debounceTimer) clearTimeout(_debounceTimer);
     _debounceTimer = setTimeout(() => set({ debouncedSearch: q }), 250);
     set({ searchQuery: q });
   },
-  setDateWindow: (v) => set({ dateWindow: v }),
-  setMinSeverity: (v) => set({ minSeverity: v }),
-  setMinConfidence: (v) => set({ minConfidence: v }),
-  setSortMode: (v) => set({ sortMode: v }),
-  setMapOverlay: (v) => set({ mapOverlay: v }),
-  setShowFlightsLayer: (v) => set({ showFlightsLayer: Boolean(v) }),
-  setShowVesselsLayer: (v) => set({ showVesselsLayer: Boolean(v) }),
+  setDateWindow: (v: string) => set({ dateWindow: v }),
+  setMinSeverity: (v: number) => set({ minSeverity: v }),
+  setMinConfidence: (v: number) => set({ minConfidence: v }),
+  setSortMode: (v: string) => set({ sortMode: v }),
+  setMapOverlay: (v: string) => set({ mapOverlay: v }),
+  setShowFlightsLayer: (v: boolean) => set({ showFlightsLayer: Boolean(v) }),
+  setShowVesselsLayer: (v: boolean) => set({ showVesselsLayer: Boolean(v) }),
   toggleFlightsLayer: () => set((s) => ({ showFlightsLayer: !s.showFlightsLayer })),
   toggleVesselsLayer: () => set((s) => ({ showVesselsLayer: !s.showVesselsLayer })),
-  setVerificationFilter: (v) => set({ verificationFilter: v }),
-  setSourceTypeFilter: (v) => set({ sourceTypeFilter: v }),
-  setLanguageFilter: (v) => set({ languageFilter: v }),
-  setAccuracyMode: (v) => set({ accuracyMode: v }),
-  setPrecisionFilter: (v) => set({ precisionFilter: v }),
-  setHideAmplified: (v) => set({ hideAmplified: v }),
-  setEntityFilter: (entity) => set({ entityFilter: entity }),
+  setVerificationFilter: (v: string) => set({ verificationFilter: v }),
+  setSourceTypeFilter: (v: string) => set({ sourceTypeFilter: v }),
+  setLanguageFilter: (v: string) => set({ languageFilter: v }),
+  setAccuracyMode: (v: string) => set({ accuracyMode: v }),
+  setPrecisionFilter: (v: string) => set({ precisionFilter: v }),
+  setHideAmplified: (v: boolean) => set({ hideAmplified: v }),
+  setEntityFilter: (entity: EntityFilter) => set({ entityFilter: entity }),
   clearEntityFilter: () => set({ entityFilter: null }),
 
   /**
@@ -74,9 +75,9 @@ const useFilterStore = create((set, get) => ({
   },
 
   /** Apply a saved view's filters + mapState. */
-  applyView: (view) => {
+  applyView: (view: SavedView) => {
     const { filters = {}, mapState = {} } = view;
-    const updates = {};
+    const updates: Partial<FilterState> = {};
     if (filters.searchQuery !== undefined) { updates.searchQuery = filters.searchQuery; updates.debouncedSearch = filters.searchQuery; }
     if (filters.minSeverity !== undefined) updates.minSeverity = filters.minSeverity;
     if (filters.minConfidence !== undefined) updates.minConfidence = filters.minConfidence;
@@ -88,19 +89,23 @@ const useFilterStore = create((set, get) => ({
     if (filters.accuracyMode !== undefined) updates.accuracyMode = filters.accuracyMode;
     if (filters.precisionFilter !== undefined) updates.precisionFilter = filters.precisionFilter;
     if (filters.hideAmplified !== undefined) updates.hideAmplified = filters.hideAmplified;
+    if (filters.entityFilter !== undefined) updates.entityFilter = filters.entityFilter;
     if (mapState.mapOverlay !== undefined) updates.mapOverlay = mapState.mapOverlay;
     set(updates);
   },
 
   /** Hydrate filter state from URL search params (called once on mount). */
-  initFromURL: (searchParams) => {
-    const { filters, mapState } = decodeURLToFilters(searchParams);
-    const updates = {};
+  initFromURL: (searchParams: URLSearchParams) => {
+    const decoded = decodeURLToFilters(searchParams);
+    const filters = decoded.filters as URLFilterParams;
+    const mapState = decoded.mapState as SavedViewMapState;
+    const updates: Partial<FilterState> = {};
     if (filters.searchQuery) { updates.searchQuery = filters.searchQuery; updates.debouncedSearch = filters.searchQuery; }
     if (filters.minSeverity) updates.minSeverity = filters.minSeverity;
     if (filters.minConfidence) updates.minConfidence = filters.minConfidence;
     if (filters.dateWindow) updates.dateWindow = filters.dateWindow;
     if (filters.sortMode) updates.sortMode = filters.sortMode;
+    if (filters.entityFilter) updates.entityFilter = filters.entityFilter;
     if (mapState.mapOverlay) updates.mapOverlay = mapState.mapOverlay;
     if (Object.keys(updates).length > 0) set(updates);
     return { filters, mapState };
@@ -116,6 +121,7 @@ const useFilterStore = create((set, get) => ({
         minConfidence: s.minConfidence,
         dateWindow: s.dateWindow,
         sortMode: s.sortMode,
+        entityFilter: s.entityFilter,
       },
       mapState: { mapOverlay: s.mapOverlay },
     });

@@ -285,15 +285,15 @@ export function coOccurrenceToStroke(count, maxCount) {
  * @returns {string} CSS color string
  */
 export function coOccurrenceToColor(count, maxCount) {
-  if (maxCount <= 0) return 'rgba(0, 212, 255, 0.6)';
+  if (maxCount <= 0) return 'rgba(45, 138, 148, 0.62)';
   const ratio = Math.min(count / maxCount, 1);
 
   if (ratio < 0.33) {
-    return 'rgba(0, 212, 255, 0.6)'; // Cyan — low co-occurrence
+    return 'rgba(45, 138, 148, 0.62)';
   } else if (ratio < 0.66) {
-    return 'rgba(255, 170, 0, 0.7)'; // Amber — medium
+    return 'rgba(196, 130, 30, 0.72)';
   } else {
-    return 'rgba(255, 85, 85, 0.8)'; // Red — high
+    return 'rgba(201, 64, 51, 0.8)';
   }
 }
 

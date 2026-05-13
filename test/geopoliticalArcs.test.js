@@ -208,24 +208,24 @@ describe('coOccurrenceToStroke', () => {
 });
 
 describe('coOccurrenceToColor', () => {
-  it('returns cyan for low co-occurrence', () => {
+  it('returns teal for low co-occurrence', () => {
     const color = coOccurrenceToColor(1, 10);
-    assert.ok(color.includes('0, 212, 255'), `Expected cyan, got ${color}`);
+    assert.ok(color.includes('45, 138, 148'), `Expected teal, got ${color}`);
   });
 
   it('returns amber for medium co-occurrence', () => {
     const color = coOccurrenceToColor(5, 10);
-    assert.ok(color.includes('255, 170, 0'), `Expected amber, got ${color}`);
+    assert.ok(color.includes('196, 130, 30'), `Expected amber, got ${color}`);
   });
 
   it('returns red for high co-occurrence', () => {
     const color = coOccurrenceToColor(10, 10);
-    assert.ok(color.includes('255, 85, 85'), `Expected red, got ${color}`);
+    assert.ok(color.includes('201, 64, 51'), `Expected red, got ${color}`);
   });
 
   it('handles maxCount of 0', () => {
     const color = coOccurrenceToColor(5, 0);
-    assert.ok(color.includes('0, 212, 255'));
+    assert.ok(color.includes('45, 138, 148'));
   });
 });
 
