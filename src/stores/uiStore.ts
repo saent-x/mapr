@@ -71,6 +71,9 @@ const useUIStore = create<UIState>()((set, get) => ({
   /* ── export modal ── */
   showExport: false,
 
+  /* ── AI agent sidebar (Workstream D1) ── */
+  agentSidebarOpen: false,
+
   /* ── timeline ── */
   scrubTime: null, // null = live, Date = historical
 
@@ -125,6 +128,8 @@ const useUIStore = create<UIState>()((set, get) => ({
   }),
 
   setShowExport: (v) => set({ showExport: v }),
+  setAgentSidebarOpen: (v) => set({ agentSidebarOpen: Boolean(v) }),
+  toggleAgentSidebar: () => set((s) => ({ agentSidebarOpen: !s.agentSidebarOpen })),
   setScrubTime: (v) => set({ scrubTime: v }),
 
   setLastRegionIso: (iso) => set(() => {

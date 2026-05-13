@@ -212,6 +212,7 @@ export interface UIState {
   selectedStoryId: string | null;
   selectedArc: unknown;
   showExport: boolean;
+  agentSidebarOpen: boolean;
   scrubTime: Date | null;
   toasts: Toast[];
   panelCollapsed: PanelCollapsed;
@@ -230,6 +231,8 @@ export interface UIState {
   selectArc: (arc: unknown) => void;
   closePanel: () => void;
   setShowExport: (v: boolean) => void;
+  setAgentSidebarOpen: (v: boolean) => void;
+  toggleAgentSidebar: () => void;
   setScrubTime: (v: Date | null) => void;
   setLastRegionIso: (iso: string | null) => void;
   togglePanelCollapsed: (key: keyof PanelCollapsed) => void;

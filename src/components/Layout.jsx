@@ -8,6 +8,7 @@ import MobileBottomNav from './MobileBottomNav';
 import OfflineBanner from './OfflineBanner';
 import ShortcutHelp from './ShortcutHelp';
 import OnboardingOverlay from './OnboardingOverlay';
+import AgentSidebar from './AgentSidebar';
 import SavedViewsSidebar from './SavedViewsSidebar';
 import AlertRulesPanel from './AlertRulesPanel';
 import BookmarksPanel from './BookmarksPanel';
@@ -202,6 +203,7 @@ export default function Layout() {
       <StatusBar />
       <MobileBottomNav />
       <ShortcutHelp />
+      <AgentSidebar />
       {location.pathname === '/' && <OnboardingOverlay />}
     </div>
   );
