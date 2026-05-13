@@ -48,7 +48,7 @@ const WatchlistPanel = ({ onRegionSelect }) => {
         <span className="dot" style={{ background: 'var(--amber)' }} />
         {t('watchlist.toggleLabel')}
         <span className="spacer" />
-        <span style={{ color: 'var(--ink-2)' }}>{watchItems.length}</span>
+        <span className="tnum" style={{ color: 'var(--ink-2)' }}>{watchItems.length}</span>
         <button
           type="button"
           className="panel-collapse-btn"

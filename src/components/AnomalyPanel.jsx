@@ -64,7 +64,7 @@ const AnomalyPanel = ({
         <span className="dot" style={{ background: 'var(--sev-red)' }} />
         {t('anomaly.title')}
         <span className="spacer" />
-        <span style={{ color: 'var(--ink-2)' }}>{anomalies.length}</span>
+        <span className="tnum" style={{ color: 'var(--ink-2)' }}>{anomalies.length}</span>
         <button
           type="button"
           className="panel-collapse-btn"

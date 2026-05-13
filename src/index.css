@@ -2802,3 +2802,292 @@ a { color: inherit; text-decoration: none; }
     top: 100px;
   }
 }
+
+/* ============================================================
+   Detail polish — applied last so it overrides earlier shorthands.
+   ============================================================ */
+
+/* Tabular numerals on every numeric stream (counters, codes, IDs,
+   confidence, timestamps, ISOs). Prevents the 1px jitter when
+   digits update under autopoll. */
+.status-item b,
+.news-meta,
+.news-src,
+.news-card-detail-row,
+.news-card-mini-badge,
+.intel-ticker-loc,
+.intel-ticker-severity,
+.anomaly-delta,
+.anomaly-sub,
+.narrative-row .sub,
+.watchlist-row .ct,
+.watchlist-row .code,
+.region-picker-count,
+.region-picker-count-sm,
+.region-picker-iso,
+.feed-region-link-iso,
+.timeline-label .t2,
+.lang-select b,
+.brand-build,
+.kpi .v,
+.kpi .d,
+.stat .val,
+.search-kbd,
+.toast {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Text wrapping: balance headings, prettify body to kill orphans. */
+.news-item-detail h2,
+.region-name,
+.admin-head h2,
+.trend-card .head h3,
+.news-title,
+.anomaly-label {
+  text-wrap: balance;
+}
+.news-card-summary,
+.news-summary-preview,
+.narrative-row .title {
+  text-wrap: pretty;
+}
+
+/* Search kbd hint — give it a faint keycap edge. */
+.search-kbd {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Hit-area extension for tiny controls (panel collapse, panel close ×).
+   Visible glyph stays compact; pseudo-element adds a 32px touch
+   target without disturbing layout. */
+.panel-collapse-btn,
+.panel-header > button {
+  position: relative;
+}
+.panel-collapse-btn::after,
+.panel-header > button::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+/* Tactile feedback — interruptible :active scale on every interactive
+   surface. Extends each rule's transition with `transform` so the
+   press / release interpolates. Reduced-motion users get the press
+   colour change but no scale. */
+@media (prefers-reduced-motion: no-preference) {
+  .toggle-chip,
+  .chip,
+  .btn,
+  .filter-toggle,
+  .collapse-all-toggle,
+  .map-controls button,
+  .tl-btn,
+  .panel-collapse-btn,
+  .panel-header > button,
+  .feed-region-link,
+  .map-drill-chip,
+  .data-error-banner-retry,
+  .region-picker-recent,
+  .region-picker-row,
+  .header-icon-btn,
+  .mobile-tab-back,
+  .lang-select,
+  .entity-graph-zoom button,
+  .bottom-nav-btn,
+  .side-btn,
+  .layout-nav-link,
+  .news-item,
+  .news-card-source-item,
+  .mobile-timeline-fab {
+    transition-property: background-color, color, border-color, transform, box-shadow, opacity;
+    transition-duration: 0.14s;
+    transition-timing-function: var(--ease);
+  }
+  .toggle-chip:active:not([disabled]),
+  .chip:active:not([disabled]),
+  .btn:active:not([disabled]),
+  .filter-toggle:active,
+  .collapse-all-toggle:active,
+  .map-controls button:active,
+  .tl-btn:active,
+  .panel-collapse-btn:active,
+  .panel-header > button:active,
+  .feed-region-link:active,
+  .map-drill-chip:active,
+  .data-error-banner-retry:active,
+  .region-picker-recent:active,
+  .region-picker-row:active,
+  .header-icon-btn:active,
+  .mobile-tab-back:active,
+  .lang-select:active,
+  .entity-graph-zoom button:active,
+  .bottom-nav-btn:active,
+  .side-btn:active,
+  .layout-nav-link:active,
+  .news-item:active,
+  .mobile-timeline-fab:active {
+    transform: scale(0.96);
+  }
+}
+
+/* Stagger reveal — desktop only. Side panels fan in from the left,
+   the news feed slides in from the right, timeline + ticker rise up.
+   `both` keeps the final state pinned so we don't get a flash before
+   the animation starts. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 1024px) {
+  .side-panels > .mini-panel {
+    animation: panel-enter-left 0.36s var(--ease) both;
+    will-change: transform, opacity;
+  }
+  .side-panels > .mini-panel:nth-child(1) { animation-delay: 60ms; }
+  .side-panels > .mini-panel:nth-child(2) { animation-delay: 140ms; }
+  .side-panels > .mini-panel:nth-child(3) { animation-delay: 220ms; }
+
+  .news-panel {
+    animation: panel-enter-right 0.36s var(--ease) both;
+    animation-delay: 100ms;
+    will-change: transform, opacity;
+  }
+
+  .drawer-toggles {
+    animation: panel-fade-in 0.4s var(--ease) both;
+    animation-delay: 200ms;
+  }
+
+  .timeline {
+    animation: panel-enter-up 0.36s var(--ease) both;
+    animation-delay: 220ms;
+    will-change: transform, opacity;
+  }
+
+  .intel-ticker {
+    animation: panel-fade-in 0.5s var(--ease) both;
+    animation-delay: 320ms;
+  }
+
+  /* Drop will-change once the entrance is done — keeps the
+     compositor from holding extra layers forever. */
+  .side-panels > .mini-panel,
+  .news-panel,
+  .timeline {
+    animation-fill-mode: both;
+  }
+}
+
+@keyframes panel-enter-left {
+  from { opacity: 0; transform: translate3d(-8px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes panel-enter-right {
+  from { opacity: 0; transform: translate3d(8px, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes panel-enter-up {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes panel-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Op-dot — stronger pulse + drop-shadow halo so the breathing reads
+   as live signal, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .op-dot { animation: none; }
+  .intel-ticker-scroll { animation: none; }
+  .data-loading-skeleton { animation: none; }
+}
+
+/* News item active-stripe — make the amber rail draw in rather than
+   pop. Pure compositor work; no layout cost. */
+.news-item[data-active="true"],
+.news-item.is-active {
+  position: relative;
+}
+
+/* Anomaly delta chips — small bordered token, easier to scan at a glance. */
+.anomaly-delta {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  letter-spacing: 0.05em;
+  border-radius: 2px;
+}
+
+/* Brand mark — subtle hover lift inside its sidebar slot. */
+.header-brand .brand-mark svg {
+  transition: transform 0.4s var(--ease);
+}
+.header-brand:hover .brand-mark svg {
+  transform: rotate(8deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-brand .brand-mark svg { transition: none; }
+}
+
+/* Sidebar active rail — animate width so the indicator slides in,
+   not pops. */
+.side-btn::before,
+.layout-nav-link::before {
+  transition: opacity 0.18s var(--ease), transform 0.18s var(--ease);
+}
+.side-btn:not([data-active="true"])::before,
+.layout-nav-link:not(.active)::before {
+  opacity: 0;
+}
+
+/* Toast — refined entrance with translate from below instead of
+   straight fade. Stays under reduced-motion guard. */
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-enter 0.32s var(--ease) both;
+  }
+}
+@keyframes toast-enter {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+/* Map controls — concentric pill: container 1px border + inside
+   buttons stack with tiny gap. Add an active rail accent on press
+   to confirm the toggle landed. */
+.map-controls {
+  box-shadow: 0 6px 20px -8px rgba(0, 0, 0, 0.55);
+}
+.map-controls button[data-active="true"] {
+  position: relative;
+}
+.map-controls button[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 2px;
+  background: var(--amber);
+}
+
+/* Floating panel shadow — soften the hard outline with a layered
+   diffusion shadow that matches the dark surface. */
+.floating-panel {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 12px 30px -16px rgba(0, 0, 0, 0.65),
+    0 4px 12px -6px rgba(0, 0, 0, 0.45);
+}
+
+/* Mini-panel — match the floating-panel diffusion so the side stack
+   reads as one elevation tier, not three disconnected boxes. */
+.mini-panel {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.02) inset,
+    0 8px 20px -14px rgba(0, 0, 0, 0.55);
+}
+
+/* News-item image — tame the hard 1px tinted border into a soft
+   inner outline that doesn't read as dirt on the edge. */
+.news-card-image {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}

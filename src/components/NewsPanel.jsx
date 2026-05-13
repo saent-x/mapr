@@ -386,7 +386,7 @@ const NewsPanel = ({
           <span className="dot" />
           <span>FEED · LIVE</span>
           <span className="spacer" />
-          <span style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+          <span className="tnum" style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
         </div>
         <div className="panel-body">{listBody}</div>
       </div>
@@ -421,7 +421,7 @@ const NewsPanel = ({
         <span className="dot" />
         <span>FEED · LIVE</span>
         <span className="spacer" />
-        <span style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
+        <span className="tnum" style={{ color: 'var(--ink-2)' }}>{items.length} items</span>
         <button
           type="button"
           className="panel-collapse-btn"

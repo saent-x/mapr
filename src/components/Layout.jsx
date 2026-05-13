@@ -66,16 +66,16 @@ function StatusBar() {
 
   return (
     <div className="app-status" role="status" aria-live="polite">
-      <div className="status-item">● <b>{formatClock(now)}</b></div>
+      <div className="status-item">● <b className="tnum">{formatClock(now)}</b></div>
       <div className="status-sep" />
-      <div className="status-item">FEED · <b>{liveNews.length}</b> evt</div>
-      <div className="status-item">RED <b style={{ color: 'var(--sev-red)' }}>{red}</b></div>
-      <div className="status-item">AMBER <b style={{ color: 'var(--sev-amber)' }}>{amber}</b></div>
-      <div className="status-item">GREEN <b style={{ color: 'var(--sev-green)' }}>{green}</b></div>
+      <div className="status-item">FEED · <b className="tnum">{liveNews.length}</b> evt</div>
+      <div className="status-item">RED <b className="tnum" style={{ color: 'var(--sev-red)' }}>{red}</b></div>
+      <div className="status-item">AMBER <b className="tnum" style={{ color: 'var(--sev-amber)' }}>{amber}</b></div>
+      <div className="status-item">GREEN <b className="tnum" style={{ color: 'var(--sev-green)' }}>{green}</b></div>
       <div className="status-sep" />
       <div className="status-item">
-        SRC · <b>{totalSources}</b> online
-        {degraded > 0 && <> · <b style={{ color: 'var(--sev-amber)' }}>{degraded}</b> degraded</>}
+        SRC · <b className="tnum">{totalSources}</b> online
+        {degraded > 0 && <> · <b className="tnum" style={{ color: 'var(--sev-amber)' }}>{degraded}</b> degraded</>}
       </div>
       <div className="status-right">
         <div className="status-item">LANG · <b>{i18n.language.toUpperCase()}</b></div>
