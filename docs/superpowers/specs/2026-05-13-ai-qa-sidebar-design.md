@@ -430,15 +430,22 @@ E2E manual on `mapr.tors-x.dev`:
 - Multi-language agent UI strings beyond English (other locales fall
   back to English keys).
 
-## Open questions for the reviewer
+## Locked design decisions
 
-1. Should the agent be **scoped to the current page's filter context**
-   (e.g. on `/region/UA` it only retrieves Ukraine articles) or always
-   **global**? Default in spec: global, with an optional "Use current
-   filters" toggle in the composer.
-2. Should we **cache identical questions** at the server level so two
-   users asking the same thing in the same hour reuse one LLM call?
-   Default in spec: no — privacy / quota fairness argues against
-   shared cache.
+The following were ambiguous during initial design; the reviewer made
+explicit calls. Recording them here so the implementation plan can
+reference a stable spec.
 
-Reviewer can answer either question or accept the defaults.
+1. **Agent scope** — drawer is **always available globally** by default.
+   The composer ships with a toggle ("Use current page filters") that
+   forwards the page's active filter state to `retrieveTopK` for the
+   next message only. The toggle defaults to off and is sticky per
+   conversation (so a thread you started in Ukraine stays Ukraine-scoped
+   if you flip it).
+2. **Server-side cache for identical questions** — **disabled**. Every
+   user's question goes to the LLM fresh. This avoids one user's quota
+   silently subsidizing another's, keeps privacy semantics simple, and
+   prevents leaking "popular question" signal through cache hit rates.
+   Per-user response cache (within a single conversation context, so
+   pressing the regenerate button skips a redundant LLM call) is fair
+   game and lives at the conversation level rather than globally.
