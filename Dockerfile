@@ -20,5 +20,6 @@ COPY --from=build /app/api ./api
 COPY --from=build /app/src ./src
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/public ./public
+COPY --from=build /app/data ./data
 EXPOSE 3030
 CMD ["npm", "start"]
