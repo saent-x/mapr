@@ -472,7 +472,10 @@ const server = http.createServer(async (request, response) => {
       }
       const briefingReady = health.snapshotStatus !== 'cold';
       const ready = dbOk && briefingReady && !_shuttingDown;
-      sendJson(response, ready ? 200 : 503, { ...health, ready });
+      const subscriptionStatus = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+        ? 'configured'
+        : 'disabled';
+      sendJson(response, ready ? 200 : 503, { ...health, ready, subscription_status: subscriptionStatus });
       return;
     }
 
