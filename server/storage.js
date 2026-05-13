@@ -136,6 +136,7 @@ async function runSchemaMigration(db) {
       "lastUpdatedAt" TEXT
     );
 
+<<<<<<< HEAD
     -- D3: cached per-event LLM-extracted source contradictions.
     CREATE TABLE IF NOT EXISTS event_contradictions (
       "eventId"            TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
@@ -145,6 +146,29 @@ async function runSchemaMigration(db) {
       "generatedAt"        TEXT NOT NULL
     );
 
+=======
+    -- D5: auto-generated entity dossiers, keyed on normalized name +
+    -- a monthly window so each calendar month picks up new coverage.
+    CREATE TABLE IF NOT EXISTS entity_dossiers (
+      "entityKey"        TEXT NOT NULL,
+      "entityType"       TEXT NOT NULL,
+      "windowKey"        TEXT NOT NULL,
+      "displayName"      TEXT NOT NULL,
+      summary            TEXT NOT NULL,
+      role               TEXT,
+      "recentActivity"   TEXT,
+      "keyRelationships" TEXT,
+      "notableQuotes"    TEXT,
+      "articleCount"     INTEGER DEFAULT 0,
+      "modelUsed"        TEXT,
+      "generatedAt"      TEXT NOT NULL,
+      PRIMARY KEY ("entityKey", "windowKey")
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_entity_dossiers_recent
+      ON entity_dossiers ("generatedAt" DESC);
+
+>>>>>>> f833f6f (feat(d5): auto-generated entity dossiers)
     CREATE TABLE IF NOT EXISTS velocity_history (
       iso TEXT NOT NULL,
       "bucketAt" TEXT NOT NULL,

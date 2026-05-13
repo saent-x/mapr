@@ -10109,6 +10109,7 @@ h1, h2, h3, h4, h5, h6 {
 .news-card-image {
   border-color: transparent;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+<<<<<<< HEAD
 /* ── Event contradictions (D3) ──────────────────────────────────────── */
 .contradictions-empty {
   border: 1px dashed var(--line);
@@ -10118,6 +10119,91 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 8px;
   background: var(--bg-2);
+=======
+
+/* ── Entity dossier panel (D5) ──────────────────────────────────────── */
+.entity-dossier {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 12px;
+  margin: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-2);
+}
+.entity-dossier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.entity-dossier-head h3 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-0);
+}
+.entity-dossier-role { color: var(--ink-2); margin: 0; }
+.entity-dossier-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-1);
+}
+.entity-dossier-block { display: flex; flex-direction: column; gap: 4px; }
+.entity-dossier-subhead {
+  color: var(--ink-2);
+  letter-spacing: 0.08em;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.entity-dossier-block p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-1); }
+.entity-dossier-rel,
+.entity-dossier-quotes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.entity-dossier-rel li,
+.entity-dossier-quotes li {
+  border-left: 2px solid var(--cyan);
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--ink-1);
+}
+.entity-dossier-rel li strong { color: var(--ink-0); }
+.entity-dossier-quotes li span:first-child { font-style: italic; color: var(--ink-0); }
+.entity-dossier-empty {
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  padding: 12px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--bg-1);
+}
+.entity-dossier-empty p { margin: 0; color: var(--ink-2); line-height: 1.5; }
+.entity-dossier-foot {
+  color: var(--ink-3);
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
+.entity-dossier-error {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sev-red);
+>>>>>>> f833f6f (feat(d5): auto-generated entity dossiers)
 }
 .contradictions-empty p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
 .contradictions-section {

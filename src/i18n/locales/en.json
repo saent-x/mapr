@@ -702,6 +702,21 @@
     "modelLabel": "Model",
     "deletedNotice": "Conversation archived."
   },
+  "dossier": {
+    "title": "Dossier",
+    "loading": "BUILDING DOSSIER…",
+    "notRunYet": "Run the AI compiler to build a dossier from the recent corpus.",
+    "signInToGenerate": "Sign in to build a dossier.",
+    "generate": "Build dossier",
+    "generating": "Building…",
+    "regenerate": "Refresh",
+    "notConfigured": "AI service offline — try again later.",
+    "recentActivity": "RECENT ACTIVITY",
+    "relationships": "KEY RELATIONSHIPS",
+    "quotes": "NOTABLE QUOTES",
+    "articlesScanned": "articles scanned",
+    "lastBuilt": "built {{relative}}"
+  },
   "verification": {
     "title": "Verify this story",
     "loading": "CHECKING ARCHIVES…",
