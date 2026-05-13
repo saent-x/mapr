@@ -155,3 +155,46 @@ export function generateEventBrief(eventId, { force = false } = {}) {
     auth: true,
   });
 }
+
+// ── AI Q&A sidebar (Workstream D1) ───────────────────────────────────
+
+export function listQaConversations({ archived = false } = {}) {
+  const params = new URLSearchParams();
+  if (archived) params.set('archived', '1');
+  return request(`/qa/conversations?${params.toString()}`, { auth: true });
+}
+
+export function createQaConversation({ title = '', useCurrentFilters = false } = {}) {
+  return request('/qa/conversations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, useCurrentFilters }),
+    auth: true,
+  });
+}
+
+export function archiveQaConversation(conversationId) {
+  return request(`/qa/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function fetchQaMessages(conversationId) {
+  return request(
+    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { auth: true },
+  );
+}
+
+export function sendQaMessage(conversationId, { content, useCurrentFilters, filters } = {}) {
+  return request(
+    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content, useCurrentFilters, filters }),
+      auth: true,
+    },
+  );
+}
