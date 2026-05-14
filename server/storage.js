@@ -280,6 +280,37 @@ async function runSchemaMigration(db) {
     CREATE INDEX IF NOT EXISTS idx_story_thread_articles_thread ON story_thread_articles("threadId", "addedAt");
   `);
 
+  // pgvector + embedding column. Idempotent so it's safe to run on every
+  // boot. Wrapped because hosts without pgvector (e.g. vanilla
+  // postgres:16, not pgvector/pgvector:pg16) will fail CREATE EXTENSION;
+  // we log and continue so the rest of the server still boots — only the
+  // embedding-backed features (QA retrieval, beat alerts, arc clustering)
+  // will return empty results.
+  try {
+    await db.query('CREATE EXTENSION IF NOT EXISTS vector');
+    await db.query(`
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1024);
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS "embeddingModel" TEXT;
+      ALTER TABLE articles ADD COLUMN IF NOT EXISTS "embeddedAt" TEXT;
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS articles_embedding_hnsw
+        ON articles USING hnsw (embedding vector_cosine_ops)
+        WITH (m=16, ef_construction=64)
+    `).catch((err) => {
+      // The HNSW index requires every row to have an embedding before
+      // it can be built; on a fresh DB that's vacuously true. If it
+      // ever fails (e.g. partial backfill), continue without it — the
+      // cosine query still works, just slower.
+      console.warn('[storage] HNSW index not created:', err.message);
+    });
+  } catch (err) {
+    console.warn(
+      '[storage] pgvector unavailable — embedding-backed features disabled:',
+      err.message,
+    );
+  }
+
   // Fix schema: drop url UNIQUE constraint/index that causes spurious conflicts
   // during ON CONFLICT (id) upserts.  The id column is the canonical dedup key.
   await db.query(`ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_url_key`).catch(() => {});

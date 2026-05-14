@@ -111,7 +111,24 @@ export async function retrieveTopK(question, {
       LIMIT $2
   `;
 
-  const { rows } = await db.query(sql, params);
+  let rows = [];
+  try {
+    const result = await db.query(sql, params);
+    rows = result.rows;
+  } catch (err) {
+    // Host may have booted without pgvector or before the backfill ran.
+    // ensureSchema makes a best-effort attempt to install both; if that
+    // failed (e.g. the postgres image doesn't ship pgvector), the column
+    // won't exist and this query fails with 42703 (undefined_column) or
+    // 42704 (undefined_object for the vector type cast). Either way the
+    // right user-facing behavior is "no matches" rather than 500.
+    const code = err?.code || '';
+    if (code === '42703' || code === '42704' || /column .*embedding.* does not exist/i.test(err.message)) {
+      console.warn('[qa.retrieve] embedding column unavailable, returning no matches');
+      return [];
+    }
+    throw err;
+  }
   return rows
     .filter((row) => Number(row.similarity) >= minSimilarity)
     .map((row) => ({
