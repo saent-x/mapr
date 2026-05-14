@@ -10109,6 +10109,8 @@ h1, h2, h3, h4, h5, h6 {
 .news-card-image {
   border-color: transparent;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
 /* ── Event contradictions (D3) ──────────────────────────────────────── */
 .contradictions-empty {
   border: 1px dashed var(--line);
@@ -10118,6 +10120,89 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 8px;
   background: var(--bg-2);
+}
+.contradictions-empty p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+.contradictions-section {
+  border: 1px solid var(--amber);
+  background: rgba(255, 191, 0, 0.04);
+  border-radius: 3px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0;
+}
+.contradictions-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.contradictions-head h3 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-0);
+}
+.contradictions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.contradiction-card {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 8px 10px;
+  background: var(--bg-1);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.contradiction-card-head {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+.contradiction-category {
+  color: var(--ink-2);
+  letter-spacing: 0.08em;
+}
+.contradiction-claim {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-0);
+  line-height: 1.5;
+}
+.contradiction-buckets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.contradiction-bucket {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ink-1);
+}
+.contradiction-bucket-label {
+  width: 56px;
+  flex-shrink: 0;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+}
+.contradiction-bucket-sources {
+  flex: 1;
+}
+.contradictions-error {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sev-red);
+}
 
 /* ── Entity dossier panel (D5) ──────────────────────────────────────── */
 .entity-dossier {
@@ -10414,6 +10499,49 @@ h1, h2, h3, h4, h5, h6 {
   margin: 4px 0 0;
   padding-left: 20px;
   font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reporter-prompt-questions li strong { color: var(--ink-0); }
+.reporter-prompt-questions .mono { color: var(--ink-2); }
+.reporter-prompt-reporters {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.reporter-prompt-reporters li {
+  border-left: 2px solid var(--cyan);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.reporter-prompt-error,
+.why-now-error {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sev-red);
+}
+.why-now-context {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-0);
+  line-height: 1.55;
+}
+.why-now-precedents { margin-top: 6px; }
+.why-now-precedents ul {
+  list-style: disc;
+  margin: 4px 0 0 18px;
+  padding: 0;
+  font-size: 12px;
+}
+.why-now-precedents a { color: var(--cyan); text-decoration: none; }
+.why-now-precedents a:hover { text-decoration: underline; }
+
 /* ── Narrative arcs (D4) ────────────────────────────────────────────── */
 .arcs-page { padding: 32px 28px; max-width: 1100px; margin: 0 auto; }
 .arcs-page-head { margin-bottom: 24px; }
