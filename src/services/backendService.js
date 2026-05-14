@@ -196,3 +196,48 @@ export function regenerateEventContradictions(eventId, { force = true } = {}) {
     auth: true,
   });
 }
+
+export function archiveQaConversation(conversationId) {
+  return request(`/qa/conversations/${encodeURIComponent(conversationId)}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export function fetchQaMessages(conversationId) {
+  return request(
+    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { auth: true },
+  );
+}
+
+export function sendQaMessage(conversationId, { content, useCurrentFilters, filters } = {}) {
+  return request(
+    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content, useCurrentFilters, filters }),
+      auth: true,
+    },
+  );
+}
+
+// ── D5: entity dossiers ───────────────────────────────────────────────
+
+function dossierPath(name) {
+  return `/entities/${encodeURIComponent(String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''))}/dossier`;
+}
+
+export function fetchEntityDossier(name) {
+  return request(dossierPath(name));
+}
+
+export function regenerateEntityDossier(name, { type = 'entity', force = true } = {}) {
+  return request(dossierPath(name), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name, type, force }),
+    auth: true,
+  });
+}

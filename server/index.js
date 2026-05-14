@@ -113,6 +113,11 @@ import {
 import { generateBrief, readLatestBrief } from './briefs.js';
 import { readEventById } from './storage.js';
 import {
+  generateEntityDossier,
+  readLatestDossier,
+  normalizeEntityKey,
+} from './entityDossiers.js';
+import {
   createConversation as createQaConversation,
   listConversations as listQaConversations,
   getConversation as getQaConversation,
@@ -1413,6 +1418,50 @@ const server = http.createServer(async (request, response) => {
         const conversationId = url.pathname.split('/')[4];
         const ok = await withTimeout(() => archiveQaConversation({ user, conversationId }));
         sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── D5: entity dossiers ─────────────────────────────────────────────
+    // GET  /api/entities/:key/dossier        — cached row (no auth)
+    // POST /api/entities/:key/dossier        — regenerate (auth required)
+    //   body: { name: 'Display Name', type: 'person' | 'organization' | 'location' }
+    if (request.method === 'GET' && /^\/api\/entities\/[^/]+\/dossier$/.test(url.pathname)) {
+      try {
+        const rawKey = decodeURIComponent(url.pathname.split('/')[3]);
+        const entityKey = normalizeEntityKey(rawKey);
+        const row = await withTimeout(() => readLatestDossier({ entityKey }));
+        sendJson(response, 200, row || { entityKey, summary: '', generatedAt: null });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+    if (request.method === 'POST' && /^\/api\/entities\/[^/]+\/dossier$/.test(url.pathname)) {
+      try {
+        await requireUser(request);
+        const rawKey = decodeURIComponent(url.pathname.split('/')[3]);
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body OK */ }
+        const name = String(body?.name || rawKey).slice(0, 200);
+        const type = String(body?.type || 'entity').toLowerCase();
+        try {
+          const row = await withTimeout(
+            () => generateEntityDossier({ name, type, force: Boolean(body?.force) }),
+            60_000,
+          );
+          sendJson(response, 200, row);
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, { error: e.message, code: 'AI_NOT_CONFIGURED' });
+            return;
+          }
+          throw e;
+        }
       } catch (err) {
         const { status, body: b } = classifyError(err);
         sendJson(response, status, b);

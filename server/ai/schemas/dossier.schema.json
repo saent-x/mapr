@@ -1,0 +1,50 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 60,
+      "maxLength": 1200,
+      "description": "Two to four sentence neutral description of who/what this entity is. No speculation."
+    },
+    "role": {
+      "type": "string",
+      "maxLength": 240,
+      "description": "Short factual role (e.g. 'Russian foreign minister since 2004', 'Iranian state-aligned militia network')."
+    },
+    "recentActivity": {
+      "type": "string",
+      "maxLength": 1200,
+      "description": "What the entity has been doing in the recent corpus. Stay grounded — cite only events that appear in recent_articles."
+    },
+    "keyRelationships": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["other"],
+        "additionalProperties": false,
+        "properties": {
+          "other":  { "type": "string", "minLength": 2, "maxLength": 200 },
+          "kind":   { "type": "string", "maxLength": 80 },
+          "context": { "type": "string", "maxLength": 280 }
+        }
+      }
+    },
+    "notableQuotes": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["quote"],
+        "additionalProperties": false,
+        "properties": {
+          "quote": { "type": "string", "minLength": 8, "maxLength": 280 },
+          "context": { "type": "string", "maxLength": 200 }
+        }
+      }
+    }
+  }
+}

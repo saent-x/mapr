@@ -16,6 +16,8 @@ import useBreakpoint from '../hooks/useBreakpoint';
 import BottomSheet from '../components/ui/BottomSheet';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 
+const EntityDossierPanel = lazy(() => import('../components/EntityDossierPanel.jsx'));
+
 const EntityRelationshipGraph = lazy(() => import('../components/EntityRelationshipGraph.jsx'));
 
 const TYPE_STYLES = {
@@ -473,6 +475,10 @@ export default function EntityExplorerPage() {
                 )}
               </div>
 
+              <Suspense fallback={null}>
+                <EntityDossierPanel name={selNode.name} type={selNode.type} />
+              </Suspense>
+
               <div style={{ padding: '14px 4px', display: 'flex', gap: 8 }}>
                 <button type="button" className="btn primary" onClick={showOnMap}>{t('entities.showOnMap') || 'SHOW ON MAP'}</button>
                 <button type="button" className="btn" onClick={showTimeline}>{t('correlation.timelineButton') || 'TIMELINE'}</button>
@@ -570,6 +576,10 @@ export default function EntityExplorerPage() {
                   </div>
                 )}
               </div>
+
+              <Suspense fallback={null}>
+                <EntityDossierPanel name={selNode.name} type={selNode.type} />
+              </Suspense>
 
               <div style={{ padding: '14px 20px', display: 'flex', gap: 8, marginTop: 'auto' }}>
                 <button type="button" className="btn primary" onClick={showOnMap}>{t('entities.showOnMap') || 'SHOW ON MAP'}</button>
