@@ -140,7 +140,10 @@ import {
   userMessageCountInLastDays as qaUserMessageCount,
 } from './qa/conversations.js';
 import { retrieveTopK as qaRetrieveTopK } from './qa/retrieve.js';
-import { generateAnswer as qaGenerateAnswer } from './qa/generate.js';
+import {
+  generateAnswer as qaGenerateAnswer,
+  shouldBypassCorpusRetrieval as qaShouldBypassCorpusRetrieval,
+} from './qa/generate.js';
 import {
   readBeatProfile,
   upsertBeatProfile,
@@ -1503,39 +1506,43 @@ const server = http.createServer(async (request, response) => {
 
         let retrieved = [];
         let retrievalError = null;
-        try {
-          retrieved = await qaRetrieveTopK(compositeQuery, {
-            k: 8,
-            lexicalK: 6,
-            timeWindowHours: filters.timeWindowHours || 168,
-            region: filters.region || null,
-            minSimilarity: 0.3,
-          });
-        } catch (e) {
-          retrievalError = e;
-          log.warn('qa_retrieve_failed', { msg: e.message, code: e.code });
+        const skipRetrieval = qaShouldBypassCorpusRetrieval(content);
+        if (!skipRetrieval) {
+          try {
+            retrieved = await qaRetrieveTopK(compositeQuery, {
+              k: 8,
+              lexicalK: 6,
+              timeWindowHours: filters.timeWindowHours || 168,
+              region: filters.region || null,
+              minSimilarity: 0.3,
+            });
+          } catch (e) {
+            retrievalError = e;
+            log.warn('qa_retrieve_failed', { msg: e.message, code: e.code });
+          }
         }
 
-        // Generation — falls back to Workers AI internally via ai/client.
+        // Generation. Do not synthesize server-side answer text here; if the
+        // model cannot answer, return a structured error instead.
         let assistantMessage;
         try {
-          const result = retrievalError && retrieved.length === 0
-            ? {
-                answer: "I couldn't search the Mapr corpus right now, so I won't answer from model memory. Try again after the data service recovers.",
-                citations: [],
-                modelUsed: 'retrieval-error',
-                tokensIn: 0,
-                tokensOut: 0,
-              }
-            : await withTimeout(() => qaGenerateAnswer({
-                question: content,
-                retrieved,
-                priorMessages,
-              }), 60_000);
+          if (retrievalError && retrieved.length === 0) {
+            sendJson(response, 503, {
+              error: 'QA retrieval failed',
+              code: 'QA_RETRIEVAL_FAILED',
+              userMessage,
+            });
+            return;
+          }
+          const result = await withTimeout(() => qaGenerateAnswer({
+            question: content,
+            retrieved,
+            priorMessages,
+          }), 60_000);
           assistantMessage = await appendQaMessage({
             user, conversationId,
             role: 'assistant',
-            content: result.answer || "I couldn't find enough Mapr corpus evidence to answer that.",
+            content: result.answer,
             citations: result.citations,
             modelUsed: result.modelUsed,
             tokensIn: result.tokensIn,
@@ -1550,7 +1557,12 @@ const server = http.createServer(async (request, response) => {
             });
             return;
           }
-          throw e;
+          sendJson(response, e?.statusCode || 502, {
+            error: e?.message || 'AI generation failed',
+            code: e?.code || 'AI_GENERATE_FAILED',
+            userMessage,
+          });
+          return;
         }
 
         sendJson(response, 200, {

@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __test__ } from '../server/qa/retrieve.js';
 
-const { vectorLiteral, buildExcerpt, buildSearchTerms, mergeRetrieved } = __test__;
+const {
+  vectorLiteral,
+  buildExcerpt,
+  buildSearchTerms,
+  isMissingEmbeddingColumnError,
+  mergeRetrieved,
+} = __test__;
 
 test('vectorLiteral formats floats as pgvector textual literal', () => {
   const lit = vectorLiteral([1, -2, 0.5]);
@@ -63,4 +69,15 @@ test('mergeRetrieved preserves semantic order and marks duplicate lexical hits a
   assert.deepEqual(out.map((r) => r.articleId), ['a', 'b', 'c']);
   assert.equal(out[0].retrievalMode, 'hybrid');
   assert.equal(out[0].lexicalScore, 7);
+});
+
+test('isMissingEmbeddingColumnError detects Postgres undefined-column embedding errors', () => {
+  assert.equal(
+    isMissingEmbeddingColumnError({ code: '42703', message: 'column a.embedding does not exist' }),
+    true,
+  );
+  assert.equal(
+    isMissingEmbeddingColumnError({ code: '42P01', message: 'relation articles does not exist' }),
+    false,
+  );
 });

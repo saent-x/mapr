@@ -280,6 +280,21 @@ async function runSchemaMigration(db) {
     CREATE INDEX IF NOT EXISTS idx_story_thread_articles_thread ON story_thread_articles("threadId", "addedAt");
   `);
 
+  // D1: semantic Q&A uses pgvector article embeddings when available.
+  // This must be best-effort because local/dev Postgres instances may not
+  // have pgvector installed or permission to CREATE EXTENSION. The QA route
+  // degrades to lexical corpus search when this setup is unavailable.
+  try {
+    await db.query('CREATE EXTENSION IF NOT EXISTS vector');
+    await db.query('ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1024)');
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_articles_embedding_hnsw
+        ON articles USING hnsw (embedding vector_cosine_ops)
+    `);
+  } catch (err) {
+    console.warn('[storage] pgvector article embedding setup skipped:', err.message);
+  }
+
   // Fix schema: drop url UNIQUE constraint/index that causes spurious conflicts
   // during ON CONFLICT (id) upserts.  The id column is the canonical dedup key.
   await db.query(`ALTER TABLE articles DROP CONSTRAINT IF EXISTS articles_url_key`).catch(() => {});

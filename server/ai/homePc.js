@@ -31,6 +31,19 @@ function authHeaders() {
   return h;
 }
 
+function summarizeHttpErrorBody(text = '') {
+  const body = String(text || '').trim();
+  if (!body) return '';
+  if (/^<!doctype html/i.test(body) || /^<html[\s>]/i.test(body)) {
+    return 'upstream returned an HTML error page';
+  }
+  return body
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+}
+
 async function call(url, body, { timeoutMs = 30_000 } = {}) {
   if (!url) throw notConfigured('missing MAPR_AI_HOMEPC_URL');
   if (!BEARER) throw notConfigured('missing MAPR_AI_HOMEPC_BEARER');
@@ -45,7 +58,9 @@ async function call(url, body, { timeoutMs = 30_000 } = {}) {
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      const err = new Error(`home-pc HTTP ${res.status}: ${text.slice(0, 200)}`);
+      const summary = summarizeHttpErrorBody(text);
+      const detail = summary ? `: ${summary}` : '';
+      const err = new Error(`home-pc HTTP ${res.status}${detail}`);
       err.code = 'AI_HOMEPC_HTTP_ERROR';
       err.status = res.status;
       throw err;
@@ -87,3 +102,5 @@ export async function healthz() {
     clearTimeout(timer);
   }
 }
+
+export const __test__ = { summarizeHttpErrorBody };

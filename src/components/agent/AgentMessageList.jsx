@@ -151,6 +151,12 @@ function MessageSources({ citations = [] }) {
   );
 }
 
+function formatAgentError(error, t) {
+  const code = error?.payload?.code || error?.code || null;
+  const message = error?.payload?.error || error?.message || t('agent.errorGenericBody');
+  return code ? `${code}: ${message}` : message;
+}
+
 export default function AgentMessageList({ messages = [], status, error }) {
   const { t } = useTranslation();
   const scrollerRef = useRef(null);
@@ -203,7 +209,7 @@ export default function AgentMessageList({ messages = [], status, error }) {
       {error && status === 'error' && (
         <div className="agent-error" role="alert">
           <strong>{t('agent.errorGenericTitle')}</strong>
-          <div>{t('agent.errorGenericBody')}</div>
+          <div>{formatAgentError(error, t)}</div>
         </div>
       )}
     </div>

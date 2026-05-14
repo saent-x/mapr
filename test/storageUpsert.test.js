@@ -237,6 +237,28 @@ test('ensureSchema drops articles_url_key constraint and index', async () => {
   );
 });
 
+test('ensureSchema installs article embedding column when pgvector is available', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { resolve, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const storageSource = readFileSync(resolve(__dirname, '..', 'server', 'storage.js'), 'utf-8');
+
+  assert.ok(
+    storageSource.includes('CREATE EXTENSION IF NOT EXISTS vector'),
+    'ensureSchema should enable pgvector when the database supports it'
+  );
+  assert.ok(
+    storageSource.includes('ALTER TABLE articles ADD COLUMN IF NOT EXISTS embedding vector(1024)'),
+    'ensureSchema should add the articles.embedding vector column'
+  );
+  assert.ok(
+    storageSource.includes('idx_articles_embedding_hnsw'),
+    'ensureSchema should add an HNSW index for article embeddings'
+  );
+});
+
 test('pipeline correlateEvents.js upserts event before linking articles (FK ordering)', async () => {
   const { readFileSync } = await import('node:fs');
   const { resolve, dirname } = await import('node:path');

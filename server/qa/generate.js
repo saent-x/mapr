@@ -18,11 +18,28 @@ const QA_SCHEMA = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'ai', 'schemas', 'qa.schema.json'), 'utf8'),
 );
 
-const MAX_PRIOR_MESSAGES = 6;          // includes both user + assistant turns
+const MAX_PRIOR_MESSAGES = 4;          // includes both user + assistant turns
 const MAX_QUESTION_CHARS = 4000;
-const MAX_EXCERPT_PER_CITATION = 360;
+const MAX_EXCERPT_PER_CITATION = 220;
+const MAX_QA_CITATIONS = 4;
+const DEFAULT_QA_MAX_TOKENS = 384;
+const DEFAULT_QA_GENERATE_TIMEOUT_MS = 45_000;
 
 function clamp(s, n) { return String(s || '').slice(0, n); }
+
+function normalizeConversationText(question) {
+  return String(question || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s'?]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function shouldBypassCorpusRetrieval(question) {
+  const cleaned = normalizeConversationText(question);
+  if (!cleaned || cleaned.length > 80) return false;
+  return /^(hi|hello|hey|yo|howdy|good morning|good afternoon|good evening|thanks|thank you|thx|cheers|ok|okay|cool|got it|how are you\??)$/.test(cleaned);
+}
 
 function trimPriorMessages(messages = []) {
   if (!messages.length) return [];
@@ -30,12 +47,12 @@ function trimPriorMessages(messages = []) {
     .slice(-MAX_PRIOR_MESSAGES)
     .map((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: clamp(m.content, 1200),
+      content: clamp(m.content, 500),
     }));
 }
 
 function trimRetrieved(retrieved = []) {
-  return retrieved.slice(0, 8).map((r, i) => ({
+  return retrieved.slice(0, MAX_QA_CITATIONS).map((r, i) => ({
     index: i + 1,
     articleId: r.articleId,
     title: clamp(r.title, 200),
@@ -50,17 +67,21 @@ function trimRetrieved(retrieved = []) {
 }
 
 function buildInput({ question, retrieved, priorMessages }) {
+  const citations = trimRetrieved(retrieved);
+  const evidenceInstruction = citations.length
+    ? 'Answer using ONLY the provided Mapr corpus citations.'
+    : 'No Mapr corpus citations were retrieved for this turn. For factual questions, do not answer from model memory; explain the evidence gap and ask for a narrower Mapr corpus question. For non-factual conversational messages, respond naturally without inventing facts.';
   return {
     question: clamp(question, MAX_QUESTION_CHARS),
     prior_messages: trimPriorMessages(priorMessages),
-    citations: trimRetrieved(retrieved),
+    citations,
     current_date: new Date().toISOString().slice(0, 10),
     instructions: [
-      'Answer using ONLY the provided Mapr corpus citations.',
+      evidenceInstruction,
       'Do not use general world knowledge or model training data to fill gaps.',
-      'Reference sources inline with [1], [2]… matching the citations array.',
+      'When citations are available, reference sources inline with [1], [2]… matching the citations array.',
       'If the citations do not cover the question, say exactly what is missing.',
-      'Format for scanning: a short bottom line first, then compact bullets only when useful.',
+      'Keep the answer concise: a short bottom line first, then compact bullets only when useful.',
       'Do not include uncited factual claims.',
     ].join(' '),
   };
@@ -81,7 +102,7 @@ function coerceOutput(raw) {
       .filter((c) => c && typeof c.articleId === 'string')
       .slice(0, 12)
       .map((c, i) => ({
-        index: Number.isFinite(c.index) ? c.index : i + 1,
+        index: i + 1,
         articleId: c.articleId,
         quote: typeof c.quote === 'string' ? clamp(c.quote, 240) : null,
       })),
@@ -102,7 +123,7 @@ function enrichCitations(rawCitations, retrieved) {
     const meta = byId.get(cite.articleId);
     if (!meta) continue;
     out.push({
-      index: cite.index || nextIndex,
+      index: nextIndex,
       articleId: meta.articleId,
       eventId: meta.eventId || null,
       title: meta.title,
@@ -115,60 +136,53 @@ function enrichCitations(rawCitations, retrieved) {
   return out;
 }
 
-function noContextAnswer() {
-  return {
-    answer: "I couldn't find enough Mapr corpus evidence to answer that. Try broadening the time window, turning off the current filter, or asking about a named place, event, source, or actor from the latest ingest.",
-    citations: [],
-    modelUsed: 'retrieval-only',
-    tokensIn: 0,
-    tokensOut: 0,
-  };
+function aiGenerateError(err) {
+  const message = err?.message || 'AI generation failed';
+  const out = err instanceof Error ? err : new Error(message);
+  out.statusCode = err?.statusCode || 502;
+  out.code = err?.code || 'AI_GENERATE_FAILED';
+  return out;
 }
 
-function retrievalOnlyFallback(retrieved, modelUsed) {
-  const rawCitations = retrieved.slice(0, 4).map((r, i) => ({
-    index: i + 1,
-    articleId: r.articleId,
-  }));
-  const citations = enrichCitations(rawCitations, retrieved);
-  const lines = [
-    "I found relevant Mapr corpus matches, but the model did not return a properly cited synthesis.",
-    '',
-    ...citations.map((c) => `- ${c.title}${c.source ? ` (${c.source})` : ''} [${c.index}]`),
-  ];
-  return {
-    answer: lines.join('\n'),
-    citations,
-    modelUsed: `${modelUsed || 'unknown'}:citation-fallback`,
-    tokensIn: null,
-    tokensOut: null,
-  };
+function badModelOutputError(message) {
+  return Object.assign(new Error(message), {
+    statusCode: 502,
+    code: 'AI_BAD_QA_OUTPUT',
+  });
 }
 
 /**
  * Public entry. Returns { answer, citations, modelUsed, tokensIn, tokensOut }.
  * Throws when the AI adapter is unconfigured — the caller maps to 503.
  */
-export async function generateAnswer({ question, retrieved = [], priorMessages = [] } = {}) {
+export async function generateAnswer(
+  { question, retrieved = [], priorMessages = [] } = {},
+  { generate = aiGenerate } = {},
+) {
   if (!question || !String(question).trim()) {
     throw Object.assign(new Error('question required'), { statusCode: 400 });
   }
-  if (!retrieved.length) {
-    return noContextAnswer();
-  }
   const input = buildInput({ question, retrieved, priorMessages });
-  const result = await aiGenerate({
-    task: 'qa',
-    input,
-    schema: QA_SCHEMA,
-    maxTokens: 640,
-    temperature: 0.2,
-    timeoutMs: Number(process.env.MAPR_AI_QA_GENERATE_TIMEOUT_MS || 25_000),
-  });
+  let result;
+  try {
+    result = await generate({
+      task: 'qa',
+      input,
+      schema: QA_SCHEMA,
+      maxTokens: Number(process.env.MAPR_AI_QA_MAX_TOKENS || DEFAULT_QA_MAX_TOKENS),
+      temperature: 0.2,
+      timeoutMs: Number(process.env.MAPR_AI_QA_GENERATE_TIMEOUT_MS || DEFAULT_QA_GENERATE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw aiGenerateError(err);
+  }
   const coerced = coerceOutput(result?.output);
   const citations = enrichCitations(coerced.citations, retrieved);
-  if (!coerced.answer.trim() || citations.length === 0) {
-    return retrievalOnlyFallback(retrieved, result?.model || 'unknown');
+  if (!coerced.answer.trim()) {
+    throw badModelOutputError('AI response did not include an answer');
+  }
+  if (retrieved.length > 0 && citations.length === 0) {
+    throw badModelOutputError('AI response did not include supported citations');
   }
   return {
     answer: coerced.answer.trim(),
@@ -182,9 +196,14 @@ export async function generateAnswer({ question, retrieved = [], priorMessages =
 export const __test__ = {
   trimPriorMessages,
   trimRetrieved,
+  shouldBypassCorpusRetrieval,
   buildInput,
   coerceOutput,
   enrichCitations,
-  noContextAnswer,
-  retrievalOnlyFallback,
+  aiGenerateError,
+  badModelOutputError,
+  DEFAULT_QA_MAX_TOKENS,
+  DEFAULT_QA_GENERATE_TIMEOUT_MS,
 };
+
+export { shouldBypassCorpusRetrieval };

@@ -25,6 +25,9 @@ const SEARCH_STOPWORDS = new Set([
   'which', 'with', 'would',
 ]);
 
+const EMBEDDING_COLUMN_RECHECK_MS = 60_000;
+let embeddingColumnCache = { exists: null, checkedAt: 0 };
+
 function vectorLiteral(vec) {
   if (!Array.isArray(vec) || !vec.length) {
     throw new Error('retrieve: empty embedding vector from AI worker');
@@ -116,12 +119,48 @@ function mapRetrievedRow(row, retrievalMode) {
   };
 }
 
+function isMissingEmbeddingColumnError(err) {
+  return err?.code === '42703' && /embedding/i.test(String(err?.message || ''));
+}
+
+async function hasArticleEmbeddingColumn(db) {
+  const now = Date.now();
+  if (
+    embeddingColumnCache.exists != null
+    && now - embeddingColumnCache.checkedAt < EMBEDDING_COLUMN_RECHECK_MS
+  ) {
+    return embeddingColumnCache.exists;
+  }
+
+  try {
+    const { rows } = await db.query(`
+      SELECT EXISTS (
+        SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'articles'
+            AND column_name = 'embedding'
+      ) AS exists
+    `);
+    const exists = Boolean(rows?.[0]?.exists);
+    embeddingColumnCache = { exists, checkedAt: now };
+    return exists;
+  } catch {
+    embeddingColumnCache = { exists: false, checkedAt: now };
+    return false;
+  }
+}
+
 async function retrieveSemantic(cleanQuestion, {
   limit,
   timeWindowHours,
   region,
   minSimilarity,
 }) {
+  const db = await ensureDatabase();
+  if (!(await hasArticleEmbeddingColumn(db))) {
+    return [];
+  }
+
   const embedRes = await aiEmbed({
     inputs: [cleanQuestion],
     normalize: true,
@@ -133,7 +172,6 @@ async function retrieveSemantic(cleanQuestion, {
   }
   const literal = vectorLiteral(vec);
 
-  const db = await ensureDatabase();
   const params = [literal, limit];
   const conditions = ['a.embedding IS NOT NULL'];
   addScopeFilters(conditions, params, { timeWindowHours, region });
@@ -302,6 +340,9 @@ export async function retrieveTopK(question, {
       minSimilarity,
     });
   } catch (err) {
+    if (isMissingEmbeddingColumnError(err)) {
+      embeddingColumnCache = { exists: false, checkedAt: Date.now() };
+    }
     semanticError = err;
   }
 
@@ -327,5 +368,6 @@ export const __test__ = {
   vectorLiteral,
   buildExcerpt,
   buildSearchTerms,
+  isMissingEmbeddingColumnError,
   mergeRetrieved,
 };
