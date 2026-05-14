@@ -522,25 +522,17 @@
       "resolved": "Resolved"
     }
   },
-  "beat": {
-    "title": "Your beat",
-    "subtitle": "Describe your beat in plain English. New articles are scored semantically against your description — the top matches land in your digest and the watchlist surface.",
-    "placeholder": "I cover Central Asian gas pipelines, Russia-China energy ties, and sanctions evasion in shadow tanker fleets.",
-    "save": "Save beat",
-    "saving": "Saving…",
-    "saved": "Saved",
-    "delete": "Remove",
-    "deleting": "Removing…",
-    "removed": "Beat removed.",
-    "lastRefreshed": "Last refreshed {{relative}}",
-    "emptyTitle": "No beat set yet",
-    "emptyBody": "Save a beat description to start getting semantically-matched articles in your digest.",
-    "matchesHeading": "Recent matches",
-    "matchesEmpty": "No matches in the last 7 days at similarity ≥ 0.5.",
-    "matchSimilarity": "{{score}}% match",
-    "errorTooShort": "Beat description needs at least 12 characters.",
-    "errorNotConfiguredTitle": "AI service offline",
-    "errorNotConfiguredBody": "Couldn't compute your beat embedding right now. Try again in a minute."
+  "contradictions": {
+    "title": "Sources disagree on…",
+    "notRunYet": "AI hasn't extracted contradictions yet for this event. Run it once and the result is cached until the story updates.",
+    "generate": "Extract contradictions",
+    "regenerate": "Regenerate",
+    "generating": "Working…",
+    "notConfigured": "AI service offline — couldn't run the extractor.",
+    "none": "Sources broadly agree on the facts.",
+    "support": "Support",
+    "refute": "Disagree",
+    "unclear": "Don't say"
   },
   "credibility": {
     "corroborated": "Corroborated",
