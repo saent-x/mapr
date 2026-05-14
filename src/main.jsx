@@ -20,6 +20,8 @@ const HealthPage = lazy(() => import('./pages/HealthPage.jsx'))
 const AdminPage = lazy(() => import('./pages/AdminPage.jsx'))
 const EntityExplorerPage = lazy(() => import('./pages/EntityExplorerPage.jsx'))
 const TrendAnalysisPage = lazy(() => import('./pages/TrendAnalysisPage.jsx'))
+const ArcsPage = lazy(() => import('./pages/ArcsPage.jsx'))
+const ArcDetailPage = lazy(() => import('./pages/ArcDetailPage.jsx'))
 const IntelPage = lazy(() => import('./pages/IntelPage.jsx'))
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
 const HistoricalQueriesPage = lazy(() => import('./pages/HistoricalQueriesPage.jsx'))
@@ -52,6 +54,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path="/account/billing" element={<Suspense fallback={<PageLoadingFallback />}><AccountPage /></Suspense>} />
             <Route path="/entities" element={<Suspense fallback={<PageLoadingFallback />}><EntityExplorerPage /></Suspense>} />
             <Route path="/trends" element={<Suspense fallback={<PageLoadingFallback />}><TrendAnalysisPage /></Suspense>} />
+            <Route path="/arcs" element={<Suspense fallback={<PageLoadingFallback />}><ArcsPage /></Suspense>} />
+            <Route path="/arcs/:id" element={<Suspense fallback={<PageLoadingFallback />}><ArcDetailPage /></Suspense>} />
             <Route path="/intel" element={<Suspense fallback={<PageLoadingFallback />}><IntelPage /></Suspense>} />
             <Route path="/event/:id" element={<Suspense fallback={<PageLoadingFallback />}><EventDetailPage /></Suspense>} />
             <Route path="/v/:token" element={<Suspense fallback={<PageLoadingFallback />}><SharedViewPage /></Suspense>} />

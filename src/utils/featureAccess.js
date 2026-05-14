@@ -74,6 +74,13 @@ export const FEATURE_ACCESS_CATALOG = [
     defaultTier: FEATURE_TIER_FREE,
   },
   {
+    id: 'narrativeArcs',
+    label: 'Narrative arcs',
+    description: 'Multi-event story-line landing pages auto-discovered from the corpus.',
+    category: 'Analysis',
+    defaultTier: FEATURE_TIER_FREE,
+  },
+  {
     id: 'aiQa',
     label: 'AI Q&A agent',
     description: 'Conversational search over the news corpus with inline citations. 10 messages / 30d on Free, 200 on Pro.',

@@ -10109,7 +10109,6 @@ h1, h2, h3, h4, h5, h6 {
 .news-card-image {
   border-color: transparent;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-<<<<<<< HEAD
 /* ── Event contradictions (D3) ──────────────────────────────────────── */
 .contradictions-empty {
   border: 1px dashed var(--line);
@@ -10119,7 +10118,6 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   gap: 8px;
   background: var(--bg-2);
-=======
 
 /* ── Entity dossier panel (D5) ──────────────────────────────────────── */
 .entity-dossier {
@@ -10203,7 +10201,6 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   font-size: 11px;
   color: var(--sev-red);
->>>>>>> f833f6f (feat(d5): auto-generated entity dossiers)
 }
 .contradictions-empty p { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
 .contradictions-section {
@@ -10417,6 +10414,98 @@ h1, h2, h3, h4, h5, h6 {
   margin: 4px 0 0;
   padding-left: 20px;
   font-size: 13px;
+/* ── Narrative arcs (D4) ────────────────────────────────────────────── */
+.arcs-page { padding: 32px 28px; max-width: 1100px; margin: 0 auto; }
+.arcs-page-head { margin-bottom: 24px; }
+.arcs-page-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  margin: 0 0 4px;
+  letter-spacing: 0.04em;
+}
+.arcs-page-sub { color: var(--ink-2); margin: 0; line-height: 1.5; }
+.arcs-empty {
+  border: 1px dashed var(--line);
+  border-radius: 4px;
+  padding: 32px;
+  color: var(--ink-2);
+  text-align: center;
+}
+.arcs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.arc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-2);
+  text-decoration: none;
+  color: var(--ink-0);
+  transition: border-color 120ms;
+}
+.arc-card:hover { border-color: var(--ink-2); }
+.arc-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+.arc-card-status {
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  padding: 1px 5px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.arc-card-status[data-status="active"] { color: var(--amber); border-color: var(--amber); }
+.arc-card-status[data-status="dormant"] { color: var(--ink-3); }
+.arc-card-status[data-status="resolved"] { color: var(--sev-green); border-color: var(--sev-green); }
+.arc-card-name { margin: 0; font-size: 14px; letter-spacing: 0.02em; color: var(--ink-0); }
+.arc-card-summary { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-1); }
+.arc-card-foot { color: var(--ink-3); }
+
+.arc-detail-page { padding: 32px 28px; max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.arc-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--ff-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  text-decoration: none;
+  width: fit-content;
+}
+.arc-detail-back:hover { color: var(--ink-0); }
+.arc-detail-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 22px;
+  margin: 0;
+}
+.arc-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--ink-2);
+}
+.arc-detail-summary { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--ink-1); }
+.arc-detail-events-head { margin: 0 0 8px; color: var(--ink-2); letter-spacing: 0.1em; }
+.arc-detail-event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -10459,3 +10548,31 @@ h1, h2, h3, h4, h5, h6 {
 }
 .why-now-precedents a { color: var(--cyan); text-decoration: none; }
 .why-now-precedents a:hover { text-decoration: underline; }
+.arc-detail-event-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 8px 10px;
+  background: var(--bg-2);
+  text-decoration: none;
+  color: var(--ink-0);
+}
+.arc-detail-event-link:hover { border-color: var(--ink-2); }
+.arc-detail-event-title { flex: 1; font-size: 13px; }
+.arc-detail-event-meta { color: var(--ink-3); display: inline-flex; gap: 4px; align-items: center; }
+
+.event-arc-tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  color: var(--ink-2);
+  margin: 4px 0 8px;
+}
+.event-arc-tag {
+  color: var(--cyan);
+  text-decoration: none;
+}
+.event-arc-tag:hover { text-decoration: underline; }

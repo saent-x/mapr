@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Network, TrendingUp, MapPin } from 'lucide-react';
+import { Network, TrendingUp, MapPin, Layers } from 'lucide-react';
 import BrandMark from './BrandMark';
 import Header from './Header';
 import MobileBottomNav from './MobileBottomNav';
@@ -181,6 +181,14 @@ export default function Layout() {
           >
             <TrendingUp size={18} aria-hidden />
             <span className="side-label">{t('nav.trends')}</span>
+          </NavLink>
+          <NavLink
+            to="/arcs"
+            className={({ isActive }) => `layout-nav-link${isActive ? ' active' : ''}`}
+            title={t('nav.arcs', 'Arcs')}
+          >
+            <Layers size={18} aria-hidden />
+            <span className="side-label">{t('nav.arcs', 'Arcs')}</span>
           </NavLink>
         </nav>
 

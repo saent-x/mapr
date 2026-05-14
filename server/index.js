@@ -113,18 +113,22 @@ import {
 import { generateBrief, readLatestBrief } from './briefs.js';
 import { readEventById } from './storage.js';
 import {
-<<<<<<< HEAD
   generateEntityDossier,
   readLatestDossier,
   normalizeEntityKey,
 } from './entityDossiers.js';
-=======
+import {
   readLatestReporterPrompt,
   generateReporterPromptForEvent,
   readLatestWhyNow,
   generateWhyNowForEvent,
 } from './eventInsights.js';
->>>>>>> 1db7277 (feat(d6,d7): reporter prompt + why-now context cards on event detail)
+import {
+  runNarrativeArcSweep,
+  listActiveArcs,
+  readArc,
+  readArcsForEvent,
+} from './narrativeArcs.js';
 import {
   createConversation as createQaConversation,
   listConversations as listQaConversations,
@@ -1255,6 +1259,61 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    // ── D4: narrative arcs ──────────────────────────────────────────────
+    if (request.method === 'GET' && url.pathname === '/api/arcs') {
+      try {
+        const limit = Math.max(1, Math.min(48, Number(url.searchParams.get('limit')) || 24));
+        const status = url.searchParams.get('status') || 'active';
+        const arcs = await withTimeout(() => listActiveArcs({ limit, status }));
+        sendJson(response, 200, { arcs });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && /^\/api\/arcs\/[^/]+$/.test(url.pathname)) {
+      try {
+        const arcId = url.pathname.split('/')[3];
+        const arc = await withTimeout(() => readArc(arcId));
+        if (!arc) { sendJson(response, 404, { error: 'arc not found' }); return; }
+        sendJson(response, 200, { arc });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && /^\/api\/events\/[^/]+\/arcs$/.test(url.pathname)) {
+      try {
+        const eventId = url.pathname.split('/')[3];
+        const arcs = await withTimeout(() => readArcsForEvent(eventId));
+        sendJson(response, 200, { arcs });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/api/admin/arcs/refresh') {
+      if (!adminAuthorized(request)) { sendJson(response, 401, { error: 'admin required' }); return; }
+      try {
+        const dryRun = url.searchParams.get('dry') === '1';
+        const out = await withTimeout(
+          () => runNarrativeArcSweep({ dryRun }),
+          120_000,
+        );
+        sendJson(response, 200, out);
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
     if (request.method === 'GET' && url.pathname.startsWith('/api/events/') && url.pathname.endsWith('/credibility')) {
       try {
         const id = url.pathname.replace(/^\/api\/events\//, '').replace(/\/credibility$/, '');
@@ -1812,6 +1871,21 @@ server.listen(PORT, HOST, async () => {
       });
     }, DAILY_DIGEST_INTERVAL_MS).unref();
     log.info('daily_digest_sweep_started', { intervalMs: DAILY_DIGEST_INTERVAL_MS });
+  }
+
+  // D4: narrative arc sweep — runs every 6 h. No-ops cleanly when the
+  // AI worker is unconfigured or no durable clusters exist.
+  const ARC_SWEEP_INTERVAL_MS = Number(process.env.MAPR_ARC_SWEEP_INTERVAL_MS || 6 * 60 * 60 * 1000);
+  if (ARC_SWEEP_INTERVAL_MS > 0 && process.env.DISABLE_ARC_REFRESH !== 'true') {
+    // Fire once shortly after boot (60s) so an admin can see the first
+    // result without waiting 6 h, then settle into the interval.
+    setTimeout(() => {
+      runNarrativeArcSweep().catch((err) => log.warn('arc_sweep_error_initial', { msg: err.message }));
+    }, 60_000).unref();
+    setInterval(() => {
+      runNarrativeArcSweep().catch((err) => log.warn('arc_sweep_error', { msg: err.message }));
+    }, ARC_SWEEP_INTERVAL_MS).unref();
+    log.info('arc_sweep_started', { intervalMs: ARC_SWEEP_INTERVAL_MS });
   }
 
   // Railway sleep is enabled — no keep-alive ping needed.

@@ -145,6 +145,32 @@ async function runSchemaMigration(db) {
       "modelUsed"          TEXT,
       "generatedAt"        TEXT NOT NULL
     );
+=======
+    -- D4: auto-discovered narrative arcs spanning multiple events.
+    CREATE TABLE IF NOT EXISTS narrative_arcs (
+      id              TEXT PRIMARY KEY,
+      name            TEXT NOT NULL,
+      summary         TEXT NOT NULL,
+      status          TEXT NOT NULL DEFAULT 'active',
+      "firstSeenAt"   TEXT NOT NULL,
+      "lastUpdatedAt" TEXT NOT NULL,
+      "eventCount"    INTEGER NOT NULL DEFAULT 0,
+      "modelUsed"     TEXT,
+      "createdAt"     TEXT NOT NULL DEFAULT (now()::text)
+    );
+    CREATE INDEX IF NOT EXISTS idx_narrative_arcs_status_recent
+      ON narrative_arcs (status, "lastUpdatedAt" DESC);
+
+    CREATE TABLE IF NOT EXISTS narrative_arc_events (
+      "arcId"     TEXT NOT NULL REFERENCES narrative_arcs(id) ON DELETE CASCADE,
+      "eventId"   TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      "addedAt"   TEXT NOT NULL,
+      relevance   REAL,
+      PRIMARY KEY ("arcId", "eventId")
+    );
+    CREATE INDEX IF NOT EXISTS idx_narrative_arc_events_event
+      ON narrative_arc_events ("eventId");
+>>>>>>> 9eace00 (feat(d4): narrative arc auto-discovery)
 
 =======
     -- D5: auto-generated entity dossiers, keyed on normalized name +
