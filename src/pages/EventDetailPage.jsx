@@ -19,12 +19,9 @@ const FlatMap = lazy(() => import('../components/FlatMap'));
 const SourceCredibilityPanel = lazy(() => import('../components/SourceCredibilityPanel.jsx'));
 const BriefGenerator = lazy(() => import('../components/BriefGenerator.jsx'));
 const VerificationHelper = lazy(() => import('../components/VerificationHelper.jsx'));
-<<<<<<< HEAD
 const ReporterPromptCard = lazy(() => import('../components/ReporterPromptCard.jsx'));
 const WhyNowCard = lazy(() => import('../components/WhyNowCard.jsx'));
-=======
 const EventArcTags = lazy(() => import('../components/EventArcTags.jsx'));
->>>>>>> 072f86b (feat(d4): narrative arc auto-discovery)
 
 function formatTs(ts, locale) {
   if (!ts) return '—';
