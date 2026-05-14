@@ -5,6 +5,7 @@
     "admin": "Admin",
     "entities": "Entities",
     "trends": "Trends",
+    "arcs": "Arcs",
     "intel": "Intel",
     "region": "Region",
     "expand": "Expand navigation",
@@ -726,6 +727,18 @@
     "generating": "Working…",
     "notConfigured": "AI service offline — try again later.",
     "precedentsHeading": "RELATED PRECEDENTS"
+  },
+  "arcs": {
+    "pageTitle": "Narrative arcs",
+    "pageSubtitle": "Multi-week story lines auto-discovered from your corpus. Each arc bundles related events so you can browse the bigger picture instead of clicking event-by-event.",
+    "loading": "BUILDING ARCS…",
+    "empty": "No durable arcs detected yet. Once the corpus contains a multi-event story line ≥5 events long over ≥7 days, it'll appear here.",
+    "events": "events",
+    "back": "Back to arcs",
+    "lastUpdate": "Last update",
+    "firstSeen": "First seen",
+    "eventsHeading": "EVENTS IN THIS ARC",
+    "partOf": "Part of:"
   },
   "verification": {
     "title": "Verify this story",

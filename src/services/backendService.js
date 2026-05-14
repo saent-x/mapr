@@ -267,3 +267,20 @@ export function regenerateWhyNow(eventId, { force = true } = {}) {
     auth: true,
   });
 }
+
+// ── D4: narrative arcs ────────────────────────────────────────────────
+
+export function fetchArcs({ limit = 24, status = 'active' } = {}) {
+  const p = new URLSearchParams();
+  if (limit) p.set('limit', String(limit));
+  if (status) p.set('status', status);
+  return request(`/arcs?${p.toString()}`);
+}
+
+export function fetchArc(arcId) {
+  return request(`/arcs/${encodeURIComponent(arcId)}`);
+}
+
+export function fetchEventArcs(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/arcs`);
+}
