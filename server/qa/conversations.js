@@ -232,18 +232,24 @@ export async function userMessageCountInLastDays({ user, days = 30 }) {
   const cutoff = now() - days * 24 * 3600 * 1000;
   // Pull the user's conversations (via $users reverse traversal — see the
   // top-of-file note on why forward `'owner.id'` filters don't work) plus
-  // recent user-role messages, then filter messages to owned conversations.
+  // user-role messages, then apply the time + ownership cutoff locally.
+  // The createdAt cutoff is intentionally local rather than a server-side
+  // `$gte` filter: that operator requires `qaMessages.createdAt` to be
+  // indexed in the live DB, which isn't guaranteed in every environment,
+  // and the per-user dataset is tiny (capped by the quota itself).
   const result = await db.query({
     $users: {
       qaConversations: {},
       $: { where: { id: user.id } },
     },
     qaMessages: {
-      $: { where: { role: 'user', createdAt: { $gte: cutoff } } },
+      $: { where: { role: 'user' } },
     },
   });
   const ownedIds = new Set((result?.$users?.[0]?.qaConversations || []).map((c) => c.id));
-  return (result?.qaMessages || []).filter((m) => ownedIds.has(m.conversationId)).length;
+  return (result?.qaMessages || []).filter(
+    (m) => ownedIds.has(m.conversationId) && (m.createdAt || 0) >= cutoff,
+  ).length;
 }
 
 export const __test__ = { trimTitle, MAX_CONTENT_LENGTH, MAX_TITLE_LENGTH, DEFAULT_TITLE };
