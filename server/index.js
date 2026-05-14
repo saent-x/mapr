@@ -1489,8 +1489,10 @@ const server = http.createServer(async (request, response) => {
           user, conversationId, role: 'user', content,
         });
 
-        // Read prior messages for conversational context (incl. the new user msg).
-        const priorMessages = await readQaMessages({ user, conversationId });
+        // Read only the recent turns needed for conversational context. Pulling
+        // the full chat history from InstantDB on every send adds avoidable
+        // latency to the hot path.
+        const priorMessages = await readQaMessages({ user, conversationId, limit: 12 });
 
         // Retrieval. The composite question is "<previous question if any>\n<question>"
         // for better follow-up handling.
@@ -1500,31 +1502,40 @@ const server = http.createServer(async (request, response) => {
           : content;
 
         let retrieved = [];
+        let retrievalError = null;
         try {
           retrieved = await qaRetrieveTopK(compositeQuery, {
             k: 8,
+            lexicalK: 6,
             timeWindowHours: filters.timeWindowHours || 168,
             region: filters.region || null,
             minSimilarity: 0.3,
           });
         } catch (e) {
+          retrievalError = e;
           log.warn('qa_retrieve_failed', { msg: e.message, code: e.code });
         }
 
         // Generation — falls back to Workers AI internally via ai/client.
         let assistantMessage;
         try {
-          const result = await withTimeout(() => qaGenerateAnswer({
-            question: content,
-            retrieved,
-            priorMessages,
-          }), 60_000);
+          const result = retrievalError && retrieved.length === 0
+            ? {
+                answer: "I couldn't search the Mapr corpus right now, so I won't answer from model memory. Try again after the data service recovers.",
+                citations: [],
+                modelUsed: 'retrieval-error',
+                tokensIn: 0,
+                tokensOut: 0,
+              }
+            : await withTimeout(() => qaGenerateAnswer({
+                question: content,
+                retrieved,
+                priorMessages,
+              }), 60_000);
           assistantMessage = await appendQaMessage({
             user, conversationId,
             role: 'assistant',
-            content: result.answer || (retrieved.length === 0
-              ? "I couldn't find recent coverage on that in our corpus."
-              : 'No answer was produced — please try rephrasing.'),
+            content: result.answer || "I couldn't find enough Mapr corpus evidence to answer that.",
             citations: result.citations,
             modelUsed: result.modelUsed,
             tokensIn: result.tokensIn,

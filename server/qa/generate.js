@@ -20,7 +20,7 @@ const QA_SCHEMA = JSON.parse(
 
 const MAX_PRIOR_MESSAGES = 6;          // includes both user + assistant turns
 const MAX_QUESTION_CHARS = 4000;
-const MAX_EXCERPT_PER_CITATION = 280;
+const MAX_EXCERPT_PER_CITATION = 360;
 
 function clamp(s, n) { return String(s || '').slice(0, n); }
 
@@ -41,6 +41,10 @@ function trimRetrieved(retrieved = []) {
     title: clamp(r.title, 200),
     source: clamp(r.source, 80),
     publishedAt: r.publishedAt || null,
+    eventTitle: r.eventTitle ? clamp(r.eventTitle, 220) : null,
+    eventCountry: r.eventCountry ? clamp(r.eventCountry, 80) : null,
+    eventCategory: r.eventCategory ? clamp(r.eventCategory, 80) : null,
+    retrievalMode: r.retrievalMode || null,
     excerpt: clamp(r.excerpt, MAX_EXCERPT_PER_CITATION),
   }));
 }
@@ -50,11 +54,14 @@ function buildInput({ question, retrieved, priorMessages }) {
     question: clamp(question, MAX_QUESTION_CHARS),
     prior_messages: trimPriorMessages(priorMessages),
     citations: trimRetrieved(retrieved),
+    current_date: new Date().toISOString().slice(0, 10),
     instructions: [
-      'Answer the user\'s question using ONLY the provided citations.',
+      'Answer using ONLY the provided Mapr corpus citations.',
+      'Do not use general world knowledge or model training data to fill gaps.',
       'Reference sources inline with [1], [2]… matching the citations array.',
-      'If the citations do not cover the question, say so explicitly.',
-      'Be concise: prefer 3-5 short paragraphs over a wall of text.',
+      'If the citations do not cover the question, say exactly what is missing.',
+      'Format for scanning: a short bottom line first, then compact bullets only when useful.',
+      'Do not include uncited factual claims.',
     ].join(' '),
   };
 }
@@ -108,6 +115,36 @@ function enrichCitations(rawCitations, retrieved) {
   return out;
 }
 
+function noContextAnswer() {
+  return {
+    answer: "I couldn't find enough Mapr corpus evidence to answer that. Try broadening the time window, turning off the current filter, or asking about a named place, event, source, or actor from the latest ingest.",
+    citations: [],
+    modelUsed: 'retrieval-only',
+    tokensIn: 0,
+    tokensOut: 0,
+  };
+}
+
+function retrievalOnlyFallback(retrieved, modelUsed) {
+  const rawCitations = retrieved.slice(0, 4).map((r, i) => ({
+    index: i + 1,
+    articleId: r.articleId,
+  }));
+  const citations = enrichCitations(rawCitations, retrieved);
+  const lines = [
+    "I found relevant Mapr corpus matches, but the model did not return a properly cited synthesis.",
+    '',
+    ...citations.map((c) => `- ${c.title}${c.source ? ` (${c.source})` : ''} [${c.index}]`),
+  ];
+  return {
+    answer: lines.join('\n'),
+    citations,
+    modelUsed: `${modelUsed || 'unknown'}:citation-fallback`,
+    tokensIn: null,
+    tokensOut: null,
+  };
+}
+
 /**
  * Public entry. Returns { answer, citations, modelUsed, tokensIn, tokensOut }.
  * Throws when the AI adapter is unconfigured — the caller maps to 503.
@@ -116,18 +153,25 @@ export async function generateAnswer({ question, retrieved = [], priorMessages =
   if (!question || !String(question).trim()) {
     throw Object.assign(new Error('question required'), { statusCode: 400 });
   }
+  if (!retrieved.length) {
+    return noContextAnswer();
+  }
   const input = buildInput({ question, retrieved, priorMessages });
   const result = await aiGenerate({
     task: 'qa',
     input,
     schema: QA_SCHEMA,
-    maxTokens: 768,
+    maxTokens: 640,
     temperature: 0.2,
+    timeoutMs: Number(process.env.MAPR_AI_QA_GENERATE_TIMEOUT_MS || 25_000),
   });
   const coerced = coerceOutput(result?.output);
   const citations = enrichCitations(coerced.citations, retrieved);
+  if (!coerced.answer.trim() || citations.length === 0) {
+    return retrievalOnlyFallback(retrieved, result?.model || 'unknown');
+  }
   return {
-    answer: coerced.answer,
+    answer: coerced.answer.trim(),
     citations,
     modelUsed: result?.model || 'unknown',
     tokensIn: result?.tokens_in ?? null,
@@ -135,4 +179,12 @@ export async function generateAnswer({ question, retrieved = [], priorMessages =
   };
 }
 
-export const __test__ = { trimPriorMessages, trimRetrieved, coerceOutput, enrichCitations };
+export const __test__ = {
+  trimPriorMessages,
+  trimRetrieved,
+  buildInput,
+  coerceOutput,
+  enrichCitations,
+  noContextAnswer,
+  retrievalOnlyFallback,
+};

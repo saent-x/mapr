@@ -180,8 +180,20 @@ export default function useAgent() {
       )));
       setStatus(STATUS.IDLE);
     } catch (err) {
-      // Roll back the optimistic message.
-      cacheRef.current[convoId] = (cacheRef.current[convoId] || []).filter((m) => m.id !== tempUser.id);
+      // If the server persisted the user message before the model failed,
+      // keep that durable message in the transcript instead of making the
+      // user's prompt disappear on an AI-side error.
+      const persistedUser = err?.payload?.userMessage;
+      cacheRef.current[convoId] = (cacheRef.current[convoId] || [])
+        .filter((m) => m.id !== tempUser.id);
+      if (persistedUser?.id) {
+        cacheRef.current[convoId] = [...cacheRef.current[convoId], persistedUser];
+        setConversations((prev) => prev.map((c) => (
+          c.id === convoId
+            ? { ...c, lastMessageAt: persistedUser.createdAt || Date.now(), messageCount: (c.messageCount || 0) + 1 }
+            : c
+        )));
+      }
       setMessagesById((prev) => ({ ...prev, [convoId]: cacheRef.current[convoId] }));
 
       if (err?.status === 429 && err?.payload?.code === 'QUOTA_EXCEEDED') {

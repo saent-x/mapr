@@ -2,7 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { __test__ } from '../server/qa/generate.js';
 
-const { trimPriorMessages, trimRetrieved, coerceOutput, enrichCitations } = __test__;
+const {
+  trimPriorMessages,
+  trimRetrieved,
+  buildInput,
+  coerceOutput,
+  enrichCitations,
+  noContextAnswer,
+  retrievalOnlyFallback,
+} = __test__;
 
 test('trimPriorMessages caps at 6 and normalizes role', () => {
   const out = trimPriorMessages([
@@ -24,13 +32,37 @@ test('trimPriorMessages caps at 6 and normalizes role', () => {
 
 test('trimRetrieved enforces excerpt cap + index numbering', () => {
   const out = trimRetrieved([
-    { articleId: 'a', title: 'T', source: 'src', excerpt: 'x'.repeat(500) },
+    {
+      articleId: 'a',
+      title: 'T',
+      source: 'src',
+      excerpt: 'x'.repeat(500),
+      eventTitle: 'Event T',
+      eventCountry: 'Yemen',
+      eventCategory: 'Conflict',
+      retrievalMode: 'hybrid',
+    },
     { articleId: 'b', title: 'U', source: 'src', excerpt: 'y' },
   ]);
   assert.equal(out.length, 2);
   assert.equal(out[0].index, 1);
   assert.equal(out[1].index, 2);
-  assert.equal(out[0].excerpt.length, 280);
+  assert.equal(out[0].excerpt.length, 360);
+  assert.equal(out[0].eventTitle, 'Event T');
+  assert.equal(out[0].eventCountry, 'Yemen');
+  assert.equal(out[0].eventCategory, 'Conflict');
+  assert.equal(out[0].retrievalMode, 'hybrid');
+});
+
+test('buildInput explicitly forbids model-memory answers', () => {
+  const input = buildInput({
+    question: 'What happened?',
+    retrieved: [{ articleId: 'a', title: 'T', source: 'src', excerpt: 'excerpt' }],
+    priorMessages: [],
+  });
+  assert.match(input.instructions, /ONLY the provided Mapr corpus citations/);
+  assert.match(input.instructions, /Do not use general world knowledge/);
+  assert.equal(input.citations.length, 1);
 });
 
 test('coerceOutput defaults on bad input', () => {
@@ -60,4 +92,21 @@ test('enrichCitations drops unknown articleIds, attaches eventId', () => {
   assert.equal(out[0].eventId, 'e1');
   assert.equal(out[1].eventId, null);
   assert.equal(out[0].quote, 'q');
+});
+
+test('noContextAnswer returns retrieval-only guardrail response', () => {
+  const out = noContextAnswer();
+  assert.equal(out.modelUsed, 'retrieval-only');
+  assert.deepEqual(out.citations, []);
+  assert.match(out.answer, /Mapr corpus evidence/);
+});
+
+test('retrievalOnlyFallback cites retrieved rows when model output is unusable', () => {
+  const out = retrievalOnlyFallback([
+    { articleId: 'a1', eventId: 'e1', title: 'T1', source: 's1', url: 'http://x/1' },
+    { articleId: 'a2', eventId: null, title: 'T2', source: 's2', url: 'http://x/2' },
+  ], 'model-x');
+  assert.equal(out.citations.length, 2);
+  assert.match(out.answer, /\[1\]/);
+  assert.match(out.modelUsed, /citation-fallback/);
 });
