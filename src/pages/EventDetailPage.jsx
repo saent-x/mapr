@@ -19,6 +19,8 @@ const FlatMap = lazy(() => import('../components/FlatMap'));
 const SourceCredibilityPanel = lazy(() => import('../components/SourceCredibilityPanel.jsx'));
 const BriefGenerator = lazy(() => import('../components/BriefGenerator.jsx'));
 const VerificationHelper = lazy(() => import('../components/VerificationHelper.jsx'));
+const ReporterPromptCard = lazy(() => import('../components/ReporterPromptCard.jsx'));
+const WhyNowCard = lazy(() => import('../components/WhyNowCard.jsx'));
 
 function formatTs(ts, locale) {
   if (!ts) return '—';
@@ -451,6 +453,14 @@ export default function EventDetailPage() {
 
           <Suspense fallback={null}>
             <VerificationHelper event={event} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <ReporterPromptCard event={event} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <WhyNowCard event={event} />
           </Suspense>
 
           {hasCoords && (

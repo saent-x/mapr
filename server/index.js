@@ -113,10 +113,18 @@ import {
 import { generateBrief, readLatestBrief } from './briefs.js';
 import { readEventById } from './storage.js';
 import {
+<<<<<<< HEAD
   generateEntityDossier,
   readLatestDossier,
   normalizeEntityKey,
 } from './entityDossiers.js';
+=======
+  readLatestReporterPrompt,
+  generateReporterPromptForEvent,
+  readLatestWhyNow,
+  generateWhyNowForEvent,
+} from './eventInsights.js';
+>>>>>>> 1db7277 (feat(d6,d7): reporter prompt + why-now context cards on event detail)
 import {
   createConversation as createQaConversation,
   listConversations as listQaConversations,
@@ -1160,6 +1168,82 @@ const server = http.createServer(async (request, response) => {
           }
           if (e?.code === 'NO_ARTICLES') {
             sendJson(response, 409, { error: e.message, code: 'NO_ARTICLES' });
+            return;
+          }
+          throw e;
+        }
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── D6: reporter prompt ─────────────────────────────────────────────
+    if (request.method === 'GET' && /^\/api\/events\/[^/]+\/reporter-prompt$/.test(url.pathname)) {
+      try {
+        const eventId = url.pathname.split('/')[3];
+        const row = await withTimeout(() => readLatestReporterPrompt(eventId));
+        sendJson(response, 200, row || { questions: [], reporters: [], generatedAt: null });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+    if (request.method === 'POST' && /^\/api\/events\/[^/]+\/reporter-prompt$/.test(url.pathname)) {
+      try {
+        await requireUser(request);
+        const eventId = url.pathname.split('/')[3];
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body OK */ }
+        try {
+          const row = await withTimeout(
+            () => generateReporterPromptForEvent({ eventId, force: Boolean(body.force) }),
+            60_000,
+          );
+          sendJson(response, 200, row);
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, { error: e.message, code: 'AI_NOT_CONFIGURED' });
+            return;
+          }
+          throw e;
+        }
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── D7: why-now context ─────────────────────────────────────────────
+    if (request.method === 'GET' && /^\/api\/events\/[^/]+\/why-now$/.test(url.pathname)) {
+      try {
+        const eventId = url.pathname.split('/')[3];
+        const row = await withTimeout(() => readLatestWhyNow(eventId));
+        sendJson(response, 200, row || { context: '', precedents: [], generatedAt: null });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+    if (request.method === 'POST' && /^\/api\/events\/[^/]+\/why-now$/.test(url.pathname)) {
+      try {
+        await requireUser(request);
+        const eventId = url.pathname.split('/')[3];
+        let body = {};
+        try { body = await readJsonBody(request); } catch { /* empty body OK */ }
+        try {
+          const row = await withTimeout(
+            () => generateWhyNowForEvent({ eventId, force: Boolean(body.force) }),
+            60_000,
+          );
+          sendJson(response, 200, row);
+        } catch (e) {
+          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+            sendJson(response, 503, { error: e.message, code: 'AI_NOT_CONFIGURED' });
             return;
           }
           throw e;

@@ -241,3 +241,29 @@ export function regenerateEntityDossier(name, { type = 'entity', force = true } 
     auth: true,
   });
 }
+
+// ── D6/D7: per-event insight cards ───────────────────────────────────
+
+export function fetchReporterPrompt(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/reporter-prompt`);
+}
+export function regenerateReporterPrompt(eventId, { force = true } = {}) {
+  return request(`/events/${encodeURIComponent(eventId)}/reporter-prompt`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force }),
+    auth: true,
+  });
+}
+
+export function fetchWhyNow(eventId) {
+  return request(`/events/${encodeURIComponent(eventId)}/why-now`);
+}
+export function regenerateWhyNow(eventId, { force = true } = {}) {
+  return request(`/events/${encodeURIComponent(eventId)}/why-now`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ force }),
+    auth: true,
+  });
+}

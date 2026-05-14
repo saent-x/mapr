@@ -10379,3 +10379,83 @@ h1, h2, h3, h4, h5, h6 {
 .beat-match-title:hover { text-decoration: underline; }
 .beat-match-score { color: var(--cyan); }
 .beat-match-meta { color: var(--ink-3); }
+
+/* ── Reporter prompt + why-now (D6, D7) ─────────────────────────────── */
+.event-detail-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.reporter-prompt-section,
+.why-now-section { display: flex; flex-direction: column; gap: 8px; }
+.reporter-prompt-loading,
+.reporter-prompt-empty,
+.why-now-empty {
+  font-size: 12px;
+  color: var(--ink-2);
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  padding: 12px;
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.reporter-prompt-empty p,
+.why-now-empty p { margin: 0; line-height: 1.5; }
+.reporter-prompt-subhead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-2);
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.reporter-prompt-questions {
+  margin: 4px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reporter-prompt-questions li strong { color: var(--ink-0); }
+.reporter-prompt-questions .mono { color: var(--ink-2); }
+.reporter-prompt-reporters {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.reporter-prompt-reporters li {
+  border-left: 2px solid var(--cyan);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.reporter-prompt-error,
+.why-now-error {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sev-red);
+}
+.why-now-context {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-0);
+  line-height: 1.55;
+}
+.why-now-precedents { margin-top: 6px; }
+.why-now-precedents ul {
+  list-style: disc;
+  margin: 4px 0 0 18px;
+  padding: 0;
+  font-size: 12px;
+}
+.why-now-precedents a { color: var(--cyan); text-decoration: none; }
+.why-now-precedents a:hover { text-decoration: underline; }

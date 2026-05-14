@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["context"],
+  "properties": {
+    "context": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 800,
+      "description": "Two to four sentences explaining what trend this event continues and what precedent it mirrors. No new facts beyond what the prior coverage supports."
+    },
+    "precedents": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["label"],
+        "additionalProperties": false,
+        "properties": {
+          "label":     { "type": "string", "minLength": 4, "maxLength": 160 },
+          "approxDate": { "type": "string", "maxLength": 32 },
+          "eventId":   { "type": "string", "maxLength": 200 }
+        }
+      }
+    }
+  }
+}
