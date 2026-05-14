@@ -201,9 +201,18 @@ const useNewsStore = create<NewsState>()((set, get) => ({
       return;
     }
 
-    // Both backend and client-GDELT failed — there is no data. Render an
-    // honest error state with retry. We do NOT substitute mock entries.
-    set({ liveNews: null, dataSource: 'unavailable', dataError: result.errorMessage });
+    // Both backend and client-GDELT failed for this tick. Don't wipe
+    // liveNews if we already had data — a single transient network blip
+    // (or autoRefresh tick coinciding with backend slowness) would blank
+    // the map and lose all severity/marker overlays on /. Surface the
+    // failure via dataSource + dataError so DataErrorBanner shows; keep
+    // last-known liveNews until a subsequent tick succeeds or the user
+    // hits refresh. We do NOT substitute mock entries.
+    set((s) => ({
+      ...(s.liveNews ? {} : { liveNews: null }),
+      dataSource: 'unavailable',
+      dataError: result.errorMessage,
+    }));
   },
 
   /** Force a full refresh cycle. */
