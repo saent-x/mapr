@@ -23,11 +23,12 @@ function trimTitle(raw) {
   return cleaned || DEFAULT_TITLE;
 }
 
-function ownerRefForUser(user) {
-  // Match the pattern used by useBookmarks / useSavedViews — link via
-  // the $users id. Admin SDK accepts the raw user id string here.
-  return user.id;
-}
+// NOTE on $users links: the InstantDB admin SDK silently no-ops
+// `db.tx.qaConversations[id].link({ owner: userId })` when the linked
+// namespace is `$users`, and the inverse `'owner.id': user.id` filter
+// can't traverse into `$users` from the qaConversations side. We must
+// (1) write the link from the `$users` side and (2) read via the
+// reverse `$users.qaConversations` traversal for the link to be honored.
 
 /**
  * Create a new conversation linked to the user. Returns the persisted row.
@@ -46,11 +47,10 @@ export async function createConversation({ user, title, useCurrentFilters = fals
     messageCount: 0,
     useCurrentFilters: Boolean(useCurrentFilters),
   };
-  await db.transact(
-    db.tx.qaConversations[conversationId]
-      .update(rec)
-      .link({ owner: ownerRefForUser(user) }),
-  );
+  await db.transact([
+    db.tx.qaConversations[conversationId].update(rec),
+    db.tx.$users[user.id].link({ qaConversations: conversationId }),
+  ]);
   return { id: conversationId, ...rec };
 }
 
@@ -62,11 +62,14 @@ export async function listConversations({ user, archived = false, limit = 50 } =
   if (!user?.id) throw Object.assign(new Error('user required'), { statusCode: 401 });
   const db = getInstantDb();
   const result = await db.query({
-    qaConversations: {
-      $: { where: { 'owner.id': user.id, archived: Boolean(archived) } },
+    $users: {
+      qaConversations: {
+        $: { where: { archived: Boolean(archived) } },
+      },
+      $: { where: { id: user.id } },
     },
   });
-  const rows = result?.qaConversations || [];
+  const rows = result?.$users?.[0]?.qaConversations || [];
   return rows
     .slice()
     .sort((a, b) => (b.lastMessageAt || b.createdAt || 0) - (a.lastMessageAt || a.createdAt || 0))
@@ -91,11 +94,12 @@ export async function getConversation({ user, conversationId }) {
   if (!conversationId) throw Object.assign(new Error('conversationId required'), { statusCode: 400 });
   const db = getInstantDb();
   const result = await db.query({
-    qaConversations: {
-      $: { where: { id: conversationId, 'owner.id': user.id }, limit: 1 },
+    $users: {
+      qaConversations: { $: { where: { id: conversationId } } },
+      $: { where: { id: user.id } },
     },
   });
-  const row = result?.qaConversations?.[0];
+  const row = result?.$users?.[0]?.qaConversations?.[0];
   if (!row) throw Object.assign(new Error('conversation not found'), { statusCode: 404 });
   return row;
 }
@@ -226,18 +230,19 @@ export async function userMessageCountInLastDays({ user, days = 30 }) {
   if (!user?.id) throw Object.assign(new Error('user required'), { statusCode: 401 });
   const db = getInstantDb();
   const cutoff = now() - days * 24 * 3600 * 1000;
-  // Pull the user's conversations + their qaMessages in a single query,
-  // then filter user-role messages locally. The dataset per user stays
-  // small (capped by quota itself) so this is cheap.
+  // Pull the user's conversations (via $users reverse traversal — see the
+  // top-of-file note on why forward `'owner.id'` filters don't work) plus
+  // recent user-role messages, then filter messages to owned conversations.
   const result = await db.query({
-    qaConversations: {
-      $: { where: { 'owner.id': user.id } },
+    $users: {
+      qaConversations: {},
+      $: { where: { id: user.id } },
     },
     qaMessages: {
       $: { where: { role: 'user', createdAt: { $gte: cutoff } } },
     },
   });
-  const ownedIds = new Set((result?.qaConversations || []).map((c) => c.id));
+  const ownedIds = new Set((result?.$users?.[0]?.qaConversations || []).map((c) => c.id));
   return (result?.qaMessages || []).filter((m) => ownedIds.has(m.conversationId)).length;
 }
 
