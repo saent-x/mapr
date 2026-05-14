@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSubscriptionStore from '../stores/subscriptionStore';
 import useFilterStore from '../stores/filterStore';
 import {
@@ -39,10 +39,14 @@ function optimisticMessage(content) {
  */
 export default function useAgent() {
   const isAuthenticated = useSubscriptionStore((s) => s.isAuthenticated);
-  const currentFilters = useFilterStore((s) => ({
-    region: s.entityFilter?.iso || s.regionFilter || null,
-    timeWindowHours: filtersWindowHours(s.dateWindow),
-  }));
+  // Atomic selectors (Zustand v5 uses Object.is for equality, so returning
+  // a fresh object from one selector would trigger an infinite re-render).
+  const entityFilterIso = useFilterStore((s) => s.entityFilter?.iso || null);
+  const dateWindow = useFilterStore((s) => s.dateWindow);
+  const currentFilters = useMemo(
+    () => ({ region: entityFilterIso, timeWindowHours: filtersWindowHours(dateWindow) }),
+    [entityFilterIso, dateWindow],
+  );
 
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
