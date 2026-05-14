@@ -197,6 +197,26 @@ export function regenerateEventContradictions(eventId, { force = true } = {}) {
   });
 }
 
+// ── AI Q&A sidebar (Workstream D1) ───────────────────────────────────
+// These two exports were dropped during the D-series rebase chain; the
+// useAgent hook imports both, so without them the entire app-shell module
+// failed to parse and rendered as a blank page.
+
+export function listQaConversations({ archived = false } = {}) {
+  const params = new URLSearchParams();
+  if (archived) params.set('archived', '1');
+  return request(`/qa/conversations?${params.toString()}`, { auth: true });
+}
+
+export function createQaConversation({ title = '', useCurrentFilters = false } = {}) {
+  return request('/qa/conversations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title, useCurrentFilters }),
+    auth: true,
+  });
+}
+
 export function archiveQaConversation(conversationId) {
   return request(`/qa/conversations/${encodeURIComponent(conversationId)}`, {
     method: 'DELETE',
