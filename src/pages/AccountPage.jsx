@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { CreditCard, LogIn, Settings, UserCircle } from 'lucide-react';
 import BillingPage from './BillingPage';
+import BeatSection from '../components/account/BeatSection.jsx';
 import useAuth from '../hooks/useAuth';
 import useSubscription from '../hooks/useSubscription';
 
@@ -92,6 +93,9 @@ export default function AccountPage() {
               <p className="account-muted">
                 {t('account.preferencesBody', 'Language, theme, saved views, alerts, and bookmarks are available from the app controls and account-linked side panels. Billing lives in the Billing tab.')}
               </p>
+            </section>
+            <section className="account-panel">
+              <BeatSection />
             </section>
           </>
         ) : (

@@ -156,45 +156,29 @@ export function generateEventBrief(eventId, { force = false } = {}) {
   });
 }
 
-// ── AI Q&A sidebar (Workstream D1) ───────────────────────────────────
+// ── D2: beat-aware semantic alerts ───────────────────────────────────
 
-export function listQaConversations({ archived = false } = {}) {
-  const params = new URLSearchParams();
-  if (archived) params.set('archived', '1');
-  return request(`/qa/conversations?${params.toString()}`, { auth: true });
+export function fetchBeatProfile() {
+  return request('/me/beat', { auth: true });
 }
 
-export function createQaConversation({ title = '', useCurrentFilters = false } = {}) {
-  return request('/qa/conversations', {
-    method: 'POST',
+export function saveBeatProfile(description) {
+  return request('/me/beat', {
+    method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ title, useCurrentFilters }),
+    body: JSON.stringify({ description }),
     auth: true,
   });
 }
 
-export function archiveQaConversation(conversationId) {
-  return request(`/qa/conversations/${encodeURIComponent(conversationId)}`, {
-    method: 'DELETE',
-    auth: true,
-  });
+export function deleteBeatProfile() {
+  return request('/me/beat', { method: 'DELETE', auth: true });
 }
 
-export function fetchQaMessages(conversationId) {
-  return request(
-    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
-    { auth: true },
-  );
-}
-
-export function sendQaMessage(conversationId, { content, useCurrentFilters, filters } = {}) {
-  return request(
-    `/qa/conversations/${encodeURIComponent(conversationId)}/messages`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ content, useCurrentFilters, filters }),
-      auth: true,
-    },
-  );
+export function fetchBeatMatches({ limit = 10, minSimilarity = 0.5, windowHours = 168 } = {}) {
+  const p = new URLSearchParams();
+  if (limit) p.set('limit', String(limit));
+  if (minSimilarity) p.set('minSimilarity', String(minSimilarity));
+  if (windowHours) p.set('windowHours', String(windowHours));
+  return request(`/me/beat/matches?${p.toString()}`, { auth: true });
 }

@@ -120,6 +120,12 @@ import {
 } from './qa/conversations.js';
 import { retrieveTopK as qaRetrieveTopK } from './qa/retrieve.js';
 import { generateAnswer as qaGenerateAnswer } from './qa/generate.js';
+import {
+  readBeatProfile,
+  upsertBeatProfile,
+  deleteBeatProfile,
+} from './beats/profile.js';
+import { matchBeatForUser } from './beats/match.js';
 
 const GDELT_DOC_URL = 'https://api.gdeltproject.org/api/v2/doc/doc';
 
@@ -1374,6 +1380,71 @@ const server = http.createServer(async (request, response) => {
           subscriptionStatus: record?.subscriptionStatus || 'free',
           stripeCustomerId: record?.stripeCustomerId || null,
         });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    // ── D2: beat-aware semantic alerts ─────────────────────────────────
+    if (request.method === 'GET' && url.pathname === '/api/me/beat') {
+      try {
+        const user = await requireUser(request);
+        const profile = await withTimeout(() => readBeatProfile(user.id));
+        sendJson(response, 200, { profile: profile || null });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'PUT' && url.pathname === '/api/me/beat') {
+      try {
+        const user = await requireUser(request);
+        let body = {};
+        try { body = await readJsonBody(request); }
+        catch (e) { const { status, body: b } = classifyError(e); sendJson(response, status, b); return; }
+        const profile = await withTimeout(
+          () => upsertBeatProfile({ userId: user.id, description: body?.description }),
+          30_000,
+        );
+        sendJson(response, 200, { profile });
+      } catch (err) {
+        if (err?.code === 'AI_HOMEPC_NOT_CONFIGURED' || err?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+          sendJson(response, 503, { error: err.message, code: 'AI_NOT_CONFIGURED' });
+          return;
+        }
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE' && url.pathname === '/api/me/beat') {
+      try {
+        const user = await requireUser(request);
+        const ok = await withTimeout(() => deleteBeatProfile(user.id));
+        sendJson(response, ok ? 200 : 404, { ok });
+      } catch (err) {
+        const { status, body: b } = classifyError(err);
+        sendJson(response, status, b);
+      }
+      return;
+    }
+
+    if (request.method === 'GET' && url.pathname === '/api/me/beat/matches') {
+      try {
+        const user = await requireUser(request);
+        const limit = Math.max(1, Math.min(100, Number(url.searchParams.get('limit')) || 20));
+        const minSimilarity = Number(url.searchParams.get('minSimilarity')) || 0.5;
+        const windowHours = Number(url.searchParams.get('windowHours')) || 168;
+        const sinceIso = url.searchParams.get('since') || null;
+        const matches = await withTimeout(() => matchBeatForUser({
+          userId: user.id, limit, minSimilarity, windowHours, sinceIso,
+        }));
+        sendJson(response, 200, { matches });
       } catch (err) {
         const { status, body: b } = classifyError(err);
         sendJson(response, status, b);
