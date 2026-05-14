@@ -32,6 +32,6 @@ COPY main.py /app/main.py
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=6 --start-period=90s \
-    CMD curl -fsS http://localhost:8080/healthz || exit 1
+    CMD python -c "import os,sys,urllib.request; req=urllib.request.Request('http://localhost:8080/healthz', headers={'x-mapr-token': os.environ.get('MAPR_AI_BEARER','')}); sys.exit(0 if urllib.request.urlopen(req, timeout=3).status==200 else 1)" || exit 1
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
