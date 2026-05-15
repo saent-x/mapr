@@ -139,11 +139,7 @@ import {
   setConversationUseFilters as setQaConversationUseFilters,
   userMessageCountInLastDays as qaUserMessageCount,
 } from './qa/conversations.js';
-import { retrieveTopK as qaRetrieveTopK } from './qa/retrieve.js';
-import {
-  generateAnswer as qaGenerateAnswer,
-  shouldBypassCorpusRetrieval as qaShouldBypassCorpusRetrieval,
-} from './qa/generate.js';
+import { qa as callAiGatewayQa } from './ai/gateway.js';
 import {
   readBeatProfile,
   upsertBeatProfile,
@@ -1497,47 +1493,22 @@ const server = http.createServer(async (request, response) => {
         // latency to the hot path.
         const priorMessages = await readQaMessages({ user, conversationId, limit: 12 });
 
-        // Retrieval. The composite question is "<previous question if any>\n<question>"
-        // for better follow-up handling.
-        const lastAssistant = [...priorMessages].reverse().find((m) => m.role === 'assistant');
-        const compositeQuery = lastAssistant
-          ? `Previous answer: ${String(lastAssistant.content).slice(0, 400)}\n\nQuestion: ${content}`
-          : content;
-
-        let retrieved = [];
-        let retrievalError = null;
-        const skipRetrieval = qaShouldBypassCorpusRetrieval(content);
-        if (!skipRetrieval) {
-          try {
-            retrieved = await qaRetrieveTopK(compositeQuery, {
-              k: 8,
-              lexicalK: 6,
-              timeWindowHours: filters.timeWindowHours || 168,
-              region: filters.region || null,
-              minSimilarity: 0.3,
-            });
-          } catch (e) {
-            retrievalError = e;
-            log.warn('qa_retrieve_failed', { msg: e.message, code: e.code });
-          }
-        }
-
-        // Generation. Do not synthesize server-side answer text here; if the
-        // model cannot answer, return a structured error instead.
+        // AI/RAG call. The Mapr backend calls exactly one stable AI Gateway URL.
+        // Retrieval, embeddings, queueing/backpressure, and model generation all
+        // happen behind /v1/qa; the backend never talks to Ollama, vector search,
+        // Redis, or an internal ai-worker directly.
         let assistantMessage;
         try {
-          if (retrievalError && retrieved.length === 0) {
-            sendJson(response, 503, {
-              error: 'QA retrieval failed',
-              code: 'QA_RETRIEVAL_FAILED',
-              userMessage,
-            });
-            return;
-          }
-          const result = await withTimeout(() => qaGenerateAnswer({
+          const requestId = crypto.randomUUID();
+          const result = await withTimeout(() => callAiGatewayQa({
+            requestId,
+            conversationId,
             question: content,
-            retrieved,
             priorMessages,
+            filters: {
+              timeWindowHours: filters.timeWindowHours || 168,
+              region: filters.region || null,
+            },
           }), 60_000);
           assistantMessage = await appendQaMessage({
             user, conversationId,
@@ -1549,7 +1520,7 @@ const server = http.createServer(async (request, response) => {
             tokensOut: result.tokensOut,
           });
         } catch (e) {
-          if (e?.code === 'AI_HOMEPC_NOT_CONFIGURED' || e?.code === 'AI_WORKERSAI_NOT_CONFIGURED') {
+          if (e?.code === 'AI_NOT_CONFIGURED') {
             sendJson(response, 503, {
               error: e.message,
               code: 'AI_NOT_CONFIGURED',

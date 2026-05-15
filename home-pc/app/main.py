@@ -16,13 +16,18 @@ as the public-facing auth layer.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
+import re
 import time
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 import httpx
+import psycopg
+from psycopg.rows import dict_row
 from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -40,6 +45,23 @@ MAX_CONCURRENT_EMBED = int(os.environ.get("MAX_CONCURRENT_EMBED", "2"))
 # Keep this below the Node client's MAPR_AI_GENERATE_TIMEOUT_MS default (45s)
 # so the sidecar returns a useful JSON error instead of letting Node abort.
 OLLAMA_GENERATE_TIMEOUT_S = float(os.environ.get("OLLAMA_GENERATE_TIMEOUT_S", "40"))
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+QA_QUEUE_MAX_DEPTH = int(os.environ.get("QA_QUEUE_MAX_DEPTH", "3"))
+QA_QUEUE_WAIT_TIMEOUT_S = float(os.environ.get("QA_QUEUE_WAIT_TIMEOUT_S", "8"))
+QA_TOP_K = int(os.environ.get("QA_TOP_K", "5"))
+QA_LEXICAL_K = int(os.environ.get("QA_LEXICAL_K", "5"))
+QA_MIN_SIMILARITY = float(os.environ.get("QA_MIN_SIMILARITY", "0.30"))
+QA_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_MAX_OUTPUT_TOKENS", "500"))
+QA_HARD_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_HARD_MAX_OUTPUT_TOKENS", "700"))
+
+# Observability counters for /healthz and logs. The semaphore is the bounded
+# queue/backpressure mechanism for low-budget CPU generation: one active LLM
+# decode, at most QA_QUEUE_MAX_DEPTH requests waiting, then structured AI_BUSY.
+qa_waiting = 0
+qa_active_generations = 0
+qa_timeout_count = 0
+qa_last_success: Optional[str] = None
+qa_last_error: Optional[Dict[str, Any]] = None
 
 # Concurrency gates. The LLM is single-slot because Qwen 2.5 3B Q4 on CPU
 # does not benefit from concurrent decoding (KV cache + thread pinning
@@ -168,7 +190,39 @@ async def healthz():
         "ollama_model": OLLAMA_MODEL,
         "max_concurrent_llm": MAX_CONCURRENT_LLM,
         "max_concurrent_embed": MAX_CONCURRENT_EMBED,
+        "queue_depth": qa_waiting,
+        "active_generation_count": qa_active_generations,
+        "queue_max_depth": QA_QUEUE_MAX_DEPTH,
+        "provider": "local",
+        "model": OLLAMA_MODEL,
+        "timeout_count": qa_timeout_count,
+        "last_successful_generation": qa_last_success,
+        "last_error": qa_last_error,
     }
+
+
+@app.get("/readyz", dependencies=[Depends(require_bearer)])
+async def readyz():
+    checks: Dict[str, Any] = {"database": False, "ollama": False}
+    if DATABASE_URL:
+        try:
+            with psycopg.connect(DATABASE_URL, connect_timeout=3) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("select 1")
+                    checks["database"] = True
+        except Exception as e:
+            checks["database_error"] = str(e)[:160]
+    else:
+        checks["database_error"] = "DATABASE_URL not configured"
+    try:
+        r = await ollama_client.get("/api/tags", timeout=3.0)
+        checks["ollama"] = r.status_code == 200
+    except Exception as e:
+        checks["ollama_error"] = repr(e)[:160]
+    ok = bool(checks["database"] and checks["ollama"])
+    if not ok:
+        raise HTTPException(status_code=503, detail={"code": "AI_NOT_READY", "checks": checks})
+    return {"ok": True, "checks": checks, "model": OLLAMA_MODEL}
 
 
 @app.post("/embed", response_model=EmbedResponse, dependencies=[Depends(require_bearer)])
@@ -351,6 +405,236 @@ def _system_prompt_for(req: GenerateRequest) -> str:
     if req.schema:
         return f"{base}\n\nSCHEMA:\n{json.dumps(req.schema, separators=(',', ':'))}"
     return base
+
+
+class QaGatewayRequest(BaseModel):
+    requestId: Optional[str] = None
+    conversationId: Optional[str] = None
+    question: str = Field(..., min_length=1, max_length=4000)
+    priorMessages: List[Dict[str, Any]] = Field(default_factory=list)
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    maxTokens: Optional[int] = None
+
+
+class QaGatewayResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]]
+    modelUsed: str
+    provider: str = "local"
+    tokensIn: Optional[int] = None
+    tokensOut: Optional[int] = None
+    took_ms: int
+    queueWaitMs: int
+    requestId: str
+    conversationId: Optional[str] = None
+
+
+STOPWORDS = {
+    "about", "after", "again", "against", "anything", "before", "between", "brief", "briefing",
+    "could", "current", "does", "from", "happen", "happened", "have", "into", "latest",
+    "more", "news", "recent", "report", "reports", "show", "source", "sources", "that",
+    "their", "the", "there", "these", "this", "today", "updates", "what", "when", "where",
+    "which", "with", "would",
+}
+
+
+def _clean_text(raw: Any) -> str:
+    return re.sub(r"\\s+", " ", re.sub(r"<[^>]*>", " ", str(raw or ""))).strip()
+
+
+def _excerpt(payload_raw: Any, title: Any) -> str:
+    payload = {}
+    try:
+        payload = json.loads(payload_raw or "{}") if isinstance(payload_raw, str) else (payload_raw or {})
+    except Exception:
+        payload = {}
+    for key in ("summary", "description", "content", "body", "text"):
+        val = _clean_text(payload.get(key))
+        if val:
+            return val[:360]
+    return _clean_text(title)[:360]
+
+
+def _search_terms(question: str) -> List[str]:
+    out, seen = [], set()
+    for term in re.findall(r"[\\w]{3,}", question.lower(), flags=re.UNICODE):
+        if term in STOPWORDS or term in seen:
+            continue
+        seen.add(term)
+        out.append(term)
+        if len(out) >= 8:
+            break
+    return out
+
+
+def _vector_literal(vec: List[float]) -> str:
+    return "[" + ",".join(f"{float(v):.6f}" for v in vec) + "]"
+
+
+def _row_to_citation(row: Dict[str, Any], mode: str, index: int) -> Dict[str, Any]:
+    return {
+        "index": index,
+        "articleId": str(row.get("id")),
+        "eventId": row.get("event_id"),
+        "title": row.get("title") or "",
+        "source": row.get("source") or "",
+        "url": row.get("url"),
+        "publishedAt": row.get("publishedAt").isoformat() if hasattr(row.get("publishedAt"), "isoformat") else row.get("publishedAt"),
+        "eventTitle": row.get("event_title"),
+        "eventCountry": row.get("event_country"),
+        "eventCategory": row.get("event_category"),
+        "retrievalMode": mode,
+        "similarity": float(row["similarity"]) if row.get("similarity") is not None else None,
+        "lexicalScore": float(row["lexical_score"]) if row.get("lexical_score") is not None else None,
+        "excerpt": _excerpt(row.get("payload"), row.get("title")),
+    }
+
+
+def _db_retrieve_sync(question: str, query_vec: Optional[List[float]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL not configured")
+    region = (filters or {}).get("region")
+    time_window = float((filters or {}).get("timeWindowHours") or 168)
+    cutoff_sql = "a.\"publishedAt\" >= now() - (%s || ' hours')::interval"
+    base_select = """
+      SELECT a.id, a.title, a.url, a.source, a.\"publishedAt\", a.payload, a.embedding,
+             ea.\"eventId\" AS event_id, e.title AS event_title,
+             e.\"primaryCountry\" AS event_country, e.category AS event_category
+      FROM articles a
+      LEFT JOIN event_articles ea ON ea.\"articleId\" = a.id
+      LEFT JOIN events e ON e.id = ea.\"eventId\"
+    """
+    out: List[Dict[str, Any]] = []
+    with psycopg.connect(DATABASE_URL, connect_timeout=5) as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            if query_vec:
+                params: List[Any] = [_vector_literal(query_vec), time_window]
+                conditions = ["a.embedding IS NOT NULL", cutoff_sql]
+                if region:
+                    conditions.append('a."isoA2" = %s')
+                    params.append(str(region).upper())
+                sql = f"""
+                  SELECT *, 1 - (embedding <=> %s::vector) AS similarity, NULL::float AS lexical_score
+                  FROM ({base_select} WHERE {' AND '.join(conditions)}) s
+                  ORDER BY embedding <=> %s::vector
+                  LIMIT %s
+                """
+                # duplicate vector for ORDER BY because psycopg positional placeholders are sequential.
+                params2 = [_vector_literal(query_vec)] + params[1:] + [_vector_literal(query_vec), max(1, min(QA_TOP_K, 16))]
+                cur.execute(sql, params2)
+                for row in cur.fetchall():
+                    if row.get("similarity") is None or float(row["similarity"]) >= QA_MIN_SIMILARITY:
+                        out.append(_row_to_citation(row, "semantic", len(out) + 1))
+            terms = _search_terms(question)
+            if terms and len(out) < QA_TOP_K:
+                params = [time_window]
+                conditions = [cutoff_sql]
+                if region:
+                    conditions.append('a."isoA2" = %s')
+                    params.append(str(region).upper())
+                likes = []
+                for term in terms:
+                    like = f"%{term}%"
+                    likes.append("(LOWER(a.title) LIKE %s OR LOWER(COALESCE(a.source,'')) LIKE %s OR LOWER(COALESCE(a.payload,'')) LIKE %s OR LOWER(COALESCE(e.title,'')) LIKE %s OR LOWER(COALESCE(e.\"primaryCountry\",'')) LIKE %s OR LOWER(COALESCE(e.category,'')) LIKE %s)")
+                    params.extend([like, like, like, like, like, like])
+                conditions.append("(" + " OR ".join(likes) + ")")
+                sql = f"""
+                  SELECT *, 1::float AS lexical_score, NULL::float AS similarity
+                  FROM ({base_select} WHERE {' AND '.join(conditions)}) s
+                  ORDER BY s.\"publishedAt\" DESC NULLS LAST
+                  LIMIT %s
+                """
+                params.append(max(1, min(QA_LEXICAL_K, 16)))
+                cur.execute(sql, params)
+                seen = {c["articleId"] for c in out}
+                for row in cur.fetchall():
+                    if str(row.get("id")) not in seen and len(out) < QA_TOP_K:
+                        out.append(_row_to_citation(row, "lexical", len(out) + 1))
+    return out[:QA_TOP_K]
+
+
+async def _retrieve_for_qa(question: str, prior: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    last_assistant = next((m for m in reversed(prior or []) if m.get("role") == "assistant"), None)
+    composite = f"Previous answer: {str(last_assistant.get('content', ''))[:400]}\\n\\nQuestion: {question}" if last_assistant else question
+    vec = None
+    try:
+        model = await get_embedder()
+        loop = asyncio.get_event_loop()
+        vectors = await loop.run_in_executor(None, lambda: model.encode([composite], normalize_embeddings=True, batch_size=1).tolist())
+        vec = vectors[0] if vectors else None
+    except Exception as e:
+        log.warning("qa embed failed; lexical fallback request=%s error=%r", hashlib.sha1(question.encode()).hexdigest()[:10], e)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: _db_retrieve_sync(composite, vec, filters or {}))
+
+
+def _qa_input(question: str, prior: List[Dict[str, Any]], citations: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        "question": question[:4000],
+        "prior_messages": [{"role": (m.get("role") if m.get("role") == "assistant" else "user"), "content": str(m.get("content", ""))[:500]} for m in (prior or [])[-4:]],
+        "citations": [{k: c.get(k) for k in ("index", "articleId", "title", "source", "publishedAt", "eventTitle", "eventCountry", "eventCategory", "retrievalMode", "excerpt")} for c in citations[:QA_TOP_K]],
+        "current_date": time.strftime("%Y-%m-%d"),
+        "instructions": "Answer using only provided Mapr corpus citations for factual claims. If no citations cover the question, say what evidence is missing. Greetings/small talk may be answered naturally. Keep output concise and cite with [1], [2] when citations are used.",
+    }
+
+
+async def _generate_qa(req: QaGatewayRequest, citations: List[Dict[str, Any]]) -> GenerateResponse:
+    schema = {"type": "object", "required": ["answer", "citations"], "properties": {"answer": {"type": "string"}, "citations": {"type": "array", "items": {"type": "object"}}}}
+    gen_req = GenerateRequest(task="qa", input=_qa_input(req.question, req.priorMessages, citations), schema=schema, maxTokens=min(int(req.maxTokens or QA_MAX_OUTPUT_TOKENS), QA_HARD_MAX_OUTPUT_TOKENS), temperature=0.2)
+    return await generate(gen_req)
+
+
+@app.post("/v1/qa", response_model=QaGatewayResponse, dependencies=[Depends(require_bearer)])
+async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
+    global qa_waiting, qa_active_generations, qa_timeout_count, qa_last_success, qa_last_error
+    request_id = req.requestId or hashlib.sha1(f"{time.time()}:{req.question}".encode()).hexdigest()[:16]
+    if qa_waiting >= QA_QUEUE_MAX_DEPTH and llm_semaphore.locked():
+        qa_last_error = {"code": "AI_BUSY", "request_id": request_id, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        raise HTTPException(status_code=503, detail={"code": "AI_BUSY", "request_id": request_id, "queue_depth": qa_waiting, "active_generation_count": qa_active_generations})
+    t0 = time.monotonic()
+    citations = await _retrieve_for_qa(req.question, req.priorMessages, req.filters)
+    qa_waiting += 1
+    queue_started = time.monotonic()
+    acquired = False
+    try:
+        try:
+            await asyncio.wait_for(llm_semaphore.acquire(), timeout=QA_QUEUE_WAIT_TIMEOUT_S)
+            acquired = True
+        except asyncio.TimeoutError:
+            qa_timeout_count += 1
+            qa_last_error = {"code": "AI_BUSY", "request_id": request_id, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            raise HTTPException(status_code=503, detail={"code": "AI_BUSY", "request_id": request_id, "queue_wait_ms": int((time.monotonic() - queue_started) * 1000)})
+        finally:
+            qa_waiting = max(0, qa_waiting - 1)
+        qa_active_generations += 1
+        queue_wait_ms = int((time.monotonic() - queue_started) * 1000)
+        gen = await _generate_qa(req, citations)
+        supported = {c["articleId"]: c for c in citations}
+        out_cites = []
+        for c in (gen.output or {}).get("citations") or []:
+            aid = str(c.get("articleId") or c.get("article_id") or "")
+            if aid in supported:
+                meta = dict(supported[aid])
+                if isinstance(c.get("quote"), str) and c["quote"].strip():
+                    meta["quote"] = c["quote"].strip()[:240]
+                out_cites.append(meta)
+        answer = str((gen.output or {}).get("answer") or "").strip()
+        if not answer:
+            raise HTTPException(status_code=502, detail={"code": "AI_UPSTREAM_ERROR", "request_id": request_id, "message": "model returned empty answer"})
+        if citations and not out_cites:
+            raise HTTPException(status_code=502, detail={"code": "AI_UPSTREAM_ERROR", "request_id": request_id, "message": "model returned no supported citations"})
+        took_ms = int((time.monotonic() - t0) * 1000)
+        qa_last_success = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        log.info("qa ok request_id=%s conversation_id=%s queue_depth=%s queue_wait_ms=%s active_generation_count=%s provider=local model=%s tokens_in=%s tokens_out=%s took_ms=%s citations=%s", request_id, req.conversationId, qa_waiting, queue_wait_ms, qa_active_generations, OLLAMA_MODEL, gen.tokens_in, gen.tokens_out, took_ms, len(out_cites))
+        return QaGatewayResponse(answer=answer, citations=out_cites, modelUsed=gen.model, tokensIn=gen.tokens_in, tokensOut=gen.tokens_out, took_ms=took_ms, queueWaitMs=queue_wait_ms, requestId=request_id, conversationId=req.conversationId)
+    except HTTPException as e:
+        qa_last_error = {"code": getattr(e, "detail", {}).get("code") if isinstance(e.detail, dict) else "AI_UPSTREAM_ERROR", "request_id": request_id, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        log.warning("qa error request_id=%s conversation_id=%s detail=%s", request_id, req.conversationId, e.detail)
+        raise
+    finally:
+        if acquired:
+            qa_active_generations = max(0, qa_active_generations - 1)
+            llm_semaphore.release()
 
 
 @app.on_event("shutdown")
