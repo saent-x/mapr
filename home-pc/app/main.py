@@ -265,6 +265,77 @@ async def ner(req: NerRequest = Body(...)) -> NerResponse:
         )
 
 
+async def _generate_locked(req: GenerateRequest) -> GenerateResponse:
+    """
+    Run one Ollama JSON generation. The caller must already hold
+    llm_semaphore; keeping semaphore ownership outside this function lets
+    /v1/qa measure queue wait time without deadlocking on a nested acquire.
+    """
+    t0 = time.monotonic()
+    max_tokens = _requested_max_tokens(req)
+    sys_prompt = _system_prompt_for(req)
+    user_msg = json.dumps({"task": req.task, "input": req.input})
+    ollama_body = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": user_msg},
+        ],
+        "format": "json",
+        "stream": False,
+        "keep_alive": "30m",
+        "options": {
+            "temperature": req.temperature,
+            "num_predict": max_tokens,
+        },
+    }
+    try:
+        r = await ollama_client.post("/api/chat", json=ollama_body, timeout=OLLAMA_GENERATE_TIMEOUT_S)
+        r.raise_for_status()
+    except httpx.TimeoutException as e:
+        took_ms = int((time.monotonic() - t0) * 1000)
+        log.warning(
+            "generate timeout task=%s model=%s took_ms=%s timeout_s=%s max_tokens=%s error=%s",
+            req.task, OLLAMA_MODEL, took_ms, OLLAMA_GENERATE_TIMEOUT_S, max_tokens, repr(e),
+        )
+        raise HTTPException(
+            status_code=504,
+            detail={
+                "error": "ollama_timeout",
+                "code": "AI_TIMEOUT",
+                "model": OLLAMA_MODEL,
+                "task": req.task,
+                "took_ms": took_ms,
+                "timeout_s": OLLAMA_GENERATE_TIMEOUT_S,
+            },
+        )
+    except httpx.HTTPError as e:
+        took_ms = int((time.monotonic() - t0) * 1000)
+        log.warning("generate http_error task=%s model=%s took_ms=%s error=%s", req.task, OLLAMA_MODEL, took_ms, repr(e))
+        raise HTTPException(status_code=502, detail={"error": "ollama_http_error", "code": "AI_UPSTREAM_ERROR", "message": str(e), "model": OLLAMA_MODEL, "task": req.task, "took_ms": took_ms})
+    data = r.json()
+    content = (data.get("message") or {}).get("content") or "{}"
+    try:
+        output = json.loads(content)
+    except json.JSONDecodeError as e:
+        took_ms = int((time.monotonic() - t0) * 1000)
+        log.warning("generate invalid_json task=%s model=%s took_ms=%s raw=%r", req.task, OLLAMA_MODEL, took_ms, content[:500])
+        raise HTTPException(status_code=502, detail={"error": "invalid_model_json", "code": "AI_UPSTREAM_ERROR", "message": str(e), "raw": content[:500], "model": OLLAMA_MODEL, "task": req.task, "took_ms": took_ms})
+    output = _coerce_output_for_task(req, output)
+    took_ms = int((time.monotonic() - t0) * 1000)
+    log.info(
+        "generate ok task=%s model=%s took_ms=%s tokens_in=%s tokens_out=%s max_tokens=%s",
+        req.task, OLLAMA_MODEL, took_ms, data.get("prompt_eval_count"), data.get("eval_count"), max_tokens,
+    )
+    return GenerateResponse(
+        output=output,
+        model=OLLAMA_MODEL,
+        tokens_in=data.get("prompt_eval_count"),
+        tokens_out=data.get("eval_count"),
+        took_ms=took_ms,
+    )
+
+
 @app.post("/generate", response_model=GenerateResponse, dependencies=[Depends(require_bearer)])
 async def generate(req: GenerateRequest = Body(...)) -> GenerateResponse:
     """
@@ -274,68 +345,7 @@ async def generate(req: GenerateRequest = Body(...)) -> GenerateResponse:
     prompt so the model knows exactly which keys to emit.
     """
     async with llm_semaphore:
-        t0 = time.monotonic()
-        max_tokens = _requested_max_tokens(req)
-        sys_prompt = _system_prompt_for(req)
-        user_msg = json.dumps({"task": req.task, "input": req.input})
-        ollama_body = {
-            "model": OLLAMA_MODEL,
-            "messages": [
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_msg},
-            ],
-            "format": "json",
-            "stream": False,
-            "keep_alive": "30m",
-            "options": {
-                "temperature": req.temperature,
-                "num_predict": max_tokens,
-            },
-        }
-        try:
-            r = await ollama_client.post("/api/chat", json=ollama_body, timeout=OLLAMA_GENERATE_TIMEOUT_S)
-            r.raise_for_status()
-        except httpx.TimeoutException as e:
-            took_ms = int((time.monotonic() - t0) * 1000)
-            log.warning(
-                "generate timeout task=%s model=%s took_ms=%s timeout_s=%s max_tokens=%s error=%s",
-                req.task, OLLAMA_MODEL, took_ms, OLLAMA_GENERATE_TIMEOUT_S, max_tokens, repr(e),
-            )
-            raise HTTPException(
-                status_code=504,
-                detail={
-                    "error": "ollama_timeout",
-                    "model": OLLAMA_MODEL,
-                    "task": req.task,
-                    "took_ms": took_ms,
-                    "timeout_s": OLLAMA_GENERATE_TIMEOUT_S,
-                },
-            )
-        except httpx.HTTPError as e:
-            took_ms = int((time.monotonic() - t0) * 1000)
-            log.warning("generate http_error task=%s model=%s took_ms=%s error=%s", req.task, OLLAMA_MODEL, took_ms, repr(e))
-            raise HTTPException(status_code=502, detail={"error": "ollama_http_error", "message": str(e), "model": OLLAMA_MODEL, "task": req.task, "took_ms": took_ms})
-        data = r.json()
-        content = (data.get("message") or {}).get("content") or "{}"
-        try:
-            output = json.loads(content)
-        except json.JSONDecodeError as e:
-            took_ms = int((time.monotonic() - t0) * 1000)
-            log.warning("generate invalid_json task=%s model=%s took_ms=%s raw=%r", req.task, OLLAMA_MODEL, took_ms, content[:500])
-            raise HTTPException(status_code=502, detail={"error": "invalid_model_json", "message": str(e), "raw": content[:500], "model": OLLAMA_MODEL, "task": req.task, "took_ms": took_ms})
-        output = _coerce_output_for_task(req, output)
-        took_ms = int((time.monotonic() - t0) * 1000)
-        log.info(
-            "generate ok task=%s model=%s took_ms=%s tokens_in=%s tokens_out=%s max_tokens=%s",
-            req.task, OLLAMA_MODEL, took_ms, data.get("prompt_eval_count"), data.get("eval_count"), max_tokens,
-        )
-        return GenerateResponse(
-            output=output,
-            model=OLLAMA_MODEL,
-            tokens_in=data.get("prompt_eval_count"),
-            tokens_out=data.get("eval_count"),
-            took_ms=took_ms,
-        )
+        return await _generate_locked(req)
 
 
 def _requested_max_tokens(req: GenerateRequest) -> int:
@@ -581,7 +591,7 @@ def _qa_input(question: str, prior: List[Dict[str, Any]], citations: List[Dict[s
 async def _generate_qa(req: QaGatewayRequest, citations: List[Dict[str, Any]]) -> GenerateResponse:
     schema = {"type": "object", "required": ["answer", "citations"], "properties": {"answer": {"type": "string"}, "citations": {"type": "array", "items": {"type": "object"}}}}
     gen_req = GenerateRequest(task="qa", input=_qa_input(req.question, req.priorMessages, citations), schema=schema, maxTokens=min(int(req.maxTokens or QA_MAX_OUTPUT_TOKENS), QA_HARD_MAX_OUTPUT_TOKENS), temperature=0.2)
-    return await generate(gen_req)
+    return await _generate_locked(gen_req)
 
 
 @app.post("/v1/qa", response_model=QaGatewayResponse, dependencies=[Depends(require_bearer)])
