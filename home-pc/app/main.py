@@ -607,13 +607,53 @@ def _is_conversational_only(question: str) -> bool:
 
 
 async def _generate_qa(req: QaGatewayRequest, citations: List[Dict[str, Any]]) -> GenerateResponse:
-    # The gateway already owns retrieval provenance. Ask the model to generate
-    # only the answer text, not to copy citation objects back. This keeps CPU
-    # output bounded and avoids truncated/invalid JSON while still requiring a
-    # model-generated answer with citation markers like [1].
-    schema = {"type": "object", "required": ["answer"], "properties": {"answer": {"type": "string"}}}
-    gen_req = GenerateRequest(task="qa", input=_qa_input(req.question, req.priorMessages, citations), schema=schema, maxTokens=min(int(req.maxTokens or QA_MAX_OUTPUT_TOKENS), QA_HARD_MAX_OUTPUT_TOKENS), temperature=0.2)
-    return await _generate_locked(gen_req)
+    # QA is the hot path on a CPU-only home server. The gateway already owns
+    # retrieval provenance, so do not ask the model to emit citation JSON. Ask
+    # for plain answer text with citation markers and return the retrieved
+    # citations from the gateway. This preserves model-generated replies while
+    # keeping generation short and reliable.
+    t0 = time.monotonic()
+    max_tokens = min(int(req.maxTokens or QA_MAX_OUTPUT_TOKENS), QA_HARD_MAX_OUTPUT_TOKENS)
+    source_lines = []
+    for c in citations[:QA_TOP_K]:
+        source_lines.append(f"[{c.get('index')}] {c.get('title') or 'Untitled'} — {c.get('source') or 'Unknown'}: {c.get('excerpt') or ''}")
+    prior_lines = []
+    for m in (req.priorMessages or [])[-2:]:
+        role = "assistant" if m.get("role") == "assistant" else "user"
+        prior_lines.append(f"{role}: {str(m.get('content') or '')[:300]}")
+    user_msg = "Question:\n" + req.question[:1200]
+    if prior_lines:
+        user_msg += "\n\nRecent conversation:\n" + "\n".join(prior_lines)
+    if source_lines:
+        user_msg += "\n\nSources:\n" + "\n".join(source_lines)
+    else:
+        user_msg += "\n\nSources: none"
+    llm_body = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are Mapr's assistant. Answer concisely. Use only provided sources for factual corpus claims and cite them as [1], [2]. If no sources cover the factual question, say what evidence is missing. Greetings/small talk may be answered naturally."},
+            {"role": "user", "content": user_msg},
+        ],
+        "stream": False,
+        "temperature": 0.2,
+        "max_tokens": max_tokens,
+    }
+    try:
+        r = await llm_client.post("/v1/chat/completions", json=llm_body, timeout=LLM_GENERATE_TIMEOUT_S)
+        r.raise_for_status()
+    except httpx.TimeoutException as e:
+        took_ms = int((time.monotonic() - t0) * 1000)
+        log.warning("generate timeout task=qa model=%s took_ms=%s timeout_s=%s max_tokens=%s error=%s", LLM_MODEL, took_ms, LLM_GENERATE_TIMEOUT_S, max_tokens, repr(e))
+        raise HTTPException(status_code=504, detail={"error": "llama_cpp_timeout", "code": "AI_TIMEOUT", "model": LLM_MODEL, "task": "qa", "took_ms": took_ms, "timeout_s": LLM_GENERATE_TIMEOUT_S})
+    except httpx.HTTPError as e:
+        took_ms = int((time.monotonic() - t0) * 1000)
+        log.warning("generate http_error task=qa model=%s took_ms=%s error=%s", LLM_MODEL, took_ms, repr(e))
+        raise HTTPException(status_code=502, detail={"error": "llama_cpp_http_error", "code": "AI_UPSTREAM_ERROR", "message": str(e), "model": LLM_MODEL, "task": "qa", "took_ms": took_ms})
+    data = r.json()
+    answer = (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+    took_ms = int((time.monotonic() - t0) * 1000)
+    log.info("generate ok task=qa model=%s took_ms=%s tokens_in=%s tokens_out=%s max_tokens=%s", LLM_MODEL, took_ms, (data.get("usage") or {}).get("prompt_tokens"), (data.get("usage") or {}).get("completion_tokens"), max_tokens)
+    return GenerateResponse(output={"answer": answer}, model=LLM_MODEL, tokens_in=(data.get("usage") or {}).get("prompt_tokens"), tokens_out=(data.get("usage") or {}).get("completion_tokens"), took_ms=took_ms)
 
 
 @app.post("/v1/qa", response_model=QaGatewayResponse, dependencies=[Depends(require_bearer)])
