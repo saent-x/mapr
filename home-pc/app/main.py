@@ -505,7 +505,7 @@ def _db_retrieve_sync(question: str, query_vec: Optional[List[float]], filters: 
         raise RuntimeError("DATABASE_URL not configured")
     region = (filters or {}).get("region")
     time_window = float((filters or {}).get("timeWindowHours") or 168)
-    cutoff_sql = "a.\"publishedAt\" >= now() - (%s || ' hours')::interval"
+    cutoff_sql = "NULLIF(a.\"publishedAt\", '')::timestamptz >= now() - (%s || ' hours')::interval"
     base_select = """
       SELECT a.id, a.title, a.url, a.source, a.\"publishedAt\", a.payload, a.embedding,
              ea.\"eventId\" AS event_id, e.title AS event_title,
