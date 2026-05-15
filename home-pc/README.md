@@ -4,7 +4,9 @@ This directory deploys the separate Mapr AI service on the home PC through Cooli
 
 ## Current architecture
 
-- `llama-cpp`: private GGUF model server for Qwen2.5 3B Instruct Q4_K_M.
+- `llama-cpp`: private GGUF model server for one active Qwen2.5 GGUF at a time.
+  - Default active model: `qwen2.5-3b-instruct-q4_k_m.gguf`.
+  - Downloaded comparison models: `qwen2.5-1.5b-instruct-q4_k_m.gguf`, `qwen2.5-0.5b-instruct-q8_0.gguf`, `qwen2.5-0.5b-instruct-q6_k.gguf`.
   - Internal API/UI port: `8080`.
   - Public web UI: `https://llama.tors-x.dev`, protected by Traefik Basic Auth.
   - Completion/API routes are not reachable anonymously; they share the same Basic Auth guard as the UI.
@@ -33,6 +35,7 @@ Set these on the Mapr AI service:
 MAPR_AI_BEARER=<random shared secret>
 DATABASE_URL=<Mapr Postgres URL>
 LLAMA_CPP_THREADS=6
+LLAMA_CPP_MODEL_FILE=qwen2.5-3b-instruct-q4_k_m.gguf
 LLM_GENERATE_TIMEOUT_S=55
 QA_QUEUE_MAX_DEPTH=3
 QA_QUEUE_WAIT_TIMEOUT_S=8
@@ -42,12 +45,37 @@ QA_MAX_OUTPUT_TOKENS=120
 QA_HARD_MAX_OUTPUT_TOKENS=700
 ```
 
-Optional model download overrides:
+## Model selection and comparison
+
+The AI service downloads these GGUFs into the persistent `llama-models` volume:
 
 ```text
-LLAMA_MODEL_REPO=Qwen/Qwen2.5-3B-Instruct-GGUF
-LLAMA_MODEL_FILE=qwen2.5-3b-instruct-q4_k_m.gguf
+qwen2.5-3b-instruct-q4_k_m.gguf      # current/default quality baseline
+qwen2.5-1.5b-instruct-q4_k_m.gguf    # option-one likely default candidate
+qwen2.5-0.5b-instruct-q8_0.gguf      # tiny, highest 0.5B quant
+qwen2.5-0.5b-instruct-q6_k.gguf      # tiny, smaller/faster than Q8
 ```
+
+Only one llama.cpp model is active at a time to keep memory bounded. To switch for testing in `https://llama.tors-x.dev`, set the AI service env:
+
+```text
+LLAMA_CPP_MODEL_FILE=<one filename above>
+```
+
+Then redeploy only the Mapr AI service. `model-puller` skips files already present, and both `llama-cpp` and `ai-worker` report the same active filename through `/healthz`/logs.
+
+## Benchmarking
+
+From the AI service network or any shell that can reach the llama.cpp server:
+
+```bash
+LLAMA_CPP_BASE_URL=http://llama-cpp:8080 \
+LLAMA_MODEL=$LLAMA_CPP_MODEL_FILE \
+BENCH_RUNS=3 \
+python home-pc/scripts/benchmark_llama_models.py
+```
+
+Benchmark each model by setting `LLAMA_CPP_MODEL_FILE`, redeploying AI, waiting for `/readyz`, and running the script. Compare `median_output_tok_s`, `median_wall_ms`, and answer quality in the web UI.
 
 ## Networking
 
@@ -97,8 +125,8 @@ Expected success includes `provider: local`, nonzero `tokensIn`, nonzero `tokens
 
 ## Updating the model
 
-1. Change `LLAMA_MODEL_REPO` and `LLAMA_MODEL_FILE` in the AI service environment.
-2. Redeploy the AI service; `model-puller` downloads the GGUF into `llama-models` if missing.
-3. Confirm `llama-cpp` health and direct `/v1/qa` before testing the Mapr app API flow.
+1. Change `LLAMA_CPP_MODEL_FILE` in the AI service environment to one of the downloaded filenames.
+2. Redeploy the AI service; `model-puller` downloads any missing comparison GGUFs into `llama-models` and skips existing files.
+3. Confirm `llama-cpp` health, run the benchmark script, and test direct `/v1/qa` before testing the Mapr app API flow.
 
-Avoid 7B+ models on this CPU-only host unless benchmarked. The default is Qwen2.5 3B Instruct Q4_K_M.
+Avoid 7B+ models on this CPU-only host unless benchmarked. The default is Qwen2.5 3B Instruct Q4_K_M; the first speed candidate is Qwen2.5 1.5B Instruct Q4_K_M.

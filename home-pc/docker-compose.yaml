@@ -6,7 +6,7 @@
 #
 # Services:
 #   llama-cpp     — private local GGUF LLM server; web UI exposed at llama.tors-x.dev with auth
-#   model-puller  — one-shot init that downloads Qwen2.5 3B Instruct Q4_K_M GGUF
+#   model-puller  — one-shot init that downloads benchmarkable Qwen2.5 GGUFs
 #   ai-worker     — FastAPI AI Gateway: /v1/qa, /healthz, /readyz, /embed, /ner, /generate
 #   cloudflared   — optional existing tunnel container for AI service routes
 #
@@ -29,17 +29,24 @@ services:
     command:
       - |
         set -eu
-        model_path="/models/qwen2.5-3b-instruct-q4_k_m.gguf"
-        model_url="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
-        if [ ! -s "$${model_path}" ]; then
-          echo "Downloading Qwen2.5 3B Instruct Q4_K_M GGUF..."
-          tmp="$${model_path}.tmp"
-          curl -L --fail --retry 5 --retry-delay 5 -o "$${tmp}" "$${model_url}"
-          mv "$${tmp}" "$${model_path}"
-        else
-          echo "Model already present at $${model_path}."
-        fi
-        ls -lh "$${model_path}"
+        download_model() {
+          model_path="/models/$$1"
+          model_url="$$2"
+          if [ ! -s "$${model_path}" ]; then
+            echo "Downloading $$1..."
+            tmp="$${model_path}.tmp"
+            rm -f "$${tmp}"
+            curl -L --fail --retry 5 --retry-delay 5 -o "$${tmp}" "$${model_url}"
+            mv "$${tmp}" "$${model_path}"
+          else
+            echo "Model already present at $${model_path}."
+          fi
+          ls -lh "$${model_path}"
+        }
+        download_model qwen2.5-3b-instruct-q4_k_m.gguf https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf
+        download_model qwen2.5-1.5b-instruct-q4_k_m.gguf https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
+        download_model qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf
+        download_model qwen2.5-0.5b-instruct-q6_k.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q6_k.gguf
 
   llama-cpp:
     image: ghcr.io/ggml-org/llama.cpp:server
@@ -53,7 +60,7 @@ services:
       - --port
       - "8080"
       - --model
-      - /models/qwen2.5-3b-instruct-q4_k_m.gguf
+      - /models/${LLAMA_CPP_MODEL_FILE:-qwen2.5-3b-instruct-q4_k_m.gguf}
       - --ctx-size
       - "4096"
       - --threads
@@ -101,7 +108,7 @@ services:
       - MAPR_AI_BEARER=${MAPR_AI_BEARER:?must set}
       - DATABASE_URL=${DATABASE_URL:?must set}
       - LLAMA_CPP_BASE_URL=http://llama-cpp:8080
-      - LLM_MODEL=qwen2.5-3b-instruct-q4_k_m.gguf
+      - LLM_MODEL=${LLAMA_CPP_MODEL_FILE:-qwen2.5-3b-instruct-q4_k_m.gguf}
       - LLM_GENERATE_TIMEOUT_S=${LLM_GENERATE_TIMEOUT_S:-55}
       - EMBED_MODEL=BAAI/bge-m3
       - NER_MODEL=urchade/gliner_multi-v2.1

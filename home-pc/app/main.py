@@ -5,7 +5,7 @@ Endpoints:
   POST /embed     — sentence embeddings via BAAI/bge-m3 (1024-dim, multilingual)
   POST /ner       — entity extraction via urchade/gliner_multi-v2.1
   POST /generate  — JSON-mode text generation via private llama.cpp server
-                    serving Qwen 2.5 3B Instruct Q4_K_M GGUF
+                    serving the active LLAMA_CPP_MODEL_FILE GGUF
   GET  /healthz   — liveness + resource snapshot
 
 Auth: every public endpoint must carry `x-mapr-token: $MAPR_AI_BEARER`.
