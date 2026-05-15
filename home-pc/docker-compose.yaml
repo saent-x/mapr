@@ -21,6 +21,7 @@
 services:
   model-puller:
     image: curlimages/curl:8.10.1
+    user: "0:0"
     restart: "no"
     volumes:
       - llama-models:/models
