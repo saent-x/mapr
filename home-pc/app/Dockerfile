@@ -1,5 +1,5 @@
-# Mapr AI worker — FastAPI service that exposes /embed (bge-m3),
-# /ner (GLiNER multilingual), and /generate (proxies to local Ollama).
+# Mapr AI Gateway worker — FastAPI service that exposes /v1/qa, /embed,
+# /ner (GLiNER multilingual), and /generate (proxies to private llama.cpp).
 #
 # Built to run as a Coolify service. Use `python:3.11-slim` because the
 # inference libraries don't need anything beyond CPU + AVX2.

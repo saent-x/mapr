@@ -1,79 +1,124 @@
-# Coolify "Service" deploy for the Mapr AI sidecar.
+# Coolify "Service" deploy for the Mapr AI stack.
 #
-# Drop this file into a Coolify Service (Docker Compose). Coolify will spin
-# up four containers on the same internal network:
+# Separate from the Mapr backend. The backend talks only to ai-worker's
+# authenticated gateway URL; it never calls llama.cpp, embeddings, or storage
+# internals directly.
 #
-#   ollama        — local LLM runtime (Qwen 2.5 3B Q4 served on :11434)
-#   ai-worker     — FastAPI: /embed (bge-m3 ONNX), /ner (GLiNER), /generate (proxies to ollama)
-#   cloudflared   — Cloudflare Tunnel that publishes ai-llm.<your-domain> + ai-embed.<your-domain>
-#   model-puller  — one-shot init: pulls the Qwen model into the ollama volume on first boot
+# Services:
+#   llama-cpp     — private local GGUF LLM server; web UI exposed at llama.tors-x.dev with auth
+#   model-puller  — one-shot init that downloads Qwen2.5 3B Instruct Q4_K_M GGUF
+#   ai-worker     — FastAPI AI Gateway: /v1/qa, /healthz, /readyz, /embed, /ner, /generate
+#   cloudflared   — optional existing tunnel container for AI service routes
 #
-# Required Coolify environment variables (set under the Service → "Environment"):
-#   MAPR_AI_BEARER           — random 32+ byte token shared with the Mapr server
-#   CF_TUNNEL_TOKEN          — Cloudflare Tunnel token (from CF dashboard → Zero Trust → Tunnels)
-#   OLLAMA_MODEL             — defaults to "qwen2.5:3b-instruct-q4_K_M"
-#   N_THREADS                — defaults to "$(nproc)" inside the container
+# Required Coolify environment variables:
+#   MAPR_AI_BEARER             — random 32+ byte token shared with Mapr backend
+#   CF_TUNNEL_TOKEN            — existing Cloudflare Tunnel token, if this service uses it
+#   LLAMA_WEB_BASIC_AUTH_HASH  — htpasswd APR1/bcrypt hash for user "mapr" protecting llama UI
+#   DATABASE_URL               — Mapr database URL for RAG retrieval
 #
-# Coolify pins persistent volumes to its storage dir, so models survive
-# re-deploys.  Health checks let Coolify auto-restart on failure.
+# Model/cache volumes survive redeploys.
 
 services:
-  ollama:
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    environment:
-      - OLLAMA_KEEP_ALIVE=30m
-      - OLLAMA_NUM_PARALLEL=1
-      - OLLAMA_MAX_LOADED_MODELS=1
-    volumes:
-      - ollama-data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 5s
-      retries: 10
-    deploy:
-      resources:
-        limits:
-          memory: 6g
-
   model-puller:
-    image: ollama/ollama:latest
+    image: curlimages/curl:8.10.1
     restart: "no"
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+    volumes:
+      - llama-models:/models
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -eu
-        echo "Pulling $${OLLAMA_MODEL} via ollama at $${OLLAMA_HOST}…"
-        until ollama list >/dev/null 2>&1; do sleep 2; done
-        ollama pull "$${OLLAMA_MODEL}"
-        echo "Model warm."
+        model_path="/models/qwen2.5-3b-instruct-q4_k_m.gguf"
+        model_url="https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+        if [ ! -s "$${model_path}" ]; then
+          echo "Downloading Qwen2.5 3B Instruct Q4_K_M GGUF..."
+          tmp="$${model_path}.tmp"
+          curl -L --fail --retry 5 --retry-delay 5 -o "$${tmp}" "$${model_url}"
+          mv "$${tmp}" "$${model_path}"
+        else
+          echo "Model already present at $${model_path}."
+        fi
+        ls -lh "$${model_path}"
+
+  llama-cpp:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    restart: unless-stopped
+    depends_on:
+      model-puller:
+        condition: service_completed_successfully
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --model
+      - /models/qwen2.5-3b-instruct-q4_k_m.gguf
+      - --ctx-size
+      - "4096"
+      - --threads
+      - "${LLAMA_CPP_THREADS:-6}"
+      - --parallel
+      - "1"
+      - --cont-batching
+      - --cache-reuse
+      - "256"
+    volumes:
+      - llama-models:/models
+    networks:
+      - default
+      - coolify
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.middlewares.mapr-llama-ui-auth.basicauth.users=mapr:${LLAMA_WEB_BASIC_AUTH_HASH:?must set}
+      - traefik.http.routers.http-mapr-llama-ui.entryPoints=http
+      - traefik.http.routers.http-mapr-llama-ui.rule=Host(`llama.tors-x.dev`) && PathPrefix(`/`)
+      - traefik.http.routers.http-mapr-llama-ui.middlewares=redirect-to-https
+      - traefik.http.routers.http-mapr-llama-ui.service=http-mapr-llama-ui
+      - traefik.http.routers.https-mapr-llama-ui.entryPoints=https
+      - traefik.http.routers.https-mapr-llama-ui.rule=Host(`llama.tors-x.dev`) && PathPrefix(`/`)
+      - traefik.http.routers.https-mapr-llama-ui.middlewares=gzip,mapr-llama-ui-auth
+      - traefik.http.routers.https-mapr-llama-ui.tls=true
+      - traefik.http.routers.https-mapr-llama-ui.tls.certresolver=letsencrypt
+      - traefik.http.routers.https-mapr-llama-ui.service=https-mapr-llama-ui
+      - traefik.http.services.http-mapr-llama-ui.loadbalancer.server.port=8080
+      - traefik.http.services.https-mapr-llama-ui.loadbalancer.server.port=8080
+    deploy:
+      resources:
+        limits:
+          cpus: "3.0"
+          memory: 8g
 
   ai-worker:
     build:
       context: ./app
     restart: unless-stopped
     depends_on:
-      ollama:
-        condition: service_healthy
+      llama-cpp:
+        condition: service_started
     environment:
       - MAPR_AI_BEARER=${MAPR_AI_BEARER:?must set}
-      - OLLAMA_BASE_URL=http://ollama:11434
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      - DATABASE_URL=${DATABASE_URL:?must set}
+      - LLAMA_CPP_BASE_URL=http://llama-cpp:8080
+      - LLM_MODEL=qwen2.5-3b-instruct-q4_k_m.gguf
+      - LLM_GENERATE_TIMEOUT_S=${LLM_GENERATE_TIMEOUT_S:-40}
       - EMBED_MODEL=BAAI/bge-m3
       - NER_MODEL=urchade/gliner_multi-v2.1
       - N_THREADS=${N_THREADS:-4}
       - MAX_CONCURRENT_LLM=1
       - MAX_CONCURRENT_EMBED=2
+      - QA_QUEUE_MAX_DEPTH=${QA_QUEUE_MAX_DEPTH:-3}
+      - QA_QUEUE_WAIT_TIMEOUT_S=${QA_QUEUE_WAIT_TIMEOUT_S:-8}
+      - QA_TOP_K=${QA_TOP_K:-5}
+      - QA_LEXICAL_K=${QA_LEXICAL_K:-5}
+      - QA_MAX_OUTPUT_TOKENS=${QA_MAX_OUTPUT_TOKENS:-500}
+      - QA_HARD_MAX_OUTPUT_TOKENS=${QA_HARD_MAX_OUTPUT_TOKENS:-700}
       - HF_HOME=/cache/huggingface
     volumes:
       - hf-cache:/cache/huggingface
+    networks:
+      - default
+      - coolify
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import os,sys,urllib.request; req=urllib.request.Request('http://localhost:8080/healthz', headers={'x-mapr-token': os.environ.get('MAPR_AI_BEARER','')}); sys.exit(0 if urllib.request.urlopen(req, timeout=3).status==200 else 1)\""]
       interval: 30s
@@ -83,6 +128,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "1.0"
           memory: 4g
 
   cloudflared:
@@ -94,5 +140,12 @@ services:
         condition: service_healthy
 
 volumes:
-  ollama-data:
+  llama-models:
   hf-cache:
+
+networks:
+  default:
+    name: uvoliod0bjp0n0wdfjxd19b1
+    external: true
+  coolify:
+    external: true

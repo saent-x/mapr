@@ -1,16 +1,16 @@
 """
-Mapr AI worker — FastAPI service for the home-PC sidecar.
+Mapr AI worker — FastAPI gateway for the home-PC AI service.
 
 Endpoints:
   POST /embed     — sentence embeddings via BAAI/bge-m3 (1024-dim, multilingual)
   POST /ner       — entity extraction via urchade/gliner_multi-v2.1
-  POST /generate  — JSON-mode text generation, proxied to local Ollama
-                    serving Qwen 2.5 3B Instruct (Q4_K_M)
+  POST /generate  — JSON-mode text generation via private llama.cpp server
+                    serving Qwen 2.5 3B Instruct Q4_K_M GGUF
   GET  /healthz   — liveness + resource snapshot
 
 Auth: every public endpoint must carry `x-mapr-token: $MAPR_AI_BEARER`.
 This deployment relies on Cloudflare Tunnel for ingress and the app bearer
-as the public-facing auth layer.
+as the auth layer for gateway endpoints.
 """
 
 from __future__ import annotations
@@ -36,15 +36,15 @@ log = logging.getLogger("mapr.ai")
 
 # ── Config ────────────────────────────────────────────────────────────
 BEARER = os.environ.get("MAPR_AI_BEARER", "")
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://ollama:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M")
+LLAMA_CPP_BASE_URL = os.environ.get("LLAMA_CPP_BASE_URL", os.environ.get("OLLAMA_BASE_URL", "http://llama-cpp:8080"))
+LLM_MODEL = os.environ.get("LLM_MODEL", os.environ.get("OLLAMA_MODEL", "qwen2.5-3b-instruct-q4_k_m.gguf"))
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-m3")
 NER_MODEL = os.environ.get("NER_MODEL", "urchade/gliner_multi-v2.1")
 MAX_CONCURRENT_LLM = int(os.environ.get("MAX_CONCURRENT_LLM", "1"))
 MAX_CONCURRENT_EMBED = int(os.environ.get("MAX_CONCURRENT_EMBED", "2"))
 # Keep this below the Node client's MAPR_AI_GENERATE_TIMEOUT_MS default (45s)
 # so the sidecar returns a useful JSON error instead of letting Node abort.
-OLLAMA_GENERATE_TIMEOUT_S = float(os.environ.get("OLLAMA_GENERATE_TIMEOUT_S", "40"))
+LLM_GENERATE_TIMEOUT_S = float(os.environ.get("LLM_GENERATE_TIMEOUT_S", os.environ.get("OLLAMA_GENERATE_TIMEOUT_S", "40")))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 QA_QUEUE_MAX_DEPTH = int(os.environ.get("QA_QUEUE_MAX_DEPTH", "3"))
 QA_QUEUE_WAIT_TIMEOUT_S = float(os.environ.get("QA_QUEUE_WAIT_TIMEOUT_S", "8"))
@@ -71,7 +71,7 @@ embed_semaphore = asyncio.Semaphore(MAX_CONCURRENT_EMBED)
 
 embedder = None  # lazy-loaded sentence-transformer
 ner_model = None  # lazy-loaded GLiNER model
-ollama_client = httpx.AsyncClient(base_url=OLLAMA_BASE_URL, timeout=120.0)
+llm_client = httpx.AsyncClient(base_url=LLAMA_CPP_BASE_URL, timeout=120.0)
 
 app = FastAPI(title="mapr-ai", version="0.1.0")
 
@@ -187,14 +187,14 @@ async def healthz():
         "ok": True,
         "embed_loaded": embedder is not None,
         "ner_loaded": ner_model is not None,
-        "ollama_model": OLLAMA_MODEL,
+        "llm_model": LLM_MODEL,
         "max_concurrent_llm": MAX_CONCURRENT_LLM,
         "max_concurrent_embed": MAX_CONCURRENT_EMBED,
         "queue_depth": qa_waiting,
         "active_generation_count": qa_active_generations,
         "queue_max_depth": QA_QUEUE_MAX_DEPTH,
         "provider": "local",
-        "model": OLLAMA_MODEL,
+        "model": LLM_MODEL,
         "timeout_count": qa_timeout_count,
         "last_successful_generation": qa_last_success,
         "last_error": qa_last_error,
@@ -203,7 +203,7 @@ async def healthz():
 
 @app.get("/readyz", dependencies=[Depends(require_bearer)])
 async def readyz():
-    checks: Dict[str, Any] = {"database": False, "ollama": False}
+    checks: Dict[str, Any] = {"database": False, "llama_cpp": False}
     if DATABASE_URL:
         try:
             with psycopg.connect(DATABASE_URL, connect_timeout=3) as conn:
@@ -215,14 +215,14 @@ async def readyz():
     else:
         checks["database_error"] = "DATABASE_URL not configured"
     try:
-        r = await ollama_client.get("/api/tags", timeout=3.0)
-        checks["ollama"] = r.status_code == 200
+        r = await llm_client.get("/health", timeout=3.0)
+        checks["llama_cpp"] = r.status_code == 200
     except Exception as e:
-        checks["ollama_error"] = repr(e)[:160]
-    ok = bool(checks["database"] and checks["ollama"])
+        checks["llama_cpp_error"] = repr(e)[:160]
+    ok = bool(checks["database"] and checks["llama_cpp"])
     if not ok:
         raise HTTPException(status_code=503, detail={"code": "AI_NOT_READY", "checks": checks})
-    return {"ok": True, "checks": checks, "model": OLLAMA_MODEL}
+    return {"ok": True, "checks": checks, "model": LLM_MODEL}
 
 
 @app.post("/embed", response_model=EmbedResponse, dependencies=[Depends(require_bearer)])
@@ -267,7 +267,7 @@ async def ner(req: NerRequest = Body(...)) -> NerResponse:
 
 async def _generate_locked(req: GenerateRequest) -> GenerateResponse:
     """
-    Run one Ollama JSON generation. The caller must already hold
+    Run one llama.cpp JSON generation. The caller must already hold
     llm_semaphore; keeping semaphore ownership outside this function lets
     /v1/qa measure queue wait time without deadlocking on a nested acquire.
     """
@@ -275,63 +275,60 @@ async def _generate_locked(req: GenerateRequest) -> GenerateResponse:
     max_tokens = _requested_max_tokens(req)
     sys_prompt = _system_prompt_for(req)
     user_msg = json.dumps({"task": req.task, "input": req.input})
-    ollama_body = {
-        "model": OLLAMA_MODEL,
+    llm_body = {
+        "model": LLM_MODEL,
         "messages": [
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": user_msg},
         ],
-        "format": "json",
+        "response_format": {"type": "json_object"},
         "stream": False,
-        "keep_alive": "30m",
-        "options": {
-            "temperature": req.temperature,
-            "num_predict": max_tokens,
-        },
+        "temperature": req.temperature,
+        "max_tokens": max_tokens,
     }
     try:
-        r = await ollama_client.post("/api/chat", json=ollama_body, timeout=OLLAMA_GENERATE_TIMEOUT_S)
+        r = await llm_client.post("/v1/chat/completions", json=llm_body, timeout=LLM_GENERATE_TIMEOUT_S)
         r.raise_for_status()
     except httpx.TimeoutException as e:
         took_ms = int((time.monotonic() - t0) * 1000)
         log.warning(
             "generate timeout task=%s model=%s took_ms=%s timeout_s=%s max_tokens=%s error=%s",
-            req.task, OLLAMA_MODEL, took_ms, OLLAMA_GENERATE_TIMEOUT_S, max_tokens, repr(e),
+            req.task, LLM_MODEL, took_ms, LLM_GENERATE_TIMEOUT_S, max_tokens, repr(e),
         )
         raise HTTPException(
             status_code=504,
             detail={
-                "error": "ollama_timeout",
+                "error": "llama_cpp_timeout",
                 "code": "AI_TIMEOUT",
-                "model": OLLAMA_MODEL,
+                "model": LLM_MODEL,
                 "task": req.task,
                 "took_ms": took_ms,
-                "timeout_s": OLLAMA_GENERATE_TIMEOUT_S,
+                "timeout_s": LLM_GENERATE_TIMEOUT_S,
             },
         )
     except httpx.HTTPError as e:
         took_ms = int((time.monotonic() - t0) * 1000)
-        log.warning("generate http_error task=%s model=%s took_ms=%s error=%s", req.task, OLLAMA_MODEL, took_ms, repr(e))
-        raise HTTPException(status_code=502, detail={"error": "ollama_http_error", "code": "AI_UPSTREAM_ERROR", "message": str(e), "model": OLLAMA_MODEL, "task": req.task, "took_ms": took_ms})
+        log.warning("generate http_error task=%s model=%s took_ms=%s error=%s", req.task, LLM_MODEL, took_ms, repr(e))
+        raise HTTPException(status_code=502, detail={"error": "llama_cpp_http_error", "code": "AI_UPSTREAM_ERROR", "message": str(e), "model": LLM_MODEL, "task": req.task, "took_ms": took_ms})
     data = r.json()
-    content = (data.get("message") or {}).get("content") or "{}"
+    content = (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "{}")
     try:
         output = json.loads(content)
     except json.JSONDecodeError as e:
         took_ms = int((time.monotonic() - t0) * 1000)
-        log.warning("generate invalid_json task=%s model=%s took_ms=%s raw=%r", req.task, OLLAMA_MODEL, took_ms, content[:500])
-        raise HTTPException(status_code=502, detail={"error": "invalid_model_json", "code": "AI_UPSTREAM_ERROR", "message": str(e), "raw": content[:500], "model": OLLAMA_MODEL, "task": req.task, "took_ms": took_ms})
+        log.warning("generate invalid_json task=%s model=%s took_ms=%s raw=%r", req.task, LLM_MODEL, took_ms, content[:500])
+        raise HTTPException(status_code=502, detail={"error": "invalid_model_json", "code": "AI_UPSTREAM_ERROR", "message": str(e), "raw": content[:500], "model": LLM_MODEL, "task": req.task, "took_ms": took_ms})
     output = _coerce_output_for_task(req, output)
     took_ms = int((time.monotonic() - t0) * 1000)
     log.info(
         "generate ok task=%s model=%s took_ms=%s tokens_in=%s tokens_out=%s max_tokens=%s",
-        req.task, OLLAMA_MODEL, took_ms, data.get("prompt_eval_count"), data.get("eval_count"), max_tokens,
+        req.task, LLM_MODEL, took_ms, (data.get("usage") or {}).get("prompt_tokens"), (data.get("usage") or {}).get("completion_tokens"), max_tokens,
     )
     return GenerateResponse(
         output=output,
-        model=OLLAMA_MODEL,
-        tokens_in=data.get("prompt_eval_count"),
-        tokens_out=data.get("eval_count"),
+        model=LLM_MODEL,
+        tokens_in=(data.get("usage") or {}).get("prompt_tokens"),
+        tokens_out=(data.get("usage") or {}).get("completion_tokens"),
         took_ms=took_ms,
     )
 
@@ -339,8 +336,8 @@ async def _generate_locked(req: GenerateRequest) -> GenerateResponse:
 @app.post("/generate", response_model=GenerateResponse, dependencies=[Depends(require_bearer)])
 async def generate(req: GenerateRequest = Body(...)) -> GenerateResponse:
     """
-    Constrained JSON generation. Builds an Ollama chat request and asks
-    Ollama to format the response as JSON (Ollama's `format: json` mode).
+    Constrained JSON generation. Builds an OpenAI-compatible chat request and asks
+    the private llama.cpp server to format the response as JSON.
     For strict schema adherence, the JSON schema is embedded in the system
     prompt so the model knows exactly which keys to emit.
     """
@@ -635,7 +632,7 @@ async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
             raise HTTPException(status_code=502, detail={"code": "AI_UPSTREAM_ERROR", "request_id": request_id, "message": "model returned no supported citations"})
         took_ms = int((time.monotonic() - t0) * 1000)
         qa_last_success = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        log.info("qa ok request_id=%s conversation_id=%s queue_depth=%s queue_wait_ms=%s active_generation_count=%s provider=local model=%s tokens_in=%s tokens_out=%s took_ms=%s citations=%s", request_id, req.conversationId, qa_waiting, queue_wait_ms, qa_active_generations, OLLAMA_MODEL, gen.tokens_in, gen.tokens_out, took_ms, len(out_cites))
+        log.info("qa ok request_id=%s conversation_id=%s queue_depth=%s queue_wait_ms=%s active_generation_count=%s provider=local model=%s tokens_in=%s tokens_out=%s took_ms=%s citations=%s", request_id, req.conversationId, qa_waiting, queue_wait_ms, qa_active_generations, LLM_MODEL, gen.tokens_in, gen.tokens_out, took_ms, len(out_cites))
         return QaGatewayResponse(answer=answer, citations=out_cites, modelUsed=gen.model, tokensIn=gen.tokens_in, tokensOut=gen.tokens_out, took_ms=took_ms, queueWaitMs=queue_wait_ms, requestId=request_id, conversationId=req.conversationId)
     except HTTPException as e:
         qa_last_error = {"code": getattr(e, "detail", {}).get("code") if isinstance(e.detail, dict) else "AI_UPSTREAM_ERROR", "request_id": request_id, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
@@ -649,4 +646,4 @@ async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    await ollama_client.aclose()
+    await llm_client.aclose()
