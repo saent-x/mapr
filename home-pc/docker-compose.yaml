@@ -102,7 +102,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:?must set}
       - LLAMA_CPP_BASE_URL=http://llama-cpp:8080
       - LLM_MODEL=qwen2.5-3b-instruct-q4_k_m.gguf
-      - LLM_GENERATE_TIMEOUT_S=${LLM_GENERATE_TIMEOUT_S:-40}
+      - LLM_GENERATE_TIMEOUT_S=${LLM_GENERATE_TIMEOUT_S:-55}
       - EMBED_MODEL=BAAI/bge-m3
       - NER_MODEL=urchade/gliner_multi-v2.1
       - N_THREADS=${N_THREADS:-4}
@@ -110,8 +110,8 @@ services:
       - MAX_CONCURRENT_EMBED=2
       - QA_QUEUE_MAX_DEPTH=${QA_QUEUE_MAX_DEPTH:-3}
       - QA_QUEUE_WAIT_TIMEOUT_S=${QA_QUEUE_WAIT_TIMEOUT_S:-8}
-      - QA_TOP_K=${QA_TOP_K:-5}
-      - QA_LEXICAL_K=${QA_LEXICAL_K:-5}
+      - QA_TOP_K=${QA_TOP_K:-3}
+      - QA_LEXICAL_K=${QA_LEXICAL_K:-3}
       - QA_MAX_OUTPUT_TOKENS=${QA_MAX_OUTPUT_TOKENS:-500}
       - QA_HARD_MAX_OUTPUT_TOKENS=${QA_HARD_MAX_OUTPUT_TOKENS:-700}
       - HF_HOME=/cache/huggingface

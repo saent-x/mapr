@@ -42,14 +42,14 @@ EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-m3")
 NER_MODEL = os.environ.get("NER_MODEL", "urchade/gliner_multi-v2.1")
 MAX_CONCURRENT_LLM = int(os.environ.get("MAX_CONCURRENT_LLM", "1"))
 MAX_CONCURRENT_EMBED = int(os.environ.get("MAX_CONCURRENT_EMBED", "2"))
-# Keep this below the Node client's MAPR_AI_GENERATE_TIMEOUT_MS default (45s)
-# so the sidecar returns a useful JSON error instead of letting Node abort.
-LLM_GENERATE_TIMEOUT_S = float(os.environ.get("LLM_GENERATE_TIMEOUT_S", os.environ.get("OLLAMA_GENERATE_TIMEOUT_S", "40")))
+# Keep this below the backend gateway timeout so the AI service returns a
+# useful JSON error instead of letting the Node client/proxy abort first.
+LLM_GENERATE_TIMEOUT_S = float(os.environ.get("LLM_GENERATE_TIMEOUT_S", os.environ.get("OLLAMA_GENERATE_TIMEOUT_S", "55")))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 QA_QUEUE_MAX_DEPTH = int(os.environ.get("QA_QUEUE_MAX_DEPTH", "3"))
 QA_QUEUE_WAIT_TIMEOUT_S = float(os.environ.get("QA_QUEUE_WAIT_TIMEOUT_S", "8"))
-QA_TOP_K = int(os.environ.get("QA_TOP_K", "5"))
-QA_LEXICAL_K = int(os.environ.get("QA_LEXICAL_K", "5"))
+QA_TOP_K = int(os.environ.get("QA_TOP_K", "3"))
+QA_LEXICAL_K = int(os.environ.get("QA_LEXICAL_K", "3"))
 QA_MIN_SIMILARITY = float(os.environ.get("QA_MIN_SIMILARITY", "0.30"))
 QA_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_MAX_OUTPUT_TOKENS", "500"))
 QA_HARD_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_HARD_MAX_OUTPUT_TOKENS", "700"))
@@ -458,8 +458,8 @@ def _excerpt(payload_raw: Any, title: Any) -> str:
     for key in ("summary", "description", "content", "body", "text"):
         val = _clean_text(payload.get(key))
         if val:
-            return val[:360]
-    return _clean_text(title)[:360]
+            return val[:220]
+    return _clean_text(title)[:220]
 
 
 def _search_terms(question: str) -> List[str]:
@@ -578,7 +578,7 @@ async def _retrieve_for_qa(question: str, prior: List[Dict[str, Any]], filters: 
 def _qa_input(question: str, prior: List[Dict[str, Any]], citations: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "question": question[:4000],
-        "prior_messages": [{"role": (m.get("role") if m.get("role") == "assistant" else "user"), "content": str(m.get("content", ""))[:500]} for m in (prior or [])[-4:]],
+        "prior_messages": [{"role": (m.get("role") if m.get("role") == "assistant" else "user"), "content": str(m.get("content", ""))[:300]} for m in (prior or [])[-2:]],
         "citations": [{k: c.get(k) for k in ("index", "articleId", "title", "source", "publishedAt", "eventTitle", "eventCountry", "eventCategory", "retrievalMode", "excerpt")} for c in citations[:QA_TOP_K]],
         "current_date": time.strftime("%Y-%m-%d"),
         "instructions": "Answer using only provided Mapr corpus citations for factual claims. If no citations cover the question, say what evidence is missing. Greetings/small talk may be answered naturally. Keep output concise and cite with [1], [2] when citations are used.",
