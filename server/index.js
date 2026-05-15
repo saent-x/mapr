@@ -1509,7 +1509,7 @@ const server = http.createServer(async (request, response) => {
               timeWindowHours: filters.timeWindowHours || 168,
               region: filters.region || null,
             },
-          }), 60_000);
+          }), Number(process.env.MAPR_AI_QA_GATEWAY_TIMEOUT_MS || 75_000));
           assistantMessage = await appendQaMessage({
             user, conversationId,
             role: 'assistant',

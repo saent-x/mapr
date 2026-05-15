@@ -36,22 +36,22 @@ log = logging.getLogger("mapr.ai")
 
 # ── Config ────────────────────────────────────────────────────────────
 BEARER = os.environ.get("MAPR_AI_BEARER", "")
-LLAMA_CPP_BASE_URL = os.environ.get("LLAMA_CPP_BASE_URL", os.environ.get("OLLAMA_BASE_URL", "http://llama-cpp:8080"))
-LLM_MODEL = os.environ.get("LLM_MODEL", os.environ.get("OLLAMA_MODEL", "qwen2.5-3b-instruct-q4_k_m.gguf"))
+LLAMA_CPP_BASE_URL = os.environ.get("LLAMA_CPP_BASE_URL", "http://llama-cpp:8080")
+LLM_MODEL = os.environ.get("LLM_MODEL", "qwen2.5-3b-instruct-q4_k_m.gguf")
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "BAAI/bge-m3")
 NER_MODEL = os.environ.get("NER_MODEL", "urchade/gliner_multi-v2.1")
 MAX_CONCURRENT_LLM = int(os.environ.get("MAX_CONCURRENT_LLM", "1"))
 MAX_CONCURRENT_EMBED = int(os.environ.get("MAX_CONCURRENT_EMBED", "2"))
 # Keep this below the backend gateway timeout so the AI service returns a
 # useful JSON error instead of letting the Node client/proxy abort first.
-LLM_GENERATE_TIMEOUT_S = float(os.environ.get("LLM_GENERATE_TIMEOUT_S", os.environ.get("OLLAMA_GENERATE_TIMEOUT_S", "55")))
+LLM_GENERATE_TIMEOUT_S = float(os.environ.get("LLM_GENERATE_TIMEOUT_S", "55"))
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 QA_QUEUE_MAX_DEPTH = int(os.environ.get("QA_QUEUE_MAX_DEPTH", "3"))
 QA_QUEUE_WAIT_TIMEOUT_S = float(os.environ.get("QA_QUEUE_WAIT_TIMEOUT_S", "8"))
 QA_TOP_K = int(os.environ.get("QA_TOP_K", "3"))
 QA_LEXICAL_K = int(os.environ.get("QA_LEXICAL_K", "3"))
 QA_MIN_SIMILARITY = float(os.environ.get("QA_MIN_SIMILARITY", "0.30"))
-QA_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_MAX_OUTPUT_TOKENS", "500"))
+QA_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_MAX_OUTPUT_TOKENS", "120"))
 QA_HARD_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_HARD_MAX_OUTPUT_TOKENS", "700"))
 
 # Observability counters for /healthz and logs. The semaphore is the bounded
