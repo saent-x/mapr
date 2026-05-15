@@ -607,7 +607,11 @@ def _is_conversational_only(question: str) -> bool:
 
 
 async def _generate_qa(req: QaGatewayRequest, citations: List[Dict[str, Any]]) -> GenerateResponse:
-    schema = {"type": "object", "required": ["answer", "citations"], "properties": {"answer": {"type": "string"}, "citations": {"type": "array", "items": {"type": "object"}}}}
+    # The gateway already owns retrieval provenance. Ask the model to generate
+    # only the answer text, not to copy citation objects back. This keeps CPU
+    # output bounded and avoids truncated/invalid JSON while still requiring a
+    # model-generated answer with citation markers like [1].
+    schema = {"type": "object", "required": ["answer"], "properties": {"answer": {"type": "string"}}}
     gen_req = GenerateRequest(task="qa", input=_qa_input(req.question, req.priorMessages, citations), schema=schema, maxTokens=min(int(req.maxTokens or QA_MAX_OUTPUT_TOKENS), QA_HARD_MAX_OUTPUT_TOKENS), temperature=0.2)
     return await _generate_locked(gen_req)
 
@@ -637,20 +641,10 @@ async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
         qa_active_generations += 1
         queue_wait_ms = int((time.monotonic() - queue_started) * 1000)
         gen = await _generate_qa(req, citations)
-        supported = {c["articleId"]: c for c in citations}
-        out_cites = []
-        for c in (gen.output or {}).get("citations") or []:
-            aid = str(c.get("articleId") or c.get("article_id") or "")
-            if aid in supported:
-                meta = dict(supported[aid])
-                if isinstance(c.get("quote"), str) and c["quote"].strip():
-                    meta["quote"] = c["quote"].strip()[:240]
-                out_cites.append(meta)
+        out_cites = citations[:QA_TOP_K]
         answer = str((gen.output or {}).get("answer") or "").strip()
         if not answer:
             raise HTTPException(status_code=502, detail={"code": "AI_UPSTREAM_ERROR", "request_id": request_id, "message": "model returned empty answer"})
-        if citations and not out_cites:
-            raise HTTPException(status_code=502, detail={"code": "AI_UPSTREAM_ERROR", "request_id": request_id, "message": "model returned no supported citations"})
         took_ms = int((time.monotonic() - t0) * 1000)
         qa_last_success = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         log.info("qa ok request_id=%s conversation_id=%s queue_depth=%s queue_wait_ms=%s active_generation_count=%s provider=local model=%s tokens_in=%s tokens_out=%s took_ms=%s citations=%s", request_id, req.conversationId, qa_waiting, queue_wait_ms, qa_active_generations, LLM_MODEL, gen.tokens_in, gen.tokens_out, took_ms, len(out_cites))
