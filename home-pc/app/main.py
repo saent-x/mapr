@@ -585,6 +585,27 @@ def _qa_input(question: str, prior: List[Dict[str, Any]], citations: List[Dict[s
     }
 
 
+def _is_conversational_only(question: str) -> bool:
+    """
+    Route obvious greetings/small talk to the same model with a compact prompt
+    instead of doing RAG over unrelated corpus items. This does not return a
+    scripted answer; it only avoids wasting retrieval/context on non-factual
+    requests.
+    """
+    q = re.sub(r"[^a-z0-9\s'?!]", " ", question.lower()).strip()
+    q = re.sub(r"\s+", " ", q)
+    if not q or len(q) > 80:
+        return False
+    patterns = (
+        r"^(hi|hello|hey|yo|sup|howdy)[!?.\s]*$",
+        r"^(hi|hello|hey|yo|sup|howdy)\s+(there|mapr|assistant|buddy)[!?.\s]*$",
+        r"^good\s+(morning|afternoon|evening)[!?.\s]*$",
+        r"^how\s+are\s+you[!?.\s]*$",
+        r"^thanks?(\s+you)?[!?.\s]*$",
+    )
+    return any(re.match(p, q) for p in patterns)
+
+
 async def _generate_qa(req: QaGatewayRequest, citations: List[Dict[str, Any]]) -> GenerateResponse:
     schema = {"type": "object", "required": ["answer", "citations"], "properties": {"answer": {"type": "string"}, "citations": {"type": "array", "items": {"type": "object"}}}}
     gen_req = GenerateRequest(task="qa", input=_qa_input(req.question, req.priorMessages, citations), schema=schema, maxTokens=min(int(req.maxTokens or QA_MAX_OUTPUT_TOKENS), QA_HARD_MAX_OUTPUT_TOKENS), temperature=0.2)
@@ -599,7 +620,7 @@ async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
         qa_last_error = {"code": "AI_BUSY", "request_id": request_id, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         raise HTTPException(status_code=503, detail={"code": "AI_BUSY", "request_id": request_id, "queue_depth": qa_waiting, "active_generation_count": qa_active_generations})
     t0 = time.monotonic()
-    citations = await _retrieve_for_qa(req.question, req.priorMessages, req.filters)
+    citations = [] if _is_conversational_only(req.question) else await _retrieve_for_qa(req.question, req.priorMessages, req.filters)
     qa_waiting += 1
     queue_started = time.monotonic()
     acquired = False
