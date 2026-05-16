@@ -4,9 +4,9 @@ This directory deploys the separate Mapr AI service on the home PC through Cooli
 
 ## Current architecture
 
-- `llama-cpp`: private GGUF model server for one active Qwen2.5 GGUF at a time.
-  - Default active model: `qwen2.5-3b-instruct-q4_k_m.gguf`.
-  - Downloaded comparison models: `qwen2.5-1.5b-instruct-q4_k_m.gguf`, `qwen2.5-0.5b-instruct-q8_0.gguf`, `qwen2.5-0.5b-instruct-q6_k.gguf`.
+- `llama-cpp`: private GGUF model router serving the `/models` directory.
+  - Mapr backend default model: `qwen2.5-3b-instruct-q4_k_m.gguf` unless `LLAMA_CPP_MODEL_FILE` is changed.
+  - Web UI comparison models: `qwen2.5-1.5b-instruct-q4_k_m.gguf`, `qwen2.5-0.5b-instruct-q8_0.gguf`, `qwen2.5-0.5b-instruct-q6_k.gguf`.
   - Internal API/UI port: `8080`.
   - Public web UI: `https://llama.tors-x.dev`, protected by Traefik Basic Auth.
   - Completion/API routes are not reachable anonymously; they share the same Basic Auth guard as the UI.
@@ -56,13 +56,7 @@ qwen2.5-0.5b-instruct-q8_0.gguf      # tiny, highest 0.5B quant
 qwen2.5-0.5b-instruct-q6_k.gguf      # tiny, smaller/faster than Q8
 ```
 
-Only one llama.cpp model is active at a time to keep memory bounded. To switch for testing in `https://llama.tors-x.dev`, set the AI service env:
-
-```text
-LLAMA_CPP_MODEL_FILE=<one filename above>
-```
-
-Then redeploy only the Mapr AI service. `model-puller` skips files already present, and both `llama-cpp` and `ai-worker` report the same active filename through `/healthz`/logs.
+llama.cpp router keeps at most one model loaded at once (`--models-max 1`) while still exposing all downloaded GGUFs to the web UI. `LLAMA_CPP_MODEL_FILE` controls the model name Mapr's `ai-worker` requests by default; the web UI can select any downloaded model from `/v1/models` after AI redeploy.
 
 ## Benchmarking
 
@@ -98,7 +92,7 @@ Because llama.cpp serves its UI and OpenAI-compatible API from the same process,
 
 ## Resource/concurrency defaults
 
-- llama.cpp: `--parallel 1`, `--threads 6`, `--ctx-size 4096`, `--cont-batching`, memory limit 8 GB.
+- llama.cpp: router over `/models`, `--models-max 1`, `--parallel 1`, `--threads 6`, `--ctx-size 4096`, `--cont-batching`, memory limit 8 GB.
 - AI Gateway: `MAX_CONCURRENT_LLM=1`, queue depth 3, wait timeout 8 s, memory limit 4 GB.
 - RAG: top-k 3, lexical-k 3, excerpts capped for CPU latency.
 - Default QA output: 120 tokens; hard cap 700.

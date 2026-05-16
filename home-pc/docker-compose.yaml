@@ -59,8 +59,10 @@ services:
       - 0.0.0.0
       - --port
       - "8080"
-      - --model
-      - /models/${LLAMA_CPP_MODEL_FILE:-qwen2.5-3b-instruct-q4_k_m.gguf}
+      - --models-dir
+      - /models
+      - --models-max
+      - "1"
       - --ctx-size
       - "4096"
       - --threads
