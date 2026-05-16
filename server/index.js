@@ -1510,6 +1510,16 @@ const server = http.createServer(async (request, response) => {
               region: filters.region || null,
             },
           }), Number(process.env.MAPR_AI_QA_GATEWAY_TIMEOUT_MS || 75_000));
+          console.info('qa gateway ok request_id=%s conversation_id=%s provider=%s model=%s tokens_in=%s tokens_out=%s took_ms=%s citations=%s',
+            requestId,
+            conversationId,
+            result.provider || 'local',
+            result.modelUsed,
+            result.tokensIn,
+            result.tokensOut,
+            result.took_ms,
+            Array.isArray(result.citations) ? result.citations.length : 0,
+          );
           assistantMessage = await appendQaMessage({
             user, conversationId,
             role: 'assistant',
@@ -1520,6 +1530,7 @@ const server = http.createServer(async (request, response) => {
             tokensOut: result.tokensOut,
           });
         } catch (e) {
+          console.warn('qa gateway error conversation_id=%s code=%s status=%s message=%s', conversationId, e?.code || 'AI_GENERATE_FAILED', e?.statusCode || 502, e?.message || 'AI generation failed');
           if (e?.code === 'AI_NOT_CONFIGURED') {
             sendJson(response, 503, {
               error: e.message,
