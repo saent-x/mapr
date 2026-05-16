@@ -121,7 +121,7 @@ services:
       - MAPR_AI_BEARER=${MAPR_AI_BEARER:?must set}
       - DATABASE_URL=${DATABASE_URL:?must set}
       - LLAMA_CPP_BASE_URL=http://llama-cpp:8080
-      - LLM_MODEL=${LLAMA_CPP_MODEL_FILE:-qwen2.5-3b-instruct-q4_k_m.gguf}
+      - LLM_MODEL=${LLAMA_CPP_MODEL:-qwen2.5-3b-instruct-q4_k_m}
       - LLM_GENERATE_TIMEOUT_S=${LLM_GENERATE_TIMEOUT_S:-55}
       - EMBED_MODEL=BAAI/bge-m3
       - NER_MODEL=urchade/gliner_multi-v2.1

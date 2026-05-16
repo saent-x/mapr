@@ -5,7 +5,7 @@ This directory deploys the separate Mapr AI service on the home PC through Cooli
 ## Current architecture
 
 - `llama-cpp`: private GGUF model router serving the `/models` directory.
-  - Mapr backend default model: `qwen2.5-3b-instruct-q4_k_m.gguf` unless `LLAMA_CPP_MODEL_FILE` is changed.
+  - Mapr backend default model: `qwen2.5-3b-instruct-q4_k_m` unless `LLAMA_CPP_MODEL` is changed.
   - Web UI comparison models: `qwen2.5-1.5b-instruct-q4_k_m.gguf`, `qwen2.5-0.5b-instruct-q8_0.gguf`, `qwen2.5-0.5b-instruct-q6_k.gguf`.
   - Internal API/UI port: `8080`.
   - Public web UI: `https://llama.tors-x.dev`, protected by Traefik Basic Auth.
@@ -35,7 +35,7 @@ Set these on the Mapr AI service:
 MAPR_AI_BEARER=<random shared secret>
 DATABASE_URL=<Mapr Postgres URL>
 LLAMA_CPP_THREADS=6
-LLAMA_CPP_MODEL_FILE=qwen2.5-3b-instruct-q4_k_m.gguf
+LLAMA_CPP_MODEL=qwen2.5-3b-instruct-q4_k_m
 LLM_GENERATE_TIMEOUT_S=55
 QA_QUEUE_MAX_DEPTH=3
 QA_QUEUE_WAIT_TIMEOUT_S=8
@@ -56,7 +56,7 @@ qwen2.5-0.5b-instruct-q8_0.gguf      # tiny, highest 0.5B quant
 qwen2.5-0.5b-instruct-q6_k.gguf      # tiny, smaller/faster than Q8
 ```
 
-llama.cpp router keeps at most one model loaded at once (`--models-max 1`) while still exposing all downloaded GGUFs to the web UI. `LLAMA_CPP_MODEL_FILE` controls the model name Mapr's `ai-worker` requests by default; the web UI can select any downloaded model from `/v1/models` after AI redeploy.
+llama.cpp router keeps at most one model loaded at once (`--models-max 1`) while still exposing all downloaded GGUFs to the web UI. `LLAMA_CPP_MODEL` controls the router model name Mapr's `ai-worker` requests by default; omit the `.gguf` suffix because llama.cpp advertises router model IDs without it. The web UI can select any downloaded model from `/v1/models` after AI redeploy.
 
 ## Benchmarking
 
@@ -64,7 +64,7 @@ From the AI service network or any shell that can reach the llama.cpp server:
 
 ```bash
 LLAMA_CPP_BASE_URL=http://llama-cpp:8080 \
-LLAMA_MODEL=$LLAMA_CPP_MODEL_FILE \
+LLAMA_MODEL=$LLAMA_CPP_MODEL \
 BENCH_RUNS=3 \
 python home-pc/scripts/benchmark_llama_models.py
 ```
