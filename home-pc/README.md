@@ -15,7 +15,7 @@ This directory deploys the separate Mapr AI service on the home PC through Cooli
   - `GET /healthz`
   - `GET /readyz`
   - legacy internal endpoints: `/embed`, `/ner`, `/generate`
-- `model-puller`: one-shot GGUF downloader into the persistent `llama-models` volume.
+- `model-puller`: keeps the persistent `llama-models` volume populated, then stays running with a file-existence healthcheck so Coolify does not mark the whole service degraded just because a one-shot init container exited.
 - `cloudflared`: left available for tunnel-based routing, but the Mapr backend should use internal Coolify/Docker networking, not this tunnel.
 
 The Mapr backend must call only the authenticated AI Gateway URL:

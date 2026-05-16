@@ -21,8 +21,9 @@
 services:
   model-puller:
     image: curlimages/curl:8.10.1
+    pull_policy: always
     user: "0:0"
-    restart: "no"
+    restart: unless-stopped
     volumes:
       - llama-models:/models
     entrypoint: ["/bin/sh", "-c"]
@@ -47,13 +48,23 @@ services:
         download_model qwen2.5-1.5b-instruct-q4_k_m.gguf https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
         download_model qwen2.5-0.5b-instruct-q8_0.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf
         download_model qwen2.5-0.5b-instruct-q6_k.gguf https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q6_k.gguf
+        echo "All Mapr comparison models are present; keeping model-puller healthy for Coolify status."
+        tail -f /dev/null
+
+    healthcheck:
+      test: ["CMD-SHELL", "test -s /models/qwen2.5-3b-instruct-q4_k_m.gguf && test -s /models/qwen2.5-1.5b-instruct-q4_k_m.gguf && test -s /models/qwen2.5-0.5b-instruct-q8_0.gguf && test -s /models/qwen2.5-0.5b-instruct-q6_k.gguf"]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 5m
 
   llama-cpp:
     image: ghcr.io/ggml-org/llama.cpp:server
+    pull_policy: always
     restart: unless-stopped
     depends_on:
       model-puller:
-        condition: service_completed_successfully
+        condition: service_healthy
     command:
       - --host
       - 0.0.0.0
