@@ -1,136 +1,19 @@
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import AgentCitation from './AgentCitation.jsx';
-
-/**
- * Splits inline markdown-ish content into text + citation/bold/code spans.
- * React escapes all text nodes; this deliberately avoids raw HTML.
- */
-function renderInlineContent(content, citationMap, keyPrefix) {
-  const parts = [];
-  let lastIdx = 0;
-  let match;
-  const tokenRe = /(\[(\d{1,2})\]|\*\*([^*]+)\*\*|`([^`]+)`)/g;
-  while ((match = tokenRe.exec(content)) != null) {
-    if (match.index > lastIdx) {
-      parts.push(content.slice(lastIdx, match.index));
-    }
-    if (match[2]) {
-      const idx = Number(match[2]);
-      const cite = citationMap.get(idx);
-      parts.push(cite
-        ? <AgentCitation key={`${keyPrefix}-c-${match.index}-${idx}`} citation={cite} />
-        : match[0]);
-    } else if (match[3]) {
-      parts.push(<strong key={`${keyPrefix}-b-${match.index}`}>{match[3]}</strong>);
-    } else if (match[4]) {
-      parts.push(<code key={`${keyPrefix}-code-${match.index}`}>{match[4]}</code>);
-    } else {
-      parts.push(match[0]);
-    }
-    lastIdx = match.index + match[0].length;
-  }
-  if (lastIdx < content.length) parts.push(content.slice(lastIdx));
-  return parts;
-}
-
-function renderFormattedAssistantContent(content, citations) {
-  const text = String(content || '').trim();
-  if (!text) return null;
-
-  const citationMap = new Map((citations || []).map((c) => [Number(c.index), c]));
-  const lines = text.split(/\r?\n/);
-  const blocks = [];
-  const paragraph = [];
-
-  const flushParagraph = () => {
-    if (!paragraph.length) return;
-    const body = paragraph.join(' ').trim();
-    if (body) {
-      blocks.push(
-        <p key={`p-${blocks.length}`}>
-          {renderInlineContent(body, citationMap, `p-${blocks.length}`)}
-        </p>,
-      );
-    }
-    paragraph.length = 0;
-  };
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const raw = lines[i];
-    const trimmed = raw.trim();
-    if (!trimmed) {
-      flushParagraph();
-      continue;
-    }
-
-    const heading = /^(#{1,4})\s+(.+)$/.exec(trimmed);
-    if (heading) {
-      flushParagraph();
-      blocks.push(
-        <h4 key={`h-${blocks.length}`}>
-          {renderInlineContent(heading[2], citationMap, `h-${blocks.length}`)}
-        </h4>,
-      );
-      continue;
-    }
-
-    const bullet = /^[-*]\s+(.+)$/.exec(trimmed);
-    if (bullet) {
-      flushParagraph();
-      const items = [];
-      let j = i;
-      while (j < lines.length) {
-        const item = /^[-*]\s+(.+)$/.exec(lines[j].trim());
-        if (!item) break;
-        items.push(item[1]);
-        j += 1;
-      }
-      blocks.push(
-        <ul key={`ul-${blocks.length}`}>
-          {items.map((item, idx) => (
-            <li key={`li-${idx}`}>
-              {renderInlineContent(item, citationMap, `ul-${blocks.length}-${idx}`)}
-            </li>
-          ))}
-        </ul>,
-      );
-      i = j - 1;
-      continue;
-    }
-
-    const numbered = /^\d+\.\s+(.+)$/.exec(trimmed);
-    if (numbered) {
-      flushParagraph();
-      const items = [];
-      let j = i;
-      while (j < lines.length) {
-        const item = /^\d+\.\s+(.+)$/.exec(lines[j].trim());
-        if (!item) break;
-        items.push(item[1]);
-        j += 1;
-      }
-      blocks.push(
-        <ol key={`ol-${blocks.length}`}>
-          {items.map((item, idx) => (
-            <li key={`li-${idx}`}>
-              {renderInlineContent(item, citationMap, `ol-${blocks.length}-${idx}`)}
-            </li>
-          ))}
-        </ol>,
-      );
-      i = j - 1;
-      continue;
-    }
-
-    paragraph.push(trimmed);
-  }
-  flushParagraph();
-
-  return blocks.length
-    ? blocks
-    : <p>{renderInlineContent(text, citationMap, 'p-empty')}</p>;
-}
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+} from '../prompt-kit/message.jsx';
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from '../prompt-kit/reasoning.jsx';
+import { SourceContent } from '../prompt-kit/source.jsx';
+import { Loader } from '../prompt-kit/loader.jsx';
+import { Response } from '../prompt-kit/response.jsx';
 
 function MessageSources({ citations = [] }) {
   const { t } = useTranslation();
@@ -142,12 +25,87 @@ function MessageSources({ citations = [] }) {
         {citations.map((c) => (
           <li key={`src-${c.index}`} value={c.index}>
             <AgentCitation citation={c} />
-            <span className="agent-source-title">{c.title}</span>
-            {c.source && <span className="agent-source-outlet"> · {c.source}</span>}
+            <SourceContent
+              className="agent-source-content"
+              title={c.title}
+              description={c.source || ''}
+            />
           </li>
         ))}
       </ol>
     </div>
+  );
+}
+
+function normalizeReasoning(reasoning) {
+  if (!reasoning) return null;
+  if (typeof reasoning === 'string') {
+    return { notes: [reasoning], sourceCount: null, searchTerms: [], retrievalModes: [], scope: null };
+  }
+  if (typeof reasoning !== 'object') return null;
+  return {
+    searchQuery: reasoning.searchQuery || '',
+    searchTerms: Array.isArray(reasoning.searchTerms) ? reasoning.searchTerms : [],
+    sourceCount: Number.isFinite(Number(reasoning.sourceCount)) ? Number(reasoning.sourceCount) : null,
+    retrievalModes: Array.isArray(reasoning.retrievalModes) ? reasoning.retrievalModes : [],
+    scope: reasoning.scope && typeof reasoning.scope === 'object' ? reasoning.scope : null,
+    notes: Array.isArray(reasoning.notes) ? reasoning.notes : [],
+  };
+}
+
+function AgentReasoning({ reasoning }) {
+  const { t } = useTranslation();
+  const trace = normalizeReasoning(reasoning);
+  if (!trace) return null;
+  const scopeParts = [];
+  if (trace.scope?.region) scopeParts.push(trace.scope.region);
+  if (trace.scope?.timeWindowHours) scopeParts.push(`${trace.scope.timeWindowHours}h`);
+
+  return (
+    <Reasoning className="agent-reasoning" data-testid="agent-reasoning">
+      <ReasoningTrigger className="agent-reasoning-trigger">
+        {t('agent.reasoningTitle')}
+      </ReasoningTrigger>
+      <ReasoningContent className="agent-reasoning-content">
+        <div className="agent-reasoning-grid">
+          {trace.searchQuery && (
+            <div>
+              <span>{t('agent.reasoningQuery')}</span>
+              <code>{trace.searchQuery}</code>
+            </div>
+          )}
+          {trace.sourceCount != null && (
+            <div>
+              <span>{t('agent.reasoningSources')}</span>
+              <strong>{trace.sourceCount}</strong>
+            </div>
+          )}
+          {trace.searchTerms.length > 0 && (
+            <div>
+              <span>{t('agent.reasoningTerms')}</span>
+              <strong>{trace.searchTerms.join(', ')}</strong>
+            </div>
+          )}
+          {trace.retrievalModes.length > 0 && (
+            <div>
+              <span>{t('agent.reasoningModes')}</span>
+              <strong>{trace.retrievalModes.join(', ')}</strong>
+            </div>
+          )}
+          {scopeParts.length > 0 && (
+            <div>
+              <span>{t('agent.reasoningScope')}</span>
+              <strong>{scopeParts.join(' / ')}</strong>
+            </div>
+          )}
+        </div>
+        {trace.notes.length > 0 && (
+          <ul className="agent-reasoning-notes">
+            {trace.notes.map((note, idx) => <li key={`${idx}-${note}`}>{note}</li>)}
+          </ul>
+        )}
+      </ReasoningContent>
+    </Reasoning>
   );
 }
 
@@ -157,13 +115,38 @@ function formatAgentError(error, t) {
   return code ? `${code}: ${message}` : message;
 }
 
+function AssistantMessage({ message, reasoning = message.reasoning }) {
+  const { t } = useTranslation();
+  return (
+    <Message
+      className="agent-message agent-message--assistant"
+      data-testid="agent-message-assistant"
+    >
+      <MessageAvatar fallback="AI" />
+      <MessageContent className="agent-message-body">
+        <Response
+          content={message.content}
+          citations={message.citations || []}
+          renderCitation={(citation, key) => <AgentCitation key={key} citation={citation} />}
+        />
+        <AgentReasoning reasoning={reasoning} />
+        <MessageSources citations={message.citations || []} />
+        {message.modelUsed && (
+          <div className="agent-message-meta mono">
+            {t('agent.modelLabel')}: {message.modelUsed}
+          </div>
+        )}
+      </MessageContent>
+    </Message>
+  );
+}
+
 export default function AgentMessageList({ messages = [], status, error }) {
   const { t } = useTranslation();
   const scrollerRef = useRef(null);
   const isSending = status === 'sending';
   const showEmpty = !messages.length && status !== 'sending';
 
-  // Auto-scroll to bottom on new messages or while sending.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -178,33 +161,26 @@ export default function AgentMessageList({ messages = [], status, error }) {
         </div>
       )}
       {messages.map((m) => (
-        <div
-          key={m.id}
-          className={`agent-message agent-message--${m.role}${m.optimistic ? ' agent-message--optimistic' : ''}`}
-          data-testid={`agent-message-${m.role}`}
-        >
-          {m.role === 'assistant'
-            ? (
-                <div className="agent-message-body">
-                  {renderFormattedAssistantContent(m.content, m.citations)}
-                  <MessageSources citations={m.citations || []} />
-                </div>
-              )
-            : <div className="agent-message-body">{m.content}</div>}
-          {m.role === 'assistant' && m.modelUsed && (
-            <div className="agent-message-meta mono">
-              {t('agent.modelLabel')}: {m.modelUsed}
-            </div>
-          )}
-        </div>
+        m.role === 'assistant'
+          ? <AssistantMessage key={m.id} message={m} reasoning={m.reasoning} />
+          : (
+              <Message
+                key={m.id}
+                className={`agent-message agent-message--user${m.optimistic ? ' agent-message--optimistic' : ''}`}
+                data-testid="agent-message-user"
+              >
+                <MessageContent className="agent-message-body">{m.content}</MessageContent>
+              </Message>
+            )
       ))}
       {isSending && (
-        <div className="agent-message agent-message--assistant agent-message--pending" data-testid="agent-thinking">
-          <span className="agent-thinking-dot" />
-          <span className="agent-thinking-dot" />
-          <span className="agent-thinking-dot" />
-          <span className="mono micro" style={{ marginLeft: 8 }}>{t('agent.thinking')}</span>
-        </div>
+        <Message
+          className="agent-message agent-message--assistant agent-message--pending"
+          data-testid="agent-thinking"
+        >
+          <MessageAvatar fallback="AI" />
+          <Loader label={t('agent.thinking')} />
+        </Message>
       )}
       {error && status === 'error' && (
         <div className="agent-error" role="alert">

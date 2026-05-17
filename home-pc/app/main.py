@@ -50,6 +50,7 @@ QA_QUEUE_MAX_DEPTH = int(os.environ.get("QA_QUEUE_MAX_DEPTH", "3"))
 QA_QUEUE_WAIT_TIMEOUT_S = float(os.environ.get("QA_QUEUE_WAIT_TIMEOUT_S", "8"))
 QA_TOP_K = int(os.environ.get("QA_TOP_K", "3"))
 QA_LEXICAL_K = int(os.environ.get("QA_LEXICAL_K", "3"))
+QA_SEMANTIC_K = int(os.environ.get("QA_SEMANTIC_K", str(max(QA_TOP_K * 2, QA_TOP_K))))
 QA_MIN_SIMILARITY = float(os.environ.get("QA_MIN_SIMILARITY", "0.30"))
 QA_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_MAX_OUTPUT_TOKENS", "120"))
 QA_HARD_MAX_OUTPUT_TOKENS = int(os.environ.get("QA_HARD_MAX_OUTPUT_TOKENS", "700"))
@@ -423,9 +424,19 @@ class QaGatewayRequest(BaseModel):
     maxTokens: Optional[int] = None
 
 
+class QaGatewayReasoning(BaseModel):
+    searchQuery: str
+    searchTerms: List[str] = Field(default_factory=list)
+    sourceCount: int = 0
+    retrievalModes: List[str] = Field(default_factory=list)
+    scope: Dict[str, Any] = Field(default_factory=dict)
+    notes: List[str] = Field(default_factory=list)
+
+
 class QaGatewayResponse(BaseModel):
     answer: str
     citations: List[Dict[str, Any]]
+    reasoning: QaGatewayReasoning
     modelUsed: str
     provider: str = "local"
     tokensIn: Optional[int] = None
@@ -440,13 +451,14 @@ STOPWORDS = {
     "about", "after", "again", "against", "anything", "before", "between", "brief", "briefing",
     "could", "current", "does", "from", "happen", "happened", "have", "into", "latest",
     "more", "news", "recent", "report", "reports", "show", "source", "sources", "that",
-    "their", "the", "there", "these", "this", "today", "updates", "what", "when", "where",
-    "which", "with", "would",
+    "their", "the", "there", "these", "this", "today", "updates", "what", "what's", "whats",
+    "when", "where", "which", "with", "would", "going", "happening", "asked", "asking",
+    "answer", "answers", "instead", "rather", "than", "not",
 }
 
 
 def _clean_text(raw: Any) -> str:
-    return re.sub(r"\\s+", " ", re.sub(r"<[^>]*>", " ", str(raw or ""))).strip()
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", str(raw or ""))).strip()
 
 
 def _excerpt(payload_raw: Any, title: Any) -> str:
@@ -464,14 +476,60 @@ def _excerpt(payload_raw: Any, title: Any) -> str:
 
 def _search_terms(question: str) -> List[str]:
     out, seen = [], set()
-    for term in re.findall(r"[\\w]{3,}", question.lower(), flags=re.UNICODE):
-        if term in STOPWORDS or term in seen:
+    negated = _negative_terms(question)
+    for term in re.findall(r"[\w]{3,}", question.lower(), flags=re.UNICODE):
+        if term in STOPWORDS or term in negated or term in seen:
             continue
         seen.add(term)
         out.append(term)
         if len(out) >= 8:
             break
     return out
+
+
+def _negative_terms(question: str) -> set:
+    terms = set()
+    text = str(question or "").lower()
+    for match in re.finditer(r"\b(?:not|instead of|rather than)\s+([^,.!?;:]{2,80})", text, flags=re.UNICODE):
+        segment = re.split(r"\b(?:but|and|or|please|now|today|this|that)\b", match.group(1), maxsplit=1)[0]
+        for term in re.findall(r"[\w]{3,}", segment, flags=re.UNICODE):
+            if term not in STOPWORDS:
+                terms.add(term)
+    return terms
+
+
+def _strip_negative_terms(question: str) -> str:
+    cleaned = str(question or "")
+    for term in _negative_terms(cleaned):
+        cleaned = re.sub(rf"\b{re.escape(term)}\b", " ", cleaned, flags=re.IGNORECASE)
+    return _clean_text(cleaned)
+
+
+def _is_contextual_followup(question: str) -> bool:
+    q = str(question or "").lower()
+    if len(_search_terms(q)) > 3:
+        return False
+    return bool(re.search(r"\b(it|its|that|this|there|they|them|those|same|he|she|country|region)\b", q))
+
+
+def _last_user_question(prior: List[Dict[str, Any]]) -> str:
+    for msg in reversed(prior or []):
+        if msg.get("role") != "assistant":
+            content = _clean_text(msg.get("content"))
+            if content:
+                return content[:300]
+    return ""
+
+
+def _build_retrieval_query(question: str, prior: List[Dict[str, Any]]) -> str:
+    current = _strip_negative_terms(question)
+    if not current:
+        current = _clean_text(question)
+    if _is_contextual_followup(current):
+        previous_user = _last_user_question(prior)
+        if previous_user and previous_user.lower() != current.lower():
+            return f"{current}\nPrior user question for context: {previous_user}"
+    return current
 
 
 def _vector_literal(vec: List[float]) -> str:
@@ -497,6 +555,31 @@ def _row_to_citation(row: Dict[str, Any], mode: str, index: int) -> Dict[str, An
     }
 
 
+def _retrieval_sort_key(citation: Dict[str, Any]) -> tuple:
+    lexical = float(citation.get("lexicalScore") or 0)
+    similarity = float(citation.get("similarity") or 0)
+    hybrid = 1 if citation.get("retrievalMode") == "hybrid" else 0
+    return (hybrid, lexical, similarity)
+
+
+def _merge_retrieval_rows(semantic_rows: List[Dict[str, Any]], lexical_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    by_id: Dict[str, Dict[str, Any]] = {}
+    for row in semantic_rows:
+        article_id = str(row.get("id"))
+        by_id[article_id] = _row_to_citation(row, "semantic", 0)
+    for row in lexical_rows:
+        article_id = str(row.get("id"))
+        if article_id in by_id:
+            by_id[article_id]["retrievalMode"] = "hybrid"
+            by_id[article_id]["lexicalScore"] = float(row["lexical_score"]) if row.get("lexical_score") is not None else None
+            continue
+        by_id[article_id] = _row_to_citation(row, "lexical", 0)
+    ranked = sorted(by_id.values(), key=_retrieval_sort_key, reverse=True)[:QA_TOP_K]
+    for idx, item in enumerate(ranked, start=1):
+        item["index"] = idx
+    return ranked
+
+
 def _db_retrieve_sync(question: str, query_vec: Optional[List[float]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not configured")
@@ -511,11 +594,12 @@ def _db_retrieve_sync(question: str, query_vec: Optional[List[float]], filters: 
       LEFT JOIN event_articles ea ON ea.\"articleId\" = a.id
       LEFT JOIN events e ON e.id = ea.\"eventId\"
     """
-    out: List[Dict[str, Any]] = []
+    semantic_rows: List[Dict[str, Any]] = []
+    lexical_rows: List[Dict[str, Any]] = []
     with psycopg.connect(DATABASE_URL, connect_timeout=5) as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             if query_vec:
-                params: List[Any] = [_vector_literal(query_vec), time_window]
+                params: List[Any] = [time_window]
                 conditions = ["a.embedding IS NOT NULL", cutoff_sql]
                 if region:
                     conditions.append('a."isoA2" = %s')
@@ -526,14 +610,14 @@ def _db_retrieve_sync(question: str, query_vec: Optional[List[float]], filters: 
                   ORDER BY embedding <=> %s::vector
                   LIMIT %s
                 """
-                # duplicate vector for ORDER BY because psycopg positional placeholders are sequential.
-                params2 = [_vector_literal(query_vec)] + params[1:] + [_vector_literal(query_vec), max(1, min(QA_TOP_K, 16))]
+                vector = _vector_literal(query_vec)
+                params2 = [vector] + params + [vector, max(1, min(QA_SEMANTIC_K, 16))]
                 cur.execute(sql, params2)
                 for row in cur.fetchall():
                     if row.get("similarity") is None or float(row["similarity"]) >= QA_MIN_SIMILARITY:
-                        out.append(_row_to_citation(row, "semantic", len(out) + 1))
+                        semantic_rows.append(row)
             terms = _search_terms(question)
-            if terms and len(out) < QA_TOP_K:
+            if terms:
                 params = [time_window]
                 conditions = [cutoff_sql]
                 if region:
@@ -542,37 +626,70 @@ def _db_retrieve_sync(question: str, query_vec: Optional[List[float]], filters: 
                 likes = []
                 for term in terms:
                     like = f"%{term}%"
-                    likes.append("(LOWER(a.title) LIKE %s OR LOWER(COALESCE(a.source,'')) LIKE %s OR LOWER(COALESCE(a.payload,'')) LIKE %s OR LOWER(COALESCE(e.title,'')) LIKE %s OR LOWER(COALESCE(e.\"primaryCountry\",'')) LIKE %s OR LOWER(COALESCE(e.category,'')) LIKE %s)")
+                    likes.append("(LOWER(a.title) LIKE %s OR LOWER(COALESCE(a.source,'')) LIKE %s OR LOWER(COALESCE(a.payload::text,'')) LIKE %s OR LOWER(COALESCE(e.title,'')) LIKE %s OR LOWER(COALESCE(e.\"primaryCountry\",'')) LIKE %s OR LOWER(COALESCE(e.category,'')) LIKE %s)")
                     params.extend([like, like, like, like, like, like])
                 conditions.append("(" + " OR ".join(likes) + ")")
+                score_parts = []
+                score_params = []
+                for term in terms:
+                    like = f"%{term}%"
+                    score_parts.append("(CASE WHEN LOWER(s.title) LIKE %s THEN 6 ELSE 0 END + CASE WHEN LOWER(COALESCE(s.event_title,'')) LIKE %s THEN 5 ELSE 0 END + CASE WHEN LOWER(COALESCE(s.event_country,'')) LIKE %s THEN 4 ELSE 0 END + CASE WHEN LOWER(COALESCE(s.source,'')) LIKE %s THEN 2 ELSE 0 END + CASE WHEN LOWER(COALESCE(s.payload::text,'')) LIKE %s THEN 1 ELSE 0 END)")
+                    score_params.extend([like, like, like, like, like])
                 sql = f"""
-                  SELECT *, 1::float AS lexical_score, NULL::float AS similarity
+                  SELECT *, ({' + '.join(score_parts)})::float AS lexical_score, NULL::float AS similarity
                   FROM ({base_select} WHERE {' AND '.join(conditions)}) s
-                  ORDER BY s.\"publishedAt\" DESC NULLS LAST
+                  ORDER BY lexical_score DESC, s.\"publishedAt\" DESC NULLS LAST
                   LIMIT %s
                 """
-                params.append(max(1, min(QA_LEXICAL_K, 16)))
-                cur.execute(sql, params)
-                seen = {c["articleId"] for c in out}
-                for row in cur.fetchall():
-                    if str(row.get("id")) not in seen and len(out) < QA_TOP_K:
-                        out.append(_row_to_citation(row, "lexical", len(out) + 1))
-    return out[:QA_TOP_K]
+                cur.execute(sql, score_params + params + [max(1, min(QA_LEXICAL_K, 16))])
+                lexical_rows = cur.fetchall()
+    return _merge_retrieval_rows(semantic_rows, lexical_rows)
 
 
 async def _retrieve_for_qa(question: str, prior: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-    last_assistant = next((m for m in reversed(prior or []) if m.get("role") == "assistant"), None)
-    composite = f"Previous answer: {str(last_assistant.get('content', ''))[:400]}\\n\\nQuestion: {question}" if last_assistant else question
+    retrieval_query = _build_retrieval_query(question, prior)
     vec = None
     try:
         model = await get_embedder()
         loop = asyncio.get_event_loop()
-        vectors = await loop.run_in_executor(None, lambda: model.encode([composite], normalize_embeddings=True, batch_size=1).tolist())
+        vectors = await loop.run_in_executor(None, lambda: model.encode([retrieval_query], normalize_embeddings=True, batch_size=1).tolist())
         vec = vectors[0] if vectors else None
     except Exception as e:
         log.warning("qa embed failed; lexical fallback request=%s error=%r", hashlib.sha1(question.encode()).hexdigest()[:10], e)
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, lambda: _db_retrieve_sync(composite, vec, filters or {}))
+    return await loop.run_in_executor(None, lambda: _db_retrieve_sync(retrieval_query, vec, filters or {}))
+
+
+def _build_reasoning_trace(
+    question: str,
+    prior: List[Dict[str, Any]],
+    filters: Dict[str, Any],
+    citations: List[Dict[str, Any]],
+) -> QaGatewayReasoning:
+    retrieval_query = _build_retrieval_query(question, prior)
+    terms = _search_terms(retrieval_query)
+    modes = sorted({str(c.get("retrievalMode") or "unknown") for c in citations if c.get("retrievalMode")})
+    notes = [
+        "Retrieval was anchored to the latest user question; conversation history was used only for pronoun resolution.",
+    ]
+    if retrieval_query.strip().lower() != _clean_text(question).strip().lower():
+        notes.append("The retrieval query was rewritten to remove negated stale terms or resolve a short follow-up.")
+    if not citations:
+        notes.append("No Mapr corpus sources cleared retrieval for this turn.")
+    else:
+        notes.append(f"Returned {len(citations)} source candidate(s), ranked by hybrid lexical and semantic evidence.")
+    scope = {
+        "timeWindowHours": (filters or {}).get("timeWindowHours") or 168,
+        "region": (filters or {}).get("region"),
+    }
+    return QaGatewayReasoning(
+        searchQuery=retrieval_query[:500],
+        searchTerms=terms,
+        sourceCount=len(citations),
+        retrievalModes=modes,
+        scope=scope,
+        notes=notes,
+    )
 
 
 def _qa_input(question: str, prior: List[Dict[str, Any]], citations: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -619,19 +736,21 @@ async def _generate_qa(req: QaGatewayRequest, citations: List[Dict[str, Any]]) -
         source_lines.append(f"[{c.get('index')}] {c.get('title') or 'Untitled'} — {c.get('source') or 'Unknown'}: {c.get('excerpt') or ''}")
     prior_lines = []
     for m in (req.priorMessages or [])[-2:]:
+        if _clean_text(m.get("content")).lower() == _clean_text(req.question).lower():
+            continue
         role = "assistant" if m.get("role") == "assistant" else "user"
         prior_lines.append(f"{role}: {str(m.get('content') or '')[:300]}")
-    user_msg = "Question:\n" + req.question[:1200]
+    user_msg = "CURRENT QUESTION (answer this turn only):\n" + req.question[:1200]
     if prior_lines:
-        user_msg += "\n\nRecent conversation:\n" + "\n".join(prior_lines)
+        user_msg += "\n\nCONVERSATION CONTEXT (for pronoun resolution only):\n" + "\n".join(prior_lines)
     if source_lines:
-        user_msg += "\n\nSources:\n" + "\n".join(source_lines)
+        user_msg += "\n\nRETRIEVED SOURCES FOR THE CURRENT QUESTION:\n" + "\n".join(source_lines)
     else:
-        user_msg += "\n\nSources: none"
+        user_msg += "\n\nRETRIEVED SOURCES FOR THE CURRENT QUESTION: none"
     llm_body = {
         "model": LLM_MODEL,
         "messages": [
-            {"role": "system", "content": "You are Mapr's assistant. Answer concisely. Use only provided sources for factual corpus claims and cite them as [1], [2]. If no sources cover the factual question, say what evidence is missing. Greetings/small talk may be answered naturally."},
+            {"role": "system", "content": "You are Mapr's analyst assistant. Answer the CURRENT QUESTION only. Do not answer a previous question. Conversation context is only for pronoun resolution and may be irrelevant. Use only retrieved sources for factual corpus claims and cite them as [1], [2]. If sources do not match the current question's entity, location, or time frame, say the retrieved evidence is insufficient instead of answering an older topic. Never start an answer with \"The recent conversation indicates\". Greetings/small talk may be answered naturally."},
             {"role": "user", "content": user_msg},
         ],
         "stream": False,
@@ -665,6 +784,7 @@ async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
         raise HTTPException(status_code=503, detail={"code": "AI_BUSY", "request_id": request_id, "queue_depth": qa_waiting, "active_generation_count": qa_active_generations})
     t0 = time.monotonic()
     citations = [] if _is_conversational_only(req.question) else await _retrieve_for_qa(req.question, req.priorMessages, req.filters)
+    reasoning = _build_reasoning_trace(req.question, req.priorMessages, req.filters, citations)
     qa_waiting += 1
     queue_started = time.monotonic()
     acquired = False
@@ -688,7 +808,7 @@ async def v1_qa(req: QaGatewayRequest, request: Request) -> QaGatewayResponse:
         took_ms = int((time.monotonic() - t0) * 1000)
         qa_last_success = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         log.info("qa ok request_id=%s conversation_id=%s queue_depth=%s queue_wait_ms=%s active_generation_count=%s provider=local model=%s tokens_in=%s tokens_out=%s took_ms=%s citations=%s", request_id, req.conversationId, qa_waiting, queue_wait_ms, qa_active_generations, LLM_MODEL, gen.tokens_in, gen.tokens_out, took_ms, len(out_cites))
-        return QaGatewayResponse(answer=answer, citations=out_cites, modelUsed=gen.model, tokensIn=gen.tokens_in, tokensOut=gen.tokens_out, took_ms=took_ms, queueWaitMs=queue_wait_ms, requestId=request_id, conversationId=req.conversationId)
+        return QaGatewayResponse(answer=answer, citations=out_cites, reasoning=reasoning, modelUsed=gen.model, tokensIn=gen.tokens_in, tokensOut=gen.tokens_out, took_ms=took_ms, queueWaitMs=queue_wait_ms, requestId=request_id, conversationId=req.conversationId)
     except HTTPException as e:
         qa_last_error = {"code": getattr(e, "detail", {}).get("code") if isinstance(e.detail, dict) else "AI_UPSTREAM_ERROR", "request_id": request_id, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         log.warning("qa error request_id=%s conversation_id=%s detail=%s", request_id, req.conversationId, e.detail)

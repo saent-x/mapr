@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Filter, Search, SendHorizontal } from 'lucide-react';
+import {
+  PromptInput,
+  PromptInputAction,
+  PromptInputActions,
+  PromptInputTextarea,
+} from '../prompt-kit/prompt-input.jsx';
 
 export default function AgentComposer({
   onSend,
@@ -66,8 +72,8 @@ export default function AgentComposer({
         </div>
       )}
 
-      <div className="agent-composer-shell" data-busy={disabled ? 'true' : undefined}>
-        <textarea
+      <PromptInput className="agent-composer-shell" isLoading={disabled} data-busy={disabled ? 'true' : undefined}>
+        <PromptInputTextarea
           ref={textareaRef}
           className="agent-composer-input"
           placeholder={t('agent.composerPlaceholder')}
@@ -78,35 +84,38 @@ export default function AgentComposer({
           disabled={disabled || quotaExceeded || notConfigured}
           data-testid="agent-composer-input"
         />
-        <div className="agent-composer-toolbar">
-          <button
-            type="button"
-            className="agent-filter-toggle"
-            onClick={() => onToggleFilters?.(!useCurrentFilters)}
-            data-active={useCurrentFilters ? 'true' : undefined}
-            title={t('agent.useCurrentFiltersHelp')}
-            aria-pressed={useCurrentFilters}
-            aria-label={t('agent.useCurrentFilters')}
-          >
-            <Filter size={12} aria-hidden />
-            <span>{useCurrentFilters ? t('agent.filtersOn') : t('agent.filtersOff')}</span>
-          </button>
+        <PromptInputActions className="agent-composer-toolbar">
+          <PromptInputAction tooltip={t('agent.useCurrentFiltersHelp')}>
+            <button
+              type="button"
+              className="agent-filter-toggle"
+              onClick={() => onToggleFilters?.(!useCurrentFilters)}
+              data-active={useCurrentFilters ? 'true' : undefined}
+              aria-pressed={useCurrentFilters}
+              aria-label={t('agent.useCurrentFilters')}
+            >
+              <Filter size={12} aria-hidden />
+              <span>{useCurrentFilters ? t('agent.filtersOn') : t('agent.filtersOff')}</span>
+            </button>
+          </PromptInputAction>
           <div className="agent-composer-context" aria-live="polite">
             <Search size={12} aria-hidden />
             <span>{useCurrentFilters ? t('agent.contextFiltered') : t('agent.contextCorpus')}</span>
           </div>
           <span className="agent-composer-shortcut mono micro">{t('agent.enterToSend')}</span>
-          <button
-            type="submit"
-            className="agent-composer-send"
-            disabled={sendDisabled}
-            aria-label={t('agent.composerSend')}
-            data-testid="agent-composer-send"
-          >
-            <SendHorizontal size={14} aria-hidden />
-          </button>
-        </div>
-      </div>
+          <PromptInputAction tooltip={t('agent.composerSend')}>
+            <button
+              type="submit"
+              className="agent-composer-send"
+              disabled={sendDisabled}
+              aria-label={t('agent.composerSend')}
+              data-testid="agent-composer-send"
+            >
+              <SendHorizontal size={14} aria-hidden />
+            </button>
+          </PromptInputAction>
+        </PromptInputActions>
+      </PromptInput>
     </form>
   );
 }

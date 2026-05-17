@@ -11,9 +11,25 @@
  * behind this gateway.
  */
 
-const GATEWAY_URL = (process.env.MAPR_AI_GATEWAY_URL || '').replace(/\/+$/, '');
-const GATEWAY_TOKEN = process.env.MAPR_AI_GATEWAY_TOKEN || '';
 const DEFAULT_TIMEOUT_MS = 55_000;
+
+function resolveGatewayConfig(env = process.env) {
+  return {
+    url: (
+      env.MAPR_AI_GATEWAY_URL
+      || env.MAPR_AI_HOMEPC_QA_URL
+      || env.MAPR_AI_HOMEPC_LLM_URL
+      || env.MAPR_AI_HOMEPC_URL
+      || ''
+    ).replace(/\/+$/, ''),
+    token: (
+      env.MAPR_AI_GATEWAY_TOKEN
+      || env.MAPR_AI_BEARER
+      || env.MAPR_AI_HOMEPC_BEARER
+      || ''
+    ),
+  };
+}
 
 function notConfigured(detail) {
   const err = new Error(`AI gateway not configured: ${detail}`);
@@ -40,17 +56,18 @@ function mapGatewayCode(status, payload) {
 }
 
 async function callGateway(path, { method = 'GET', body, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
-  if (!GATEWAY_URL) throw notConfigured('missing MAPR_AI_GATEWAY_URL');
-  if (!GATEWAY_TOKEN) throw notConfigured('missing MAPR_AI_GATEWAY_TOKEN');
+  const config = resolveGatewayConfig();
+  if (!config.url) throw notConfigured('missing MAPR_AI_GATEWAY_URL');
+  if (!config.token) throw notConfigured('missing MAPR_AI_GATEWAY_TOKEN');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(`${GATEWAY_URL}${path}`, {
+    const res = await fetch(`${config.url}${path}`, {
       method,
       headers: {
         'content-type': 'application/json',
-        'x-mapr-token': GATEWAY_TOKEN,
+        'x-mapr-token': config.token,
       },
       body: body == null ? undefined : JSON.stringify(body),
       signal: ctrl.signal,
@@ -98,4 +115,4 @@ export function readyz() {
   return callGateway('/readyz');
 }
 
-export const __test__ = { summarizeHttpErrorBody, mapGatewayCode };
+export const __test__ = { summarizeHttpErrorBody, mapGatewayCode, resolveGatewayConfig };

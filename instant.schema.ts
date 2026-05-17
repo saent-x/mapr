@@ -112,6 +112,7 @@ const _schema = i.schema({
       role: i.string(),
       content: i.string(),
       citations: i.json().optional(),
+      reasoning: i.json().optional(),
       modelUsed: i.string().optional(),
       tokensIn: i.number().optional(),
       tokensOut: i.number().optional(),

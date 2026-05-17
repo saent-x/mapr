@@ -1492,6 +1492,7 @@ const server = http.createServer(async (request, response) => {
         // the full chat history from InstantDB on every send adds avoidable
         // latency to the hot path.
         const priorMessages = await readQaMessages({ user, conversationId, limit: 12 });
+        const gatewayPriorMessages = priorMessages.filter((m) => m.id !== userMessage.id);
 
         // AI/RAG call. The Mapr backend calls exactly one stable AI Gateway URL.
         // Retrieval, embeddings, queueing/backpressure, and model generation all
@@ -1504,7 +1505,7 @@ const server = http.createServer(async (request, response) => {
             requestId,
             conversationId,
             question: content,
-            priorMessages,
+            priorMessages: gatewayPriorMessages,
             filters: {
               timeWindowHours: filters.timeWindowHours || 168,
               region: filters.region || null,
@@ -1525,6 +1526,7 @@ const server = http.createServer(async (request, response) => {
             role: 'assistant',
             content: result.answer,
             citations: result.citations,
+            reasoning: result.reasoning,
             modelUsed: result.modelUsed,
             tokensIn: result.tokensIn,
             tokensOut: result.tokensOut,

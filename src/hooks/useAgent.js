@@ -24,6 +24,7 @@ function optimisticMessage(content) {
     role: 'user',
     content,
     citations: null,
+    reasoning: null,
     createdAt: Date.now(),
     optimistic: true,
   };

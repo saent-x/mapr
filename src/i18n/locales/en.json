@@ -705,6 +705,12 @@
     "citationTooltipHasEvent": "Open event in Mapr",
     "citationTooltipExternal": "Open source in new tab",
     "footnoteSources": "Sources",
+    "reasoningTitle": "Reasoning",
+    "reasoningQuery": "Query",
+    "reasoningSources": "Sources",
+    "reasoningTerms": "Terms",
+    "reasoningModes": "Modes",
+    "reasoningScope": "Scope",
     "modelLabel": "Model",
     "deletedNotice": "Conversation archived."
   },

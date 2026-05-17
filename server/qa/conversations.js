@@ -110,7 +110,7 @@ export async function getConversation({ user, conversationId }) {
  */
 export async function appendMessage({
   user, conversationId, role, content, citations = null,
-  modelUsed = null, tokensIn = null, tokensOut = null,
+  reasoning = null, modelUsed = null, tokensIn = null, tokensOut = null,
 }) {
   if (!VALID_ROLES.has(role)) {
     throw Object.assign(new Error(`invalid role ${role}`), { statusCode: 400 });
@@ -132,6 +132,7 @@ export async function appendMessage({
     createdAt: ts,
   };
   if (citations) messageRec.citations = citations;
+  if (reasoning) messageRec.reasoning = reasoning;
   if (modelUsed) messageRec.modelUsed = modelUsed;
   if (tokensIn != null) messageRec.tokensIn = tokensIn;
   if (tokensOut != null) messageRec.tokensOut = tokensOut;
@@ -168,6 +169,7 @@ export async function readMessages({ user, conversationId, limit = 100 }) {
       role: row.role,
       content: row.content,
       citations: row.citations || null,
+      reasoning: row.reasoning || null,
       modelUsed: row.modelUsed || null,
       createdAt: row.createdAt,
     }));
