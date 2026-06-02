@@ -1,0 +1,49 @@
+# deploy/cloudflared/config.example.yml
+# Cloudflare Tunnel ingress for MAPR. The tunnel is the ONLY public ingress;
+# it reaches services over the private Docker network by service name.
+#
+# SETUP (run on the box, with the cloudflared CLI or a one-off container):
+#   1. Authenticate (opens a browser to pick your zone):
+#        cloudflared tunnel login
+#   2. Create a named tunnel — this prints the <TUNNEL_ID> and writes a
+#      credentials JSON to ~/.cloudflared/<TUNNEL_ID>.json:
+#        cloudflared tunnel create mapr
+#   3. Copy the credentials file next to this config so the container mount
+#      (./cloudflared -> /etc/cloudflared) can see it:
+#        cp ~/.cloudflared/<TUNNEL_ID>.json deploy/cloudflared/<TUNNEL_ID>.json
+#   4. Copy this file to the live name and fill in <TUNNEL_ID> + hostnames:
+#        cp deploy/cloudflared/config.example.yml deploy/cloudflared/config.yml
+#   5. Point DNS at the tunnel (one route per public hostname):
+#        cloudflared tunnel route dns mapr app.example.com
+#        cloudflared tunnel route dns mapr convex-api.example.com
+#        cloudflared tunnel route dns mapr convex-site.example.com
+#   6. Bring up the stack; the `cloudflared` service runs `tunnel run`.
+#
+# The hostnames here MUST match: web origin = APP_ORIGIN/SITE_URL,
+# convex-api = CONVEX_CLOUD_ORIGIN, convex-site = CONVEX_SITE_ORIGIN.
+# Cloudflare terminates TLS, so the internal services stay plain http.
+# Credentials JSON and the live config.yml are secrets — do NOT commit them.
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  # Public web app (static React build served by nginx).
+  - hostname: app.example.com
+    service: http://web:80
+
+  # Convex API origin (:3210) — reactive WebSocket + queries/mutations.
+  - hostname: convex-api.example.com
+    service: http://convex-backend:3210
+
+  # Convex HTTP-actions/site origin (:3211) — Stripe webhook + Convex Auth.
+  - hostname: convex-site.example.com
+    service: http://convex-backend:3211
+
+  # OPTIONAL: expose the admin dashboard, but ALWAYS gate it behind a
+  # Cloudflare Access policy (Zero Trust) — it has no auth of its own.
+  # - hostname: convex-dashboard.example.com
+  #   service: http://convex-dashboard:6791
+
+  # Everything else is rejected.
+  - service: http_status:404

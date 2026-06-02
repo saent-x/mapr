@@ -1,0 +1,30 @@
+# mapr-ingestor — ingestion + enrichment worker. Embeds via Ollama (bge-m3)
+# and writes into the Convex backend over the raw HTTP function API. No
+# in-process ONNX runtime or model files.
+[package]
+name = "mapr-ingestor"
+version = "0.1.0"
+edition = "2021"
+description = "MAPR ingestion + enrichment worker for the Convex backend"
+license = "MIT"
+
+[[bin]]
+name = "mapr-ingestor"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "net", "time", "signal"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+quick-xml = "0.40"
+scraper = "0.23"
+url = "2.5"
+sha2 = "0.10"
+
+[dev-dependencies]
+tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "test-util"] }

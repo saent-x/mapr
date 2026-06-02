@@ -1,0 +1,30 @@
+/* RegionDetailPage — page-specific layout */
+.rg-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+.rg-topline { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.rg-name { font-size: var(--fs-6); line-height: 1.1; color: var(--ink-0); }
+.rg-win { display: inline-flex; border: 1px solid var(--line-2); border-radius: 4px; overflow: hidden; }
+.rg-win button { height: 28px; padding: 0 12px; background: var(--bg-1); border: 0; border-left: 1px solid var(--line); color: var(--ink-2); font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+.rg-win button:first-child { border-left: 0; }
+.rg-win button:hover { color: var(--ink-0); background: var(--bg-2); }
+.rg-win button.on { background: var(--amber); color: var(--bg-0); }
+
+.rg-tierbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--bg-2); border: 1px solid var(--line); }
+.rg-tierbar span { display: block; }
+.rg-tierbar-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+.rg-tierbar-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+.rg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rg-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line-2); border-radius: 3px; font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.rg-chip b { color: var(--ink-0); font-weight: 400; }
+
+.rg-events { display: flex; flex-direction: column; gap: 8px; }
+.rg-event { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; text-align: left; width: 100%; }
+.rg-event:hover { background: var(--bg-2); border-color: var(--line-2); }
+.rg-event .sev-pill { flex: none; margin-top: 2px; }
+.rg-event-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rg-event-title { font-size: var(--fs-3); line-height: 1.4; color: var(--ink-0); }
+
+.rg-section-label { margin-bottom: 10px; }
+.rg-skel { height: 56px; background: var(--bg-1); border: 1px solid var(--line); border-radius: 6px; animation: rgpulse 1.4s ease-in-out infinite; }
+@keyframes rgpulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.75; } }
+.rg-empty { padding: 40px; text-align: center; color: var(--ink-2); background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px; }

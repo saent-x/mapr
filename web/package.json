@@ -1,0 +1,28 @@
+{
+  "name": "@mapr/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MAPR tactical OSINT console — lean AI-first React client (convex/react + bespoke SVG map).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@convex-dev/auth": "^0.0.92",
+    "convex": "^1.39.0",
+    "maplibre-gl": "^5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0",
+    "vite": "^6.3.5"
+  }
+}

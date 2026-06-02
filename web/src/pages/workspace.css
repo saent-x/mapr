@@ -1,0 +1,40 @@
+/* WorkspacePage — page-specific layout */
+.ws-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin: 14px 0 18px; }
+.ws-title { font-size: var(--fs-6); line-height: 1.1; color: var(--ink-0); margin: 0; }
+
+.ws-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.ws-tabs button {
+  height: 34px; padding: 0 16px; background: transparent; color: var(--ink-2);
+  border: 0; border-bottom: 2px solid transparent;
+  font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.12em; text-transform: uppercase;
+  cursor: pointer;
+}
+.ws-tabs button:hover { color: var(--ink-0); }
+.ws-tabs button[aria-pressed="true"] { color: var(--amber); border-bottom-color: var(--amber); }
+.ws-tabs .badge { margin-left: 6px; color: var(--ink-3); }
+
+.ws-list { display: flex; flex-direction: column; gap: 0; }
+.ws-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.ws-row:last-child { border-bottom: 0; }
+.ws-row .grow { flex: 1; min-width: 0; }
+.ws-row .name { color: var(--ink-0); font-size: var(--fs-3); overflow: hidden; text-overflow: ellipsis; }
+.ws-row .sub { color: var(--ink-2); font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; }
+.ws-row .sub a:hover { color: var(--amber); }
+.btn.sm { height: 26px; padding: 0 10px; font-size: 9px; }
+.btn.danger:hover { color: var(--sev-red); border-color: var(--sev-red); }
+
+.ws-empty { color: var(--ink-2); font-size: var(--fs-3); padding: 18px 0; }
+
+.ws-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; align-items: end; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.ws-form .btn { height: 36px; }
+
+.toggle {
+  width: 40px; height: 22px; border-radius: 11px; border: 1px solid var(--line-2);
+  background: var(--bg-3); position: relative; cursor: pointer; flex: none;
+}
+.toggle::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink-2); transition: transform 0.12s, background 0.12s; }
+.toggle[aria-pressed="true"] { background: var(--amber-dim); border-color: var(--amber); }
+.toggle[aria-pressed="true"]::after { transform: translateX(18px); background: var(--amber); }

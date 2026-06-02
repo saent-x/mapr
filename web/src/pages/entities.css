@@ -1,0 +1,36 @@
+/* EntityExplorerPage — page-specific layout */
+.ent-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 14px 0 18px;
+}
+.ent-title { font-size: var(--fs-6); line-height: 1.1; color: var(--ink-0); margin: 0; }
+.ent-stats { display: flex; gap: 16px; margin-bottom: 14px; }
+.ent-stats span { font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.ent-stats b { color: var(--ink-0); }
+
+.win-seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 4px; overflow: hidden; }
+.win-seg button {
+  height: 28px; padding: 0 12px; background: var(--bg-1); color: var(--ink-2);
+  border: 0; border-right: 1px solid var(--line-2);
+  font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.12em; text-transform: uppercase;
+  cursor: pointer;
+}
+.win-seg button:last-child { border-right: 0; }
+.win-seg button:hover { color: var(--ink-0); background: var(--bg-2); }
+.win-seg button[aria-pressed="true"] { background: var(--amber); color: var(--bg-0); }
+.ent-layout { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.9fr); gap: 16px; }
+.ent-detail { min-height: 0; }
+.ent-detail .ws-list { max-height: 420px; overflow-y: auto; }
+@media (max-width: 980px) { .ent-layout { grid-template-columns: 1fr; } }
+
+.ent-graph svg { display: block; width: 100%; height: auto; background: var(--bg-0); border-radius: 6px; }
+.ent-graph .node { cursor: pointer; }
+.ent-graph .node-label { fill: var(--ink-1); font-family: var(--ff-mono); font-size: 11px; letter-spacing: 0.04em; pointer-events: none; }
+.ent-graph .edge { stroke: var(--ink-3); }
+.ent-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; }
+.ent-legend .lg { display: inline-flex; align-items: center; gap: 6px; font-family: var(--ff-mono); font-size: var(--fs-0); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+.ent-legend .dot { width: 10px; height: 10px; border-radius: 50%; }

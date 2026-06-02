@@ -1,0 +1,226 @@
+# deploy/docker-compose.yml
+# MAPR — single-command self-hosting stack for the owner's Coolify box
+# (Apple/Core i7 class, 24 GB RAM, 256 GB disk).
+#
+# ONE command brings up the WHOLE stack with LIVE data:
+#     docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+#
+# Boot order is encoded with healthchecks + depends_on conditions:
+#   convex-backend (healthy: GET /version)   ← SQLite backing on the convex_data volume
+#     ├─ convex-dashboard
+#     ├─ bootstrap        (one-shot: convex deploy + env set + seed sources)
+#     └─ cloudflared
+#   ollama (healthy)
+#     └─ ollama-pull           (one-shot: pulls bge-m3 + qwen2.5:3b)
+#   rust-ingestor              (waits for convex-backend + ollama + models + bootstrap)
+#
+# Only convex-backend (3210/3211), convex-dashboard and web are reachable from
+# the internet, and only through the Cloudflare Tunnel (cloudflared). ollama
+# and rust-ingestor stay private on the `mapr` network.
+#
+# Validate without pulling/building/starting:
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env.example config
+
+name: mapr
+
+networks:
+  mapr:
+    driver: bridge
+
+volumes:
+  convex_data:     # Convex backing store (embedded SQLite) + file storage (exports, modules, files, search)
+  ollama_models:   # Ollama model blobs (bge-m3 + qwen2.5:3b), pulled on the box
+
+services:
+  # --- Convex backend: API (3210) + HTTP actions/site (3211) ----------------
+  convex-backend:
+    image: ghcr.io/get-convex/convex-backend:latest
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    networks: [mapr]
+    ports:
+      # Loopback only: lets the on-box Convex CLI and backup script reach the
+      # backend directly. Public access is via cloudflared.
+      - "127.0.0.1:3210:3210"
+      - "127.0.0.1:3211:3211"
+    environment:
+      # Stable identity so generated admin keys survive restarts.
+      - INSTANCE_NAME=${INSTANCE_NAME:-convex-self-hosted}
+      - INSTANCE_SECRET=${INSTANCE_SECRET}
+      # Public origins served through the tunnel (TLS terminated by Cloudflare).
+      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN}
+      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN}
+      - DISABLE_BEACON=true
+      - REDACT_LOGS_TO_CLIENT=true
+      - RUST_LOG=info
+    volumes:
+      - convex_data:/convex/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3210/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 3g
+
+  # --- Convex admin dashboard (loopback; reach via SSH tunnel or gated host) --
+  convex-dashboard:
+    image: ghcr.io/get-convex/convex-dashboard:latest
+    restart: unless-stopped
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    networks: [mapr]
+    ports:
+      - "127.0.0.1:6791:6791"
+    environment:
+      # The dashboard is a browser app: this URL must be reachable from the
+      # operator's browser, so it points at the PUBLIC convex cloud origin.
+      - NEXT_PUBLIC_DEPLOYMENT_URL=${CONVEX_CLOUD_ORIGIN}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    mem_limit: 512m
+
+  # --- Ollama: embeddings (bge-m3, /api/embed) + LLM (qwen2.5:3b, /v1) -------
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    networks: [mapr]
+    environment:
+      # Bind to all interfaces so other containers on `mapr` can reach it.
+      - OLLAMA_HOST=0.0.0.0:11434
+      # One model loaded at a time keeps RAM bounded on the single box.
+      - OLLAMA_KEEP_ALIVE=15m
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      # `ollama list` hits GET /api/tags on the local server; 0 once it is up
+      # (independent of whether models are pulled yet).
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    mem_limit: 8g
+
+  # --- One-shot: pull the two models into the shared ollama volume ----------
+  ollama-pull:
+    image: ollama/ollama:latest
+    restart: "no"
+    networks: [mapr]
+    environment:
+      # Talk to the ollama SERVER container, not a local daemon.
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "set -e; echo 'pulling bge-m3 (embeddings)'; ollama pull bge-m3; echo 'pulling qwen2.5:3b (llm)'; ollama pull qwen2.5:3b; echo 'models ready'"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    mem_limit: 512m
+
+  # --- Rust ingestor: pure worker (fetch -> enrich -> embed -> write) -------
+  rust-ingestor:
+    build:
+      context: ../ingestor
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks: [mapr]
+    environment:
+      - CONVEX_URL=http://convex-backend:3210
+      - MAPR_INGEST_KEY=${MAPR_INGEST_KEY}
+      - OLLAMA_URL=http://ollama:11434
+      - EMBED_MODEL=${EMBED_MODEL:-bge-m3}
+      - INGEST_INTERVAL_SECS=${INGEST_INTERVAL_SECS:-900}
+      - FETCH_TIMEOUT_SECS=${FETCH_TIMEOUT_SECS:-20}
+      - RUST_LOG=${RUST_LOG:-info}
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-pull:
+        condition: service_completed_successfully
+      bootstrap:
+        condition: service_completed_successfully
+    mem_limit: 512m
+
+  # --- One-shot: deploy Convex functions, set function env, seed sources ----
+  bootstrap:
+    build:
+      context: ./bootstrap
+      dockerfile: Dockerfile
+    restart: "no"
+    networks: [mapr]
+    environment:
+      # Where the in-container CLI deploys to (internal Docker DNS). These ENV
+      # vars win over any on-box convex/.env.local (dotenv does not override
+      # real env), so the host's loopback .env.local stays valid for manual CLI.
+      - CONVEX_SELF_HOSTED_URL=http://convex-backend:3210
+      - CONVEX_SELF_HOSTED_ADMIN_KEY=${CONVEX_SELF_HOSTED_ADMIN_KEY}
+      # --- Convex FUNCTION env applied via `convex env set` -----------------
+      - MAPR_INGEST_KEY=${MAPR_INGEST_KEY}
+      - OLLAMA_URL=http://ollama:11434
+      - EMBED_MODEL=${EMBED_MODEL:-bge-m3}
+      - LLM_MODEL=${LLM_MODEL:-qwen2.5:3b}
+      - APP_ORIGIN=${APP_ORIGIN}
+      - AUTH_RESEND_KEY=${AUTH_RESEND_KEY}
+      - AUTH_EMAIL_FROM=${AUTH_EMAIL_FROM}
+      - ADMIN_EMAILS=${ADMIN_EMAILS}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_PRO=${STRIPE_PRICE_PRO}
+      - JWT_PRIVATE_KEY=${JWT_PRIVATE_KEY}
+      - JWKS=${JWKS}
+      # Optional tuning (set only if non-empty)
+      - OLLAMA_BEARER=${OLLAMA_BEARER:-}
+      - MAPR_QA_MAX_TOKENS=${MAPR_QA_MAX_TOKENS:-}
+    volumes:
+      # Read-only source; the script copies it to a writable /convex copy so the
+      # host tree (and its loopback .env.local) is never mutated.
+      - ../convex:/convex-src:ro
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+    mem_limit: 1g
+
+  # --- Static React build served by nginx (public via tunnel) ---------------
+  web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        # Baked into the bundle at build time (Vite inlines import.meta.env).
+        VITE_CONVEX_URL: ${CONVEX_CLOUD_ORIGIN}
+        VITE_CONVEX_SITE_URL: ${CONVEX_SITE_ORIGIN}
+        VITE_MAP_STYLE: ${VITE_MAP_STYLE:-}
+    restart: unless-stopped
+    networks: [mapr]
+    ports:
+      - "127.0.0.1:8080:80"   # loopback sanity check; public via cloudflared
+    volumes:
+      # SPA server config — single source of truth in deploy/nginx.conf.
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    mem_limit: 128m
+
+  # --- Cloudflare Tunnel: the only public ingress ---------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    networks: [mapr]
+    command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]
+    volumes:
+      - ./cloudflared:/etc/cloudflared:ro   # config.yml + <tunnel-id>.json (see cloudflared/config.example.yml)
+    depends_on:
+      convex-backend:
+        condition: service_healthy
+      web:
+        condition: service_started
+    mem_limit: 128m
