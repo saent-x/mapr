@@ -1,0 +1,134 @@
+/* ============================================================
+   mapr — "The Standing Watch"
+   Editorial intelligence instrument. Monochrome ink + severity-only color.
+   ============================================================ */
+
+/* ---------- Tokens ---------- */
+:root {
+  /* Light theme (warm paper) */
+  --paper:        oklch(0.985 0.004 95);
+  --paper-2:      oklch(0.965 0.005 92);
+  --surface:      oklch(0.998 0.002 95);
+  --surface-2:    oklch(0.975 0.004 93);
+  --ink:          oklch(0.205 0.012 80);
+  --ink-2:        oklch(0.36 0.012 80);
+  --ink-3:        oklch(0.54 0.012 82);
+  --ink-faint:    oklch(0.70 0.010 85);
+  --hairline:     oklch(0.90 0.006 85);
+  --hairline-2:   oklch(0.84 0.008 85);
+  --accent:       oklch(0.73 0.135 85);    /* dark yellow / goldenrod brand accent */
+  --accent-ink:   oklch(0.24 0.04 85);      /* warm near-black text on accent */
+  --shadow-color: 30 25% 12%;
+  --shadow-1: 0 1px 2px hsl(var(--shadow-color) / 0.06), 0 2px 6px hsl(var(--shadow-color) / 0.05);
+  --shadow-2: 0 4px 14px hsl(var(--shadow-color) / 0.10), 0 1px 3px hsl(var(--shadow-color) / 0.06);
+  --shadow-3: 0 18px 50px hsl(var(--shadow-color) / 0.18), 0 6px 16px hsl(var(--shadow-color) / 0.10);
+
+  /* Map cartography (light) */
+  --map-bg:     oklch(0.945 0.008 200);
+  --map-land:   oklch(0.905 0.010 95);
+  --map-land-2: oklch(0.875 0.012 95);
+  --map-stroke: oklch(0.80 0.010 95);
+  --map-grat:   oklch(0.88 0.006 200);
+
+  /* Severity — the ONLY hues that carry meaning */
+  --t-green:  oklch(0.62 0.13 150);
+  --t-amber:  oklch(0.74 0.145 75);
+  --t-red:    oklch(0.585 0.205 27);
+  --t-black:  oklch(0.40 0.16 22);
+  --t-green-soft:  oklch(0.62 0.13 150 / 0.14);
+  --t-amber-soft:  oklch(0.74 0.145 75 / 0.16);
+  --t-red-soft:    oklch(0.585 0.205 27 / 0.14);
+  --t-black-soft:  oklch(0.40 0.16 22 / 0.16);
+
+  /* Type */
+  --serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --sans:  "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono:  "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --r-sm: 7px;
+  --r:    11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  --spine-w: 0px;
+}
+
+[data-theme="dark"] {
+  --paper:        oklch(0.185 0.010 265);
+  --paper-2:      oklch(0.215 0.012 265);
+  --surface:      oklch(0.235 0.012 265);
+  --surface-2:    oklch(0.275 0.013 265);
+  --ink:          oklch(0.95 0.006 250);
+  --ink-2:        oklch(0.80 0.010 250);
+  --ink-3:        oklch(0.66 0.012 252);
+  --ink-faint:    oklch(0.50 0.012 255);
+  --hairline:     oklch(0.32 0.012 265);
+  --hairline-2:   oklch(0.40 0.014 265);
+  --accent:       oklch(0.81 0.145 86);    /* brighter goldenrod on dark */
+  --accent-ink:   oklch(0.19 0.035 86);
+  --shadow-color: 250 40% 3%;
+  --shadow-1: 0 1px 2px hsl(var(--shadow-color) / 0.35), 0 2px 6px hsl(var(--shadow-color) / 0.30);
+  --shadow-2: 0 6px 18px hsl(var(--shadow-color) / 0.45), 0 1px 3px hsl(var(--shadow-color) / 0.30);
+  --shadow-3: 0 24px 60px hsl(var(--shadow-color) / 0.60), 0 8px 20px hsl(var(--shadow-color) / 0.40);
+
+  --map-bg:     oklch(0.165 0.014 262);
+  --map-land:   oklch(0.255 0.015 262);
+  --map-land-2: oklch(0.29 0.016 262);
+  --map-stroke: oklch(0.355 0.016 262);
+  --map-grat:   oklch(0.24 0.012 262);
+
+  --t-green:  oklch(0.72 0.15 152);
+  --t-amber:  oklch(0.80 0.15 78);
+  --t-red:    oklch(0.66 0.21 28);
+  --t-black:  oklch(0.55 0.20 24);
+  --t-green-soft:  oklch(0.72 0.15 152 / 0.18);
+  --t-amber-soft:  oklch(0.80 0.15 78 / 0.20);
+  --t-red-soft:    oklch(0.66 0.21 28 / 0.20);
+  --t-black-soft:  oklch(0.55 0.20 24 / 0.22);
+}
+
+/* ---------- Reset / base ---------- */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+#root { height: 100%; }
+button { font-family: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+input, textarea { font-family: inherit; }
+::selection { background: var(--ink); color: var(--paper); }
+
+/* Headline serif handling driven by Tweaks */
+[data-headfont="sans"] .serif { font-family: var(--sans) !important; letter-spacing: -0.02em; }
+
+.serif { font-family: var(--serif); font-optical-sizing: auto; }
+.mono  { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* tier helpers */
+.tier-green  { --tc: var(--t-green);  --tcs: var(--t-green-soft); }
+.tier-amber  { --tc: var(--t-amber);  --tcs: var(--t-amber-soft); }
+.tier-red    { --tc: var(--t-red);    --tcs: var(--t-red-soft); }
+.tier-black  { --tc: var(--t-black);  --tcs: var(--t-black-soft); }
+
+/* scrollbars */
+.scroll { scrollbar-width: thin; scrollbar-color: var(--hairline-2) transparent; }
+.scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.scroll::-webkit-scrollbar-thumb { background: var(--hairline-2); border-radius: 20px; border: 2px solid transparent; background-clip: content-box; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

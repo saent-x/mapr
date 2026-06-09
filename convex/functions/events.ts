@@ -49,14 +49,85 @@ export const list = query({
 });
 
 /**
+ * Honest feed totals for the same window `list` serves. `list` is capped at
+ * FEED_LIMIT, so its length silently understates activity during spikes; this
+ * sibling reports the EXACT in-window event total (from the precomputed
+ * `coverage` rollup on the default window) plus the cap and a `truncated` flag
+ * so the UI can render "600+". Additive — `list` callers are unaffected.
+ */
+export const listMeta = query({
+  args: { windowHours: v.optional(v.number()), limit: v.optional(v.number()) },
+  returns: v.object({
+    total: v.number(),
+    limit: v.number(),
+    truncated: v.boolean(),
+    exact: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const windowHours = args.windowHours ?? DEFAULT_WINDOW_HOURS;
+    const limit = Math.min(args.limit ?? FEED_LIMIT, FEED_LIMIT);
+
+    // Default window: the coverage rollup already holds exact per-region totals.
+    if (windowHours === DEFAULT_WINDOW_HOURS) {
+      const rollups = await ctx.db.query("coverage").collect();
+      const total = rollups.reduce((sum, c) => sum + c.eventCount, 0);
+      return { total, limit, truncated: total > limit, exact: true };
+    }
+
+    // Other windows: bounded count over the scan ceiling. `exact` is false only
+    // when we hit that ceiling (total is then a floor, not the true count).
+    const cutoff = Date.now() - windowHours * 3_600_000;
+    const rows = await ctx.db
+      .query("events")
+      .withIndex("by_publishedAt", (q) => q.gte("publishedAt", cutoff))
+      .take(RECENT_SCAN_LIMIT);
+    const exact = rows.length < RECENT_SCAN_LIMIT;
+    return { total: rows.length, limit, truncated: rows.length > limit, exact };
+  },
+});
+
+// Representative severity for a region whose rollup carries only `topTier`
+// (the precomputed `coverage` table has no per-region max-severity column). The
+// floor of each tier's band keeps `maxSev` tier-consistent so any choropleth
+// derives the same tint from `maxSev` as it does from `tier`.
+const TIER_SEV_FLOOR: Record<Doc<"events">["tier"], number> = {
+  green: 0,
+  amber: 4,
+  red: 7,
+  black: 9,
+};
+
+/**
  * Per-region coverage rollup over the window (ALL events, not the feed cap) —
  * drives the choropleth so every country with activity is tinted, even when its
  * events fall outside the recency-capped feed.
+ *
+ * For the DEFAULT window this reads the precomputed `coverage` rollup (written
+ * at ingest time, O(regions)) instead of re-scanning every event on every
+ * client subscription — the rollup's `eventCount` is also an EXACT per-region
+ * total, not a scan-capped approximation. Non-default windows fall back to the
+ * live scan. The return element shape — { iso, count, maxSev, tier } — is
+ * identical across both paths.
  */
 export const regionCoverage = query({
   args: { windowHours: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const windowHours = args.windowHours ?? DEFAULT_WINDOW_HOURS;
+
+    // Fast path: the precomputed rollup already covers the standard window.
+    if (windowHours === DEFAULT_WINDOW_HOURS) {
+      const rollups = await ctx.db.query("coverage").collect();
+      return rollups
+        .filter((c) => c.isoA2 && c.eventCount > 0)
+        .map((c) => ({
+          iso: c.isoA2,
+          count: c.eventCount,
+          maxSev: TIER_SEV_FLOOR[c.topTier],
+          tier: c.topTier,
+        }));
+    }
+
+    // Fallback: arbitrary windows still scan the events feed.
     const cutoff = Date.now() - windowHours * 3_600_000;
     const rows = await ctx.db
       .query("events")

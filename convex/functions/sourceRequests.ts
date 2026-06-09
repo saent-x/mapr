@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser, requireAdmin, requireUser } from "./lib/access";
 import { limitsForUser, requireFeature } from "./lib/entitlements";
+import { assertPublicSourceUrl } from "./admin";
 
 export const listMine = query({
   args: {},
@@ -27,6 +28,9 @@ export const submit = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     requireFeature(user, "custom_sources");
+    // Reject internal/private targets at request time (mirrors the worker's
+    // SSRF policy) so an unsafe URL never reaches the admin review queue.
+    assertPublicSourceUrl(args.url);
     const limits = limitsForUser(user);
     if (limits.sourceRequestsPerMonth !== Number.MAX_SAFE_INTEGER) {
       const cutoff = Date.now() - 30 * 24 * 3_600_000;
@@ -80,6 +84,9 @@ export const review = mutation({
     if (!req) throw new Error("NOT_FOUND");
     let sourceId = null;
     if (args.status === "approved" && args.approveAsSource) {
+      // Re-validate at catalog-write time: the request may predate this guard,
+      // so never promote an internal/private URL into the fetchable catalog.
+      assertPublicSourceUrl(req.url);
       const existing = await ctx.db
         .query("sourceCatalog")
         .withIndex("by_url", (q) => q.eq("url", req.url))

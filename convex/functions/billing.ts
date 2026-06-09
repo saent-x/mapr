@@ -1,6 +1,6 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { internal, api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import Stripe from "stripe";
 
@@ -22,7 +22,7 @@ export const createCheckout = action({
   handler: async (ctx): Promise<{ url: string }> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHENTICATED");
-    const user = await ctx.runQuery(api.users.getById, { id: userId });
+    const user = await ctx.runQuery(internal.users.getById, { id: userId });
     if (!user) throw new Error("UNAUTHENTICATED");
 
     const stripe = stripeClient();
@@ -59,7 +59,7 @@ export const createPortal = action({
   handler: async (ctx): Promise<{ url: string }> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHENTICATED");
-    const user = await ctx.runQuery(api.users.getById, { id: userId });
+    const user = await ctx.runQuery(internal.users.getById, { id: userId });
     if (!user?.stripeCustomerId) throw new Error("no stripe customer for user");
 
     const stripe = stripeClient();

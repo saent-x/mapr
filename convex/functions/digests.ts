@@ -68,15 +68,26 @@ export const digestMatches = internalQuery({
   args: { severityThreshold: v.number(), isoA2: v.optional(v.string()), category: v.optional(v.string()), keyword: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const cutoff = Date.now() - 24 * 3_600_000;
-    const events = await ctx.db
-      .query("events")
-      .withIndex("by_publishedAt", (q) => q.gte("publishedAt", cutoff))
-      .order("desc")
-      .take(500);
+    // Region-scoped digests read ONLY their region's events off `by_iso`
+    // instead of scanning + filtering the global recency window (which silently
+    // drops region matches past the take cap). events.isoA2 is stored
+    // upper-case (the Rust geocoder emits upper-case ISO alpha-2). Entity/
+    // keyword/category scopes stay on the bounded recency-window scan.
+    const events = args.isoA2
+      ? await ctx.db
+          .query("events")
+          .withIndex("by_iso", (q) => q.eq("isoA2", args.isoA2!.toUpperCase()).gte("publishedAt", cutoff))
+          .order("desc")
+          .take(500)
+      : await ctx.db
+          .query("events")
+          .withIndex("by_publishedAt", (q) => q.gte("publishedAt", cutoff))
+          .order("desc")
+          .take(500);
     return events
       .filter((e: Doc<"events">) => {
         if (e.severity < args.severityThreshold) return false;
-        if (args.isoA2 && e.isoA2 !== args.isoA2) return false;
+        if (args.isoA2 && e.isoA2 !== args.isoA2.toUpperCase()) return false;
         if (args.category && e.category !== args.category) return false;
         if (args.keyword) {
           const haystack = `${e.title} ${e.summary} ${(e.entities ?? []).join(" ")}`.toLowerCase();
@@ -90,22 +101,46 @@ export const digestMatches = internalQuery({
   },
 });
 
+/**
+ * Shared watchlist scope predicate — does an event match a watch's
+ * (type, value) scope? Reused by digests + watchBaselines (Phase 2) so the
+ * baseline snapshot and the rolling brief evaluate identical membership.
+ */
+export function watchlistMatchesEvent(
+  e: Doc<"events">,
+  type: string,
+  value: string,
+): boolean {
+  if (type === "region") return e.isoA2.toUpperCase() === value.toUpperCase();
+  if (type === "entity") return (e.entities ?? []).some((x) => x.toLowerCase() === value.toLowerCase());
+  if (type === "keyword") {
+    return `${e.title} ${e.summary} ${(e.entities ?? []).join(" ")}`.toLowerCase().includes(value.toLowerCase());
+  }
+  return false;
+}
+
 export const watchlistMatches = internalQuery({
   args: { type: v.string(), value: v.string() },
   handler: async (ctx, args) => {
     const cutoff = Date.now() - 24 * 3_600_000;
-    const events = await ctx.db
-      .query("events")
-      .withIndex("by_publishedAt", (q) => q.gte("publishedAt", cutoff))
-      .order("desc")
-      .take(500);
+    // Region watches read ONLY their region's events off `by_iso` instead of
+    // scanning + filtering the global recency window (which silently drops
+    // region matches past the take cap). events.isoA2 is stored upper-case
+    // (the Rust geocoder emits upper-case ISO alpha-2). Entity/keyword scopes
+    // have no covering index → bounded recency-window scan.
+    const events = args.type === "region"
+      ? await ctx.db
+          .query("events")
+          .withIndex("by_iso", (q) => q.eq("isoA2", args.value.toUpperCase()).gte("publishedAt", cutoff))
+          .order("desc")
+          .take(500)
+      : await ctx.db
+          .query("events")
+          .withIndex("by_publishedAt", (q) => q.gte("publishedAt", cutoff))
+          .order("desc")
+          .take(500);
     return events
-      .filter((e: Doc<"events">) => {
-        if (args.type === "region") return e.isoA2.toUpperCase() === args.value.toUpperCase();
-        if (args.type === "entity") return (e.entities ?? []).some((x) => x.toLowerCase() === args.value.toLowerCase());
-        if (args.type === "keyword") return `${e.title} ${e.summary} ${(e.entities ?? []).join(" ")}`.toLowerCase().includes(args.value.toLowerCase());
-        return false;
-      })
+      .filter((e: Doc<"events">) => watchlistMatchesEvent(e, args.type, args.value))
       .sort((a, b) => b.severity - a.severity)
       .slice(0, 20)
       .map((e) => ({ title: e.title, tier: e.tier, severity: e.severity, isoA2: e.isoA2, url: e.url ?? null }));

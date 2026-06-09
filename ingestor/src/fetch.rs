@@ -12,17 +12,36 @@ use crate::dates;
 use crate::model::{RawItem, Source, SourceKind};
 use crate::ssrf;
 
-const USER_AGENT: &str = concat!("mapr-ingestor/", env!("CARGO_PKG_VERSION"));
+// A realistic desktop-browser User-Agent. Many news sites / CDNs (Cloudflare,
+// Akamai WAFs) return 403 to bot-shaped UAs, which silently dropped otherwise-live
+// national feeds (elpais.com.uy, newsroom.gy, CBC, …). Feed readers conventionally
+// present a browser UA; doing so recovers that coverage.
+const USER_AGENT: &str =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const MAX_REDIRECTS: usize = 5;
 const MAX_ITEMS_PER_SOURCE: usize = 200;
 const GDELT_DOC_API: &str = "https://api.gdeltproject.org/api/v2/doc/doc";
 
 /// Build the fetch client: TLS via rustls, redirects DISABLED (we follow them
-/// manually so each hop passes the SSRF guard).
+/// manually so each hop passes the SSRF guard). Sends browser-like Accept headers
+/// so feed endpoints behind a WAF don't reject us.
 pub fn build_client() -> Result<reqwest::Client> {
+    use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, ACCEPT_LANGUAGE};
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        ACCEPT,
+        HeaderValue::from_static(
+            "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/html;q=0.8, */*;q=0.7",
+        ),
+    );
+    headers.insert(
+        ACCEPT_LANGUAGE,
+        HeaderValue::from_static("en-US,en;q=0.9,es;q=0.8,fr;q=0.7,ar;q=0.6,pt;q=0.6"),
+    );
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(USER_AGENT)
+        .default_headers(headers)
         .build()
         .context("building fetch client")
 }
@@ -71,6 +90,76 @@ pub async fn guarded_get(
         return Ok((current, body));
     }
     bail!("too many redirects fetching {url}")
+}
+
+/// Max fetch attempts (1 initial + [`MAX_RETRIES`] retries) on transient errors.
+const MAX_RETRIES: usize = 2;
+/// Base backoff before the first retry; doubled each attempt, plus jitter.
+const RETRY_BASE: Duration = Duration::from_millis(250);
+
+/// [`fetch_source`] with a small bounded retry (jittered exponential backoff)
+/// on transient errors. Non-transient failures (SSRF rejection, parse errors)
+/// short-circuit immediately. Per-source isolation is the caller's job.
+pub async fn fetch_source_retrying(
+    client: &reqwest::Client,
+    source: &Source,
+    timeout: Duration,
+) -> Result<Vec<RawItem>> {
+    let mut attempt = 0usize;
+    loop {
+        match fetch_source(client, source, timeout).await {
+            Ok(items) => return Ok(items),
+            Err(e) => {
+                if attempt >= MAX_RETRIES || !is_transient(&e) {
+                    return Err(e);
+                }
+                let backoff = retry_backoff(attempt);
+                tracing::debug!(
+                    source = %source.name,
+                    attempt = attempt + 1,
+                    backoff_ms = backoff.as_millis() as u64,
+                    error = %e,
+                    "transient fetch error, retrying"
+                );
+                tokio::time::sleep(backoff).await;
+                attempt += 1;
+            }
+        }
+    }
+}
+
+/// Heuristic: a fetch error is transient (worth retrying) if it stems from the
+/// network/timeout/5xx path rather than SSRF rejection or a malformed response.
+fn is_transient(err: &anyhow::Error) -> bool {
+    let msg = err.to_string().to_lowercase();
+    // SSRF guard rejections are deterministic — never retry them.
+    if msg.contains("ssrf") {
+        return false;
+    }
+    msg.contains("timed out")
+        || msg.contains("timeout")
+        || msg.contains("connection")
+        || msg.contains("connect")
+        || msg.contains("reset")
+        || msg.contains("dns")
+        || msg.contains("error sending request")
+        || msg.contains("http 5")
+        || msg.contains("returned http 5")
+        || msg.contains("too many redirects")
+}
+
+/// Exponential backoff with deterministic-but-spread jitter for `attempt`
+/// (0-indexed). Jitter is derived from the wall clock so concurrent retries on
+/// different sources don't synchronize.
+fn retry_backoff(attempt: usize) -> Duration {
+    let base = RETRY_BASE.saturating_mul(1u32 << attempt as u32);
+    // 0..=base/2 of jitter from sub-millisecond clock noise.
+    let jitter_span = (base.as_millis() as u64 / 2).max(1);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as u64)
+        .unwrap_or(0);
+    base + Duration::from_millis(nanos % jitter_span)
 }
 
 /// Fetch + parse a source into raw items (pre-enrichment). Dispatches by kind.

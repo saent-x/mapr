@@ -257,12 +257,26 @@ export interface RegionAgg {
   avg: number;
   count: number;
 }
+export interface TierSplit {
+  green: number;
+  amber: number;
+  red: number;
+  black: number;
+}
+
 export interface AnomalyAgg {
   label: string;
+  category: string; // raw category key (for CATEGORY chip)
   delta: string;
   dir: "up" | "down";
   recent: number;
   baseline: number;
+  lastTriggeredAt: number; // max publishedAt among recent-window events in this cat
+  recencyWeight: number; // 0..1, 1 == newest event <2h old, decays over the window
+  hotScore: number; // composite = abs(pct/100) * (0.4 + 0.6*recencyWeight)
+  state: "new" | "sustained"; // "new" if no baseline-window events, else "sustained"
+  tiers: TierSplit; // recent-window tier split
+  priorTiers: TierSplit; // baseline-window tier split
 }
 
 export type Route = "map" | "qa";
@@ -300,14 +314,37 @@ export function computeRegions(recent: EventLike[], n = 6): RegionAgg[] {
     .slice(0, n);
 }
 
-/** Category surges: last-window count vs the preceding window of equal length. */
-export function computeAnomalies(all: EventLike[], windowMs: number, now: number, n = 6): AnomalyAgg[] {
+const TWO_HOURS_MS = 2 * 3_600_000;
+
+function emptyTiers(): TierSplit {
+  return { green: 0, amber: 0, red: 0, black: 0 };
+}
+
+/**
+ * Category surges: last-window count vs the preceding window of equal length.
+ * Recency-weighted + tier-bucketed so /intel and /trends compute identically.
+ * Sorted by `hotScore` (delta magnitude weighted toward fresh activity).
+ */
+export function computeAnomalies(all: EventLike[], windowMs: number, now: number, n = 8): AnomalyAgg[] {
   const recent = new Map<string, number>();
   const prior = new Map<string, number>();
+  const lastAt = new Map<string, number>();
+  const tiers = new Map<string, TierSplit>();
+  const priorTiers = new Map<string, TierSplit>();
   for (const e of all) {
     const age = now - e.publishedAt;
-    if (age <= windowMs) recent.set(e.category, (recent.get(e.category) ?? 0) + 1);
-    else if (age <= 2 * windowMs) prior.set(e.category, (prior.get(e.category) ?? 0) + 1);
+    if (age <= windowMs) {
+      recent.set(e.category, (recent.get(e.category) ?? 0) + 1);
+      lastAt.set(e.category, Math.max(lastAt.get(e.category) ?? 0, e.publishedAt));
+      const t = tiers.get(e.category) ?? emptyTiers();
+      t[e.tier]++;
+      tiers.set(e.category, t);
+    } else if (age <= 2 * windowMs) {
+      prior.set(e.category, (prior.get(e.category) ?? 0) + 1);
+      const t = priorTiers.get(e.category) ?? emptyTiers();
+      t[e.tier]++;
+      priorTiers.set(e.category, t);
+    }
   }
   const cats = new Set([...recent.keys(), ...prior.keys()]);
   const out: AnomalyAgg[] = [];
@@ -316,15 +353,34 @@ export function computeAnomalies(all: EventLike[], windowMs: number, now: number
     const b = prior.get(cat) ?? 0;
     if (r === 0 && b === 0) continue;
     const pct = b === 0 ? (r > 0 ? 100 : 0) : Math.round(((r - b) / b) * 100);
+    const lastTriggeredAt = lastAt.get(cat) ?? 0;
+    const ageSinceLast = now - lastTriggeredAt;
+    // Full weight (1) for anything newer than the 2h floor, then linear decay
+    // over the rest of the window down to 0 at window edge.
+    let recencyWeight: number;
+    if (r === 0 || lastTriggeredAt === 0) recencyWeight = 0;
+    else if (ageSinceLast <= TWO_HOURS_MS) recencyWeight = 1;
+    else {
+      const span = Math.max(1, windowMs - TWO_HOURS_MS);
+      recencyWeight = Math.max(0, Math.min(1, 1 - (ageSinceLast - TWO_HOURS_MS) / span));
+    }
+    const hotScore = Math.abs(pct / 100) * (0.4 + 0.6 * recencyWeight);
     out.push({
       label: CAT_LABEL[cat] ?? cat,
+      category: cat,
       delta: (pct >= 0 ? "+" : "") + pct + "%",
       dir: pct >= 0 ? "up" : "down",
       recent: r,
       baseline: b,
+      lastTriggeredAt,
+      recencyWeight,
+      hotScore,
+      state: b === 0 ? "new" : "sustained",
+      tiers: tiers.get(cat) ?? emptyTiers(),
+      priorTiers: priorTiers.get(cat) ?? emptyTiers(),
     });
   }
-  return out.sort((a, b) => Math.abs(parseInt(b.delta)) - Math.abs(parseInt(a.delta))).slice(0, n);
+  return out.sort((a, b) => b.hotScore - a.hotScore).slice(0, n);
 }
 
 function firstClause(title: string): string {

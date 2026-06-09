@@ -129,6 +129,10 @@ export default defineSchema({
     entities: v.optional(v.array(v.string())), // NER (people/orgs/places) for the entity graph
     imageUrl: v.optional(v.string()), // representative news image for the article
     recencyBucket: recencyBucketValidator,
+    // Hash of the embed text (title+summary). Lets the ingestor skip re-embedding
+    // unchanged articles each cycle (only embed new/changed). Optional: rows
+    // written before this field are treated as "changed" and re-embedded once.
+    contentHash: v.optional(v.string()),
     embedding: v.array(v.float64()), // bge-m3, 1024-dim, normalized
   })
     .index("by_externalId", ["externalId"])
@@ -173,6 +177,10 @@ export default defineSchema({
     lastStatus: v.optional(v.string()), // "ok" | "warn" | "err"
     lastError: v.optional(v.string()),
     consecutiveFailures: v.number(),
+    // Set when the scheduled maintenance job auto-disables a persistently-failing
+    // feed. Distinguishes auto-disabled (probe may recover) from admin-disabled
+    // (left alone). Cleared on recovery or manual re-enable.
+    autoDisabledAt: v.optional(v.number()),
     fetchCount: v.number(),
     itemCount: v.number(),
     createdAt: v.number(),
@@ -229,6 +237,63 @@ export default defineSchema({
     lastDigestSentAt: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // ── Phase 2: frozen per-watch baseline snapshot (NET-NEW infra) ──
+  // NOT the rolling computeAnomalies delta. A standing watch freezes a baseline
+  // event-set + severity rollup on create; each ingest cycle diffs against it.
+  watchBaselines: defineTable({
+    userId: v.id("users"),
+    watchlistItemId: v.id("watchlistItems"), // the watch this baseline freezes
+    scopeType: v.union(v.literal("region"), v.literal("entity"), v.literal("keyword")),
+    scopeValue: v.string(), // isoA2 | entity | keyword (mirrors watchlistItems.type/value)
+    windowHours: v.number(), // baseline lookback window at snapshot time
+    snapshotAt: v.number(), // freeze timestamp
+    baselineEventKeys: v.array(v.string()), // frozen event-key set (events.externalId)
+    baselineEventCount: v.number(),
+    baselineSeverityAvg: v.number(),
+    baselineTierCounts: v.object({
+      green: v.number(),
+      amber: v.number(),
+      red: v.number(),
+      black: v.number(),
+    }),
+    lastDiffAt: v.optional(v.number()), // last time diff ran for this baseline
+  })
+    .index("by_user", ["userId"])
+    .index("by_watch", ["watchlistItemId"]),
+
+  // ── Phase 2: in-app alert stream (NET-NEW, B2) ──
+  // Per-cycle watch evaluation writes a DETERMINISTIC diff summary here when a
+  // watch fires (new events vs the frozen baseline). Prose synthesis is NOT
+  // written here — it is generated only on explicit user click (rag), so bursty
+  // ingest cycles never queue LLM generations. The SIGNALS drawer subscribes.
+  alertStream: defineTable({
+    userId: v.id("users"),
+    watchlistItemId: v.id("watchlistItems"),
+    kind: v.literal("watch_fired"),
+    // Deterministic diff summary (counts + a capped sample of new events).
+    payload: v.object({
+      label: v.string(),
+      newCount: v.number(),
+      resolvedCount: v.number(),
+      escalatedCount: v.number(),
+      severityDelta: v.number(),
+      sample: v.array(
+        v.object({
+          eventKey: v.string(),
+          eventId: v.string(),
+          title: v.string(),
+          isoA2: v.string(),
+          tier: tierValidator,
+          severity: v.number(),
+        }),
+      ),
+    }),
+    createdAt: v.number(),
+    seenAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_watch", ["watchlistItemId", "createdAt"]),
 
   watchlistItems: defineTable({
     userId: v.id("users"),

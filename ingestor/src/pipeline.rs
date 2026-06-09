@@ -23,6 +23,9 @@ use crate::velocity::Velocity;
 /// Embedding batch size (kept modest to bound memory on CPU embedding).
 const EMBED_CHUNK: usize = 32;
 
+/// Max sources fetched concurrently (bounded worker pool over the catalog).
+const FETCH_CONCURRENCY: usize = 8;
+
 /// An enriched article awaiting an embedding.
 #[derive(Debug, Clone)]
 pub struct Draft {
@@ -41,6 +44,8 @@ pub struct Draft {
     pub published_at: i64,
     pub entities: Vec<String>,
     pub image_url: Option<String>,
+    /// Stable hex hash of `title + "\n" + summary` (see [`dedup::content_hash`]).
+    pub content_hash: String,
 }
 
 impl Draft {
@@ -78,7 +83,7 @@ pub fn enrich(raw: Vec<RawItem>, now: i64) -> Vec<Draft> {
     }
     let mut stage1: Vec<Stage1> = Vec::new();
     for item in deduped {
-        let geo = match geocode::resolve(&format!("{} {}", item.title, item.summary)) {
+        let geo = match geocode::resolve_salient(&item.title, &item.summary) {
             Some(g) => g,
             None => match item.source_country.as_deref().and_then(geocode::geo_for_iso) {
                 Some(g) => g,
@@ -122,6 +127,7 @@ pub fn enrich(raw: Vec<RawItem>, now: i64) -> Vec<Draft> {
         .map(|s| {
             let severity =
                 (s.base_severity + velocity.bump(&s.category, &s.iso_a2)).clamp(0.5, 10.0);
+            let content_hash = dedup::content_hash(&s.title, &s.summary);
             Draft {
                 external_id: s.external_id,
                 event_key: String::new(), // filled by correlation
@@ -138,6 +144,7 @@ pub fn enrich(raw: Vec<RawItem>, now: i64) -> Vec<Draft> {
                 published_at: s.published_at,
                 entities: s.entities,
                 image_url: s.image_url,
+                content_hash,
             }
         })
         .collect();
@@ -193,25 +200,96 @@ pub fn finalize(drafts: Vec<Draft>, vectors: Vec<Vec<f32>>) -> Result<Vec<Articl
             published_at: d.published_at,
             entities: d.entities,
             image_url: d.image_url,
+            content_hash: d.content_hash,
             embedding,
         });
     }
     Ok(articles)
 }
 
-/// Embed all drafts via Ollama in bounded chunks, preserving order.
-async fn embed_drafts(embedder: &OllamaEmbedder, drafts: &[Draft]) -> Result<Vec<Vec<f32>>> {
-    let mut vectors = Vec::with_capacity(drafts.len());
+/// Drop drafts whose content is unchanged from what Convex already stores.
+///
+/// Queries `articles:contentHashesByExternalIds` for the batch's external ids
+/// and keeps only drafts that are new (no stored hash) or changed (stored hash
+/// differs). On ANY error the query is treated as unavailable and ALL drafts are
+/// kept (the optimization must never break a cycle). Returns `(kept, skipped)`.
+async fn skip_unchanged(convex: &ConvexClient, drafts: Vec<Draft>) -> (Vec<Draft>, usize) {
+    if drafts.is_empty() {
+        return (drafts, 0);
+    }
+    let ids: Vec<String> = drafts.iter().map(|d| d.external_id.clone()).collect();
+    let existing = match convex.content_hashes_by_external_ids(&ids).await {
+        Ok(map) => map,
+        Err(e) => {
+            warn!(error = %e, "contentHashesByExternalIds unavailable; embedding all drafts");
+            return (drafts, 0);
+        }
+    };
+    let before = drafts.len();
+    let kept: Vec<Draft> = drafts
+        .into_iter()
+        .filter(|d| {
+            // Keep when new (no stored hash) or changed (hashes differ).
+            match existing.get(&d.external_id) {
+                Some(Some(stored)) => stored != &d.content_hash,
+                _ => true,
+            }
+        })
+        .collect();
+    let skipped = before - kept.len();
+    (kept, skipped)
+}
+
+/// Embed drafts in bounded chunks and ingest each successful chunk IMMEDIATELY.
+///
+/// `ingestBatch` is idempotent and chunk-safe, so writing per-chunk means one
+/// chunk's embedding failure (e.g. a transient Ollama error) only loses that
+/// chunk — the rest of the cycle's articles still land. Failed chunks are logged
+/// and skipped, never aborting the cycle. Returns the aggregated ingest stats
+/// plus counts of embedded/failed chunks.
+async fn embed_and_ingest(
+    convex: &ConvexClient,
+    embedder: &OllamaEmbedder,
+    drafts: Vec<Draft>,
+) -> (IngestStats, usize, usize, usize) {
+    let mut stats = IngestStats::default();
+    let mut ingested = 0usize;
+    let mut ok_chunks = 0usize;
+    let mut failed_chunks = 0usize;
+
     for chunk in drafts.chunks(EMBED_CHUNK) {
         let texts: Vec<String> = chunk.iter().map(Draft::embed_text).collect();
-        vectors.extend(
-            embedder
-                .embed(&texts)
-                .await
-                .context("embedding draft batch")?,
-        );
+        let vectors = match embedder.embed(&texts).await {
+            Ok(v) => v,
+            Err(e) => {
+                failed_chunks += 1;
+                warn!(error = %e, size = chunk.len(), "embedding chunk failed; skipping");
+                continue;
+            }
+        };
+        let articles = match finalize(chunk.to_vec(), vectors) {
+            Ok(a) => a,
+            Err(e) => {
+                failed_chunks += 1;
+                warn!(error = %e, size = chunk.len(), "finalizing chunk failed; skipping");
+                continue;
+            }
+        };
+        match convex.ingest_batch(&articles).await {
+            Ok(s) => {
+                stats.inserted += s.inserted;
+                stats.updated += s.updated;
+                stats.events += s.events;
+                ingested += articles.len();
+                ok_chunks += 1;
+            }
+            Err(e) => {
+                failed_chunks += 1;
+                warn!(error = %e, size = articles.len(), "ingest chunk failed; skipping");
+            }
+        }
     }
-    Ok(vectors)
+    (stats, ingested, ok_chunks, failed_chunks)
 }
 
 /// Outcome of one ingest cycle.
@@ -223,19 +301,31 @@ pub struct CycleReport {
     pub stats: IngestStats,
 }
 
-/// Run one fetch → enrich → embed → write cycle.
-pub async fn run_cycle(
+/// Fetch every source concurrently (bounded pool), reporting per-source health
+/// and isolating failures (one bad source logs + skips, never aborting). Items
+/// inherit the source's configured region when they carry no `source_country`.
+async fn fetch_all(
     http: &reqwest::Client,
     convex: &ConvexClient,
-    embedder: &OllamaEmbedder,
+    sources: &[crate::model::Source],
     fetch_timeout: Duration,
-) -> Result<CycleReport> {
-    let sources = convex.list_sources().await.context("listing sources")?;
-    info!(count = sources.len(), "fetched source catalog");
+) -> Vec<RawItem> {
+    use futures_util::stream::{self, StreamExt};
+
+    // Bounded concurrent fetch: each task returns its source + fetch result so
+    // health reporting and region fallback run after the fetch completes.
+    let fetched: Vec<(&crate::model::Source, Result<Vec<RawItem>>)> = stream::iter(sources.iter())
+        .map(|source| async move {
+            let result = fetch::fetch_source_retrying(http, source, fetch_timeout).await;
+            (source, result)
+        })
+        .buffer_unordered(FETCH_CONCURRENCY)
+        .collect()
+        .await;
 
     let mut raw: Vec<RawItem> = Vec::new();
-    for source in &sources {
-        match fetch::fetch_source(http, source, fetch_timeout).await {
+    for (source, result) in fetched {
+        match result {
             Ok(mut items) => {
                 let n = items.len() as u64;
                 info!(source = %source.name, items = n, "fetched source");
@@ -268,29 +358,45 @@ pub async fn run_cycle(
             }
         }
     }
+    raw
+}
+
+/// Run one fetch → enrich → embed → write cycle.
+pub async fn run_cycle(
+    http: &reqwest::Client,
+    convex: &ConvexClient,
+    embedder: &OllamaEmbedder,
+    fetch_timeout: Duration,
+) -> Result<CycleReport> {
+    let sources = convex.list_sources().await.context("listing sources")?;
+    info!(count = sources.len(), "fetched source catalog");
+
+    let raw = fetch_all(http, convex, &sources, fetch_timeout).await;
 
     let raw_items = raw.len();
     let now = now_ms();
     let drafts = enrich(raw, now);
-    let vectors = embed_drafts(embedder, &drafts)
-        .await
-        .context("embedding drafts")?;
-    let articles = finalize(drafts, vectors).context("finalizing articles")?;
-    info!(articles = articles.len(), "enriched + embedded");
+    let enriched = drafts.len();
 
-    let stats = if articles.is_empty() {
-        IngestStats::default()
-    } else {
-        convex
-            .ingest_batch(&articles)
-            .await
-            .context("ingest_batch write")?
-    };
+    // Skip drafts whose content is unchanged in the corpus (safe fallback: keep
+    // all on query error), then embed + ingest the rest INCREMENTALLY so one bad
+    // chunk can't discard the whole cycle.
+    let (drafts, skipped) = skip_unchanged(convex, drafts).await;
+    let (stats, ingested, ok_chunks, failed_chunks) =
+        embed_and_ingest(convex, embedder, drafts).await;
+    info!(
+        enriched,
+        skipped_unchanged = skipped,
+        ingested,
+        ok_chunks,
+        failed_chunks,
+        "embedded + ingested"
+    );
 
     Ok(CycleReport {
         sources: sources.len(),
         raw_items,
-        articles: articles.len(),
+        articles: ingested,
         stats,
     })
 }

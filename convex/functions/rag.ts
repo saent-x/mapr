@@ -48,7 +48,12 @@ function excerpt(a: Doc<"articles">): string {
 }
 
 
-function mergeRetrieved(semantic: Retrieved[], lexical: Retrieved[], limit: number): Retrieved[] {
+function mergeRetrieved(
+  semantic: Retrieved[],
+  lexical: Retrieved[],
+  limit: number,
+  pinnedIds?: Set<string>,
+): Retrieved[] {
   const byId = new Map<string, Retrieved>();
   const merged: Retrieved[] = [];
   const add = (row: Retrieved) => {
@@ -64,8 +69,14 @@ function mergeRetrieved(semantic: Retrieved[], lexical: Retrieved[], limit: numb
   };
   semantic.forEach(add);
   lexical.forEach(add);
+  const isPinned = (r: Retrieved) => (pinnedIds?.has(r.articleId) ? 1 : 0);
   return merged
-    .sort((a, b) => (b.retrievalMode === "hybrid" ? 1 : 0) - (a.retrievalMode === "hybrid" ? 1 : 0) || b.similarity - a.similarity)
+    .sort(
+      (a, b) =>
+        isPinned(b) - isPinned(a) ||
+        (b.retrievalMode === "hybrid" ? 1 : 0) - (a.retrievalMode === "hybrid" ? 1 : 0) ||
+        b.similarity - a.similarity,
+    )
     .slice(0, limit);
 }
 
@@ -79,10 +90,17 @@ export const retrieve = action({
     k: v.optional(v.number()),
     windowHours: v.optional(v.number()),
     region: v.optional(v.string()),
+    // B2: exact ID/eventKey-keyed scope from the Context Stack. When present,
+    // those articles are force-fetched and merged BEFORE top-k (recall guard for
+    // scoped/changed events that the vector top-k may miss). Carries multi-ISO
+    // chip scope, where `region` collapses to null.
+    eventIds: v.optional(v.array(v.string())),
+    eventKeys: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args): Promise<Retrieved[]> => {
     const text = args.text.trim();
-    if (!text) return [];
+    const hasIdScope = (args.eventIds?.length ?? 0) > 0 || (args.eventKeys?.length ?? 0) > 0;
+    if (!text && !hasIdScope) return [];
     const k = Math.max(1, Math.min(MAX_K, args.k ?? DEFAULT_K));
     const windowHours = args.windowHours ?? DEFAULT_WINDOW_HOURS;
     const cutoff = Date.now() - windowHours * 3_600_000;
@@ -91,7 +109,7 @@ export const retrieve = action({
 
     // ── Semantic ──
     let semantic: Retrieved[] = [];
-    try {
+    if (text) try {
       const vector = await ollamaEmbed(text);
       const results = await ctx.vectorSearch("articles", "by_embedding", {
         vector,
@@ -123,13 +141,7 @@ export const retrieve = action({
       semantic = [];
     }
 
-    // ── Lexical ──
-    const lexDocs = await ctx.runQuery(internal.articles.lexicalSearch, {
-      text,
-      isoA2: args.region,
-      limit: k * VECTOR_OVERFETCH,
-    });
-    const lexical: Retrieved[] = lexDocs.map((d) => {
+    const toRetrieved = (d: Doc<"articles">, mode: Retrieved["retrievalMode"]): Retrieved => {
       isoById.set(String(d._id), d.isoA2);
       return {
         articleId: String(d._id),
@@ -140,15 +152,40 @@ export const retrieve = action({
         excerpt: excerpt(d),
         publishedAt: d.publishedAt,
         similarity: 0,
-        retrievalMode: "lexical" as const,
+        retrievalMode: mode,
         imageUrl: d.imageUrl ?? null,
       };
-    });
+    };
+
+    // ── Lexical ──
+    const lexDocs = text
+      ? await ctx.runQuery(internal.articles.lexicalSearch, {
+          text,
+          isoA2: args.region,
+          limit: k * VECTOR_OVERFETCH,
+        })
+      : [];
+    const lexical: Retrieved[] = lexDocs.map((d) => toRetrieved(d, "lexical"));
+
+    // ── ID/eventKey-keyed (B2) ── exact-scope candidates, fetched up front.
+    let idKeyed: Retrieved[] = [];
+    let pinnedIds = new Set<string>();
+    if (hasIdScope) {
+      const idDocs = await ctx.runQuery(internal.articles.lexicalByEventKeys, {
+        eventKeys: args.eventKeys,
+        eventIds: args.eventIds,
+      });
+      idKeyed = idDocs.map((d) => toRetrieved(d, "lexical"));
+      pinnedIds = new Set(idKeyed.map((r) => r.articleId));
+    }
 
     // Post-filter: exact recency window + region (when known; recall over
     // precision for semantic-only hits whose region we didn't hydrate).
-    const merged = mergeRetrieved(semantic, lexical, k * 2)
+    // ID/eventKey-pinned candidates bypass the recency+region post-filter so the
+    // exact scoped/changed events always surface (Baseline Diff Report recall).
+    const merged = mergeRetrieved([...idKeyed, ...semantic], lexical, k * 2, pinnedIds)
       .filter((r) => {
+        if (pinnedIds.has(r.articleId)) return true;
         if (r.publishedAt < cutoff) return false;
         if (!args.region) return true;
         const iso = isoById.get(r.articleId);
@@ -296,6 +333,9 @@ export const ask = action({
     text: v.string(),
     region: v.optional(v.string()),
     windowHours: v.optional(v.number()),
+    // B2: exact ID/eventKey scope from the Context Stack (passthrough → retrieve).
+    eventIds: v.optional(v.array(v.string())),
+    eventKeys: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args): Promise<{ conversationId: import("./_generated/dataModel").Id<"qaConversations">; answer: string; citations: Citation[] }> => {
     const userId = await getAuthUserId(ctx);
@@ -310,13 +350,18 @@ export const ask = action({
       text: question,
     });
 
-    const bypass = shouldBypassCorpusRetrieval(question);
+    const hasIdScope = (args.eventIds?.length ?? 0) > 0 || (args.eventKeys?.length ?? 0) > 0;
+    // Bypass only when the question is conversational AND there's no explicit
+    // ID/eventKey scope to anchor on (scoped questions always retrieve).
+    const bypass = shouldBypassCorpusRetrieval(question) && !hasIdScope;
     const retrieved: Retrieved[] = bypass
       ? []
       : await ctx.runAction(api.rag.retrieve, {
           text: question,
           region: args.region,
           windowHours: args.windowHours,
+          eventIds: args.eventIds,
+          eventKeys: args.eventKeys,
         });
 
     const result = await ctx.runAction(internal.rag.generate, {

@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { auth } from "./auth";
 import Stripe from "stripe";
 
@@ -50,10 +51,14 @@ const stripeWebhook = httpAction(async (ctx, request) => {
 
   let customerId: string | undefined;
   let subscriptionStatus: string | undefined;
+  let clientReferenceId: Id<"users"> | undefined;
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       customerId = customerIdOf(session.customer);
+      // Convex userId we stamped in billing.createCheckout — lets the mutation
+      // recover (and link) the user even if stripeCustomerId isn't on the row yet.
+      clientReferenceId = (session.client_reference_id ?? undefined) as Id<"users"> | undefined;
       subscriptionStatus = "active";
       break;
     }
@@ -70,16 +75,24 @@ const stripeWebhook = httpAction(async (ctx, request) => {
       break;
   }
 
+  let result: { duplicate: boolean; applied: boolean; failed: boolean };
   try {
-    await ctx.runMutation(internal.stripeEvents.apply, {
+    result = await ctx.runMutation(internal.stripeEvents.apply, {
       eventId: event.id,
       type: event.type,
       customerId,
       subscriptionStatus,
+      clientReferenceId,
     });
   } catch {
     // Surface failures as 5xx so Stripe re-delivers.
     return new Response("processing failed", { status: 500 });
+  }
+
+  // A billing event we couldn't attribute to a user is recorded as 'failed';
+  // return non-2xx so Stripe retries (the customer may get linked by then).
+  if (result.failed) {
+    return new Response("unattributed billing event", { status: 500 });
   }
 
   return new Response(JSON.stringify({ received: true }), {
@@ -89,5 +102,18 @@ const stripeWebhook = httpAction(async (ctx, request) => {
 });
 
 http.route({ path: "/stripe/webhook", method: "POST", handler: stripeWebhook });
+
+/**
+ * Liveness probe — no auth, no DB. External uptime monitors hit this to detect
+ * the HTTP-actions layer being down. Returns 200 with a tiny JSON body.
+ */
+const health = httpAction(async () => {
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+});
+
+http.route({ path: "/health", method: "GET", handler: health });
 
 export default http;

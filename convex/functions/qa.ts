@@ -1,6 +1,7 @@
 import { query, mutation, internalMutation } from "./_generated/server";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { citationValidator } from "./schema";
 import { getCurrentUser, requireUser } from "./lib/access";
 import { limitsForUser, tierForUser } from "./lib/entitlements";
@@ -11,8 +12,30 @@ const TITLE_MAX = 60;
 function quotaLimit(user: Doc<"users">): number {
   return limitsForUser(user).qaTurns;
 }
+
 /**
- * Atomically: enforce+reserve the QA quota, ensure a conversation, append the
+ * Rolling 30-day usage: count this user's persisted `role:'user'` messages with
+ * createdAt within the trailing window, via the by_user_created index. This is a
+ * true sliding window (no fixed reset seam), so the free/pro budgets can't be
+ * ~2x over-granted at a window boundary. Counting role:'user' rows means only
+ * real turns charge — the budget is spent when the user message is persisted.
+ */
+async function rollingUsage(
+  ctx: QueryCtx | MutationCtx,
+  userId: Id<"users">,
+  now: number,
+): Promise<number> {
+  const cutoff = now - WINDOW_MS;
+  const rows = await ctx.db
+    .query("qaMessages")
+    .withIndex("by_user_created", (q) => q.eq("userId", userId).gte("createdAt", cutoff))
+    .filter((q) => q.eq(q.field("role"), "user"))
+    .collect();
+  return rows.length;
+}
+
+/**
+ * Atomically: enforce the rolling QA quota, ensure a conversation, append the
  * user message, and return prior turns for the model context. Throws
  * QA_QUOTA_EXCEEDED when the trailing-30d message budget is spent.
  */
@@ -27,17 +50,13 @@ export const beginTurn = internalMutation({
     if (!user) throw new Error("UNAUTHENTICATED");
     const now = Date.now();
 
-    // Roll the quota window if it expired, then check + reserve.
-    let windowStart = user.qaWindowStart ?? 0;
-    let windowCount = user.qaWindowCount ?? 0;
-    if (now - windowStart > WINDOW_MS) {
-      windowStart = now;
-      windowCount = 0;
-    }
-    if (windowCount >= quotaLimit(user)) {
+    // Rolling-window check: count user messages persisted in the trailing 30d.
+    // The user message we are about to insert is the (used+1)th turn, so block
+    // when the prior rolling count already meets the limit.
+    const used = await rollingUsage(ctx, args.userId, now);
+    if (used >= quotaLimit(user)) {
       throw new Error("QA_QUOTA_EXCEEDED");
     }
-    await ctx.db.patch(args.userId, { qaWindowStart: windowStart, qaWindowCount: windowCount + 1 });
 
     // Ensure conversation (ownership-checked) or create one.
     let conversationId = args.conversationId;
@@ -110,6 +129,9 @@ export const completeTurn = internalMutation({
       lastMessageAt: now,
       updatedAt: now,
     });
+    // Quota is metered by the rolling count of persisted role:'user' messages
+    // (see beginTurn/quotaStatus), so there is no separate counter to charge
+    // here. The user turn was already persisted in beginTurn.
   },
 });
 
@@ -159,12 +181,24 @@ export const quotaStatus = query({
     const user = await getCurrentUser(ctx);
     if (!user) return null;
     const now = Date.now();
-    const windowStart = user.qaWindowStart ?? 0;
-    const used = now - windowStart > WINDOW_MS ? 0 : user.qaWindowCount ?? 0;
-    const resetAt = user.qaWindowStart ? user.qaWindowStart + WINDOW_MS : null;
+    // Rolling usage: same count the charge path (beginTurn) enforces.
+    const used = await rollingUsage(ctx, user._id, now);
     const tier = tierForUser(user);
     const limit = quotaLimit(user);
     const unlimited = tier === "admin";
+    // The window slides continuously, so the meaningful reset is when the
+    // oldest in-window turn ages out. Report that for the UI countdown.
+    let resetAt: number | null = null;
+    if (used > 0) {
+      const cutoff = now - WINDOW_MS;
+      const oldest = await ctx.db
+        .query("qaMessages")
+        .withIndex("by_user_created", (q) => q.eq("userId", user._id).gte("createdAt", cutoff))
+        .filter((q) => q.eq(q.field("role"), "user"))
+        .order("asc")
+        .first();
+      if (oldest) resetAt = oldest.createdAt + WINDOW_MS;
+    }
     return { used, limit, remaining: Math.max(0, limit - used), unlimited, tier, resetAt };
   },
 });

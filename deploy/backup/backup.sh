@@ -32,14 +32,26 @@ echo "[backup] convex export ..."
 ( cd "$REPO_ROOT/convex" && npx convex export --path "$STAGE/convex-snapshot.zip" )
 
 # --- 2. Raw SQLite backing-store snapshot (fast same-box restore) -----------
-# Stop the backend briefly for a consistent file copy, then resume. (Skip the
-# stop if you accept a slightly-fuzzy hot copy; the logical export above is the
-# authoritative restore for cross-deployment moves.)
+# Quiesce the backend before the tar so the SQLite files (and any -wal/-shm) are
+# in a consistent, crash-safe state on disk — a hot tar of a live embedded SQLite
+# DB can capture a torn write and restore to a corrupt store. We stop ONLY the
+# backend (the sole writer of convex_data), tar, then restart it. A trap ensures
+# the backend is restarted even if the tar fails. The logical export above is the
+# authoritative restore for cross-deployment moves.
+echo "[backup] stopping convex-backend for a consistent volume snapshot ..."
+docker compose -f "$COMPOSE_FILE" stop convex-backend
+restart_backend() { docker compose -f "$COMPOSE_FILE" start convex-backend || true; }
+trap 'restart_backend; rm -rf "$STAGE"' EXIT
+
 echo "[backup] snapshotting convex_data volume ..."
 docker run --rm \
   -v mapr_convex_data:/data:ro \
   -v "$STAGE":/out \
   alpine:3 sh -c "cd /data && tar czf /out/convex_data.tgz ."
+
+echo "[backup] restarting convex-backend ..."
+restart_backend
+trap 'rm -rf "$STAGE"' EXIT   # backend is up again; revert to plain cleanup
 
 # --- 3. Push off-box --------------------------------------------------------
 echo "[backup] uploading to $RCLONE_REMOTE/$STAMP ..."

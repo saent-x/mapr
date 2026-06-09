@@ -192,6 +192,34 @@ plain HTTP on the private network.
 > The web bundle bakes the Convex origins in at build time. If you change the
 > hostnames later, rebuild: `docker compose -f docker-compose.yml build web`.
 
+> **cloudflared is pinned to a known-good tag** (`cloudflare/cloudflared:2026.5.2`)
+> rather than `:latest`, so an auto-pulled bad build can't silently break the
+> only ingress. Bump it deliberately after checking the
+> [cloudflared releases](https://github.com/cloudflare/cloudflared/releases).
+
+### Break-glass: tunnel down
+
+The named tunnel is the **single, un-redundant** public ingress. If it (or
+Cloudflare) is down and you need MAPR reachable *now*, use one of these
+**temporary** paths — both expose the loopback ports the stack already binds
+(`8080` web, `3210/3211` convex). Tear them down once the named tunnel is back.
+
+```sh
+# A. Cloudflare quick tunnel — instant random *.trycloudflare.com URL, no DNS,
+#    no account config. Run on the box, one per port you need to expose:
+cloudflared tunnel --url http://localhost:8080     # the web SPA
+cloudflared tunnel --url http://localhost:3210     # convex API (if needed)
+# Each prints a https://<random>.trycloudflare.com you can hit immediately.
+
+# B. SSH reverse tunnel — forward the box's loopback ports out to any host you
+#    can SSH to (e.g. a jump VPS), then reach them via that host:
+ssh -N -R 8080:localhost:8080 -R 3210:localhost:3210 user@jump-host
+```
+
+Quick tunnels and SSH forwards are **not** a permanent fix: they have no custom
+hostname, no TLS pinning, and the quick-tunnel URL changes on every restart.
+Restore the named tunnel (step 5) as soon as possible.
+
 ---
 
 ## 6. First admin login

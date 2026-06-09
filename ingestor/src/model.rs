@@ -85,6 +85,9 @@ pub struct Article {
     pub category: String,
     pub published_at: i64,
     pub entities: Vec<String>,
+    /// Stable hex hash of `title + "\n" + summary`. Lets the backend skip
+    /// re-embedding unchanged articles (see `articles:contentHashesByExternalIds`).
+    pub content_hash: String,
     /// EXACTLY 1024 bge-m3 floats, L2-normalized. Serialized at 6 significant
     /// figures (see [`serialize_embedding`]) to keep the stored row compact.
     #[serde(serialize_with = "serialize_embedding")]
@@ -128,6 +131,34 @@ mod tests {
     struct EmbWrap {
         #[serde(serialize_with = "serialize_embedding")]
         e: Vec<f32>,
+    }
+
+    #[test]
+    fn article_serializes_content_hash_as_camel_case() {
+        // The Convex `ingestBatch` validator + `contentHashesByExternalIds`
+        // contract expect `contentHash` (camelCase). Lock the field name.
+        let article = Article {
+            external_id: "art-x".into(),
+            event_key: "evt-x".into(),
+            title: "T".into(),
+            summary: "S".into(),
+            source: "src".into(),
+            url: None,
+            iso_a2: "UA".into(),
+            lon: 30.0,
+            lat: 50.0,
+            tier: Tier::Red,
+            severity: 7.0,
+            category: "conflict".into(),
+            published_at: 1,
+            entities: vec![],
+            content_hash: "deadbeef".into(),
+            embedding: crate::embed::dummy_vector(0.1),
+            image_url: None,
+        };
+        let json = serde_json::to_value(&article).unwrap();
+        assert_eq!(json["contentHash"], "deadbeef");
+        assert!(json.get("content_hash").is_none(), "must be camelCase only");
     }
 
     #[test]

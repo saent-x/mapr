@@ -32,14 +32,17 @@ import type * as lib_qa from "../lib/qa.js";
 import type * as lib_recency from "../lib/recency.js";
 import type * as lib_regions from "../lib/regions.js";
 import type * as lib_sourceConfidence from "../lib/sourceConfidence.js";
+import type * as ops from "../ops.js";
 import type * as qa from "../qa.js";
 import type * as rag from "../rag.js";
 import type * as regions from "../regions.js";
 import type * as savedViews from "../savedViews.js";
 import type * as sourceRequests from "../sourceRequests.js";
+import type * as sourceSync from "../sourceSync.js";
 import type * as stripeEvents from "../stripeEvents.js";
 import type * as trends from "../trends.js";
 import type * as users from "../users.js";
+import type * as watchBaselines from "../watchBaselines.js";
 import type * as watchlist from "../watchlist.js";
 
 import type {
@@ -73,14 +76,17 @@ declare const fullApi: ApiFromModules<{
   "lib/recency": typeof lib_recency;
   "lib/regions": typeof lib_regions;
   "lib/sourceConfidence": typeof lib_sourceConfidence;
+  ops: typeof ops;
   qa: typeof qa;
   rag: typeof rag;
   regions: typeof regions;
   savedViews: typeof savedViews;
   sourceRequests: typeof sourceRequests;
+  sourceSync: typeof sourceSync;
   stripeEvents: typeof stripeEvents;
   trends: typeof trends;
   users: typeof users;
+  watchBaselines: typeof watchBaselines;
   watchlist: typeof watchlist;
 }>;
 

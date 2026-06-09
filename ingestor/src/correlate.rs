@@ -7,7 +7,7 @@
 //! tier escalates to the highest contributing article tier (the Convex side
 //! recomputes the authoritative event, but we pre-assign so a batch is coherent).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use sha2::{Digest, Sha256};
 
@@ -50,6 +50,44 @@ fn hash8(input: &str) -> String {
     out
 }
 
+/// Cycle-invariant content signature for a cluster: the tokens shared by a
+/// MAJORITY of the cluster's articles (a story's core terms — region names,
+/// actors, the event noun — that stay constant as new articles arrive across
+/// cycles), sorted for determinism. Falls back to the most-frequent tokens for
+/// a single-article cluster. This keeps an ongoing event's key stable from one
+/// ingest cycle to the next, instead of drifting with batch membership.
+fn cluster_token_signature(cluster: &[usize], items: &[CorrelationItem]) -> String {
+    let n = cluster.len();
+    let threshold = n / 2 + 1; // strict majority (n==1 -> 1, 2 -> 2, 3 -> 2, 4 -> 3)
+    let mut freq: HashMap<&str, usize> = HashMap::new();
+    for &i in cluster {
+        let mut seen: HashSet<&str> = HashSet::new();
+        for t in &items[i].tokens {
+            if t.len() < 3 {
+                continue;
+            }
+            if seen.insert(t.as_str()) {
+                *freq.entry(t.as_str()).or_insert(0) += 1;
+            }
+        }
+    }
+    // Tokens present in a majority of the cluster's articles (stable consensus).
+    let mut sig: Vec<&str> = freq
+        .iter()
+        .filter(|&(_, &c)| c >= threshold)
+        .map(|(&t, _)| t)
+        .collect();
+    if sig.is_empty() {
+        // No consensus (e.g. single article): fall back to the most-frequent
+        // tokens, tie-broken lexicographically for determinism.
+        let mut ranked: Vec<(&str, usize)> = freq.into_iter().collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        sig = ranked.into_iter().take(6).map(|(t, _)| t).collect();
+    }
+    sig.sort_unstable();
+    sig.join("-")
+}
+
 fn correlates(a: &CorrelationItem, b: &CorrelationItem, window_ms: i64) -> bool {
     a.iso_a2 == b.iso_a2
         && (a.published_at - b.published_at).abs() <= window_ms
@@ -85,19 +123,29 @@ pub fn correlate_with(items: &[CorrelationItem], window_ms: i64) -> CorrelationR
     let mut event_keys = vec![String::new(); items.len()];
     let mut event_tier: HashMap<String, Tier> = HashMap::new();
     for cluster in &clusters {
-        // Stable anchor: lexicographically smallest externalId in the cluster.
-        let anchor = cluster
-            .iter()
-            .map(|&i| items[i].external_id.as_str())
-            .min()
-            .unwrap_or("");
+        // Cycle-invariant key: derive from the cluster's CONSENSUS tokens (the
+        // story's core terms, shared across its articles) + region — NOT the
+        // in-batch min externalId, which shifts every cycle (old articles aren't
+        // re-fetched, new ones arrive with different ids) and so fragments one
+        // ongoing situation into a brand-new event each cycle.
         let region = items[cluster[0]].iso_a2.to_lowercase();
         let region = if region.is_empty() {
             "xx".to_string()
         } else {
             region
         };
-        let key = format!("evt-{}-{}", region, hash8(anchor));
+        // Coarse day bucket (from the cluster's earliest article) so two
+        // same-topic stories far apart in time stay distinct events, while
+        // every ingest cycle WITHIN a day keys to the SAME event (the fix:
+        // per-cycle fragmentation collapses to at most one split per day).
+        let day = cluster
+            .iter()
+            .map(|&i| items[i].published_at)
+            .min()
+            .unwrap_or(0)
+            / 86_400_000;
+        let signature = cluster_token_signature(cluster, items);
+        let key = format!("evt-{}-{}-{}", region, day, hash8(&signature));
 
         // Escalate tier to the cluster maximum.
         let max_tier = cluster
@@ -158,6 +206,28 @@ mod tests {
         );
         // Tier escalates to the max (red).
         assert_eq!(r.event_tier[&r.event_keys[0]], Tier::Red);
+    }
+
+    // Regression for the per-cycle fragmentation bug: the eventKey now derives
+    // from the cluster's CONSENSUS tokens (the story's core terms), not the
+    // in-batch min externalId — so it is order-invariant AND a corroborating
+    // article that shares the core does not mint a new event key.
+    #[test]
+    fn event_key_survives_corroborating_additions_and_order() {
+        let a = item("x1", "SD", 0, Tier::Black, "RSF shelling around El Fasher kills dozens");
+        let b = item("x2", "SD", 1, Tier::Red, "El Fasher shelling by RSF cuts aid routes");
+        let c = item("x3", "SD", 2, Tier::Black, "RSF shelling of El Fasher intensifies sharply");
+        let k_abc = correlate(&[a.clone(), b.clone(), c.clone()]).event_keys[0].clone();
+        // Order-invariant.
+        let k_shuf = correlate(&[c.clone(), a.clone(), b.clone()]).event_keys[0].clone();
+        assert_eq!(k_abc, k_shuf, "eventKey must be order-invariant");
+        // A 4th corroborating article sharing the core terms keeps the SAME key.
+        let d = item("x4", "SD", 3, Tier::Red, "RSF shelling near El Fasher displaces thousands");
+        let r = correlate(&[a, b, c, d]);
+        assert!(
+            r.event_keys.iter().all(|k| *k == k_abc),
+            "a corroborating article must keep the existing eventKey, not fragment the event"
+        );
     }
 
     #[test]

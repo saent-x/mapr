@@ -109,6 +109,14 @@ pub fn external_id(url: Option<&str>, title: &str) -> String {
     format!("art-{}", &sha_hex(&basis)[..24])
 }
 
+/// Stable content hash of `title + "\n" + summary` (full sha256 hex). Used to
+/// skip re-embedding unchanged articles; identical for byte-identical content
+/// across cycles. Matches the Convex `articles:contentHashesByExternalIds`
+/// contract.
+pub fn content_hash(title: &str, summary: &str) -> String {
+    sha_hex(&format!("{title}\n{summary}"))
+}
+
 /// Stop words excluded from title token sets (subset of the JS DEDUP_STOP_WORDS).
 const STOP_WORDS: &[&str] = &[
     "the",
@@ -182,13 +190,50 @@ pub fn jaccard(left: &[String], right: &[String]) -> f64 {
     }
     let rset: std::collections::HashSet<&String> = right.iter().collect();
     let lset: std::collections::HashSet<&String> = left.iter().collect();
-    let inter = lset.iter().filter(|t| rset.contains(**t)).count();
-    let union = lset.union(&rset).count();
+    jaccard_sets(&lset, &rset)
+}
+
+/// Jaccard over precomputed token sets (avoids rebuilding the HashSets per
+/// comparison in the blocked phase-2 loop).
+fn jaccard_sets(
+    left: &std::collections::HashSet<&String>,
+    right: &std::collections::HashSet<&String>,
+) -> f64 {
+    if left.is_empty() || right.is_empty() {
+        return 0.0;
+    }
+    let inter = left.iter().filter(|t| right.contains(**t)).count();
+    let union = left.len() + right.len() - inter;
     if union == 0 {
         0.0
     } else {
         inter as f64 / union as f64
     }
+}
+
+/// Stable 64-bit FNV-1a hash of a token, for deterministic MinHash band keys.
+fn token_hash(token: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in token.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+/// Number of smallest-hash tokens used as MinHash band keys per item. Two titles
+/// above [`NEAR_DUP_THRESHOLD`] Jaccard overwhelmingly share at least one of
+/// these, so bucketing on them never misses a real near-duplicate while pruning
+/// the O(n^2) comparison set to within-bucket candidates.
+const BAND_KEYS: usize = 3;
+
+/// The up-to-[`BAND_KEYS`] smallest token hashes for `tokens` (its blocking keys).
+fn band_keys(tokens: &[String]) -> Vec<u64> {
+    let mut hashes: Vec<u64> = tokens.iter().map(|t| token_hash(t)).collect();
+    hashes.sort_unstable();
+    hashes.dedup();
+    hashes.truncate(BAND_KEYS);
+    hashes
 }
 
 /// Minimum Jaccard for two titles to be near-duplicates. Tuned ABOVE the
@@ -222,18 +267,45 @@ pub fn dedupe(items: Vec<RawItem>) -> Vec<RawItem> {
         url_deduped.push(item);
     }
 
-    // Phase 2: title-similarity dedup across sources.
+    // Phase 2: title-similarity dedup across sources, BLOCKED by MinHash band
+    // keys. Instead of comparing each item against every kept item (O(n^2)), we
+    // bucket kept items by their smallest token hashes and only run Jaccard
+    // against candidates sharing a band key. Token sets are precomputed once.
+    use std::collections::{HashMap, HashSet};
+
     let mut result: Vec<RawItem> = Vec::with_capacity(url_deduped.len());
+    // Parallel to `result`: each kept item's tokens (for Jaccard candidates).
     let mut token_cache: Vec<Vec<String>> = Vec::with_capacity(url_deduped.len());
+    // band key -> indices into `token_cache`/`result` of kept items in that bucket.
+    let mut buckets: HashMap<u64, Vec<usize>> = HashMap::new();
+
     for item in url_deduped {
         let tokens = title_tokens(&item.title);
+        let keys = band_keys(&tokens);
         if tokens.len() >= MIN_TOKENS {
-            let dup = token_cache.iter().any(|cached| {
-                cached.len() >= MIN_TOKENS && jaccard(&tokens, cached) >= NEAR_DUP_THRESHOLD
+            // Gather candidate kept-item indices from this item's band buckets.
+            let tset: HashSet<&String> = tokens.iter().collect();
+            let mut candidates: HashSet<usize> = HashSet::new();
+            for k in &keys {
+                if let Some(idxs) = buckets.get(k) {
+                    candidates.extend(idxs.iter().copied());
+                }
+            }
+            let dup = candidates.iter().any(|&idx| {
+                let cached = &token_cache[idx];
+                if cached.len() < MIN_TOKENS {
+                    return false;
+                }
+                let cset: HashSet<&String> = cached.iter().collect();
+                jaccard_sets(&tset, &cset) >= NEAR_DUP_THRESHOLD
             });
             if dup {
                 continue;
             }
+        }
+        let idx = result.len();
+        for k in &keys {
+            buckets.entry(*k).or_default().push(idx);
         }
         token_cache.push(tokens);
         result.push(item);
@@ -280,6 +352,27 @@ mod tests {
         let id = external_id(None, "Breaking: Something Happened!");
         let id2 = external_id(Some("   "), "Breaking: Something Happened!");
         assert_eq!(id, id2);
+    }
+
+    #[test]
+    fn content_hash_is_stable_and_content_sensitive() {
+        let a = content_hash("Title", "Summary");
+        let b = content_hash("Title", "Summary");
+        assert_eq!(a, b, "identical content hashes identically");
+        assert_ne!(
+            a,
+            content_hash("Title", "Summary changed"),
+            "changed summary changes the hash"
+        );
+        assert_ne!(
+            a,
+            content_hash("Other", "Summary"),
+            "changed title changes the hash"
+        );
+        // Field boundary is part of the hash basis (title+\n+summary), so the
+        // split between title and summary is significant.
+        assert_ne!(content_hash("ab", "c"), content_hash("a", "bc"));
+        assert_eq!(a.len(), 64, "full sha256 hex");
     }
 
     #[test]
@@ -335,5 +428,53 @@ mod tests {
         ];
         let out = dedupe(items);
         assert_eq!(out.len(), 2);
+    }
+
+    #[test]
+    fn band_keys_collide_for_near_duplicates() {
+        // Near-duplicate titles share most tokens, so they share at least one
+        // MinHash band key (land in the same bucket). Unrelated titles do not.
+        let a = title_tokens("Massive earthquake strikes coastal city killing dozens");
+        let b = title_tokens("Massive earthquake strikes coastal city killing dozens of people");
+        let c = title_tokens("Central bank holds interest rates steady amid inflation");
+        let ka = band_keys(&a);
+        let kb = band_keys(&b);
+        let kc = band_keys(&c);
+        assert!(
+            ka.iter().any(|k| kb.contains(k)),
+            "near-dups must share a band key"
+        );
+        assert!(
+            !ka.iter().any(|k| kc.contains(k)),
+            "unrelated titles must not share a band key"
+        );
+    }
+
+    #[test]
+    fn blocked_dedupe_collapses_dups_and_keeps_unrelated() {
+        // Two near-duplicates that land in the same MinHash bucket still
+        // collapse; two unrelated stories both survive. (Regression guard for
+        // the blocked phase-2 path.)
+        let items = vec![
+            item(
+                "Severe flooding displaces thousands across northern province",
+                Some("https://a.com/1"),
+                "S1",
+            ),
+            item(
+                "Severe flooding displaces thousands across the northern province today",
+                Some("https://b.com/2"),
+                "S2",
+            ),
+            item(
+                "Tech giant unveils new flagship smartphone lineup",
+                Some("https://c.com/3"),
+                "S3",
+            ),
+        ];
+        let out = dedupe(items);
+        assert_eq!(out.len(), 2, "near-dup collapsed, unrelated kept: {:?}", out.iter().map(|i| &i.title).collect::<Vec<_>>());
+        assert!(out.iter().any(|i| i.title.contains("flooding")));
+        assert!(out.iter().any(|i| i.title.contains("smartphone")));
     }
 }

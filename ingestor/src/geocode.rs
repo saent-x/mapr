@@ -390,66 +390,191 @@ pub fn geo_for_iso(iso: &str) -> Option<Geo> {
         })
 }
 
-/// Resolve the best geocode from text. Cities first (longest match wins for
-/// disambiguation), then country names, then demonyms.
+/// Known wire-service / agency tokens. A gazetteer match adjacent to one of
+/// these (the classic "CITY, Country (Reuters) -" dateline) is down-weighted:
+/// the dateline names where the story was *filed*, not what it is *about*.
+const AGENCY_TOKENS: &[&str] = &[
+    "reuters", "ap", "afp", "dpa", "efe", "ansa", "pti", "ians", "xinhua",
+    "tass", "ria", "interfax", "kyodo", "yonhap", "cnn", "bbc", "bloomberg",
+];
+
+/// How far into the text the leading dateline zone extends (normalized chars).
+const DATELINE_ZONE: usize = 64;
+
+/// Salience signals for one gazetteer match, ranked best-first by [`Candidate::better_than`].
+#[derive(Clone, Copy)]
+struct Candidate {
+    geo: Geo,
+    /// Match was found in the title field (most salient signal).
+    in_title: bool,
+    /// Earliest byte offset of the match in its field's haystack.
+    first_pos: usize,
+    /// Number of whole-word occurrences across both fields.
+    occurrences: usize,
+    /// Match sits inside a leading dateline/agency credit (down-weighted).
+    is_dateline: bool,
+    /// Gazetteer name length — final tiebreaker only.
+    name_len: usize,
+}
+
+impl Candidate {
+    /// True if `self` is a more salient location than `other`.
+    /// Order: title > summary; non-dateline > dateline; earlier mention;
+    /// more occurrences; longer name (final tiebreaker).
+    fn better_than(&self, other: &Candidate) -> bool {
+        // (a) prefer a title match over a summary-only match.
+        if self.in_title != other.in_title {
+            return self.in_title;
+        }
+        // (c) down-weight dateline/agency credits.
+        if self.is_dateline != other.is_dateline {
+            return !self.is_dateline;
+        }
+        // (b) prefer the earliest mention, then the higher occurrence count.
+        if self.first_pos != other.first_pos {
+            return self.first_pos < other.first_pos;
+        }
+        if self.occurrences != other.occurrences {
+            return self.occurrences > other.occurrences;
+        }
+        // (d) name length is only the final tiebreaker.
+        self.name_len > other.name_len
+    }
+}
+
+/// True if the match at `pos` is part of a leading dateline credit — i.e. it
+/// sits in the first [`DATELINE_ZONE`] chars AND *before* an agency token
+/// ("CITY, Country (Reuters) -"). The story subject that follows the credit
+/// (e.g. "... (Reuters) - Iran said ...") is NOT in the zone, since it appears
+/// after the agency token.
+fn in_dateline_zone(hay: &str, pos: usize) -> bool {
+    if pos > DATELINE_ZONE {
+        return false;
+    }
+    // Find the first agency token; only matches before it are dateline credits.
+    let agency_pos = AGENCY_TOKENS
+        .iter()
+        .filter_map(|tok| hay.find(&format!(" {tok} ")))
+        .min();
+    match agency_pos {
+        Some(ap) => pos < ap && ap <= DATELINE_ZONE,
+        None => false,
+    }
+}
+
+/// Find the first whole-word offset and total occurrence count of ` name ` in `hay`.
+fn match_stats(hay: &str, name: &str) -> Option<(usize, usize)> {
+    let needle = format!(" {name} ");
+    let first = hay.find(&needle)?;
+    // Count overlapping-safe occurrences (advance by 1 to catch back-to-back).
+    let mut count = 0usize;
+    let mut from = 0usize;
+    while let Some(rel) = hay[from..].find(&needle) {
+        count += 1;
+        from += rel + 1;
+    }
+    Some((first, count.max(1)))
+}
+
+/// Build a salience-ranked candidate for `(name, geo)` across the two
+/// normalized haystacks, or `None` if the name does not whole-word match either.
+fn candidate_for(
+    title_hay: &str,
+    summary_hay: &str,
+    name: &str,
+    geo: Geo,
+) -> Option<Candidate> {
+    let in_title_stats = match_stats(title_hay, name);
+    let in_summary_stats = match_stats(summary_hay, name);
+    let in_title = in_title_stats.is_some();
+    let (first_pos, hay) = match (&in_title_stats, &in_summary_stats) {
+        (Some((p, _)), _) => (*p, title_hay),
+        (None, Some((p, _))) => (*p, summary_hay),
+        (None, None) => return None,
+    };
+    let occurrences =
+        in_title_stats.map(|(_, c)| c).unwrap_or(0) + in_summary_stats.map(|(_, c)| c).unwrap_or(0);
+    Some(Candidate {
+        geo,
+        in_title,
+        first_pos,
+        occurrences,
+        is_dateline: in_dateline_zone(hay, first_pos),
+        name_len: name.len(),
+    })
+}
+
+/// Resolve the best geocode from a single text blob (title and summary already
+/// concatenated). Ranking is by salience (earliest mention, occurrence count,
+/// dateline down-weighting; name length only as a final tiebreaker). Cities are
+/// tried first, then country names, then demonyms. Public signature unchanged.
 pub fn resolve(text: &str) -> Option<Geo> {
-    let hay = normalize(text);
+    resolve_salient(text, "")
+}
 
-    // Cities — track the longest matching name to disambiguate overlaps.
-    let mut best: Option<(usize, Geo)> = None;
+/// Resolve the best geocode, ranking matches by SALIENCE rather than name
+/// length. `title` matches outrank summary-only matches; among same-field
+/// matches the earliest / most-frequent mention wins; dateline/agency credits
+/// are down-weighted; gazetteer name length is only the final tiebreaker.
+///
+/// Cities are tried first (most specific), then country names, then demonyms.
+pub fn resolve_salient(title: &str, summary: &str) -> Option<Geo> {
+    let title_hay = normalize(title);
+    let summary_hay = normalize(summary);
+
+    // Cities — rank by salience across both fields.
+    let mut best: Option<Candidate> = None;
     for (name, iso, lon, lat) in CITIES {
-        if hay.contains(&format!(" {name} ")) {
-            let len = name.len();
-            if best.map(|(l, _)| len > l).unwrap_or(true) {
-                best = Some((
-                    len,
-                    Geo {
-                        iso_a2: iso,
-                        lon: *lon,
-                        lat: *lat,
-                    },
-                ));
+        let geo = Geo {
+            iso_a2: iso,
+            lon: *lon,
+            lat: *lat,
+        };
+        if let Some(c) = candidate_for(&title_hay, &summary_hay, name, geo) {
+            if best.map(|b| c.better_than(&b)).unwrap_or(true) {
+                best = Some(c);
             }
         }
     }
-    if let Some((_, geo)) = best {
-        return Some(geo);
+    if let Some(c) = best {
+        return Some(c.geo);
     }
 
-    // Country names — longest match wins.
-    let mut best: Option<(usize, Geo)> = None;
+    // Country names — rank by salience.
+    let mut best: Option<Candidate> = None;
     for (name, iso, lon, lat) in COUNTRIES {
-        if hay.contains(&format!(" {name} ")) {
-            let len = name.len();
-            if best.map(|(l, _)| len > l).unwrap_or(true) {
-                best = Some((
-                    len,
-                    Geo {
-                        iso_a2: iso,
-                        lon: *lon,
-                        lat: *lat,
-                    },
-                ));
+        let geo = Geo {
+            iso_a2: iso,
+            lon: *lon,
+            lat: *lat,
+        };
+        if let Some(c) = candidate_for(&title_hay, &summary_hay, name, geo) {
+            if best.map(|b| c.better_than(&b)).unwrap_or(true) {
+                best = Some(c);
             }
         }
     }
-    if let Some((_, geo)) = best {
-        return Some(geo);
+    if let Some(c) = best {
+        return Some(c.geo);
     }
 
-    // Demonyms.
+    // Demonyms — prefer a title demonym, else the earliest in the summary.
+    let mut best: Option<Candidate> = None;
     for (word, iso) in DEMONYMS {
-        if hay.contains(&format!(" {word} ")) {
-            if let Some((lon, lat)) = centroid_for_iso(iso) {
-                return Some(Geo {
-                    iso_a2: iso,
-                    lon,
-                    lat,
-                });
+        if let Some((lon, lat)) = centroid_for_iso(iso) {
+            let geo = Geo {
+                iso_a2: iso,
+                lon,
+                lat,
+            };
+            if let Some(c) = candidate_for(&title_hay, &summary_hay, word, geo) {
+                if best.map(|b| c.better_than(&b)).unwrap_or(true) {
+                    best = Some(c);
+                }
             }
         }
     }
-    None
+    best.map(|c| c.geo)
 }
 
 #[cfg(test)]
@@ -519,5 +644,44 @@ mod tests {
         assert_eq!(geo_for_iso("mr").map(|g| g.iso_a2), Some("MR")); // case-insensitive
         assert_eq!(geo_for_iso("AFRICA"), None); // macro region, not a country
         assert_eq!(geo_for_iso("ZZ"), None); // not a real iso
+    }
+
+    #[test]
+    fn title_country_beats_longer_summary_country() {
+        // Title names country A ("Iran", 4 chars). Summary contains a LONGER
+        // gazetteer name for region B ("United Arab Emirates", 20 chars).
+        // Old "longest match wins" logic resolved to B; salience must pick A
+        // because the title mention outranks a summary-only mention.
+        let g = resolve_salient(
+            "Iran announces new sanctions response",
+            "Officials at a summit hosted by the United Arab Emirates discussed regional security.",
+        )
+        .unwrap();
+        assert_eq!(g.iso_a2, "IR", "title country must win over longer summary country");
+    }
+
+    #[test]
+    fn dateline_credit_is_downweighted() {
+        // The Reuters dateline files from the UAE, but the story is about Iran,
+        // which is named (only) in the body. The dateline must be down-weighted
+        // so the salient subject (Iran) wins.
+        let g = resolve_salient(
+            "Sanctions response announced",
+            "UNITED ARAB EMIRATES (Reuters) - Iran said on Tuesday it would respond to the new measures.",
+        )
+        .unwrap();
+        assert_eq!(g.iso_a2, "IR", "dateline location must not outrank the story subject");
+    }
+
+    #[test]
+    fn earlier_mention_wins_within_summary() {
+        // Two summary-only countries, neither in a dateline: the earlier mention
+        // (France) wins over the later, longer-named one (United States).
+        let g = resolve_salient(
+            "Diplomatic talks",
+            "France opened the talks before the United States delegation arrived.",
+        )
+        .unwrap();
+        assert_eq!(g.iso_a2, "FR", "earlier mention should win the tie");
     }
 }

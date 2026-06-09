@@ -23,6 +23,16 @@
 
 name: mapr
 
+# Shared log rotation for every long-running service. Without this the default
+# json-file driver grows unbounded and can fill the 256GB disk. Referenced per
+# service with `<<: *default-logging` (10MB x 3 files = ~30MB cap each).
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 networks:
   mapr:
     driver: bridge
@@ -35,6 +45,7 @@ services:
   # --- Convex backend: API (3210) + HTTP actions/site (3211) ----------------
   convex-backend:
     image: ghcr.io/get-convex/convex-backend:latest
+    <<: *default-logging
     restart: unless-stopped
     stop_grace_period: 10s
     stop_signal: SIGINT
@@ -67,6 +78,7 @@ services:
   # --- Convex admin dashboard (loopback; reach via SSH tunnel or gated host) --
   convex-dashboard:
     image: ghcr.io/get-convex/convex-dashboard:latest
+    <<: *default-logging
     restart: unless-stopped
     stop_grace_period: 10s
     stop_signal: SIGINT
@@ -83,8 +95,22 @@ services:
     mem_limit: 512m
 
   # --- Ollama: embeddings (bge-m3, /api/embed) + LLM (qwen2.5:3b, /v1) -------
+  # CONTENTION TRADE-OFF (single CPU-only Ollama, no GPU): this one instance
+  # serves BOTH the ingestor's bulk embedding bursts (every INGEST_INTERVAL_SECS)
+  # AND live RAG (interactive embed + qwen2.5:3b generation). A large ingest
+  # batch can therefore stall a user's QA latency on this box. Mitigations, in
+  # order of preference:
+  #   1. Gate / off-peak the ingest embedding burst (raise INGEST_INTERVAL_SECS,
+  #      or schedule heavy refreshes for low-traffic hours) so embeds and live
+  #      RAG rarely collide.
+  #   2. Point the INGESTOR at a separate/hosted embedding endpoint by setting a
+  #      different OLLAMA_URL on the `rust-ingestor` service (and EMBED_MODEL),
+  #      leaving this instance dedicated to live RAG.
+  # NOTE: neither a hard concurrency cap nor an off-peak scheduler is implemented
+  # in this stack today — the above are operator levers, not automatic behavior.
   ollama:
     image: ollama/ollama:latest
+    <<: *default-logging
     restart: unless-stopped
     networks: [mapr]
     environment:
@@ -125,6 +151,7 @@ services:
     build:
       context: ../ingestor
       dockerfile: Dockerfile
+    <<: *default-logging
     restart: unless-stopped
     networks: [mapr]
     environment:
@@ -195,6 +222,7 @@ services:
         VITE_CONVEX_URL: ${CONVEX_CLOUD_ORIGIN}
         VITE_CONVEX_SITE_URL: ${CONVEX_SITE_ORIGIN}
         VITE_MAP_STYLE: ${VITE_MAP_STYLE:-}
+    <<: *default-logging
     restart: unless-stopped
     networks: [mapr]
     ports:
@@ -211,8 +239,13 @@ services:
     mem_limit: 128m
 
   # --- Cloudflare Tunnel: the only public ingress ---------------------------
+  # SINGLE un-redundant ingress: if this tunnel (or Cloudflare) is down, MAPR is
+  # unreachable. Break-glass recovery (quick tunnel / SSH reverse tunnel) is in
+  # deploy/README.md → "Break-glass: tunnel down". Pin a known-good release tag
+  # (not :latest) so an auto-pulled bad build can't silently break ingress.
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.5.2
+    <<: *default-logging
     restart: unless-stopped
     networks: [mapr]
     command: ["tunnel", "--no-autoupdate", "--config", "/etc/cloudflared/config.yml", "run"]

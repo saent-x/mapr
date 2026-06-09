@@ -115,6 +115,44 @@ impl ConvexClient {
         serde_json::from_value(value).context("decoding listSources")
     }
 
+    /// `articles:contentHashesByExternalIds` → existing stored content hash for
+    /// each external id (or `null` when the article is new/absent). Lets the
+    /// embed step skip drafts whose content is unchanged. This is an *optional*
+    /// optimization: callers MUST fall back to embedding everything if it errors.
+    pub async fn content_hashes_by_external_ids(
+        &self,
+        external_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, Option<String>>> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Row {
+            external_id: String,
+            #[serde(default)]
+            content_hash: Option<String>,
+        }
+        // Each matched article document carries a 1024-dim embedding (~8KB), so a
+        // single query over thousands of ids would blow Convex's 16MB per-execution
+        // read budget. Chunk the lookup so each call reads a bounded slice
+        // (~256 docs ≈ 2MB). Budgets reset per function execution.
+        const HASH_QUERY_BATCH: usize = 256;
+        let mut out: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::with_capacity(external_ids.len());
+        for chunk in external_ids.chunks(HASH_QUERY_BATCH) {
+            let value = self
+                .query(
+                    "articles:contentHashesByExternalIds",
+                    json!({ "ingestKey": self.ingest_key, "externalIds": chunk }),
+                )
+                .await?;
+            let rows: Vec<Row> =
+                serde_json::from_value(value).context("decoding contentHashesByExternalIds")?;
+            for r in rows {
+                out.insert(r.external_id, r.content_hash);
+            }
+        }
+        Ok(out)
+    }
+
     /// `ingest:consumeRefreshSignal` → true if an on-demand refresh was requested.
     pub async fn consume_refresh_signal(&self) -> Result<bool> {
         let value = self
@@ -204,6 +242,10 @@ mod tests {
             category: "conflict".into(),
             published_at: 1_700_000_000_000,
             entities: vec!["Kyiv".into(), "Ukraine".into()],
+            content_hash: crate::dedup::content_hash(
+                "Rust ingestor integration write",
+                "Verifies the Rust convex client serializes ingestBatch correctly.",
+            ),
             embedding,
             image_url: Some("https://example.com/rust-it-1.jpg".into()),
         };

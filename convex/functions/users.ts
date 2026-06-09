@@ -1,4 +1,4 @@
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { getCurrentUser, requireUser } from "./lib/access";
 import { tierForUser, limitsForUser } from "./lib/entitlements";
@@ -58,8 +58,10 @@ export const linkStripeCustomer = internalMutation({
   },
 });
 
-/** Internal helper for actions (which lack ctx.db) to read the authed user. */
-export const getById = query({
+/** INTERNAL-ONLY: actions (which lack ctx.db) read a user by id. Never exposed
+ *  to clients — the raw doc holds email/phone/stripeCustomerId/role. Clients use
+ *  `me`, which is auth-scoped and returns a curated projection. */
+export const getById = internalQuery({
   args: { id: v.id("users") },
   handler: async (ctx, args) => ctx.db.get(args.id),
 });

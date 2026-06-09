@@ -15,7 +15,28 @@ export type SourceConfidence = {
   label: string;
 };
 
-export function classifySourceName(source: string): Pick<SourceEvidence, "sourceType" | "verificationLevel"> {
+type SourceClass = Pick<SourceEvidence, "sourceType" | "verificationLevel">;
+
+/**
+ * Resolve a source's type + verification level.
+ *
+ * The `sourceCatalog` row is the source of truth: when the caller has the
+ * stored `sourceType` / `verificationLevel` (set by admin/source-request
+ * flows), pass them as `stored` and they win field-by-field. Only the fields
+ * the catalog leaves blank fall back to the name-substring heuristic below —
+ * which is a last resort, not the primary signal. Calling with no `stored`
+ * preserves the original heuristic-only behavior.
+ */
+export function classifySourceName(source: string, stored?: SourceClass): SourceClass {
+  const heuristic = heuristicSourceClass(source);
+  return {
+    sourceType: stored?.sourceType ?? heuristic.sourceType,
+    verificationLevel: stored?.verificationLevel ?? heuristic.verificationLevel,
+  };
+}
+
+/** Name-substring fallback used only when the catalog has no stored metadata. */
+function heuristicSourceClass(source: string): SourceClass {
   const s = source.toLowerCase();
   if (s.includes("mastodon") || s.includes("bluesky")) {
     return { sourceType: "social", verificationLevel: "unverified" };
@@ -29,6 +50,36 @@ export function classifySourceName(source: string): Pick<SourceEvidence, "source
   return { sourceType: "regional", verificationLevel: "mixed" };
 }
 
+/**
+ * Build SourceEvidence rows from article docs (or any row carrying `source` +
+ * `publishedAt`). `sourceType`/`verificationLevel` are not stored on articles;
+ * `summarizeSources` resolves them via `classifySourceName(source)` when absent,
+ * so this stays a pure, read-free transform.
+ */
+export function evidenceFromArticles(
+  rows: { source: string; publishedAt: number }[],
+): SourceEvidence[] {
+  return rows.map((r) => ({ source: r.source, publishedAt: r.publishedAt }));
+}
+
+/** Trimmed confidence summary for compact UI strips (no diagnostic counts). */
+export type SourceStrength = {
+  confidence: SourceConfidence["confidence"];
+  label: string;
+  verifiedSources: number;
+  socialUnverified: number;
+};
+
+export function sourceStrength(items: SourceEvidence[]): SourceStrength {
+  const s = summarizeSources(items);
+  return {
+    confidence: s.confidence,
+    label: s.label,
+    verifiedSources: s.verifiedSources,
+    socialUnverified: s.socialUnverified,
+  };
+}
+
 export function summarizeSources(items: SourceEvidence[]): SourceConfidence {
   const names = new Set<string>();
   const types = new Set<string>();
@@ -38,9 +89,14 @@ export function summarizeSources(items: SourceEvidence[]): SourceConfidence {
 
   for (const item of items) {
     names.add(item.source);
-    const fallback = classifySourceName(item.source);
-    const sourceType = item.sourceType ?? fallback.sourceType ?? "other";
-    const verificationLevel = item.verificationLevel ?? fallback.verificationLevel ?? "mixed";
+    // Stored catalog metadata (when present) is authoritative; the name
+    // heuristic only fills the gaps it leaves blank.
+    const resolved = classifySourceName(item.source, {
+      sourceType: item.sourceType,
+      verificationLevel: item.verificationLevel,
+    });
+    const sourceType = resolved.sourceType ?? "other";
+    const verificationLevel = resolved.verificationLevel ?? "mixed";
     types.add(sourceType);
     if (sourceType === "regional") regional.add(item.source);
     if (sourceType === "social" && verificationLevel === "unverified") social.add(item.source);
