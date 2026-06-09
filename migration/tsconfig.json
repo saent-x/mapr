@@ -1,0 +1,21 @@
+{
+  // Typecheck-only config for the migration CLI. The job RUNS via Node's
+  // native TS type-stripping (`node --experimental-strip-types`), so this is
+  // purely for editor/`tsc --noEmit` correctness — emit is disabled.
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*.ts"]
+}

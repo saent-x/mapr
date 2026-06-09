@@ -1,0 +1,10 @@
+# web/.dockerignore — keep the build context lean.
+node_modules
+dist
+.git
+.gitignore
+Dockerfile
+.dockerignore
+.env
+.env.*
+*.md

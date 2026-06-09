@@ -1,0 +1,18 @@
+{
+  "name": "mapr-migration",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "One-shot, idempotent backfill of legacy MAPR data into the locked Convex backend (re-embedding) + Stripe billing relink staging.",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dry-run": "node --experimental-strip-types src/migrate.ts --dry-run",
+    "migrate": "node --experimental-strip-types src/migrate.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@mapr/convex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MAPR serving/RAG/auth/realtime backend — self-hosted Convex (TS functions).",
+  "scripts": {
+    "codegen": "convex codegen",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "@convex-dev/auth": "^0.0.92",
+    "@auth/core": "0.37.0",
+    "convex": "^1.39.0",
+    "stripe": "^18.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "typescript": "^5.9.3"
+  }
+}

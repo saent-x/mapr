@@ -1,0 +1,10 @@
+# ingestor/.dockerignore — keep the build context lean + reproducible.
+target/
+**/*.rs.bk
+Dockerfile
+.dockerignore
+.git
+.gitignore
+.env
+.env.*
+*.md

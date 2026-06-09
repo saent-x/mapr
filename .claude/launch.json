@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "name": "mapr-web",
+      "runtimeExecutable": "/opt/homebrew/bin/bun",
+      "runtimeArgs": ["run", "--cwd=/Users/tor/Documents/projects/mapr/web", "dev"],
       "port": 5173
     }
   ]

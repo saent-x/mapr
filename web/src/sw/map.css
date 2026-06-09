@@ -1,0 +1,73 @@
+/* ============================================================
+   Standing Watch markers on the mapcn / MapLibre GL basemap.
+   Severity is the only color. Markers are portaled into MapLibre's
+   auto-positioned marker elements, so these styles only carry the
+   visual (dot · pulse ring · hover tip) — never the positioning.
+   ============================================================ */
+
+:root      { --mk-halo: rgba(255, 255, 255, 0.92); }
+[data-theme="dark"] { --mk-halo: rgba(12, 14, 22, 0.85); }
+
+/* map shell */
+.map-wrap { position: absolute; inset: 0; background: var(--map-bg); }
+.map-wrap .maplibregl-canvas { transition: filter .4s; }
+.map-wrap[data-dimmed="1"] .maplibregl-canvas { filter: saturate(.7) brightness(.96); }
+.sw-maplibre { position: absolute; inset: 0; }
+
+/* the MapLibre marker element we portal into */
+.swm { position: relative; line-height: 0; cursor: pointer; }
+
+.swm-dot {
+  display: block; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--tc);
+  box-shadow: 0 0 0 2px var(--mk-halo), 0 1px 3px rgba(0, 0, 0, .45);
+  transition: transform .14s;
+}
+.swm.tier-amber .swm-dot { width: 9px; height: 9px; }
+.swm.tier-green .swm-dot { width: 7px; height: 7px; opacity: .92; }
+
+.swm-ring {
+  position: absolute; left: 50%; top: 50%; width: 11px; height: 11px;
+  border-radius: 50%; border: 1.5px solid var(--tc);
+  transform: translate(-50%, -50%); animation: swm-pulse 2.6s ease-out infinite;
+  pointer-events: none;
+}
+.swm.tier-black .swm-ring { animation-duration: 1.9s; }
+@keyframes swm-pulse {
+  0% { width: 11px; height: 11px; opacity: .7; }
+  70% { width: 40px; height: 40px; opacity: 0; }
+  100% { opacity: 0; }
+}
+
+.swm:hover .swm-dot, .swm.is-hov .swm-dot { transform: scale(1.5); }
+.swm.is-fresh .swm-dot { animation: swm-fresh .5s cubic-bezier(.2,.9,.3,1); }
+@keyframes swm-fresh { 0% { transform: scale(0); } 60% { transform: scale(1.7); } 100% { transform: scale(1); } }
+
+/* hover tip — dark pill above the dot */
+.swm-tip {
+  position: absolute; left: 50%; bottom: calc(100% + 9px);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content; max-width: 230px; text-align: left;
+  background: var(--ink); color: var(--paper); border-radius: 9px; padding: 8px 11px;
+  opacity: 0; pointer-events: none; transition: opacity .14s, transform .14s;
+  box-shadow: var(--shadow-3); z-index: 80;
+  display: flex; flex-direction: column; gap: 3px; line-height: 1.3;
+}
+.swm:hover .swm-tip, .swm.is-hov .swm-tip { opacity: 1; transform: translateX(-50%) translateY(0); }
+.swm-tip-tier { font-size: 9.5px; letter-spacing: .1em; color: var(--tc); }
+.swm-tip-title { font-size: 12px; font-weight: 500; }
+
+/* MapLibre chrome — keep it quiet and out of the way of the composer/legend */
+.map-wrap .maplibregl-ctrl-attrib { font-size: 9.5px; opacity: .55; }
+.map-wrap .maplibregl-ctrl-attrib a { color: var(--ink-3); }
+.map-wrap .maplibregl-ctrl-bottom-left { display: none; } /* CARTO logo — left clear for legend */
+
+/* region hover tooltip (choropleth) */
+.sw-region-popup .maplibregl-popup-content {
+  background: var(--ink); color: var(--paper); border-radius: 9px; padding: 7px 11px;
+  box-shadow: var(--shadow-3); pointer-events: none;
+}
+.sw-region-popup .maplibregl-popup-tip { display: none; }
+.sw-region-tip { display: flex; flex-direction: column; gap: 2px; line-height: 1.3; }
+.sw-region-tip .rt-name { font-size: 12.5px; font-weight: 600; }
+.sw-region-tip .rt-meta { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }

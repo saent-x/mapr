@@ -28,3 +28,15 @@ bun.lock
 .superpowers/
 .deepseek/
 .factory/mission-scratch/
+
+# Build artifacts
+ingestor/target/
+
+# Agent / scratch dirs
+tmp/
+.claude/
+.codex/
+
+# SQLite runtime sidecar files
+data/*.db-shm
+data/*.db-wal

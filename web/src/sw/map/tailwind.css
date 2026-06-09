@@ -1,0 +1,32 @@
+/* ============================================================
+   Tailwind v4 — utilities ONLY (no preflight/base reset), so it can't
+   touch the bespoke "Standing Watch" CSS. This exists purely to power the
+   vendored mapcn component's utility classes (container sizing, controls,
+   popups, loader). shadcn semantic tokens are mapped to the Standing Watch
+   palette via `@theme inline`, so mapcn chrome theme-matches automatically.
+   ============================================================ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* mapcn switches map style via its `theme` prop; its Tailwind chrome uses
+   shadcn tokens, which we key off our own [data-theme] attribute. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  --color-background: var(--surface);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--ink-3);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--ink);
+  --color-border: var(--hairline);
+  --color-input: var(--hairline-2);
+  --color-ring: var(--accent);
+  --color-primary: var(--ink);
+  --color-primary-foreground: var(--paper);
+}
