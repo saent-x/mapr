@@ -1,0 +1,33 @@
+# MAPR v2 on stbrn-studios. All state lives under /data/mapr (never the root drive).
+# Nothing here listens on a public interface; Cloudflare reaches the API through the tunnel.
+name: mapr
+
+services:
+  db:
+    image: paradedb/paradedb:${PARADEDB_TAG:?pin a tag in .env}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mapr
+      POSTGRES_USER: mapr
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets: [pg_password]
+    volumes:
+      - /data/mapr/pg:/var/lib/postgresql
+      - ../../db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    shm_size: 1g
+    command: >
+      postgres
+      -c shared_buffers=4GB
+      -c effective_cache_size=12GB
+      -c maintenance_work_mem=1GB
+      -c max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapr -d mapr"]
+      interval: 10s
+      retries: 6
+
+secrets:
+  pg_password:
+    file: /data/mapr/secrets/pg_password
