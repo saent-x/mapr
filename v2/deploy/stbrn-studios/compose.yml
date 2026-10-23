@@ -28,6 +28,60 @@ services:
       interval: 10s
       retries: 6
 
+  # Feed poller, clustering, job queue and the local API for the Worker (via the tunnel).
+  # Same compose network as db (the default one); reaches Postgres as db:5432.
+  # First run: docker compose run --rm ingestor node dist/seed.js
+  ingestor:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    image: mapr-ingestor:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: mapr
+      PGDATABASE: mapr
+      PG_PASSWORD_FILE: /run/secrets/pg_password
+      API_TOKEN_FILE: /run/secrets/api_token
+      EMBEDDER_URL: http://embedder:8788
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8787"
+      POLL_INTERVAL_MIN: "30"
+      CLUSTER_THRESHOLD: "0.82"
+      DAILY_NEURON_CEILING: "9000"
+      LOG_LEVEL: info
+    secrets: [pg_password, api_token]
+    ports:
+      - "127.0.0.1:8787:8787"
+    stop_grace_period: 30s
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "7"
+
+  # Placeholder: local embedding service (harrier-oss-v1-0.6b, 1024 dims, CPU).
+  # Contract: POST /embed {"texts": [...]} -> {"vectors": [[1024 floats], ...], "model": "..."}
+  # Model weights live under /data/mapr/models (download on a machine that can reach the hub).
+  # embedder:
+  #   image: mapr-embedder:local
+  #   build: ../../embedder
+  #   restart: unless-stopped
+  #   environment:
+  #     MODEL_DIR: /models/harrier-oss-v1-0.6b
+  #     OMP_NUM_THREADS: "8"
+  #   volumes:
+  #     - /data/mapr/models:/models:ro
+  #   expose: ["8788"]
+  #   mem_limit: 6g
+
 secrets:
   pg_password:
     file: /data/mapr/secrets/pg_password
+  api_token:
+    file: /data/mapr/secrets/api_token
