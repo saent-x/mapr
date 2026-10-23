@@ -1,0 +1,1131 @@
+{
+ "_doc": "Hand-reviewed same-event groups. Candidates came from a TF-IDF title+lead similarity pass (cos>=0.35, <=72h apart) over data/mapr.db; every group and member was read and accepted by hand. Event = one real-world occurrence (incident, statement, vote, meeting) plus direct reactions to it within ~72h.",
+ "groups": [
+  {
+   "group": "cur-001",
+   "note": "Netanyahu: Iran can no longer enrich uranium (19 Mar presser)",
+   "members": [
+    {
+     "id": "rss-server-france24-7-0",
+     "title": "Replay: Israeli PM Netanyahu addresses press conference"
+    },
+    {
+     "id": "rss-server-scmp-10-0",
+     "title": "Israel PM says Iran can no longer enrich uranium, hints at ‘ground component’ to war"
+    },
+    {
+     "id": "rss-server-aljazeera-8",
+     "title": "Netanyahu says Iran’s uranium enrichment abilities destroyed"
+    },
+    {
+     "id": "rss-server-almonitor-7-0",
+     "title": "Netanyahu says Iran no longer has uranium enrichment capacity"
+    }
+   ]
+  },
+  {
+   "group": "cur-002",
+   "note": "Projectile strikes Bushehr nuclear plant",
+   "members": [
+    {
+     "id": "rss-server-moscowtimes-ru-18",
+     "title": "Russian Nuclear Chief Says Projectile Struck Iran’s Bushehr Power Plant"
+    },
+    {
+     "id": "rss-server-khaama-af-35",
+     "title": "UN Watchdog Says Projectile Struck Iran’s Bushehr Nuclear Plant"
+    }
+   ]
+  },
+  {
+   "group": "cur-003",
+   "note": "India blocks release of The Voice of Hind Rajab",
+   "members": [
+    {
+     "id": "rss-server-guardian-uk-30-0",
+     "title": "Indian film board blocks release of Oscar-nominated Gaza drama The Voice of Hind Rajab"
+    },
+    {
+     "id": "rss-server-straitstimes-sg-27-0",
+     "title": "India blocks release of Oscar-nominated Gaza film"
+    }
+   ]
+  },
+  {
+   "group": "cur-004",
+   "note": "Six nations ready to secure Strait of Hormuz",
+   "members": [
+    {
+     "id": "rss-server-nltimes-nl-7-0",
+     "title": "Netherlands, five allies ready to help secure Strait of Hormuz amid rising tensions"
+    },
+    {
+     "id": "rss-server-news24-za-0-0",
+     "title": "Six major powers unite against Iran’s Strait of Hormuz blockade as 20 000 seafarers stranded"
+    },
+    {
+     "id": "rss-server-dawn-pk-7-0",
+     "title": "European countries, Japan express ‘readiness’ to safeguard shipping through Strait of Hormuz"
+    },
+    {
+     "id": "rss-server-france24-17-0",
+     "title": "Six nations say ready to boost 'efforts to ensure safe passage' in Hormuz"
+    },
+    {
+     "id": "rss-server-almonitor-0-0",
+     "title": "Italy, Germany and France offer help with Hormuz only after ceasefire"
+    }
+   ]
+  },
+  {
+   "group": "cur-005",
+   "note": "Cyclone Narelle landfall in far north Queensland",
+   "members": [
+    {
+     "id": "rss-server-smh-au-17",
+     "title": "Tracking Cyclone Narelle: Everything you need to know"
+    },
+    {
+     "id": "rss-server-smh-au-4",
+     "title": "Cyclone Narelle hits Far North Queensland"
+    },
+    {
+     "id": "rss-server-smh-au-6",
+     "title": "Cyclone Narelle hits Far North Queensland communities"
+    },
+    {
+     "id": "rss-server-guardian-uk-18",
+     "title": "Tropical Cyclone Narelle hits far north Queensland as ‘high-end’ category four storm"
+    },
+    {
+     "id": "rss-server-smh-au-3",
+     "title": "Tropical Cyclone Narelle makes landfall"
+    },
+    {
+     "id": "rss-server-guardian-uk-19",
+     "title": "‘Damage will be widespread’: Narelle brings 250km/h wind gusts, with tourists evacuated and schools closed"
+    }
+   ]
+  },
+  {
+   "group": "cur-006",
+   "note": "Kebbi governor orders probe into Zuru hospital child deaths",
+   "members": [
+    {
+     "id": "rss-server-vanguard-ng-8",
+     "title": "Zuru hospital Tragedy: Idris orders probe into mysterious death of 2 children"
+    },
+    {
+     "id": "rss-server-vanguard-ng-11",
+     "title": "Kebbi gov orders probe as 2 children die after injection"
+    }
+   ]
+  },
+  {
+   "group": "cur-007",
+   "note": "Sri Lanka raises fuel prices 25%",
+   "members": [
+    {
+     "id": "rss-server-dawn-pk-13-0",
+     "title": "Sri Lanka raises fuel prices by 25pc as US-Israel war on Iran bites"
+    },
+    {
+     "id": "rss-server-straitstimes-sg-16-0",
+     "title": "Sri Lanka raises fuel prices by 25% as Iran war bites"
+    }
+   ]
+  },
+  {
+   "group": "cur-008",
+   "note": "Cyprus: President working for resumption of talks, minister says",
+   "members": [
+    {
+     "id": "html-server-candidate-cy-cyprus-mail-16",
+     "title": "President working for unity and resumption of talks, minister says"
+    },
+    {
+     "id": "html-server-candidate-cy-cyprus-news-agency-6",
+     "title": "Μinister says President is working hard for resumption of Cyprus peace talks"
+    }
+   ]
+  },
+  {
+   "group": "cur-009",
+   "note": "Zelensky: weakening sanctions gives Russia resources (lv)",
+   "members": [
+    {
+     "id": "html-server-candidate-lv-lsm-english-12",
+     "title": "Zelenskis: Līdz ar sankciju vājināšanu Krievija saņem papildu resursus karam"
+    },
+    {
+     "id": "html-server-candidate-lv-tvnet-3",
+     "title": "Zelenskis: Sankciju vājināšana nodrošina Krievijai papildu resursus karam"
+    }
+   ]
+  },
+  {
+   "group": "cur-010",
+   "note": "CAF strips Senegal of AFCON title; reactions",
+   "members": [
+    {
+     "id": "rss-server-africanews-30",
+     "title": "AFCON 2025 final scandal: Senegal accuses CAF of corruption"
+    },
+    {
+     "id": "rss-server-abc-au-16",
+     "title": "Senegal calls for corruption investigation after Africa Cup of Nations Nations title stripped"
+    },
+    {
+     "id": "rss-server-france24-12-0",
+     "title": "Senegal stripped of AFCON title: Reactions in Dakar"
+    },
+    {
+     "id": "rss-server-africanews-43-0",
+     "title": "Senegalese Football Federation bashes AFCON title stripping"
+    },
+    {
+     "id": "rss-server-africanews-1",
+     "title": "AFCON 2025 title \"cannot be taken away\" from Senegal, says FSF"
+    },
+    {
+     "id": "rss-server-africanews-49-0",
+     "title": "CAF overturns Senegal win: Appeals board declares Morocco AFCON Champions"
+    },
+    {
+     "id": "rss-server-africanews-27-0",
+     "title": "Senegalese fans in disbelief after AFCON victory overturned"
+    }
+   ]
+  },
+  {
+   "group": "cur-011",
+   "note": "World Happiness Report 2026",
+   "members": [
+    {
+     "id": "rss-server-africanews-10-0",
+     "title": "Afghanistan, Sierra Leone, and Malawi among the unhappiest countries"
+    },
+    {
+     "id": "rss-server-romaniainsider-ro-18",
+     "title": "World Happiness Report 2026: Finland tops ranking for ninth year, Romania climbs one place"
+    },
+    {
+     "id": "rss-server-helsinkitimes-fi-3",
+     "title": "Finland tops global happiness ranking for ninth year"
+    },
+    {
+     "id": "rss-server-khaama-af-17",
+     "title": "Afghanistan Again Ranked World’s Unhappiest Country"
+    }
+   ]
+  },
+  {
+   "group": "cur-012",
+   "note": "Michael Bambang Hartono dies at 86",
+   "members": [
+    {
+     "id": "rss-server-straitstimes-sg-1",
+     "title": "Indonesian billionaire Michael Bambang Hartono dies at 86"
+    },
+    {
+     "id": "rss-server-straitstimes-sg-15",
+     "title": "Billionaire Indonesian bank owner Michael Hartono dies at 86"
+    }
+   ]
+  },
+  {
+   "group": "cur-013",
+   "note": "Panel approves gold coin with Trump's face",
+   "members": [
+    {
+     "id": "rss-server-aljazeera-4",
+     "title": "US arts commission approves gold coin stamped with Donald Trump’s face"
+    },
+    {
+     "id": "rss-server-guardian-uk-41",
+     "title": "Trump-appointed panel approves 24-karat gold coin featuring his face"
+    },
+    {
+     "id": "rss-server-scmp-8",
+     "title": "Trump-picked panel approves gold coin with his image: ‘the larger the better’"
+    }
+   ]
+  },
+  {
+   "group": "cur-014",
+   "note": "Italy justice referendum vote",
+   "members": [
+    {
+     "id": "rss-server-euronews-3",
+     "title": "Italy votes on high-stakes justice referendum, a key test for Meloni's government"
+    },
+    {
+     "id": "rss-server-france24-0",
+     "title": "Italy’s justice referendum becomes key test for PM Meloni’s leadership"
+    },
+    {
+     "id": "rss-server-guardian-uk-22",
+     "title": "Meloni v the judges: high stakes for Italian PM in vote on judiciary overhaul"
+    },
+    {
+     "id": "html-server-candidate-fr-france-info-20",
+     "title": "Les Italiens appelés à se prononcer par référendum sur la réforme du système judiciaire voulue par Giorgia Meloni"
+    }
+   ]
+  },
+  {
+   "group": "cur-015",
+   "note": "Denmark prepared for US attack on Greenland, DR reports",
+   "members": [
+    {
+     "id": "rss-server-euronews-37-0",
+     "title": "Denmark deployed troops to Greenland in January fearing US invasion, local media report"
+    },
+    {
+     "id": "rss-server-thelocal-dk-2",
+     "title": "Denmark ‘prepared for US to attack’ Greenland in January"
+    }
+   ]
+  },
+  {
+   "group": "cur-016",
+   "note": "Tinubu state visit to the UK",
+   "members": [
+    {
+     "id": "rss-server-dw-5-0",
+     "title": "UK–Nigeria relations in focus as London hosts Tinubu"
+    },
+    {
+     "id": "rss-server-vanguard-ng-14",
+     "title": "Tinubu departs London after historic state visit"
+    },
+    {
+     "id": "rss-server-africanews-32",
+     "title": "Nigeria's President Tinubu welcomed by Britain's King Charles at start of state visit"
+    },
+    {
+     "id": "rss-server-dw-7",
+     "title": "UK's King Charles praises UK‑Nigeria 'partnership of equals' on Tinubu state visit"
+    },
+    {
+     "id": "rss-server-africanews-4-0",
+     "title": "Bola Tinubu's state visit to UK: major steel deal agreed with British PM"
+    }
+   ]
+  },
+  {
+   "group": "cur-017",
+   "note": "WHO: strike on Sudan hospital kills 64",
+   "members": [
+    {
+     "id": "rss-server-npr-5",
+     "title": "A strike on a hospital in Sudan killed at least 64 people, WHO says"
+    },
+    {
+     "id": "rss-server-un-news-0",
+     "title": "WHO verifies deadly hospital attack in war-torn Sudan"
+    }
+   ]
+  },
+  {
+   "group": "cur-018",
+   "note": "Belgian court sends ex-diplomat to trial over Lumumba murder",
+   "members": [
+    {
+     "id": "rss-server-guardian-uk-3-0",
+     "title": "Belgian court sends ex-diplomat, 93, to trial over 1961 murder of Congo leader"
+    },
+    {
+     "id": "rss-server-africanews-2-0",
+     "title": "Congolese citizens welcome Belgian court trial in Lumumba case"
+    }
+   ]
+  },
+  {
+   "group": "cur-019",
+   "note": "Romanian president meets NATO chief Rutte",
+   "members": [
+    {
+     "id": "rss-server-romaniainsider-ro-17",
+     "title": "Romania is a key NATO ally on the eastern flank, Mark Rutte says after talks with president Nicușor Dan"
+    },
+    {
+     "id": "rss-server-romaniainsider-ro-43",
+     "title": "Romania’s president to meet NATO chief Mark Rutte, attend EU summit in Brussels"
+    }
+   ]
+  },
+  {
+   "group": "cur-020",
+   "note": "Costa Rica closes embassy in Havana; Cuba responds",
+   "members": [
+    {
+     "id": "rss-server-ticotimes-cr-8",
+     "title": "Costa Rica Closes Embassy in Cuba as Ties With Havana Collapse"
+    },
+    {
+     "id": "rss-server-havanatimes-cu-5",
+     "title": "Costa Rica Announces Closure of Its Embassy in Havana, Cuba"
+    },
+    {
+     "id": "rss-server-ticotimes-cr-9-0",
+     "title": "Cuba Criticizes Costa Rica’s Diplomatic Downgrade, Citing U.S. Pressure"
+    }
+   ]
+  },
+  {
+   "group": "cur-021",
+   "note": "Trump 48-hour Hormuz ultimatum and Iran's response (en/es/fr/pt/ro/lv)",
+   "members": [
+    {
+     "id": "html-server-candidate-cy-cyprus-mail-4",
+     "title": "Trump warns Iran with obliteration if Strait of Hormuz is not fully reopened within 48 hours"
+    },
+    {
+     "id": "rss-server-almonitor-10-0",
+     "title": "UK minister says Trump speaks for himself on his deadline for Iran"
+    },
+    {
+     "id": "rss-server-dawn-pk-8-0",
+     "title": "Trump threatens Iran with power plant strikes over Hormuz oil blockade"
+    },
+    {
+     "id": "rss-server-euronews-8-0",
+     "title": "Iran threatens to retaliate after Trump gives 48-hour ultimatum to reopen Strait"
+    },
+    {
+     "id": "rss-server-khaama-af-8",
+     "title": "Trump Gives Iran 48 Hours to Reopen Strait of Hormuz"
+    },
+    {
+     "id": "rss-server-mwn-ma-6-0",
+     "title": "Trump Issues 48-Hour Ultimatum to Iran Over Strait of Hormuz"
+    },
+    {
+     "id": "rss-server-premiumtimes-ng-7-0",
+     "title": "US/Israel-Iran War (Day 23): Trump gives Iran 48 hours to reopen Strait of Hormuz"
+    },
+    {
+     "id": "rss-server-scmp-45-0",
+     "title": "Trump issues Hormuz ultimatum, threatens to ‘obliterate’ Iran’s power plants"
+    },
+    {
+     "id": "html-server-candidate-az-report-az-english-1",
+     "title": "Iran threatens to close Strait of Hormuz"
+    },
+    {
+     "id": "rss-server-punch-ng-2-0",
+     "title": "Iran threatens to completely close Hormuz if US targets power plants"
+    },
+    {
+     "id": "rss-server-almonitor-12-0",
+     "title": "Iran says Hormuz open to all but ‘enemy-linked’ ships amid US threat"
+    },
+    {
+     "id": "rss-server-jpost-il-10-0",
+     "title": "Iran open to maritime safety talks, says Strait of Hormuz accessible with coordination"
+    },
+    {
+     "id": "rss-server-kathmandupost-np-2-0",
+     "title": "Iran says Hormuz open to all but ‘enemy-linked’ ships"
+    },
+    {
+     "id": "gdelt-aHR0cDovL21vbnRl-24",
+     "title": "Trump dá ultimato de 48 horas para que o Irã reabra totalmente o Estreito de Ormuz"
+    },
+    {
+     "id": "html-server-candidate-md-ziarul-de-garda-5",
+     "title": "Donald Trump: „Dacă Iranul nu deschide complet Strâmtoarea Ormuz, în 48 de ore, SUA vor lovi centrale lor electrice”"
+    },
+    {
+     "id": "html-server-candidate-sv-la-prensa-grafica-7",
+     "title": "Trump amenaza con atacar las centrales eléctricas de Irán si no abre el estrecho de Ormuz"
+    },
+    {
+     "id": "html-server-candidate-lv-lsm-english-14",
+     "title": "Tramps draud uzbrukt Irānas spēkstacijām, ja netiks atvērts Hormuzs"
+    },
+    {
+     "id": "html-server-candidate-by-nasha-niva-10",
+     "title": "Trump gave Iran 48 hours to open the Strait of Hormuz. And said what he would do if they refuse 26 26"
+    },
+    {
+     "id": "rss-server-kathmandupost-np-16-0",
+     "title": "Trump threatens Iran with power plant strikes over Hormuz oil blockade"
+    },
+    {
+     "id": "html-server-candidate-fr-france-info-5",
+     "title": "Guerre au Moyen-Orient : l'Iran menace de fermer entièrement le détroit d'Ormuz si les Etats-Unis visent ses centrales électriques"
+    },
+    {
+     "id": "gdelt-aHR0cHM6Ly93d3cu-60",
+     "title": "Mesaj amenințător din Teheran . IRGC promite închiderea Ormuz și atacuri în regiune"
+    },
+    {
+     "id": "gdelt-aHR0cHM6Ly93d3cu-69",
+     "title": "Reacția Iranului la ultimatumul lui Trump : Cine poate traversa Strâmtoarea Ormuz și cu ce condiție"
+    }
+   ]
+  },
+  {
+   "group": "cur-022",
+   "note": "Cuba second nationwide blackout in a week",
+   "members": [
+    {
+     "id": "html-server-candidate-om-times-of-oman-17",
+     "title": "Cuba hit by second nationwide blackout in under a week amid deepening energy crisis"
+    },
+    {
+     "id": "rss-server-france24-22",
+     "title": "Cuba suffers second nationwide blackout in less than a week"
+    }
+   ]
+  },
+  {
+   "group": "cur-023",
+   "note": "US counterterrorism chief Joe Kent resigns over Iran war",
+   "members": [
+    {
+     "id": "rss-server-helsinkitimes-fi-6-0",
+     "title": "US counterterrorism chief resigns over Iran war"
+    },
+    {
+     "id": "rss-server-khaama-af-43-0",
+     "title": "US Counterterrorism Chief Joseph Kent Resigns Over Iran War"
+    }
+   ]
+  },
+  {
+   "group": "cur-024",
+   "note": "Afghan ex-soldier dies in ICE custody",
+   "members": [
+    {
+     "id": "rss-server-khaama-af-70",
+     "title": "U.S. Muslim Group Calls for Probe After Afghan Ex-Soldier Dies in ICE Custody"
+    },
+    {
+     "id": "rss-server-khaama-af-75",
+     "title": "Afghan Soldier Who Served U.S. for a Decade Dies in ICE Custody, Leaving Six Children"
+    }
+   ]
+  },
+  {
+   "group": "cur-025",
+   "note": "Slovenia parliamentary election",
+   "members": [
+    {
+     "id": "rss-server-kathmandupost-np-10",
+     "title": "Slovenia election pits liberals against populist right in tight race"
+    },
+    {
+     "id": "rss-server-aljazeera-21",
+     "title": "Slovenia’s governing liberals face right-wing populists in tight election"
+    },
+    {
+     "id": "rss-server-almonitor-18",
+     "title": "Slovenians vote in tight race between liberals and populist right"
+    },
+    {
+     "id": "rss-server-euronews-0",
+     "title": "Slovenia parliamentary elections: Governing liberals face right-wing conservatives"
+    },
+    {
+     "id": "html-server-candidate-bg-bta-english-6",
+     "title": "Voter Turnout in Slovenia's Parliamentary Elections Stands at 21.38% at 11:00 Local Time"
+    },
+    {
+     "id": "rss-server-guardian-uk-20",
+     "title": "Slovenia goes to polls in election marked by claims of anti-Romany rhetoric"
+    }
+   ]
+  },
+  {
+   "group": "cur-026",
+   "note": "France municipal elections second round (en + fr)",
+   "members": [
+    {
+     "id": "rss-server-euronews-5",
+     "title": "France local elections: a key test one year before the country's presidential election"
+    },
+    {
+     "id": "rss-server-france24-13",
+     "title": "French voters head to the polls in second round of local elections"
+    },
+    {
+     "id": "rss-server-france24-17",
+     "title": "'All eyes are on the three biggest cities– Paris, Marseille and Lyon'"
+    },
+    {
+     "id": "rss-server-france24-18",
+     "title": "French voters to choose mayors in key cities including Paris and Marseille"
+    },
+    {
+     "id": "rss-server-france24-7",
+     "title": "'Close race': Paris to elect its mayor among three candidates"
+    },
+    {
+     "id": "rss-server-guardian-uk-21",
+     "title": "Mayoral races in balance as voting opens in last round of French local elections"
+    },
+    {
+     "id": "html-server-candidate-fr-france-info-0",
+     "title": "Elections municipales 2026 : à Lyon, le maire sortant, Grégory Doucet, et son adversaire, Jean-Michel Aulas, ont voté pour le 2d tour"
+    },
+    {
+     "id": "html-server-candidate-fr-france-info-1",
+     "title": "Municipales 2026 : le taux de participation au 2d tour atteint 20,33% à midi, bien supérieur à 2020 pendant le Covid-19, et en très légère hausse par rapport à 2014"
+    }
+   ]
+  },
+  {
+   "group": "cur-027",
+   "note": "FIFA fines Israel FA over discrimination",
+   "members": [
+    {
+     "id": "rss-server-aljazeera-12",
+     "title": "FIFA fines Israel FA citing racism and ‘multiple’ discrimination breaches"
+    },
+    {
+     "id": "rss-server-vanguard-ng-19-0",
+     "title": "FIFA fines Israeli FA for anti-discrimination rules breaches"
+    }
+   ]
+  },
+  {
+   "group": "cur-028",
+   "note": "Iran missile launch at Diego Garcia",
+   "members": [
+    {
+     "id": "rss-server-aljazeera-8-0",
+     "title": "Did Iran launch missiles at US-UK base on Diego Garcia? Here’s what to know"
+    },
+    {
+     "id": "rss-server-scmp-26-0",
+     "title": "What the 4,000km Diego Garcia missile launch reveals about Iran’s intentions"
+    },
+    {
+     "id": "html-server-candidate-sv-la-prensa-grafica-11",
+     "title": "Esto hay que saber sobre Diego García, la base militar clave de EUA atacada por Irán"
+    },
+    {
+     "id": "html-server-candidate-sv-la-prensa-grafica-8-0",
+     "title": "Irán sube la apuesta y lanza misiles a una base estratégica de EUA en el océano Índico a 4000 kilómetros de Teherán"
+    }
+   ]
+  },
+  {
+   "group": "cur-029",
+   "note": "Larijani killed; mass funeral in Tehran",
+   "members": [
+    {
+     "id": "rss-server-euronews-49",
+     "title": "Iran: Mass funeral in Tehran for Larijani and other officials killed in strikes"
+    },
+    {
+     "id": "rss-server-helsinkitimes-fi-4-0",
+     "title": "Iran confirms deaths of Larijani and Soleimani after Israeli strikes"
+    },
+    {
+     "id": "rss-server-africanews-34",
+     "title": "Thousands of mourners at funeral of Larijani and other top Iranian security officials"
+    }
+   ]
+  },
+  {
+   "group": "cur-030",
+   "note": "Macau national security law with closed-door trials",
+   "members": [
+    {
+     "id": "rss-server-straitstimes-sg-8",
+     "title": "China-ruled Macau approves national security law allowing closed-door trials"
+    },
+    {
+     "id": "rss-server-straitstimes-sg-7",
+     "title": "New Macau security law allows for trials behind closed doors"
+    }
+   ]
+  },
+  {
+   "group": "cur-031",
+   "note": "Patriarch Ilia II laid to rest",
+   "members": [
+    {
+     "id": "html-server-candidate-ge-georgia-today-0",
+     "title": "Catholicos-Patriarch Ilia II laid to rest at Sioni Cathedral"
+    },
+    {
+     "id": "html-server-candidate-ge-georgia-today-5",
+     "title": "Patriarch Ilia II transferred to Sioni Cathedral ahead of burial"
+    }
+   ]
+  },
+  {
+   "group": "cur-032",
+   "note": "US F-35 hit by suspected Iranian fire",
+   "members": [
+    {
+     "id": "rss-server-scmp-14-0",
+     "title": "US F-35 hit by suspected Iranian fire, forced to make emergency landing"
+    },
+    {
+     "id": "rss-server-aljazeera-15-0",
+     "title": "US F-35 aircraft makes emergency landing after a combat mission over Iran"
+    },
+    {
+     "id": "rss-server-dawn-pk-2-0",
+     "title": "IRGC claims it struck US F-35 over central Iran, with fighter jet’s fate unclear"
+    },
+    {
+     "id": "rss-server-khaama-af-15-0",
+     "title": "Iran claims world’s first hit on US F-35 fighter jet"
+    }
+   ]
+  },
+  {
+   "group": "cur-033",
+   "note": "Maiduguri suicide bombings",
+   "members": [
+    {
+     "id": "rss-server-africanews-25",
+     "title": "Nigeria's army chief visits Maiduguri following deadly suicide bombings"
+    },
+    {
+     "id": "rss-server-guardian-uk-4",
+     "title": "At least 23 people killed in suspected suicide attacks in north-eastern Nigeria"
+    },
+    {
+     "id": "rss-server-africanews-44",
+     "title": "Security analyst on Maiduguri attacks: \"The city has always been vulnerable\""
+    }
+   ]
+  },
+  {
+   "group": "cur-034",
+   "note": "Monarch butterfly population up 64%",
+   "members": [
+    {
+     "id": "rss-server-mxnewsdaily-4",
+     "title": "Mexico’s monarch butterfly population is up more than 60% over last year, inspiring cautious hope"
+    },
+    {
+     "id": "rss-server-guardian-uk-7",
+     "title": "Mexico’s monarch butterfly population jumps 64%, offering hope for at-risk species"
+    }
+   ]
+  },
+  {
+   "group": "cur-035",
+   "note": "Sexual assault at Delta festival condemned",
+   "members": [
+    {
+     "id": "rss-server-punch-ng-0",
+     "title": "Oluremi Tinubu condemns assault of women at Delta festival, demands justice"
+    },
+    {
+     "id": "rss-server-punch-ng-11",
+     "title": "WIMBIZ condemns sexual assault at Delta festival, pushes for gender bill"
+    }
+   ]
+  },
+  {
+   "group": "cur-036",
+   "note": "Pro-Kremlin blogger Remeslo turns on Putin",
+   "members": [
+    {
+     "id": "rss-server-scmp-18-0",
+     "title": "Pro-Kremlin Russian blogger who turned on Putin sent to psychiatric unit"
+    },
+    {
+     "id": "rss-server-moscowtimes-ru-13",
+     "title": "A Pro-Kremlin Blogger Has Denounced Putin – And Nobody Knows Why"
+    }
+   ]
+  },
+  {
+   "group": "cur-037",
+   "note": "Hong Kong fire inquiry hearings open",
+   "members": [
+    {
+     "id": "rss-server-straitstimes-sg-33",
+     "title": "Independent Hong Kong panel starts hearing into devastating inferno"
+    },
+    {
+     "id": "rss-server-straitstimes-sg-36",
+     "title": "Hong Kong fire: Panel hears safety measures failed on day of deadly blaze"
+    }
+   ]
+  },
+  {
+   "group": "cur-038",
+   "note": "EU leaders call for moratorium on strikes on energy/water facilities",
+   "members": [
+    {
+     "id": "rss-server-jpost-il-9",
+     "title": "European Union calls for moratorium on military strikes in Middle East on energy, water facilities"
+    },
+    {
+     "id": "rss-server-almonitor-2-0",
+     "title": "EU leaders call for moratorium on strikes against energy and water facilities in Middle East"
+    }
+   ]
+  },
+  {
+   "group": "cur-039",
+   "note": "Thai parliament re-elects Anutin as PM",
+   "members": [
+    {
+     "id": "rss-server-diplomat-asia-11",
+     "title": "Thai Parliament Reconfirms Anutin Charnvirakul as Prime Minister"
+    },
+    {
+     "id": "rss-server-vnexpress-vn-9",
+     "title": "Thailand's new parliament elects Anutin as PM"
+    },
+    {
+     "id": "rss-server-straitstimes-sg-41",
+     "title": "Thailand’s Anutin re-elected as PM after crushing rival in parliamentary vote"
+    }
+   ]
+  },
+  {
+   "group": "cur-040",
+   "note": "Prague rally against Babis",
+   "members": [
+    {
+     "id": "rss-server-dw-3",
+     "title": "Major rally planned as Czech MPs mull 'foreign agent' law"
+    },
+    {
+     "id": "rss-server-dw-4-0",
+     "title": "Mass Prague rally hits Babis over democracy concerns"
+    }
+   ]
+  },
+  {
+   "group": "cur-041",
+   "note": "Natural History Museum tops UK attractions",
+   "members": [
+    {
+     "id": "rss-server-guardian-uk-36",
+     "title": "Natural History Museum tops UK attraction list with record visitors"
+    },
+    {
+     "id": "gdelt-aHR0cHM6Ly93d3cu-65",
+     "title": "Natural History Museum becomes united kingdom top attraction for visits"
+    }
+   ]
+  },
+  {
+   "group": "cur-042",
+   "note": "Trump's $200bn Iran war funding request meets opposition",
+   "members": [
+    {
+     "id": "rss-server-toi-il-11",
+     "title": "Trump’s plan to seek $200 billion for Iran war faces stiff opposition in Congress"
+    },
+    {
+     "id": "rss-server-almonitor-8-0",
+     "title": "Huge Trump Iran war funding request faces stiff opposition in Congress"
+    }
+   ]
+  },
+  {
+   "group": "cur-043",
+   "note": "Trump compares Iran strikes to Pearl Harbor with Japanese PM (absorbs legacy evt-1x1n8ro1rywqhs)",
+   "members": [
+    {
+     "id": "rss-server-almonitor-19-0",
+     "title": "Trump draws parallel between Pearl Harbor and US strikes on Iran in meeting with Japanese PM"
+    },
+    {
+     "id": "rss-server-aljazeera-16-0",
+     "title": "Trump compares Iran strikes to Pearl Harbor as he meets Japan’s PM"
+    },
+    {
+     "id": "rss-server-guardian-uk-11-0",
+     "title": "Trump mocks Japan about Pearl Harbor in response to question about Iran war"
+    }
+   ]
+  },
+  {
+   "group": "cur-044",
+   "note": "Vietnam National Assembly election day",
+   "members": [
+    {
+     "id": "rss-server-vnexpress-vn-58",
+     "title": "Vietnam's top leaders cast ballots for 16th National Assembly, People's Councils for 2026-2031 term"
+    },
+    {
+     "id": "rss-server-vnexpress-vn-51",
+     "title": "Voter turnout reaches 99.64% in Vietnam's national election"
+    }
+   ]
+  },
+  {
+   "group": "cur-045",
+   "note": "EU summit: Orbán blocks €90bn Ukraine loan",
+   "members": [
+    {
+     "id": "rss-server-dailynewshungary-hu-7-0",
+     "title": "European Council: Orbán on Ukraine oil dispute as EU chief urges homegrown energy amid Iran conflict"
+    },
+    {
+     "id": "rss-server-dailynewshungary-hu-3",
+     "title": "EU summit: European Council president urges Orbán to ease tensions with Kyiv"
+    },
+    {
+     "id": "rss-server-helsinkitimes-fi-1-0",
+     "title": "Orbán blocks EU Ukraine loan over oil dispute"
+    },
+    {
+     "id": "rss-server-guardian-uk-20-0",
+     "title": "Viktor Orbán refuses to agree to €90bn loan for Ukraine as EU leaders accuse him of betrayal"
+    },
+    {
+     "id": "rss-server-aljazeera-24-0",
+     "title": "Hungary’s Orban continues to block Ukraine loan at EU summit"
+    },
+    {
+     "id": "rss-server-euronews-2-0",
+     "title": "Belgium: EU leaders meet as Ukraine loan remains blocked"
+    },
+    {
+     "id": "rss-server-euronews-4-0",
+     "title": "Ukraine finance minister laments 'bad news from Brussels' as Hungary keeps veto on loan"
+    }
+   ]
+  },
+  {
+   "group": "cur-046",
+   "note": "Philippine jeepney drivers hit by fuel prices",
+   "members": [
+    {
+     "id": "rss-server-straitstimes-sg-23-0",
+     "title": "Thousands of Philippine jeepney drivers protest as rising fuel prices drive up costs"
+    },
+    {
+     "id": "rss-server-scmp-36",
+     "title": "Filipino jeepney drivers struggle as oil prices surge: ‘what we earn goes to diesel’"
+    }
+   ]
+  },
+  {
+   "group": "cur-047",
+   "note": "Trump administration weighs peace talks with Iran (lv)",
+   "members": [
+    {
+     "id": "html-server-candidate-lv-lsm-english-4",
+     "title": "Avoti: Trampa komanda apsver miera sarunas ar Irānu"
+    },
+    {
+     "id": "html-server-candidate-lv-tvnet-1",
+     "title": "Trampa administrācija sākusi domāt par miera sarunām ar Irānu"
+    }
+   ]
+  },
+  {
+   "group": "cur-048",
+   "note": "Chittagong University sexual assault (2022)",
+   "members": [
+    {
+     "id": "rss-server-dailystar-bd-0",
+     "title": "CU admin identifies 2 molesters"
+    },
+    {
+     "id": "rss-server-dailystar-bd-4",
+     "title": "CU sexual assault: Fingers pointed at BCL men"
+    }
+   ]
+  },
+  {
+   "group": "cur-049",
+   "note": "Netanyahu: Israel acted alone in Iran gas field strike",
+   "members": [
+    {
+     "id": "rss-server-guardian-uk-25-0",
+     "title": "Middle East crisis live: Netanyahu says Israel acted alone in Iran gasfield strike and denies ‘dragging’ US into war"
+    },
+    {
+     "id": "html-server-candidate-al-albanian-daily-news-0-0",
+     "title": "Netanyahu Claims Israel ‘Acted Alone’ in Iran Gas Field Strike"
+    }
+   ]
+  },
+  {
+   "group": "cur-050",
+   "note": "Guterres urges US, Israel to end war",
+   "members": [
+    {
+     "id": "rss-server-dawn-pk-3-0",
+     "title": "UN’s Guterres tells US, Israel ‘it is high time to end war’, urges Iran to ‘stop attacking neighbours’"
+    },
+    {
+     "id": "rss-server-un-news-3-0",
+     "title": "Middle East war: ‘Force of the law’ must prevail over the law of force, urges Guterres"
+    }
+   ]
+  },
+  {
+   "group": "cur-051",
+   "note": "Engelberg cable car crash",
+   "members": [
+    {
+     "id": "rss-server-thelocal-ch-2",
+     "title": "Deadly Swiss cable car crash blamed on 'faulty clamp'"
+    },
+    {
+     "id": "rss-server-thelocal-ch-6",
+     "title": "One dead after cable car crashes down mountainside in Swiss Alps"
+    }
+   ]
+  },
+  {
+   "group": "cur-052",
+   "note": "Iran strikes Qatar's Ras Laffan LNG complex",
+   "members": [
+    {
+     "id": "rss-server-npr-5-0",
+     "title": "Iran attacks world's largest liquified natural gas complex in Qatar"
+    },
+    {
+     "id": "rss-server-aljazeera-21-0",
+     "title": "Iran’s strike on Qatar gas facility will reduce supply for 3 to 5 years"
+    }
+   ]
+  },
+  {
+   "group": "cur-053",
+   "note": "Iranian missiles hit Arad and Dimona near Israeli nuclear site (en/fr/ro)",
+   "members": [
+    {
+     "id": "html-server-candidate-fr-france-info-6",
+     "title": "Au moins 180 blessés en Israël dans deux frappes iraniennes sur les villes d'Arad et Dimona"
+    },
+    {
+     "id": "rss-server-dawn-pk-9-0",
+     "title": "Iran missiles hit southern Israel, injuring more than 100"
+    },
+    {
+     "id": "rss-server-guardian-uk-28-0",
+     "title": "About 200 injured in Iranian missile strikes near nuclear facility in Israel"
+    },
+    {
+     "id": "rss-server-khaama-af-2-0",
+     "title": "Iranian Missile Hits Near Israeli Nuclear Site, Injures 20"
+    },
+    {
+     "id": "html-server-candidate-md-ziarul-de-garda-7",
+     "title": "Iranul a lansat un atac în apropierea unui sit nuclear israelian, utilizând pentru prima dată rachete cu rază lungă de acțiune"
+    }
+   ]
+  },
+  {
+   "group": "cur-054",
+   "note": "Brussels attacks 10th anniversary (en/fr)",
+   "members": [
+    {
+     "id": "html-server-candidate-fr-france-info-19",
+     "title": "La Belgique unie dans le recueillement, dix ans après les attentats meurtriers de Bruxelles"
+    },
+    {
+     "id": "rss-server-almonitor-6",
+     "title": "Belgium remembers Brussels jihadist attacks 10 years on"
+    },
+    {
+     "id": "rss-server-france24-21",
+     "title": "On 10th anniversary of Brussels terror attacks, authorities vow to have learnt the 'right lessons'"
+    }
+   ]
+  },
+  {
+   "group": "cur-055",
+   "note": "Ukrainian delegation meets Witkoff/Kushner in Miami (lv/ro)",
+   "members": [
+    {
+     "id": "html-server-candidate-lv-tvnet-13",
+     "title": "Ukrainas delegācija Floridā tikusies ar ASV pārstāvjiem"
+    },
+    {
+     "id": "html-server-candidate-md-ziarul-de-garda-4",
+     "title": "Negocieri de pace la Miami: Delegația ucraineană s-a întâlnit cu Witkoff și Kushner, la mai mult de o lună după ultima întâlnire"
+    }
+   ]
+  },
+  {
+   "group": "cur-056",
+   "note": "Tashiev returns to Kyrgyzstan, questioned as witness (ru/en)",
+   "members": [
+    {
+     "id": "html-server-candidate-kg-kloop-0",
+     "title": "Камчыбек Ташиев снова вернулся в Кыргызстан и побывал на допросе в МВД как свидетель"
+    },
+    {
+     "id": "rss-server-diplomat-asia-2",
+     "title": "Tashiev Returns to Kyrgyzstan, Questioned as a ‘Witness’"
+    }
+   ]
+  },
+  {
+   "group": "cur-057",
+   "note": "Pakistan strike on Kabul rehab centre and UN condemnation",
+   "members": [
+    {
+     "id": "rss-server-khaama-af-59",
+     "title": "Pakistan Strikes Kabul Addiction Treatment Center, 400 Killed, 250 Injured"
+    },
+    {
+     "id": "rss-server-khaama-af-44",
+     "title": "UN Condemns Kabul Hospital Strike, Urges Civilian Protection"
+    },
+    {
+     "id": "rss-server-khaama-af-37",
+     "title": "UN Calls for Halt to Clashes After Kabul Rehab Center Hit"
+    },
+    {
+     "id": "rss-server-un-news-13-0",
+     "title": "Afghanistan: UN condemns deadly attack on rehab centre in Kabul"
+    }
+   ]
+  },
+  {
+   "group": "cur-058",
+   "note": "Pakistan-Afghanistan Eid truce",
+   "members": [
+    {
+     "id": "rss-server-guardian-uk-32-0",
+     "title": "Pakistan to pause Afghan strikes for Eid, two days after deadly Kabul attack"
+    },
+    {
+     "id": "rss-server-dawn-pk-19-0",
+     "title": "Pakistan halts Afghanistan operation for Eid, Kabul follows suit"
+    },
+    {
+     "id": "rss-server-khaama-af-28",
+     "title": "Islamabad, Kabul Announce Temporary Eid al-Fitr Truce"
+    },
+    {
+     "id": "rss-server-khaama-af-22-0",
+     "title": "Saudi Arabia Welcomes Eid Ceasefire Between Kabul and Islamabad"
+    }
+   ]
+  },
+  {
+   "group": "cur-059",
+   "note": "Israel orders destruction of south Lebanon bridges",
+   "members": [
+    {
+     "id": "html-server-candidate-cy-cyprus-mail-2-0",
+     "title": "Israel orders destruction of bridges in Lebanon and homes near Israeli border"
+    },
+    {
+     "id": "rss-server-aljazeera-0-0",
+     "title": "Moment Israeli strike hits bridge in southern Lebanon"
+    },
+    {
+     "id": "rss-server-vanguard-ng-15-0",
+     "title": "Israel army will destroy more bridges in south Lebanon – Defence Minister"
+    }
+   ]
+  }
+ ]
+}

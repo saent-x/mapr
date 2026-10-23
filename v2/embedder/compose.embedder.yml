@@ -1,0 +1,41 @@
+# MAPR v2 embedding service. Same compose project as ../deploy/stbrn-studios/compose.yml ("mapr"),
+# so containers there reach it as http://embedder:8788; the host reaches it on 127.0.0.1:8788 only.
+#   docker compose -f compose.embedder.yml up -d --build
+# Compose may warn about "orphan containers" (the db from the other file): harmless, do not
+# pass --remove-orphans.
+name: mapr
+
+services:
+  embedder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mapr-embedder:local
+    restart: unless-stopped
+    user: "10001:10001"
+    environment:
+      # Switch models here (or in .env): any id from the bake-off that is 1024-compatible.
+      MODEL_ID: ${EMBED_MODEL_ID:-microsoft/harrier-oss-v1-0.6b}
+      MODEL_REVISION: ${EMBED_MODEL_REVISION:-}   # pin a commit sha once chosen
+      MODEL_CACHE_DIR: /models
+      MAX_SEQ_LENGTH: "512"
+      BATCH_SIZE: "32"
+      MAX_TEXTS_PER_REQUEST: "256"
+      TORCH_THREADS: ${EMBED_THREADS:-12}
+      OMP_NUM_THREADS: ${EMBED_THREADS:-12}
+      MKL_NUM_THREADS: ${EMBED_THREADS:-12}
+      # Set to 1 after the first successful start so restarts never touch the Hub.
+      HF_HUB_OFFLINE: ${EMBED_HF_OFFLINE:-0}
+      # Only gated models (embeddinggemma) need a token; pass it from the shell, never commit it.
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - /data/mapr/models:/models
+    ports:
+      - "127.0.0.1:8788:8788"
+    mem_limit: 8g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8788/healthz', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 600s
+      retries: 3

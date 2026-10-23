@@ -1,0 +1,18 @@
+[project]
+name = "mapr-embedder"
+version = "0.1.0"
+description = "MAPR v2 embedding service and embedding-model bake-off"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["bakeoff/runs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501", "RUF001", "RUF002", "RUF003"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

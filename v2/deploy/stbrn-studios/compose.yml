@@ -6,6 +6,8 @@ services:
   db:
     image: paradedb/paradedb:${PARADEDB_TAG:?pin a tag in .env}
     restart: unless-stopped
+    # Host uid 999 is caddy on stbrn-studios; run as an id nothing on the host uses.
+    user: "50999:50999"
     environment:
       POSTGRES_DB: mapr
       POSTGRES_USER: mapr
