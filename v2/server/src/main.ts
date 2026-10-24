@@ -1,13 +1,14 @@
 import path from 'node:path';
 import { clusterPending } from './cluster/pipeline.js';
-import { loadConfig } from './config.js';
-import { applyMigrations, createPool } from './db.js';
-import { HttpEmbedder } from './embed/client.js';
+import { loadConfig, type Config } from './config.js';
+import { applyMigrations, createPool, type Db } from './db.js';
+import { HttpEmbedder, type Embedder } from './embed/client.js';
+import { CLOUDFLARE_MODEL_FOR, CloudflareEmbedder, RoutedEmbedder } from './embed/cloudflare.js';
 import { createApiServer, type AppState } from './http/server.js';
 import { pollAll } from './ingest/poller.js';
-import { BudgetGate } from './jobs/budget.js';
+import { BudgetGate, recordNeurons } from './jobs/budget.js';
 import { JobRunner } from './jobs/runner.js';
-import { log, setLogLevel } from './log.js';
+import { log, setLogLevel, type Logger } from './log.js';
 import { setBlockedHosts } from './net/ssrf.js';
 import { sleep } from './util/pool.js';
 
@@ -26,6 +27,35 @@ async function every(name: string, intervalMs: number, signal: AbortSignal, fn: 
   }
 }
 
+/**
+ * Local embedder, or Workers AI with the same model on the local embedder as the
+ * backup when the daily neuron budget is closed (so vectors never mix models).
+ */
+function makeEmbedder(cfg: Config, db: Db, logger: Logger): Embedder {
+  const local = new HttpEmbedder({ url: cfg.embedderUrl, batchSize: cfg.embedBatch });
+  if (cfg.embedProvider === 'local') return local;
+  const model = CLOUDFLARE_MODEL_FOR[cfg.embedModelId];
+  if (!model) throw new Error(`config: Workers AI does not host ${cfg.embedModelId}; use EMBED_PROVIDER=local`);
+  if (!cfg.cfAccountId || !cfg.cfApiToken) throw new Error('config: EMBED_PROVIDER=cloudflare needs CF_ACCOUNT_ID and CF_API_TOKEN_FILE');
+  const gate = new BudgetGate(db, cfg.dailyNeuronCeiling);
+  let lastNote = 0;
+  return new RoutedEmbedder({
+    cloudflare: new CloudflareEmbedder({
+      accountId: cfg.cfAccountId,
+      apiToken: cfg.cfApiToken,
+      model,
+      onNeurons: (n) => recordNeurons(db, n),
+    }),
+    local,
+    budgetOpen: async () => (await gate.check()).open,
+    onFallback: (reason, err) => {
+      if (Date.now() - lastNote < 10 * 60_000) return;
+      lastNote = Date.now();
+      logger.warn('embedding on the local model', { reason, err });
+    },
+  });
+}
+
 async function main() {
   const cfg = loadConfig();
   setLogLevel(cfg.logLevel);
@@ -38,7 +68,7 @@ async function main() {
   const ac = new AbortController();
   const { signal } = ac;
   const state: AppState = { startedAt: new Date(), lastPoll: null, pollRunning: false };
-  const embedder = new HttpEmbedder({ url: cfg.embedderUrl, batchSize: cfg.embedBatch });
+  const embedder = makeEmbedder(cfg, db, log.child({ task: 'embed' }));
   const clusterCfg = {
     threshold: cfg.clusterThreshold,
     windowHours: cfg.clusterWindowHours,

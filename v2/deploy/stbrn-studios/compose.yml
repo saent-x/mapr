@@ -56,13 +56,18 @@ services:
       PG_PASSWORD_FILE: /run/secrets/pg_password
       API_TOKEN_FILE: /run/secrets/api_token
       EMBEDDER_URL: http://embedder:8788
+      # local, or cloudflare (Workers AI while the neuron budget is open, same model locally after).
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-local}
+      EMBED_MODEL_ID: ${EMBED_MODEL_ID:-microsoft/harrier-oss-v1-0.6b}
+      CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
+      CF_API_TOKEN_FILE: /run/secrets/cf_api_token
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: "8787"
       POLL_INTERVAL_MIN: "30"
       CLUSTER_THRESHOLD: "0.82"
       DAILY_NEURON_CEILING: "9000"
       LOG_LEVEL: info
-    secrets: [pg_password, api_token]
+    secrets: [pg_password, api_token, cf_api_token]
     ports:
       - "127.0.0.1:8787:8787"
     stop_grace_period: 30s
@@ -78,3 +83,6 @@ secrets:
     file: /data/mapr/secrets/pg_password
   api_token:
     file: /data/mapr/secrets/api_token
+  # Workers AI token (Account > Workers AI > Read/Edit). Empty until EMBED_PROVIDER=cloudflare.
+  cf_api_token:
+    file: /data/mapr/secrets/cf_api_token

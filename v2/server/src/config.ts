@@ -12,6 +12,11 @@ export interface Config {
   failSkipThreshold: number;
   reprobeHours: number;
   embedderUrl: string;
+  /** 'cloudflare': Workers AI while the neuron budget is open, local embedder otherwise. */
+  embedProvider: 'local' | 'cloudflare';
+  embedModelId: string;
+  cfAccountId: string | undefined;
+  cfApiToken: string | undefined;
   embedBatch: number;
   clusterThreshold: number;
   clusterWindowHours: number;
@@ -38,6 +43,12 @@ function readSecret(file: string | undefined): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function provider(raw: string | undefined): 'local' | 'cloudflare' {
+  if (raw === undefined || raw === '' || raw === 'local') return 'local';
+  if (raw === 'cloudflare') return 'cloudflare';
+  throw new Error(`config: EMBED_PROVIDER must be local or cloudflare, got ${raw}`);
 }
 
 function num(env: Env, key: string, def: number, min = -Infinity, max = Infinity): number {
@@ -78,6 +89,10 @@ export function loadConfig(env: Env = process.env): Config {
     failSkipThreshold: num(env, 'FAIL_SKIP_THRESHOLD', 12, 1),
     reprobeHours: num(env, 'REPROBE_HOURS', 24, 1),
     embedderUrl: env.EMBEDDER_URL ?? 'http://127.0.0.1:8788',
+    embedProvider: provider(env.EMBED_PROVIDER),
+    embedModelId: env.EMBED_MODEL_ID ?? 'microsoft/harrier-oss-v1-0.6b',
+    cfAccountId: env.CF_ACCOUNT_ID || undefined,
+    cfApiToken: env.CF_API_TOKEN || readSecret(env.CF_API_TOKEN_FILE),
     embedBatch: num(env, 'EMBED_BATCH', 32, 1, 256),
     clusterThreshold: num(env, 'CLUSTER_THRESHOLD', 0.82, 0, 1),
     clusterWindowHours: num(env, 'CLUSTER_WINDOW_HOURS', 48, 1),
