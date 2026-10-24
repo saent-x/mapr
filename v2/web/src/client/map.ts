@@ -1,9 +1,30 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { AttributionControl, Map as GlMap, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl';
 import type { MaprEvent } from '../types';
-import style from './style.json';
+import { borders, land } from 'virtual:basemap';
+import baseStyle from './style.json';
 
 export type Projection = 'mercator' | 'globe';
+
+/** Meridians and parallels every 30°, densified so they curve on the globe. */
+function graticule() {
+  const lines: Array<Array<[number, number]>> = [];
+  const range = (a: number, b: number, step: number) => Array.from({ length: Math.floor((b - a) / step) + 1 }, (_, i) => a + i * step);
+  for (const lon of range(-180, 150, 30)) lines.push(range(-80, 80, 5).map((lat) => [lon, lat]));
+  // Parallels in 30° pieces: one line spanning the full ±180 is dropped by tiling in some copies.
+  for (const lat of range(-60, 60, 30)) for (const lon0 of range(-180, 150, 30)) lines.push(range(lon0, lon0 + 30, 5).map((lon) => [lon, lat]));
+  return { type: 'Feature' as const, properties: {}, geometry: { type: 'MultiLineString' as const, coordinates: lines } };
+}
+
+/** Our style with the bundled basemap filled in: drawn under the tiles, so the map is never blank. */
+function deskStyle(): StyleSpecification {
+  const s = structuredClone(baseStyle) as unknown as StyleSpecification;
+  const set = (id: string, data: unknown) => ((s.sources[id] as { data: unknown }).data = data);
+  set('ne_land', land);
+  set('ne_borders', borders);
+  set('graticule', graticule());
+  return s;
+}
 
 interface EventFeature {
   type: 'Feature';
@@ -59,7 +80,7 @@ export function createMap(container: HTMLElement, onSelect: (id: number) => void
 
   const map = new GlMap({
     container,
-    style: style as StyleSpecification,
+    style: deskStyle(),
     center: [20, 20],
     zoom: projection === 'globe' ? 1.6 : 1.1,
     minZoom: 0.5,
@@ -126,6 +147,8 @@ export function createMap(container: HTMLElement, onSelect: (id: number) => void
       projection = p;
       storeProjection(p);
       map.setProjection({ type: p });
+      // A globe at world zoom is a small disc; open it at a size that fills the panel.
+      if (p === 'globe' && map.getZoom() < 1.6) map.easeTo({ zoom: 1.6, duration: 400 });
       sync();
     });
     toggle.append(b);
