@@ -67,13 +67,17 @@ a { color: inherit; }
 .row-side b { font-weight: 400; color: var(--text-2); }
 
 /* Map */
-.map { position: relative; background: var(--map-bg); min-height: 0; display: flex; align-items: center; justify-content: center; }
-.map svg { width: 100%; height: 100%; display: block; }
-.map .grid { stroke: var(--map-grid); stroke-width: 1px; vector-effect: non-scaling-stroke; fill: none; }
-.map .land { fill: var(--raised); stroke: var(--line-strong); stroke-width: .75px; vector-effect: non-scaling-stroke; }
-.map .dot { cursor: pointer; stroke: var(--map-bg); stroke-width: 1px; vector-effect: non-scaling-stroke; }
-.map .dot-1 { fill: var(--s1); } .map .dot-2 { fill: var(--s2); } .map .dot-3 { fill: var(--s3); } .map .dot-4 { fill: var(--s4); } .map .dot-0 { fill: var(--text-3); }
-.map .ring { fill: none; stroke: var(--text); stroke-width: 1.5px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.map { position: relative; background: var(--bg); min-height: 0; }
+.map .maplibregl-canvas:focus-visible { outline: none; }
+.proj { position: absolute; top: var(--sp-3); right: var(--sp-3); z-index: 2; display: flex; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); overflow: hidden; }
+.proj button { height: 26px; min-width: 34px; padding: 0 var(--sp-2); border: 0; background: transparent; color: var(--text-3); font: 500 var(--fs-label) var(--font-mono); cursor: pointer; }
+.proj button + button { border-left: 1px solid var(--line-strong); }
+.proj button:hover { color: var(--text); }
+.proj button[aria-pressed="true"] { background: var(--inverse-bg); color: var(--inverse-text); }
+.map .maplibregl-ctrl-attrib { background: var(--surface); color: var(--text-3); font: 11px var(--font-sans); }
+.map .maplibregl-ctrl-attrib a { color: var(--text-2); }
+.map .maplibregl-ctrl-attrib.maplibregl-compact { background: var(--surface); border: 1px solid var(--line-strong); }
+.map .maplibregl-ctrl-attrib-button { filter: invert(1) grayscale(1); background-color: transparent; }
 
 /* Detail */
 .detail-in { padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4); }

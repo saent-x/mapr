@@ -1,19 +1,19 @@
-import land from 'virtual:world';
 import { compareEvents, isFresh } from '../snapshot';
 import type { EventsResponse, LiveMessage, MaprEvent } from '../types';
+import { createMap } from './map';
 
 const SEV_NAME = ['', 'LOW', 'ELEVATED', 'HIGH', 'CRITICAL'] as const;
-const SVG = 'http://www.w3.org/2000/svg';
 
 const $ = <T extends Element>(id: string) => document.getElementById(id) as unknown as T;
 const listEl = $<HTMLElement>('list');
 const detailEl = $<HTMLElement>('detail');
-const mapEl = $<SVGSVGElement>('map');
+const mapEl = $<HTMLElement>('map');
 const tallyEl = $<HTMLElement>('tally');
 const linkEl = $<HTMLElement>('link');
 const clockEl = $<HTMLElement>('clock');
 
 const byId = new Map<number, MaprEvent>();
+const deskMap = createMap(mapEl, (id) => select(id));
 let order: MaprEvent[] = [];
 let selected: number | null = null;
 const fresh = new Set<number>();
@@ -58,7 +58,10 @@ function resort() {
   const now = Date.now();
   for (const [id, e] of byId) if (!isFresh(e, now)) byId.delete(id);
   order = [...byId.values()].sort(compareEvents);
-  if (selected === null || !byId.has(selected)) selected = order[0]?.id ?? null;
+  if (selected === null || !byId.has(selected)) {
+    selected = order[0]?.id ?? null;
+    deskMap.setSelected(selected, false);
+  }
 }
 
 function upsert(events: MaprEvent[], mark: boolean) {
@@ -93,30 +96,8 @@ function renderList() {
   fresh.clear();
 }
 
-function renderGrid() {
-  let d = '';
-  for (let x = 0; x <= 360; x += 30) d += `M${x} 0V180`;
-  for (let y = 0; y <= 180; y += 30) d += `M0 ${y}H360`;
-  mapEl.innerHTML = `<path class="grid" d="${d}"/><path class="land" d="${land}"/><g id="dots"></g>`;
-}
-
-const DOT_R = [1.3, 1.4, 1.7, 2.1, 2.6];
-
-function renderDots() {
-  const g = mapEl.querySelector('#dots')!;
-  const pts = order.filter((e) => e.lat !== null && e.lon !== null);
-  // Low severity first so the worst sit on top; the selection ring last.
-  pts.sort((a, b) => (a.severity ?? 0) - (b.severity ?? 0));
-  let html = '';
-  let ring = '';
-  for (const e of pts) {
-    const cx = (e.lon! + 180).toFixed(2);
-    const cy = (90 - e.lat!).toFixed(2);
-    const r = DOT_R[e.severity ?? 0];
-    html += `<circle class="dot dot-${e.severity ?? 0}" data-id="${e.id}" cx="${cx}" cy="${cy}" r="${r}"><title>${esc(e.title)}</title></circle>`;
-    if (e.id === selected) ring = `<circle class="ring" cx="${cx}" cy="${cy}" r="${r! + 1.4}"/>`;
-  }
-  g.innerHTML = html + ring;
+function renderMap() {
+  deskMap.setEvents(order);
 }
 
 function factValue(v: unknown): string {
@@ -161,7 +142,7 @@ function render() {
   resort();
   renderTally();
   renderList();
-  renderDots();
+  renderMap();
   renderDetail();
 }
 
@@ -172,7 +153,7 @@ function select(id: number | null, scroll = true) {
   const row = listEl.querySelector<HTMLElement>(`.row[data-id="${id}"]`);
   row?.setAttribute('aria-selected', 'true');
   if (scroll) row?.scrollIntoView({ block: 'nearest' });
-  renderDots();
+  deskMap.setSelected(id, true);
   renderDetail();
   detailEl.scrollTop = 0;
 }
@@ -182,10 +163,6 @@ function select(id: number | null, scroll = true) {
 listEl.addEventListener('click', (ev) => {
   const row = (ev.target as Element).closest<HTMLElement>('.row');
   if (row) select(Number(row.dataset.id), false);
-});
-mapEl.addEventListener('click', (ev) => {
-  const dot = (ev.target as Element).closest<SVGElement>('.dot');
-  if (dot) select(Number(dot.dataset.id));
 });
 document.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
@@ -254,7 +231,6 @@ function tick() {
   clockEl.textContent = `${new Date().toISOString().slice(11, 19)} UTC`;
 }
 
-renderGrid();
 tick();
 setInterval(tick, 1000);
 // Ages and the 24h window move on their own.

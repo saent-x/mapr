@@ -6,7 +6,7 @@ Cloudflare Worker for the MAPR watch desk.
 - `GET /api/events`: the window, severity desc then `updated_at` desc. Cached 15s.
 - `GET /live`: WebSocket (hibernating). Messages: `{ type: "events", upsert: Event[], remove: id[] }`. Send `ping`, get `pong`.
 - `GET /healthz`: `{ ok, snapshot_age_s, events, cursor }`. Snapshot age grows while nothing changes upstream.
-- Everything else: the desk page from `dist/public`, built by `scripts/build-client.mjs`. Map outline and fonts are bundled; nothing loads from a CDN.
+- Everything else: the desk page from `dist/public`, built by `scripts/build-client.mjs`. MapLibre GL (flat and globe) and the fonts are bundled. The only third-party requests are vector tiles and glyphs from OpenFreeMap (`tiles.openfreemap.org`, free, no key), styled by `src/client/style.json`. `src/client/_headers` sets the CSP.
 
 ## Develop
 
