@@ -206,6 +206,17 @@ def child_measure(args) -> int:
 # ---------------------------------------------------------------------------- parent
 
 
+def cpu_quota() -> int:
+    """CPUs this container may use (docker --cpus), so torch never runs more threads than it gets."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+        if quota != "max":
+            return max(1, int(int(quota) / int(period)))
+    except (OSError, ValueError):
+        pass
+    return len(os.sched_getaffinity(0))
+
+
 def spawn(mode: str, args, model: str, run_dir: Path, key: str, offline: bool) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     n = str(args.threads)
@@ -476,7 +487,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default=str(HERE))
     ap.add_argument("--cache-dir", default=os.environ.get("MODEL_CACHE_DIR", "/data/mapr/models"))
     ap.add_argument("--batch-size", type=int, default=32)
-    ap.add_argument("--threads", type=int, default=12)
+    ap.add_argument("--threads", type=int, default=cpu_quota())
     ap.add_argument("--max-seq-length", type=int, default=512)
     ap.add_argument("--timeout", type=int, default=3 * 3600, help="seconds per model step")
     ap.add_argument("--force", action="store_true", help="re-embed even if cached vectors exist")
