@@ -78,7 +78,25 @@ export async function health(o: ApiOptions): Promise<{ status: number; body: Rec
   }
 }
 
-export async function listEvents(db: Db, since: Date, limit: number): Promise<unknown[]> {
+export interface EventCursor {
+  at: Date;
+  id: number;
+}
+
+/** Opaque paging cursor: "<updated_at ISO>~<event id>". */
+export function encodeCursor(c: EventCursor): string {
+  return `${c.at.toISOString()}~${c.id}`;
+}
+
+export function decodeCursor(raw: string): EventCursor | null {
+  const [iso, id] = raw.split('~');
+  const at = new Date(iso ?? '');
+  const n = Number(id);
+  return Number.isNaN(at.getTime()) || !Number.isInteger(n) ? null : { at, id: n };
+}
+
+/** Events changed after the cursor, oldest change first, so paging forward never skips a row. */
+export async function listEvents(db: Db, after: EventCursor, limit: number): Promise<Array<Record<string, unknown> & { id: number; updated_at: Date }>> {
   const r = await db.query(
     `SELECT e.id, e.title, e.summary, e.first_seen, e.last_seen, ea.updated_at,
             e.severity, e.severity_conf, e.relevant, e.relevance_conf, e.category, e.place, e.country, e.lat, e.lon,
@@ -91,10 +109,10 @@ export async function listEvents(db: Db, since: Date, limit: number): Promise<un
               FROM event_sources es JOIN sources s ON s.id = es.source_id
               WHERE es.event_id = e.id), '[]'::json) AS sources
      FROM event_activity ea JOIN events e ON e.id = ea.event_id
-     WHERE ea.updated_at > $1
-     ORDER BY ea.updated_at DESC, e.id DESC
-     LIMIT $2`,
-    [since, limit],
+     WHERE (ea.updated_at, ea.event_id) > ($1, $2)
+     ORDER BY ea.updated_at, ea.event_id
+     LIMIT $3`,
+    [after.at, after.id, limit],
   );
   return r.rows.map((row) => ({ ...row, id: Number(row.id) }));
 }
@@ -116,15 +134,25 @@ export function createApiServer(o: ApiOptions): http.Server {
           return send(res, 401, { error: 'unauthorized' });
         }
         if (url.pathname === '/v1/events') {
-          const sinceRaw = url.searchParams.get('since');
-          const since = sinceRaw ? new Date(sinceRaw) : new Date(Date.now() - 24 * 3_600_000);
-          if (Number.isNaN(since.getTime())) return send(res, 400, { error: 'since must be an ISO 8601 timestamp' });
+          // First call: ?since=<ISO> (default 24h ago). Then keep passing ?after=<next> until more is false.
+          let after: EventCursor | null;
+          const afterRaw = url.searchParams.get('after');
+          if (afterRaw) {
+            after = decodeCursor(afterRaw);
+            if (!after) return send(res, 400, { error: 'after must be a cursor from a previous response' });
+          } else {
+            const sinceRaw = url.searchParams.get('since');
+            const since = sinceRaw ? new Date(sinceRaw) : new Date(Date.now() - 24 * 3_600_000);
+            if (Number.isNaN(since.getTime())) return send(res, 400, { error: 'since must be an ISO 8601 timestamp' });
+            after = { at: since, id: 0 };
+          }
           const limitRaw = Number(url.searchParams.get('limit') ?? 100);
           if (!Number.isInteger(limitRaw) || limitRaw < 1) return send(res, 400, { error: 'limit must be a positive integer' });
           const limit = Math.min(limitRaw, MAX_LIMIT);
-          const events = await listEvents(o.db, since, limit);
-          const cursor = events.length ? (events[0] as { updated_at: Date }).updated_at : since;
-          return send(res, 200, { since: since.toISOString(), limit, count: events.length, cursor, events });
+          const events = await listEvents(o.db, after, limit);
+          const last = events.at(-1);
+          const next = encodeCursor(last ? { at: last.updated_at, id: last.id } : after);
+          return send(res, 200, { count: events.length, next, more: events.length === limit, events });
         }
       }
       return send(res, 404, { error: 'not found' });

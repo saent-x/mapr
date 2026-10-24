@@ -314,6 +314,20 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
       const quake = all.events.find((e: { title: string }) => e.title === QUAKE.title);
       expect(quake.sources).toHaveLength(3);
       expect((await fetch(`${base}/v1/events?since=nope`, { headers: { authorization: 'Bearer secret-token' } })).status).toBe(400);
+      expect((await fetch(`${base}/v1/events?after=nope`, { headers: { authorization: 'Bearer secret-token' } })).status).toBe(400);
+
+      // Paging one at a time returns every event exactly once, even when changes share a timestamp.
+      await db.query('UPDATE event_activity SET updated_at = $1', [ago(0.5)]);
+      const seen: number[] = [];
+      let url = `${base}/v1/events?limit=1`;
+      for (let i = 0; i < 50; i++) {
+        const page = (await (await fetch(url, { headers: { authorization: 'Bearer secret-token' } })).json()) as Json;
+        seen.push(...page.events.map((e: { id: number }) => e.id));
+        if (!page.more) break;
+        url = `${base}/v1/events?limit=1&after=${encodeURIComponent(page.next)}`;
+      }
+      expect(seen.length).toBe(all.count);
+      expect(new Set(seen).size).toBe(seen.length);
     } finally {
       await new Promise((r) => server.close(r));
     }
