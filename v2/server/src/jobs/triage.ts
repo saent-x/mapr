@@ -1,7 +1,6 @@
-// Triage jobs. The model call itself (Cloudflare Workers AI, Clef-flash) is a
-// later step: it implements `Triager` and is registered in main.ts. Until then
-// no triage handler is registered, so triage jobs wait in the queue instead of
-// being run by a stub and lost.
+// Triage jobs. The model call (Clef-flash, jobs/clef.ts) implements `Triager`
+// and is registered in main.ts only when Workers AI credentials are set; until
+// then triage jobs wait in the queue instead of being run by a stub and lost.
 
 import type { Queryable } from '../db.js';
 import type { JobHandler } from './runner.js';

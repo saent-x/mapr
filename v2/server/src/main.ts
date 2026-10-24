@@ -7,7 +7,9 @@ import { CLOUDFLARE_MODEL_FOR, CloudflareEmbedder, RoutedEmbedder } from './embe
 import { createApiServer, type AppState } from './http/server.js';
 import { pollAll } from './ingest/poller.js';
 import { BudgetGate, recordNeurons } from './jobs/budget.js';
+import { ClefTriager } from './jobs/clef.js';
 import { JobRunner } from './jobs/runner.js';
+import { triageHandlers } from './jobs/triage.js';
 import { log, setLogLevel, type Logger } from './log.js';
 import { setBlockedHosts } from './net/ssrf.js';
 import { sleep } from './util/pool.js';
@@ -91,9 +93,13 @@ async function main() {
     log: log.child({ task: 'jobs' }),
     pollMs: cfg.jobPollMs,
   });
-  // TODO(triage): register the Clef-flash triager once it exists:
-  //   for (const h of triageHandlers(db, new ClefFlashTriager(...))) runner.register(h);
-  // Until then triage / re-triage jobs are enqueued and held, not run or dropped.
+  // Without Workers AI credentials, triage jobs are held in the queue, never run by a stub or dropped.
+  if (cfg.cfAccountId && cfg.cfApiToken) {
+    const triager = new ClefTriager(db, { accountId: cfg.cfAccountId, apiToken: cfg.cfApiToken });
+    for (const h of triageHandlers(db, triager)) runner.register(h);
+  } else {
+    log.warn('no Workers AI credentials: triage jobs wait in the queue');
+  }
 
   const server = createApiServer({ db, state, apiToken: cfg.apiToken, failSkipThreshold: cfg.failSkipThreshold, log: log.child({ task: 'http' }) });
   await new Promise<void>((resolve, reject) => {
