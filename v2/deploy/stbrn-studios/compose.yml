@@ -2,6 +2,10 @@
 # Nothing here listens on a public interface; Cloudflare reaches the API through the tunnel.
 name: mapr
 
+# The embedder (127.0.0.1:8788, model cache in /data/mapr/models) is defined next to its code.
+include:
+  - ../../embedder/compose.embedder.yml
+
 services:
   db:
     image: paradedb/paradedb:${PARADEDB_TAG:?pin a tag in .env}
@@ -32,13 +36,15 @@ services:
 
   # Feed poller, clustering, job queue and the local API for the Worker (via the tunnel).
   # Same compose network as db (the default one); reaches Postgres as db:5432.
-  # First run: docker compose run --rm ingestor node dist/seed.js
+  # First run and updates: bash deploy.sh (creates the API token, seeds sources, starts everything).
   ingestor:
     build:
       context: ../..
       dockerfile: server/Dockerfile
     image: mapr-ingestor:local
     restart: unless-stopped
+    # Same id as the db, so it can read the 0400 secrets; nothing on the host uses it.
+    user: "50999:50999"
     depends_on:
       db:
         condition: service_healthy
@@ -66,21 +72,6 @@ services:
       options:
         max-size: "20m"
         max-file: "7"
-
-  # Placeholder: local embedding service (harrier-oss-v1-0.6b, 1024 dims, CPU).
-  # Contract: POST /embed {"texts": [...]} -> {"vectors": [[1024 floats], ...], "model": "..."}
-  # Model weights live under /data/mapr/models (download on a machine that can reach the hub).
-  # embedder:
-  #   image: mapr-embedder:local
-  #   build: ../../embedder
-  #   restart: unless-stopped
-  #   environment:
-  #     MODEL_DIR: /models/harrier-oss-v1-0.6b
-  #     OMP_NUM_THREADS: "8"
-  #   volumes:
-  #     - /data/mapr/models:/models:ro
-  #   expose: ["8788"]
-  #   mem_limit: 6g
 
 secrets:
   pg_password:
