@@ -16,7 +16,7 @@ if ! sudo test -f /data/mapr/secrets/api_token; then
 fi
 sudo chown 50999:50999 /data/mapr/secrets/api_token /data/mapr/secrets/pg_password
 sudo chmod 400 /data/mapr/secrets/api_token /data/mapr/secrets/pg_password
-sudo install -d -o 10001 -g 10001 /data/mapr/models
+sudo mkdir -p /data/mapr/models && sudo chown 10001:10001 /data/mapr/models
 
 df -h / /data | sed 's/^/before: /'
 docker compose build ingestor embedder
