@@ -58,7 +58,7 @@ class Settings:
             return None if v in (None, "") else v.lower() in ("1", "true", "yes")
 
         return cls(
-            model_id=env("MODEL_ID", "microsoft/harrier-oss-v1-0.6b"),
+            model_id=env("MODEL_ID", "BAAI/bge-m3"),
             revision=env("MODEL_REVISION") or None,
             cache_dir=env("MODEL_CACHE_DIR", "/models"),
             max_seq_length=int(env("MAX_SEQ_LENGTH", "512")),

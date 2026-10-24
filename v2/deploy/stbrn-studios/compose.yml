@@ -58,13 +58,13 @@ services:
       EMBEDDER_URL: http://embedder:8788
       # local, or cloudflare (Workers AI while the neuron budget is open, same model locally after).
       EMBED_PROVIDER: ${EMBED_PROVIDER:-local}
-      EMBED_MODEL_ID: ${EMBED_MODEL_ID:-microsoft/harrier-oss-v1-0.6b}
+      EMBED_MODEL_ID: ${EMBED_MODEL_ID:-BAAI/bge-m3}
       CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
       CF_API_TOKEN_FILE: /run/secrets/cf_api_token
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: "8787"
       POLL_INTERVAL_MIN: "30"
-      CLUSTER_THRESHOLD: "0.82"
+      CLUSTER_THRESHOLD: "0.71"
       DAILY_NEURON_CEILING: "9000"
       LOG_LEVEL: info
     secrets: [pg_password, api_token, cf_api_token]
