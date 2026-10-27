@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Example World News</title>
+    <link>https://news.example.com/</link>
+    <language>en-gb</language>
+    <atom:link href="https://news.example.com/rss.xml" rel="self" type="application/rss+xml"/>
+    <item>
+      <title><![CDATA[Earthquake hits <b>coastal</b> region &amp; cuts power]]></title>
+      <link>https://news.example.com/world/quake-1?utm_source=rss&amp;utm_medium=feed</link>
+      <guid isPermaLink="false">quake-1</guid>
+      <pubDate>Tue, 21 Oct 2026 08:15:00 GMT</pubDate>
+      <description>&lt;p&gt;A magnitude 6.1 earthquake struck the coast early on Tuesday,&amp;nbsp;officials said.&lt;/p&gt;&lt;img src="x.jpg"&gt;</description>
+      <content:encoded><![CDATA[<p>A magnitude 6.1 earthquake struck the coast early on Tuesday, officials said.</p><script>alert(1)</script><p>Power was cut to 40,000 homes.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Relative link item</title>
+      <link>/world/relative-2</link>
+      <dc:date>2026-10-21T09:00:00+02:00</dc:date>
+      <description>Short summary with &#8220;curly quotes&#8221; and &eacute;.</description>
+    </item>
+    <item>
+      <title>Guid permalink only</title>
+      <guid>https://news.example.com/world/guid-3</guid>
+      <pubDate>21 Oct 2026 10:00 EST</pubDate>
+    </item>
+    <item>
+      <title>Future dated</title>
+      <link>https://news.example.com/world/future-4</link>
+      <pubDate>Sat, 01 Jan 2033 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <description>No title and no link: dropped</description>
+    </item>
+  </channel>
+</rss>

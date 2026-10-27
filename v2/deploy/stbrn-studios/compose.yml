@@ -1,0 +1,88 @@
+# MAPR v2 on stbrn-studios. All state lives under /data/mapr (never the root drive).
+# Nothing here listens on a public interface; Cloudflare reaches the API through the tunnel.
+name: mapr
+
+# The embedder (127.0.0.1:8788, model cache in /data/mapr/models) is defined next to its code.
+include:
+  - ../../embedder/compose.embedder.yml
+
+services:
+  db:
+    image: paradedb/paradedb:${PARADEDB_TAG:?pin a tag in .env}
+    restart: unless-stopped
+    # Host uid 999 is caddy on stbrn-studios; run as an id nothing on the host uses.
+    user: "50999:50999"
+    environment:
+      POSTGRES_DB: mapr
+      POSTGRES_USER: mapr
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+    secrets: [pg_password]
+    volumes:
+      - /data/mapr/pg:/var/lib/postgresql
+      - ../../db/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    shm_size: 1g
+    command: >
+      postgres
+      -c shared_buffers=4GB
+      -c effective_cache_size=12GB
+      -c maintenance_work_mem=1GB
+      -c max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapr -d mapr"]
+      interval: 10s
+      retries: 6
+
+  # Feed poller, clustering, job queue and the local API for the Worker (via the tunnel).
+  # Same compose network as db (the default one); reaches Postgres as db:5432.
+  # First run and updates: bash deploy.sh (creates the API token, seeds sources, starts everything).
+  ingestor:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    image: mapr-ingestor:local
+    restart: unless-stopped
+    # Same id as the db, so it can read the 0400 secrets; nothing on the host uses it.
+    user: "50999:50999"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: mapr
+      PGDATABASE: mapr
+      PG_PASSWORD_FILE: /run/secrets/pg_password
+      API_TOKEN_FILE: /run/secrets/api_token
+      EMBEDDER_URL: http://embedder:8788
+      # local, or cloudflare (Workers AI while the neuron budget is open, same model locally after).
+      EMBED_PROVIDER: ${EMBED_PROVIDER:-local}
+      EMBED_MODEL_ID: ${EMBED_MODEL_ID:-BAAI/bge-m3}
+      CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
+      CF_API_TOKEN_FILE: /run/secrets/cf_api_token
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8787"
+      POLL_INTERVAL_MIN: "30"
+      CLUSTER_THRESHOLD: "0.71"
+      DAILY_NEURON_CEILING: "9000"
+      LOG_LEVEL: info
+    secrets: [pg_password, api_token, cf_api_token]
+    ports:
+      - "127.0.0.1:8787:8787"
+    stop_grace_period: 30s
+    mem_limit: 2g
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "7"
+
+secrets:
+  pg_password:
+    file: /data/mapr/secrets/pg_password
+  api_token:
+    file: /data/mapr/secrets/api_token
+  # Workers AI token (Account > Workers AI > Read/Edit). Empty until EMBED_PROVIDER=cloudflare.
+  cf_api_token:
+    file: /data/mapr/secrets/cf_api_token

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAPR</title>
+<meta name="color-scheme" content="dark">
+<link rel="preload" href="/fonts/geist-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/geist-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/desk.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<header class="bar">
+  <span class="mark">MAPR</span>
+  <span class="tally" id="tally"></span>
+  <span class="grow"></span>
+  <span class="link" id="link">OFFLINE</span>
+  <time class="clock num" id="clock"></time>
+</header>
+<main class="desk">
+  <section class="list" id="list" role="listbox" aria-label="Events" tabindex="0"></section>
+  <section class="map" id="map" aria-label="Map"></section>
+  <aside class="detail" id="detail" aria-live="polite"></aside>
+</main>
+</body>
+</html>

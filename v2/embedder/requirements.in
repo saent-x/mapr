@@ -1,0 +1,12 @@
+# Top-level runtime dependencies. requirements.txt is the fully pinned set built from this.
+# torch comes from the CPU-only index (requirements-torch-cpu.txt); the PyPI wheel drags in ~3 GB of CUDA.
+torch==2.14.1
+sentence-transformers==6.1.0
+transformers==5.19.0
+tokenizers==0.23.2
+huggingface-hub==1.33.0
+safetensors==0.8.0
+numpy==2.5.3
+fastapi==0.142.2
+uvicorn==0.54.0
+pydantic==2.14.0

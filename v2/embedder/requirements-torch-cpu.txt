@@ -1,0 +1,3 @@
+# CPU-only PyTorch build (no CUDA libraries). Install before requirements.txt.
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu

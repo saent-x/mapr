@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel rdf:about="https://rdf.example.net/">
+    <title>RDF Headlines</title>
+    <link>https://rdf.example.net/</link>
+    <description>Latest</description>
+    <dc:language>en</dc:language>
+    <items><rdf:Seq><rdf:li rdf:resource="https://rdf.example.net/a/1"/></rdf:Seq></items>
+  </channel>
+  <item rdf:about="https://rdf.example.net/a/1">
+    <title>Election results announced in capital</title>
+    <link>https://rdf.example.net/a/1</link>
+    <description>Officials announced results after a delay.</description>
+    <dc:date>2026-10-21T06:30:00Z</dc:date>
+  </item>
+  <item rdf:about="https://rdf.example.net/a/2">
+    <title>Caf&#233; strike enters second week</title>
+    <link>https://rdf.example.net/a/2#comments</link>
+    <dc:date>2026-10-20T22:00:00-05:00</dc:date>
+  </item>
+</rdf:RDF>
