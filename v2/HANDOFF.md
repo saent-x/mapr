@@ -43,11 +43,11 @@ Full plan: `/mnt/project-files/mapr-review/lean-architecture.md` (its embeddings
 
 Previews: `/mnt/project-files/mapr-v2/desk-*.png`.
 
-## State on the server (last check 2026-10-24 05:09 UTC)
+## State on the server (last check 2026-10-26 20:10 UTC)
 
-- db, ingestor and embedder running. 14,377 articles in, 0 waiting. 10,786 events, 757 with 2+ sources. `/data` at 14 GB.
+- db, ingestor and embedder up 2 days, all healthy. 62,852 articles in, 0 waiting. 33,731 events. `/data` at 16 GB; root `/` 2.2 GB free.
 - `.env` has `EMBED_MODEL_ID=BAAI/bge-m3`; `compose.override.yml` sets `CLUSTER_THRESHOLD=0.71` (now the repo default too, so the override can go).
-- **The server's code is older than the branch:** no Cloudflare embedder, no Clef triage, no cursor fix. About 8,000 triage jobs are queued and idle.
+- 2026-10-26: server synced to the branch (rsync, not git) and redeployed. Workers AI token saved, `CF_ACCOUNT_ID` set, triage running. 14,749 queued jobs for events older than 48h dropped; triage now skips events that age past 48h in the queue. `compose.override.yml` retired (backup at `/data/mapr/src/compose.override.yml.bak`). Steps 1, 2 and 6 below are done.
 
 ## Next steps
 

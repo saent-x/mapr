@@ -70,11 +70,13 @@ export async function loadTriageEvent(q: Queryable, eventId: number, milestone: 
   };
 }
 
-export function triageHandlers(q: Queryable, triager: Triager): JobHandler[] {
+export function triageHandlers(q: Queryable, triager: Triager, maxAgeHours = 48): JobHandler[] {
   const run: JobHandler['run'] = async (job) => {
     const p = job.payload as TriagePayload;
     const ev = await loadTriageEvent(q, Number(p.event_id), Number(p.n));
     if (!ev) return; // event expired or deleted: nothing left to triage
+    // A job can wait days behind the budget gate; by then the event is past the triage window.
+    if (Date.now() - new Date(ev.firstSeen).getTime() > maxAgeHours * 3_600_000) return;
     await triager.triageEvent(ev);
   };
   return [

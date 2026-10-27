@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { clusterPending } from './cluster/pipeline.js';
+import { clusterPending, pendingBacklog } from './cluster/pipeline.js';
 import { loadConfig, type Config } from './config.js';
 import { applyMigrations, createPool, type Db } from './db.js';
 import { HttpEmbedder, type Embedder } from './embed/client.js';
@@ -15,6 +15,7 @@ import { setBlockedHosts } from './net/ssrf.js';
 import { sleep } from './util/pool.js';
 
 const SHUTDOWN_GRACE_MS = 25_000;
+const STALL_MIN = 60;
 
 /** Run `fn` now and then every `intervalMs` (measured start to start, never overlapping). */
 async function every(name: string, intervalMs: number, signal: AbortSignal, fn: () => Promise<void>): Promise<void> {
@@ -96,7 +97,7 @@ async function main() {
   // Without Workers AI credentials, triage jobs are held in the queue, never run by a stub or dropped.
   if (cfg.cfAccountId && cfg.cfApiToken) {
     const triager = new ClefTriager(db, { accountId: cfg.cfAccountId, apiToken: cfg.cfApiToken });
-    for (const h of triageHandlers(db, triager)) runner.register(h);
+    for (const h of triageHandlers(db, triager, cfg.triageMaxAgeHours)) runner.register(h);
   } else {
     log.warn('no Workers AI credentials: triage jobs wait in the queue');
   }
@@ -135,6 +136,13 @@ async function main() {
     // Picks up articles left pending when the embedder was unavailable.
     every('cluster', 5 * 60_000, signal, async () => {
       if (!state.pollRunning) await cluster();
+    }),
+    // Separate loop so it still fires when clustering itself hangs. Healthy backlog clears within one cycle.
+    every('stall check', 10 * 60_000, signal, async () => {
+      const b = await pendingBacklog(db);
+      if (b.oldestMin > STALL_MIN) {
+        log.error('clustering stalled: articles are not being embedded; check the embedder', { pending: b.count, oldest_min: b.oldestMin });
+      }
     }),
     every('retention', cfg.retentionIntervalMin * 60_000, signal, async () => {
       const t0 = Date.now();

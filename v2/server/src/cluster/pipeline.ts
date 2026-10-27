@@ -227,6 +227,17 @@ export interface ClusterDeps {
   signal?: AbortSignal;
 }
 
+/** Articles still waiting for an event, and minutes the oldest has waited (0 when none). */
+export async function pendingBacklog(q: Queryable, maxAgeHours = 72): Promise<{ count: number; oldestMin: number }> {
+  const r = await q.query<{ count: number; oldest_min: number | null }>(
+    `SELECT count(*)::int AS count, floor(extract(epoch FROM now() - min(fetched_at)) / 60)::int AS oldest_min
+     FROM articles
+     WHERE event_id IS NULL AND fetched_at > now() - make_interval(hours => $1)`,
+    [maxAgeHours],
+  );
+  return { count: r.rows[0]!.count, oldestMin: r.rows[0]!.oldest_min ?? 0 };
+}
+
 /** Cluster every pending article. Safe to call concurrently and repeatedly. */
 export async function clusterPending(deps: ClusterDeps): Promise<ClusterStats> {
   const { db, embedder, cfg, log, signal } = deps;

@@ -3,7 +3,7 @@
 import type { AddressInfo } from 'node:net';
 import { MockAgent } from 'undici';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { clusterPending, type ClusterConfig } from '../../src/cluster/pipeline.js';
+import { clusterPending, pendingBacklog, type ClusterConfig } from '../../src/cluster/pipeline.js';
 import { cosine } from '../../src/cluster/decide.js';
 import { applyMigrations, createPool, type Db } from '../../src/db.js';
 import { embedText, HttpEmbedder } from '../../src/embed/client.js';
@@ -165,6 +165,16 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     await db.query('DELETE FROM events WHERE id = $1', [ev.rows[0].id]);
   });
 
+  it('reports how long the oldest unclustered article has waited, so a stalled embedder shows', async () => {
+    expect(await pendingBacklog(db)).toEqual({ count: 0, oldestMin: 0 });
+    const title = 'Rail operator suspends night services for track repairs';
+    const lead = 'Night trains on the northern line are suspended for two weeks while crews replace worn track and signalling equipment.';
+    await storeItems(db, src['Wire D']!, [item('https://d.example/rail-repairs', title, lead)], { preferHttps: true, lang: 'en' });
+    await db.query(`UPDATE articles SET fetched_at = now() - interval '2 hours' WHERE url = 'https://d.example/rail-repairs'`);
+    expect(await pendingBacklog(db)).toEqual({ count: 1, oldestMin: 120 });
+    await db.query(`DELETE FROM articles WHERE url = 'https://d.example/rail-repairs'`);
+  });
+
   it('keeps events across days and runs, but not beyond the 48h window', async () => {
     const story = (x: string) => ({
       title: `Wildfire forces evacuation of ${x} mountain towns`,
@@ -230,6 +240,13 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     expect((await db.query('SELECT count(*)::int AS n FROM jobs')).rows[0].n).toBe(0);
     const quake = seen.find((e) => e.title === QUAKE.title && e.milestone === 3)!;
     expect(quake.sources.map((s) => s.source).sort()).toEqual(['Wire A (renamed)', 'Wire B', 'Wire C']);
+
+    // A job that waited past the 48h window finishes without a model call.
+    const old = (await db.query(`SELECT id FROM events WHERE first_seen < now() - interval '48 hours' LIMIT 1`)).rows[0];
+    await enqueue(db, 'triage', { event_id: old.id, n: 1 }, `old:${old.id}`);
+    const before = seen.length;
+    expect(await runner.runOnce()).toBe('done');
+    expect(seen).toHaveLength(before);
   });
 
   it('retries failing jobs with backoff and stops after 8 attempts; SKIP LOCKED never double-runs', async () => {
