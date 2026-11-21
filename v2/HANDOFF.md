@@ -53,9 +53,7 @@ Previews: `/mnt/project-files/mapr-v2/desk-*.png`.
 
 Done: Workers AI token + `CF_ACCOUNT_ID` (1), server synced and redeployed with triage running (2), stall warning (6). KV namespace `mapr-snapshot` created (2026-11-17) and wired into `v2/web/wrangler.jsonc`.
 
-3. **Tunnel (tor, dashboard):** Networking > Tunnels > Create a tunnel, name `mapr`, connector **Docker**. Copy only the token. Add a public hostname `mapr-api.stbrn.studio` (one level under the zone, so the free certificate covers it) with service **HTTP** `ingestor:8787`. Save the token on the server, never in chat:
-   `ssh -t stbrn-studios 'sudo sh -c "umask 077; cat > /data/mapr/secrets/tunnel_token"'` then paste, Enter, Ctrl-D.
-   Then sync the branch to `/data/mapr/src` and run `bash v2/deploy/stbrn-studios/deploy.sh`: it starts the `tunnel` service (cloudflared 2026.10.7, reads the token from the file) once the file is non-empty. Check: `curl -s -o /dev/null -w '%{http_code}' https://mapr-api.stbrn.studio/healthz` gives 200.
+3. **Tunnel:** done 2026-11-21. Tunnel `mapr-ai` (locally managed, so the dashboard cannot add routes) runs as the `tunnel` compose service with its token in `/data/mapr/secrets/tunnel_token`; the hostname rule is `v2/deploy/stbrn-studios/tunnel.yml`. DNS once from the Mac: `cloudflared tunnel route dns mapr-ai mapr-api.stbrn.studio`. Check: `curl -s -o /dev/null -w '%{http_code}' https://mapr-api.stbrn.studio/healthz` gives 200.
 4. **Deploy the Worker** (`v2/web`, from the Mac, wrangler already logged in): `ssh stbrn-studios 'sudo cat /data/mapr/secrets/api_token' | npx wrangler secret put INGEST_TOKEN` (does not print it), then `npx wrangler deploy`. Check the workers.dev URL shows events, then uncomment the `mapr.stbrn.studio` custom-domain route and deploy again.
 5. Check Cloudflare vs local bge-m3 vectors match (cosine ≈ 1) before turning on `EMBED_PROVIDER=cloudflare`.
 7. Later: watches + Clef matching, Clairic facts, D1 auth (Better Auth), alert email, AI search answers, real analysis charts.

@@ -79,17 +79,19 @@ services:
         max-file: "7"
 
   # Cloudflare Tunnel: the Worker reaches the ingestor API at mapr-api.stbrn.studio, with no open port.
-  # Remotely managed: the public hostname -> http://ingestor:8787 rule lives in the dashboard.
+  # Locally managed: the hostname -> http://ingestor:8787 rule is tunnel.yml next to this file.
   # Starts only once /data/mapr/secrets/tunnel_token holds a token (deploy.sh turns the profile on).
   tunnel:
     image: cloudflare/cloudflared:${CLOUDFLARED_TAG:?pin a tag in .env}
     profiles: [tunnel]
     restart: unless-stopped
     user: "50999:50999"
-    command: tunnel --no-autoupdate run
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
     environment:
       TUNNEL_TOKEN_FILE: /run/secrets/tunnel_token
     secrets: [tunnel_token]
+    volumes:
+      - ./tunnel.yml:/etc/cloudflared/config.yml:ro
     depends_on: [ingestor]
     logging:
       driver: json-file
