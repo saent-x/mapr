@@ -51,12 +51,13 @@ Previews: `/mnt/project-files/mapr-v2/desk-*.png`.
 
 ## Next steps
 
-1. **tor:** create a Workers AI API token. Save it on the server to `/data/mapr/secrets/cf_api_token` (mode 400, owner 50999) and set `CF_ACCOUNT_ID` in the server `.env`. Never in chat.
-2. **Sync the server to the branch** (`git pull` in `/data/mapr/src`), then `v2/deploy/stbrn-studios/deploy.sh`. Triage starts; the budget gate spreads the backlog over days. Consider dropping queued jobs for events older than 48h first.
-3. **Cloudflare Tunnel:** `cloudflared tunnel login` (tor), then a tunnel from a hostname to `127.0.0.1:8787`.
-4. **Deploy the Worker** (`v2/web`): `wrangler kv namespace create SNAPSHOT` and put the id in `wrangler.jsonc`, set `INGEST_URL` to the tunnel hostname, `wrangler secret put INGEST_TOKEN` (the ingestor's `api_token` from `/data/mapr/secrets/`), `wrangler deploy`. Then enable the `mapr.stbrn.studio` route.
+Done: Workers AI token + `CF_ACCOUNT_ID` (1), server synced and redeployed with triage running (2), stall warning (6). KV namespace `mapr-snapshot` created (2026-11-17) and wired into `v2/web/wrangler.jsonc`.
+
+3. **Tunnel (tor, dashboard):** Networking > Tunnels > Create a tunnel, name `mapr`, connector **Docker**. Copy only the token. Add a public hostname `mapr-api.stbrn.studio` (one level under the zone, so the free certificate covers it) with service **HTTP** `ingestor:8787`. Save the token on the server, never in chat:
+   `ssh -t stbrn-studios 'sudo sh -c "umask 077; cat > /data/mapr/secrets/tunnel_token"'` then paste, Enter, Ctrl-D.
+   Then sync the branch to `/data/mapr/src` and run `bash v2/deploy/stbrn-studios/deploy.sh`: it starts the `tunnel` service (cloudflared 2026.10.7, reads the token from the file) once the file is non-empty. Check: `curl -s -o /dev/null -w '%{http_code}' https://mapr-api.stbrn.studio/healthz` gives 200.
+4. **Deploy the Worker** (`v2/web`, from the Mac, wrangler already logged in): `ssh stbrn-studios 'sudo cat /data/mapr/secrets/api_token' | npx wrangler secret put INGEST_TOKEN` (does not print it), then `npx wrangler deploy`. Check the workers.dev URL shows events, then uncomment the `mapr.stbrn.studio` custom-domain route and deploy again.
 5. Check Cloudflare vs local bge-m3 vectors match (cosine ≈ 1) before turning on `EMBED_PROVIDER=cloudflare`.
-6. Small fix: warn clearly when the embedder stops answering (it stalled once with no log).
 7. Later: watches + Clef matching, Clairic facts, D1 auth (Better Auth), alert email, AI search answers, real analysis charts.
 8. **Open decisions for tor:** pricing / revenue model (see `revenue-review.md`) and the AI budget for answers and briefs.
 

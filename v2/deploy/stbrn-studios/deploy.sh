@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 [ -f .env ] || cp .env.example .env
-for k in EMBED_THREADS EMBED_MODEL_ID EMBED_PROVIDER CF_ACCOUNT_ID; do
+for k in EMBED_THREADS EMBED_MODEL_ID EMBED_PROVIDER CF_ACCOUNT_ID CLOUDFLARED_TAG; do
   grep -q "^$k=" .env || grep "^$k=" .env.example >> .env
 done
 
@@ -16,10 +16,14 @@ if ! sudo test -f /data/mapr/secrets/api_token; then
 fi
 # Workers AI token: empty placeholder until you paste one in (never through chat).
 sudo test -f /data/mapr/secrets/cf_api_token || sudo touch /data/mapr/secrets/cf_api_token
-S="/data/mapr/secrets/api_token /data/mapr/secrets/pg_password /data/mapr/secrets/cf_api_token"
+# Tunnel token: empty placeholder; the tunnel starts once it holds one.
+sudo test -f /data/mapr/secrets/tunnel_token || sudo touch /data/mapr/secrets/tunnel_token
+S="/data/mapr/secrets/api_token /data/mapr/secrets/pg_password /data/mapr/secrets/cf_api_token /data/mapr/secrets/tunnel_token"
 sudo chown 50999:50999 $S
 sudo chmod 400 $S
 sudo mkdir -p /data/mapr/models && sudo chown 10001:10001 /data/mapr/models
+
+if sudo test -s /data/mapr/secrets/tunnel_token; then export COMPOSE_PROFILES=tunnel; else echo "no tunnel token yet: tunnel not started"; fi
 
 df -h / /data | sed 's/^/before: /'
 docker compose build ingestor embedder

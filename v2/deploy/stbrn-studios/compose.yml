@@ -78,6 +78,25 @@ services:
         max-size: "20m"
         max-file: "7"
 
+  # Cloudflare Tunnel: the Worker reaches the ingestor API at mapr-api.stbrn.studio, with no open port.
+  # Remotely managed: the public hostname -> http://ingestor:8787 rule lives in the dashboard.
+  # Starts only once /data/mapr/secrets/tunnel_token holds a token (deploy.sh turns the profile on).
+  tunnel:
+    image: cloudflare/cloudflared:${CLOUDFLARED_TAG:?pin a tag in .env}
+    profiles: [tunnel]
+    restart: unless-stopped
+    user: "50999:50999"
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN_FILE: /run/secrets/tunnel_token
+    secrets: [tunnel_token]
+    depends_on: [ingestor]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 secrets:
   pg_password:
     file: /data/mapr/secrets/pg_password
@@ -86,3 +105,6 @@ secrets:
   # Workers AI token (Account > Workers AI > Read/Edit). Empty until EMBED_PROVIDER=cloudflare.
   cf_api_token:
     file: /data/mapr/secrets/cf_api_token
+  # Tunnel token (dashboard > Networking > Tunnels > mapr). Empty until the tunnel exists.
+  tunnel_token:
+    file: /data/mapr/secrets/tunnel_token

@@ -16,8 +16,7 @@
   "triggers": { "crons": ["* * * * *"] },
 
   "kv_namespaces": [
-    // `wrangler kv namespace create SNAPSHOT`, then paste the id here.
-    { "binding": "SNAPSHOT", "id": "00000000000000000000000000000000" }
+    { "binding": "SNAPSHOT", "id": "9490a186a34e46ad88958b603b22f65c" }
   ],
 
   "durable_objects": {
@@ -27,7 +26,7 @@
 
   "vars": {
     // Public hostname of the Cloudflare Tunnel in front of the ingestor API (127.0.0.1:8787).
-    "INGEST_URL": "https://ingest.example.invalid"
+    "INGEST_URL": "https://mapr-api.stbrn.studio"
   },
   // Secret, never in this file: `wrangler secret put INGEST_TOKEN` (the ingestor's API_TOKEN).
   // Local dev: put INGEST_TOKEN=... in .dev.vars.
