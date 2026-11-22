@@ -70,6 +70,22 @@ export async function loadTriageEvent(q: Queryable, eventId: number, milestone: 
   };
 }
 
+/**
+ * Delete queued triage jobs whose event is gone or past the triage window. Newest-first claiming
+ * means these may never be reached; they would only be skipped when claimed anyway.
+ */
+export async function dropAgedTriageJobs(q: Queryable, maxAgeHours = 48): Promise<number> {
+  const r = await q.query(
+    `DELETE FROM jobs j
+     WHERE j.kind IN ('triage', 're-triage') AND j.locked_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM events e
+         WHERE e.id = (j.payload->>'event_id')::bigint AND e.first_seen > now() - make_interval(hours => $1))`,
+    [maxAgeHours],
+  );
+  return r.rowCount ?? 0;
+}
+
 export function triageHandlers(q: Queryable, triager: Triager, maxAgeHours = 48): JobHandler[] {
   const run: JobHandler['run'] = async (job) => {
     const p = job.payload as TriagePayload;

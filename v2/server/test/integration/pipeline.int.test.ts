@@ -14,7 +14,7 @@ import { storeItems } from '../../src/ingest/store.js';
 import { BudgetGate, recordNeurons } from '../../src/jobs/budget.js';
 import { enqueue } from '../../src/jobs/queue.js';
 import { JobRunner } from '../../src/jobs/runner.js';
-import { triageHandlers, type TriageEvent } from '../../src/jobs/triage.js';
+import { dropAgedTriageJobs, triageHandlers, type TriageEvent } from '../../src/jobs/triage.js';
 import { log as rootLog, setLogLevel } from '../../src/log.js';
 import { seedSources } from '../../src/seed.js';
 import { fakeVector, startFakeEmbedder } from '../helpers/fakeEmbedder.js';
@@ -247,6 +247,25 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     const before = seen.length;
     expect(await runner.runOnce()).toBe('done');
     expect(seen).toHaveLength(before);
+  });
+
+  it('claims the newest job first and clears queued triage for aged-out events', async () => {
+    const order: number[] = [];
+    const runner = new JobRunner(db, { budget: new BudgetGate(db, 1e12), log });
+    runner.register({ kind: 'probe', ai: false, run: async (j) => void order.push((j.payload as { n: number }).n) });
+    for (const n of [1, 2, 3]) await enqueue(db, 'probe', { n }, `probe:${n}`);
+    while ((await runner.runOnce()) === 'done');
+    expect(order).toEqual([3, 2, 1]);
+
+    const old = (await db.query(`SELECT id FROM events WHERE first_seen < now() - interval '48 hours' LIMIT 1`)).rows[0];
+    const fresh = (await db.query(`SELECT id FROM events WHERE first_seen > now() - interval '48 hours' LIMIT 1`)).rows[0];
+    await enqueue(db, 'triage', { event_id: old.id, n: 1 }, `aged:${old.id}`);
+    await enqueue(db, 're-triage', { event_id: -1, n: 3 }, 'aged:gone');
+    await enqueue(db, 'triage', { event_id: fresh.id, n: 1 }, `aged:${fresh.id}`);
+    expect(await dropAgedTriageJobs(db, 48)).toBe(2);
+    const left = await db.query(`SELECT dedupe_key FROM jobs WHERE dedupe_key LIKE 'aged:%'`);
+    expect(left.rows.map((r) => r.dedupe_key)).toEqual([`aged:${fresh.id}`]);
+    await db.query(`DELETE FROM jobs WHERE dedupe_key LIKE 'aged:%'`);
   });
 
   it('retries failing jobs with backoff and stops after 8 attempts; SKIP LOCKED never double-runs', async () => {

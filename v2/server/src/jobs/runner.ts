@@ -76,7 +76,8 @@ export class JobRunner {
        WHERE id = (
          SELECT id FROM jobs
          WHERE locked_at IS NULL AND run_after <= now() AND attempts < $1 AND kind = ANY($2::text[])
-         ORDER BY run_after, id
+         -- Newest first: when the AI budget cannot cover every job, it goes to the freshest events.
+         ORDER BY id DESC
          LIMIT 1
          FOR UPDATE SKIP LOCKED)
        RETURNING id, kind, payload, attempts`,

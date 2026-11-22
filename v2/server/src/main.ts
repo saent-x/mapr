@@ -9,7 +9,7 @@ import { pollAll } from './ingest/poller.js';
 import { BudgetGate, recordNeurons } from './jobs/budget.js';
 import { ClefTriager } from './jobs/clef.js';
 import { JobRunner } from './jobs/runner.js';
-import { triageHandlers } from './jobs/triage.js';
+import { dropAgedTriageJobs, triageHandlers } from './jobs/triage.js';
 import { log, setLogLevel, type Logger } from './log.js';
 import { setBlockedHosts } from './net/ssrf.js';
 import { sleep } from './util/pool.js';
@@ -147,7 +147,8 @@ async function main() {
     every('retention', cfg.retentionIntervalMin * 60_000, signal, async () => {
       const t0 = Date.now();
       await db.query('SELECT mapr_retention()');
-      log.info('retention done', { ms: Date.now() - t0 });
+      const aged = await dropAgedTriageJobs(db, cfg.triageMaxAgeHours);
+      log.info('retention done', { ms: Date.now() - t0, aged_triage_jobs: aged });
     }),
     runner.run(signal),
   ];
