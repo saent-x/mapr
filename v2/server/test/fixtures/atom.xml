@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="fr" xml:base="https://atom.example.org/">
+  <title type="text">Atom Example</title>
+  <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+  <updated>2026-10-21T18:30:02Z</updated>
+  <entry>
+    <title type="html">Floods &lt;em&gt;displace&lt;/em&gt; thousands</title>
+    <link rel="self" href="https://atom.example.org/api/entries/1"/>
+    <link rel="alternate" type="text/html" href="/2026/10/floods-displace-thousands/"/>
+    <id>tag:atom.example.org,2026:1</id>
+    <published>2026-10-21T12:00:00+01:00</published>
+    <updated>2026-10-21T13:00:00Z</updated>
+    <summary type="html">&lt;p&gt;Heavy rain forced &lt;a href="#"&gt;thousands&lt;/a&gt; from their homes.&lt;/p&gt;</summary>
+    <content type="html">&lt;p&gt;Heavy rain forced thousands from their homes. Rivers burst their banks.&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <title>Updated only</title>
+    <link href="https://atom.example.org/2026/10/updated-only"/>
+    <id>tag:atom.example.org,2026:2</id>
+    <updated>2026-10-20T07:45:00.123Z</updated>
+    <summary>Plain summary.</summary>
+  </entry>
+</feed>

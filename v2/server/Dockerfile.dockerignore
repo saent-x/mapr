@@ -1,0 +1,7 @@
+# BuildKit reads this (next to the Dockerfile) instead of a .dockerignore at the context root.
+**/node_modules
+**/dist
+**/.git
+**/*.log
+server/test
+deploy

@@ -1,0 +1,6 @@
+# Ingress for the MAPR tunnel (mapr-ai). It is locally managed, so routes live here, not in the dashboard.
+# DNS: cloudflared tunnel route dns mapr-ai mapr-api.stbrn.studio (once, from a machine logged in with cloudflared).
+ingress:
+  - hostname: mapr-api.stbrn.studio
+    service: http://ingestor:8787
+  - service: http_status:404

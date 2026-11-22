@@ -1,0 +1,31 @@
+{
+  "name": "mapr-ingestor",
+  "version": "2.0.0",
+  "private": true,
+  "description": "MAPR v2 server-side ingestor: feeds -> articles -> events, job queue, local API.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "seed": "tsc -p tsconfig.build.json && node dist/seed.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude 'test/integration/**'"
+  },
+  "dependencies": {
+    "entities": "8.1.0",
+    "fast-xml-parser": "5.11.2",
+    "pg": "8.23.1",
+    "undici": "7.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

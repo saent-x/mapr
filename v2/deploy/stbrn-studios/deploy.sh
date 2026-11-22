@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Start (or update) MAPR v2 on stbrn-studios. Run on the server from this folder:
+#   bash deploy.sh
+# Idempotent. Prints no secrets. Everything lives under /data/mapr.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+[ -f .env ] || cp .env.example .env
+for k in EMBED_THREADS EMBED_MODEL_ID EMBED_PROVIDER CF_ACCOUNT_ID CLOUDFLARED_TAG; do
+  grep -q "^$k=" .env || grep "^$k=" .env.example >> .env
+done
+
+# API token for the Worker -> ingestor API. Created once, readable only by uid 50999.
+if ! sudo test -f /data/mapr/secrets/api_token; then
+  sudo sh -c 'umask 077; openssl rand -hex 32 | tr -d "\n" > /data/mapr/secrets/api_token'
+fi
+# Workers AI token: empty placeholder until you paste one in (never through chat).
+sudo test -f /data/mapr/secrets/cf_api_token || sudo touch /data/mapr/secrets/cf_api_token
+# Tunnel token: empty placeholder; the tunnel starts once it holds one.
+sudo test -f /data/mapr/secrets/tunnel_token || sudo touch /data/mapr/secrets/tunnel_token
+S="/data/mapr/secrets/api_token /data/mapr/secrets/pg_password /data/mapr/secrets/cf_api_token /data/mapr/secrets/tunnel_token"
+sudo chown 50999:50999 $S
+sudo chmod 400 $S
+sudo mkdir -p /data/mapr/models && sudo chown 10001:10001 /data/mapr/models
+
+if sudo test -s /data/mapr/secrets/tunnel_token; then export COMPOSE_PROFILES=tunnel; else echo "no tunnel token yet: tunnel not started"; fi
+
+df -h / /data | sed 's/^/before: /'
+docker compose build ingestor embedder
+# Geocoding: GeoNames gazetteer (CC BY 4.0), built once into /data/mapr/models/geonames (~400 MB download,
+# deleted after the build), and the NER model fetched into the model cache, so the embedder can start
+# offline. Rebuilt when the build's VERSION changes, or with: sudo rm /data/mapr/models/geonames/gazetteer.tsv.gz
+G=/data/mapr/models/geonames/gazetteer.tsv.gz
+want=$(docker compose run --rm --no-deps embedder python -m mapr_embedder.geo.build --version | tail -1)
+have=$(sudo cat "$G.version" 2>/dev/null || true)
+if ! sudo test -s "$G" || [ "$want" != "$have" ]; then
+  echo "building gazetteer version $want (had: ${have:-none})"
+  docker compose run --rm --no-deps embedder python -m mapr_embedder.geo.build --download /models/geonames --out /models/geonames/gazetteer.tsv.gz
+fi
+docker compose run --rm --no-deps -e HF_HUB_OFFLINE=0 embedder python -c 'from mapr_embedder.geo.ner import Ner; print(Ner(cache_dir="/models").model_id)' 2>&1 | tail -1
+docker compose up -d db
+docker compose run --rm ingestor node dist/seed.js
+docker compose up -d
+docker compose ps
+df -h / /data | sed 's/^/after: /'
+echo DONE
