@@ -10,7 +10,7 @@ Rebuild MAPR (live OSINT watch desk: feeds → events → map-first console with
 
 - **Cost:** while testing, MAPR must add **$0** to the Cloudflare bill (shared $5/mo Workers Paid plan). Heavy and growing work (ingest, embeddings, DB) runs on tor's server **stbrn-studios**.
 - **Scope:** keep all 382 feeds, AI search and live updates. No quality-reducing fallbacks (no keyword-only or rule-based scoring when caps hit). Cut retention instead.
-- **Keep facts, not articles:** article text 72h, article metadata 7d, events + vectors 90d (unless saved to a case).
+- **Keep facts, not articles:** article text 72h, article metadata 7d, events + vectors 30d (unless saved to a case; was 90d until 2026-11-22).
 - **Budget gate:** AI jobs pause when the account reaches 9,000 Workers AI neurons/day and resume at 00:00 UTC. Nothing is skipped or downgraded.
 - **Design:** "Instrument" colours on the dense watch-desk layout. No blue accent. No taglines, helper text or secondary labels; fix the layout instead. Tokens in `/mnt/project-files/mapr-design/` (copy also in the canvas artifact). Analysis charts are placeholders.
 - **Git:** commit as `Vangerwua Tor <45785419+saent-x@users.noreply.github.com>`. Never add Claude as author, co-author or any attribution line.

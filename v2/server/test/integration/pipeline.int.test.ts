@@ -414,4 +414,17 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     // The event and its citation outlive the article.
     expect((await db.query(`SELECT count(*)::int AS n FROM event_sources WHERE url = 'https://a.example/budget'`)).rows[0].n).toBe(1);
   });
+
+  it('keeps events 30 days unless pinned', async () => {
+    const ids = (await db.query<{ id: string }>('SELECT id FROM events ORDER BY id LIMIT 3')).rows.map((r) => r.id);
+    expect(ids).toHaveLength(3);
+    const [old, pinned, recent] = ids;
+    await db.query(`UPDATE events SET last_seen = now() - interval '31 days' WHERE id = ANY($1)`, [[old, pinned]]);
+    await db.query(`UPDATE events SET pinned = true WHERE id = $1`, [pinned]);
+    await db.query(`UPDATE events SET last_seen = now() - interval '29 days' WHERE id = $1`, [recent]);
+    await db.query('SELECT mapr_retention()');
+    const left = (await db.query<{ id: string }>('SELECT id FROM events WHERE id = ANY($1)', [ids])).rows.map((r) => r.id);
+    expect(left.sort()).toEqual([pinned, recent].sort());
+    expect((await db.query('SELECT count(*)::int AS n FROM event_sources WHERE event_id = $1', [old])).rows[0].n).toBe(0);
+  });
 });
