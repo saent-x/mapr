@@ -29,8 +29,12 @@ df -h / /data | sed 's/^/before: /'
 docker compose build ingestor embedder
 # Geocoding: GeoNames gazetteer (CC BY 4.0), built once into /data/mapr/models/geonames (~400 MB download,
 # deleted after the build), and the NER model fetched into the model cache, so the embedder can start
-# offline. Rebuild with: sudo rm /data/mapr/models/geonames/gazetteer.tsv.gz && bash deploy.sh
-if ! sudo test -s /data/mapr/models/geonames/gazetteer.tsv.gz; then
+# offline. Rebuilt when the build's VERSION changes, or with: sudo rm /data/mapr/models/geonames/gazetteer.tsv.gz
+G=/data/mapr/models/geonames/gazetteer.tsv.gz
+want=$(docker compose run --rm --no-deps embedder python -m mapr_embedder.geo.build --version | tail -1)
+have=$(sudo cat "$G.version" 2>/dev/null || true)
+if ! sudo test -s "$G" || [ "$want" != "$have" ]; then
+  echo "building gazetteer version $want (had: ${have:-none})"
   docker compose run --rm --no-deps embedder python -m mapr_embedder.geo.build --download /models/geonames --out /models/geonames/gazetteer.tsv.gz
 fi
 docker compose run --rm --no-deps -e HF_HUB_OFFLINE=0 embedder python -c 'from mapr_embedder.geo.ner import Ner; print(Ner(cache_dir="/models").model_id)' 2>&1 | tail -1

@@ -26,8 +26,9 @@ networkx==3.7
 numpy==2.5.3
 opentelemetry-api==1.45.1
 packaging==26.3
-pydantic-core==2.50.0
+protobuf==7.36.2
 pydantic==2.14.0
+pydantic-core==2.50.0
 pygments==2.21.0
 pyyaml==6.0.3
 regex==2026.9.29
@@ -36,6 +37,7 @@ safetensors==0.8.0
 scikit-learn==1.9.1
 scipy==1.18.1
 sentence-transformers==6.1.0
+sentencepiece==0.2.3
 setuptools==84.2.1
 shellingham==1.5.4
 starlette==1.9.0

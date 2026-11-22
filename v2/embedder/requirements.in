@@ -10,3 +10,6 @@ numpy==2.5.3
 fastapi==0.142.2
 uvicorn==0.54.0
 pydantic==2.14.0
+# The second NER model (xlm-roberta) ships only a sentencepiece tokenizer.
+sentencepiece==0.2.3
+protobuf==7.36.2

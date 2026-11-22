@@ -93,7 +93,7 @@ ROWS = [
         "12",
         60000,
     ),
-    ("1668341", "Taipei", "Taipei", "Taipei City,臺北市,台北", 25.05, 121.53, "P", "PPLC", "TW", "", "03", 7871900),
+    ("1668341", "Taipei", "Taipei", "Taipei City,臺北市", 25.05, 121.53, "P", "PPLC", "TW", "", "03", 7871900),
     ("1675151", "Hsinchu", "Hsinchu", "新竹市,新竹", 24.8, 120.97, "P", "PPLA", "TW", "", "04", 404109),
     (
         "4140963",
@@ -124,6 +124,8 @@ ROWS = [
         9000,
     ),
     ("524901", "Moscow", "Moscow", "Moskva,Москва", 55.75, 37.62, "P", "PPLC", "RU", "", "48", 10381222),
+    ("1668284", "Taiwan", "Taiwan", "台灣,臺灣,中華民國", 24, 121, "A", "PCLI", "TW", "", "00", 23500000),
+    ("1850147", "Tokyo", "Tokyo", "東京,东京", 35.69, 139.69, "P", "PPLC", "JP", "", "40", 8336599),
     ("123", "Tinyville", "Tinyville", "Tiny Town", 10, 10, "P", "PPL", "FR", "", "11", 300),
     ("124", "Smalltown", "Smalltown", "Petite Ville,Kleinstadt", 11, 11, "P", "PPL", "FR", "", "11", 8000),
 ]
@@ -382,3 +384,39 @@ def test_script_model_failure_falls_back_to_main():
     ner = Ner("main", script_model_id="script", loader=loader)
     assert ner.script_pipe is None and ner.model_id == "main"
     assert ner.extract(["台北"]) == [[]]
+
+
+def test_two_character_cjk_names_and_short_forms(gaz):
+    assert gaz.lookup("台北")[0].name == "Taipei"  # from 臺北市: suffix dropped, 臺 -> 台
+    assert gaz.lookup("台灣")[0].kind == "country"
+    assert gaz.lookup("東京")[0].name == "Tokyo"
+    r = go(gaz, [("台北", "LOC", 3)])
+    assert (r.place, r.country) == ("Taipei", "TW")
+    assert go(gaz, [("台灣", "LOC", 3)]).country == "TW"
+
+
+def test_arabic_clitic_before_article():
+    assert "البيت الابيض" in variants(normalize("والبيت الأبيض"))
+    assert "البيت الابيض" in variants(normalize("بالبيت الأبيض"))
+
+
+def test_landmarks_found_without_ner(gaz):
+    svc = GeoService(FakeNer({}), gaz)
+    [r] = svc.geocode([([("ترامب يتحدث من البيت الأبيض", 3.0)], [])])
+    assert (r["country"], r["place"]) == ("US", "Washington, D.C.")
+    [r] = svc.geocode([([("克里姆林宫回应", 3.0)], [])])
+    assert r["place"] == "Moscow"
+    [r] = svc.geocode([([("Statement from the White House on tariffs", 3.0)], [])])
+    assert r["country"] == "US"
+
+
+def test_build_writes_version_stamp(tmp_path, monkeypatch):
+    from mapr_embedder.geo import build
+
+    dump = tmp_path / "allCountries.txt"
+    dump.write_text("".join(dump_lines()), encoding="utf-8")
+    out = tmp_path / "gaz.tsv.gz"
+    monkeypatch.setattr(build, "write", lambda path, rows: (write(path, rows), 10_000)[1])
+    assert build.main(["--dump", str(dump), "--out", str(out)]) == 0
+    assert (tmp_path / "gaz.tsv.gz.version").read_text().strip() == build.VERSION
+    assert build.main(["--version"]) == 0

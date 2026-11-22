@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from .demonyms import ALIAS_KEYS, DEMONYMS
 from .gazetteer import Gazetteer, Place
 from .landmarks import LANDMARKS
+from .text import is_cjk as _cjk
 from .text import normalize, variants
 
 SPECIFICITY = {"city": 3, "admin1": 2, "region": 2, "water": 1, "country": 1}
@@ -73,8 +74,10 @@ def mentions_for(gaz: Gazetteer, entities: list[tuple[Entity, float]]) -> list[M
         if not key:
             continue
         cands: list[Place] = []
-        if e.label in ("LOC", "ORG", "MISC") and key in LANDMARKS:
-            cands = landmark(gaz, key)
+        if e.label in ("LOC", "ORG", "MISC"):
+            lm = next((k for k in variants(key) if k in LANDMARKS), None)
+            if lm:
+                cands = landmark(gaz, lm)
         if not cands and e.label == "LOC":
             for k in variants(key):
                 cands = gaz.lookup(k)
@@ -86,6 +89,18 @@ def mentions_for(gaz: Gazetteer, entities: list[tuple[Entity, float]]) -> list[M
             cands = [c]
         if cands:
             out.append(Mention(key, weight * e.score, tuple(cands)))
+    return out
+
+
+def landmark_mentions(gaz: Gazetteer, texts: list[tuple[str, float]]) -> list[Mention]:
+    """Landmarks found by plain text search, so they count even when NER misses or splits them."""
+    out = []
+    for text, weight in texts:
+        hay = f" {normalize(text)} "
+        for key in LANDMARKS:
+            hit = key in hay if _cjk(key) else f" {key} " in hay
+            if hit and (cands := landmark(gaz, key)):
+                out.append(Mention(key, weight, tuple(cands)))
     return out
 
 

@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import Protocol
 
 from .gazetteer import Gazetteer
-from .resolve import Entity, GeoResult, mentions_for, resolve
+from .resolve import Entity, GeoResult, landmark_mentions, mentions_for, resolve
 
 
 class NerLike(Protocol):
@@ -28,6 +28,10 @@ class GeoService:
         for texts, sources in events:
             pairs = [(e, w) for (_, w), found in zip(texts, ents[i : i + len(texts)], strict=True) for e in found]
             i += len(texts)
-            r: GeoResult = resolve(self.gaz, mentions_for(self.gaz, pairs), sources)
+            ner_mentions = mentions_for(self.gaz, pairs)
+            # Text-searched landmarks only where NER did not already find that landmark.
+            found = {m.key for m in ner_mentions}
+            extra = [m for m in landmark_mentions(self.gaz, texts) if m.key not in found]
+            r: GeoResult = resolve(self.gaz, ner_mentions + extra, sources)
             out.append(asdict(r))
         return out

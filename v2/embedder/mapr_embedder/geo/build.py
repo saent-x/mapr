@@ -23,11 +23,13 @@ from pathlib import Path
 
 from .demonyms import ALIASES
 from .gazetteer import Place, write
-from .text import normalize
+from .text import cjk_forms, min_key_len, normalize
 
 log = logging.getLogger(__name__)
 
 GEONAMES_URL = "https://download.geonames.org/export/dump/"
+# Bump when the build changes what goes into the gazetteer: deploy.sh rebuilds when the stamp differs.
+VERSION = "2"
 
 COUNTRY_CODES = {"PCLI", "PCLD", "PCLF", "PCLS", "PCLIX", "PCL", "TERR"}
 CITY_SEATS = {"PPLC", "PPLA", "PPLG"}
@@ -59,8 +61,9 @@ def keys_for(name: str, ascii_name: str, alts: list[str], with_alts: bool) -> li
     out = []
     for r in raws:
         k = normalize(r)
-        if len(k) >= 3 and k not in STOP_KEYS:
+        if len(k) >= min_key_len(k) and k not in STOP_KEYS:
             out.append(k)
+            out += cjk_forms(k)
     return list(dict.fromkeys(out))
 
 
@@ -149,6 +152,13 @@ def fetch(name: str, folder: Path) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    if argv is None:
+        import sys
+
+        argv = sys.argv[1:]
+    if argv == ["--version"]:
+        print(VERSION)
+        return 0
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--dump", type=Path, help="allCountries.zip (or .txt) from download.geonames.org")
     src.add_argument("--download", type=Path, metavar="DIR", help="fetch allCountries.zip and countryInfo.txt here")
@@ -167,7 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         tmp.unlink()
         raise SystemExit(f"only {n} places parsed from {dump}; gazetteer not replaced")
     tmp.replace(a.out)
-    log.info("wrote %d places to %s", n, a.out)
+    a.out.with_name(a.out.name + ".version").write_text(VERSION + "\n")
+    log.info("wrote %d places to %s (version %s)", n, a.out, VERSION)
     if a.download:
         dump.unlink()
     return 0
