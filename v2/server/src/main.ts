@@ -90,7 +90,8 @@ async function main() {
   };
 
   const runner = new JobRunner(db, {
-    budget: new BudgetGate(db, cfg.dailyNeuronCeiling),
+    // Paced with a one-hour head start, so triage runs all day on fresh events.
+    budget: new BudgetGate(db, cfg.dailyNeuronCeiling, 3_600_000),
     log: log.child({ task: 'jobs' }),
     pollMs: cfg.jobPollMs,
   });

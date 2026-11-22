@@ -69,15 +69,41 @@ export class JobRunner {
       this.lastStaleSweep = Date.now();
       await this.releaseStale();
     }
-    const kinds = this.kinds;
-    if (kinds.length === 0) return 'idle';
+    if (this.kinds.length === 0) return 'idle';
+    let kinds = this.kinds;
+    const aiKinds = [...this.handlers.values()].filter((h) => h.ai).map((h) => h.kind);
+    if (aiKinds.length) {
+      const gate = await this.o.budget.check();
+      if (!gate.open) {
+        if (!gate.paced) {
+          // Daily ceiling reached: hold every ready AI job until the reset.
+          const held = await this.db.query(
+            `UPDATE jobs SET run_after = $1
+             WHERE locked_at IS NULL AND run_after < $1 AND attempts < $2 AND kind = ANY($3::text[])`,
+            [gate.resumeAt, this.maxAttempts, aiKinds],
+          );
+          if (held.rowCount) {
+            this.o.log.warn('ai budget reached; holding ai jobs until reset', {
+              used: gate.used,
+              ceiling: gate.ceiling,
+              resume_at: gate.resumeAt?.toISOString(),
+              held: held.rowCount,
+            });
+          }
+        }
+        // Paced: AI jobs simply wait their turn; other kinds still run.
+        kinds = kinds.filter((k) => !aiKinds.includes(k));
+        if (kinds.length === 0) return 'deferred';
+      }
+    }
     const claimed = await this.db.query<{ id: string; kind: string; payload: unknown; attempts: number }>(
       `UPDATE jobs SET locked_at = now(), attempts = attempts + 1
        WHERE id = (
          SELECT id FROM jobs
          WHERE locked_at IS NULL AND run_after <= now() AND attempts < $1 AND kind = ANY($2::text[])
-         -- Newest first: when the AI budget cannot cover every job, it goes to the freshest events.
-         ORDER BY id DESC
+         -- Most important first, then newest: when the AI budget cannot cover every job, it goes to
+         -- corroborated, fresh events.
+         ORDER BY priority DESC, id DESC
          LIMIT 1
          FOR UPDATE SKIP LOCKED)
        RETURNING id, kind, payload, attempts`,
@@ -88,30 +114,6 @@ export class JobRunner {
     const job: Job = { id: Number(row.id), kind: row.kind, payload: row.payload, attempts: row.attempts };
     const handler = this.handlers.get(job.kind)!;
     const log = this.o.log.child({ job_id: job.id, kind: job.kind, attempt: job.attempts });
-
-    if (handler.ai) {
-      const gate = await this.o.budget.check();
-      if (!gate.open) {
-        // Hold this job and every other ready AI job until the reset; the claim's attempt is given back.
-        const aiKinds = [...this.handlers.values()].filter((h) => h.ai).map((h) => h.kind);
-        await this.db.query(
-          `UPDATE jobs SET locked_at = NULL, attempts = attempts - 1, run_after = $2 WHERE id = $1`,
-          [job.id, gate.resumeAt],
-        );
-        const held = await this.db.query(
-          `UPDATE jobs SET run_after = $1
-           WHERE locked_at IS NULL AND run_after < $1 AND attempts < $2 AND kind = ANY($3::text[])`,
-          [gate.resumeAt, this.maxAttempts, aiKinds],
-        );
-        log.warn('ai budget reached; holding ai jobs until reset', {
-          used: gate.used,
-          ceiling: gate.ceiling,
-          resume_at: gate.resumeAt?.toISOString(),
-          held: (held.rowCount ?? 0) + 1,
-        });
-        return 'deferred';
-      }
-    }
 
     const started = Date.now();
     try {

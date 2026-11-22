@@ -229,7 +229,7 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
       expect(j.attempts).toBe(0);
       expect(j.locked_at).toBeNull();
     }
-    expect(await runner.runOnce()).toBe('idle');
+    expect(await runner.runOnce()).toBe('deferred');
 
     // Next UTC day: budget resets.
     await db.query(`UPDATE ai_usage SET mapr_neurons = 0, account_neurons = 0`);
@@ -254,8 +254,20 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     const runner = new JobRunner(db, { budget: new BudgetGate(db, 1e12), log });
     runner.register({ kind: 'probe', ai: false, run: async (j) => void order.push((j.payload as { n: number }).n) });
     for (const n of [1, 2, 3]) await enqueue(db, 'probe', { n }, `probe:${n}`);
+    await enqueue(db, 'probe', { n: 0 }, 'probe:0', undefined, 2);
     while ((await runner.runOnce()) === 'done');
-    expect(order).toEqual([3, 2, 1]);
+    expect(order).toEqual([0, 3, 2, 1]);
+
+    // Paced gate: AI jobs wait while the day's allowance is used up, nothing is rescheduled.
+    const paced = new JobRunner(db, { budget: new BudgetGate(db, 9000, -86_400_000), log });
+    let ran = 0;
+    paced.register({ kind: 'paced-ai', ai: true, run: async () => void ran++ });
+    await enqueue(db, 'paced-ai', {}, 'paced:1');
+    expect(await paced.runOnce()).toBe('deferred');
+    expect(ran).toBe(0);
+    const pj = (await db.query(`SELECT run_after <= now() AS ready, attempts FROM jobs WHERE dedupe_key = 'paced:1'`)).rows[0];
+    expect(pj).toEqual({ ready: true, attempts: 0 });
+    await db.query(`DELETE FROM jobs WHERE dedupe_key = 'paced:1'`);
 
     const old = (await db.query(`SELECT id FROM events WHERE first_seen < now() - interval '48 hours' LIMIT 1`)).rows[0];
     const fresh = (await db.query(`SELECT id FROM events WHERE first_seen > now() - interval '48 hours' LIMIT 1`)).rows[0];
@@ -364,6 +376,18 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
       }
       expect(seen.length).toBe(all.count);
       expect(new Set(seen).size).toBe(seen.length);
+
+      // Postgres keeps microseconds: the cursor after the last change must not return it again.
+      await db.query(`UPDATE event_activity SET updated_at = now() - interval '1 minute' + make_interval(secs => event_id * 0.000137)`);
+      let next = '';
+      for (let i = 0, more = true; more && i < 50; i++) {
+        const page = (await (await fetch(next ? `${base}/v1/events?limit=10&after=${encodeURIComponent(next)}` : `${base}/v1/events?limit=10`, { headers: { authorization: 'Bearer secret-token' } })).json()) as Json;
+        next = page.next;
+        more = page.more;
+      }
+      expect(next).toMatch(/\.\d{6}Z~\d+$/);
+      const tail = (await (await fetch(`${base}/v1/events?after=${encodeURIComponent(next)}`, { headers: { authorization: 'Bearer secret-token' } })).json()) as Json;
+      expect(tail.count).toBe(0);
     } finally {
       await new Promise((r) => server.close(r));
     }

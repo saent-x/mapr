@@ -9,13 +9,14 @@ export async function enqueue(
   payload: unknown,
   dedupeKey: string | null,
   runAfter?: Date,
+  priority = 0,
 ): Promise<number | null> {
   const r = await q.query<{ id: string }>(
-    `INSERT INTO jobs (kind, payload, dedupe_key, run_after)
-     VALUES ($1, $2, $3, COALESCE($4, now()))
+    `INSERT INTO jobs (kind, payload, dedupe_key, run_after, priority)
+     VALUES ($1, $2, $3, COALESCE($4, now()), $5)
      ON CONFLICT (dedupe_key) DO NOTHING
      RETURNING id`,
-    [kind, JSON.stringify(payload), dedupeKey, runAfter ?? null],
+    [kind, JSON.stringify(payload), dedupeKey, runAfter ?? null, priority],
   );
   return r.rows[0] ? Number(r.rows[0].id) : null;
 }

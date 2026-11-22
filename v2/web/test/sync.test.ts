@@ -74,6 +74,17 @@ describe('runSync', () => {
     expect(sent).toEqual([]);
   });
 
+  it('does not write when upstream repeats the last event at the same cursor', async () => {
+    const e = ev(1, { updated_at: hoursAgo(3) });
+    const cursor = `${hoursAgo(3)}~1`;
+    const repeat = async (): Promise<EventsPage> => ({ count: 1, next: cursor, more: false, events: [e] });
+    await runSync({ kv: env.SNAPSHOT, fetchPage: repeat, notify: async () => {}, now: NOW });
+    const { kv, puts } = countingKv();
+    const r = await runSync({ kv, fetchPage: repeat, notify: async () => {}, now: NOW });
+    expect(r).toMatchObject({ received: 1, wrote: false, upserted: 0 });
+    expect(puts()).toBe(0);
+  });
+
   it('does not write or notify when only time passes (expiry alone is not a change)', async () => {
     const up = fakeIngest([ev(1, { updated_at: hoursAgo(23.9) })]);
     await runSync({ kv: env.SNAPSHOT, fetchPage: up.fetchPage, notify: async () => {}, now: NOW });
@@ -157,5 +168,11 @@ describe('encodeSnapshot', () => {
     const out = JSON.parse(r.body) as StoredSnapshot;
     expect(out.cursor).toBe('c');
     expect(out.events.map((e) => e.id)).toEqual([3]);
+  });
+});
+
+describe('cursorTime', () => {
+  it('reads microsecond cursors', () => {
+    expect(cursorTime('2026-11-22T00:14:36.052123Z~400397')).toBe(Date.parse('2026-11-22T00:14:36.052Z'));
   });
 });

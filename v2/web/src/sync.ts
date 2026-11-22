@@ -31,9 +31,9 @@ export interface SyncResult {
   dropped: number;
 }
 
-/** Cursor format is "<updated_at ISO>~<id>" (server.ts encodeCursor); only its time is read here. */
+/** Cursor format is "<updated_at ISO, up to microseconds>~<id>" (server.ts encodeCursor); only its time is read here. */
 export function cursorTime(cursor: string): number {
-  const t = Date.parse(cursor.split('~')[0] ?? '');
+  const t = Date.parse((cursor.split('~')[0] ?? '').replace(/(\.\d{3})\d+Z$/, '$1Z'));
   return Number.isNaN(t) ? NaN : t;
 }
 
@@ -64,7 +64,7 @@ export const LIVE_CHUNK = 100;
 
 /**
  * One cron tick: page /v1/events from the stored cursor, merge into the 24h window,
- * write KV once (only if upstream returned anything), then tell LiveHub what changed.
+ * write KV once (only if the window or the cursor moved), then tell LiveHub what changed.
  */
 export async function runSync(d: SyncDeps): Promise<SyncResult> {
   const now = d.now ?? Date.now();
@@ -109,7 +109,8 @@ export async function runSync(d: SyncDeps): Promise<SyncResult> {
     }
   }
 
-  const wrote = received > 0;
+  // Write only when the window or the cursor moved: an unchanged snapshot is not worth a KV write.
+  const wrote = received > 0 && (upsert.size > 0 || remove.size > 0 || cursor !== (stored?.cursor ?? null));
   let dropped = 0;
   if (wrote) {
     const snap: StoredSnapshot = { v: 1, cursor, written_at: new Date(now).toISOString(), events: prune(events, now) };

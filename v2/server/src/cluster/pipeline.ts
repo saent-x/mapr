@@ -162,12 +162,19 @@ async function attach(tx: Tx, eventId: number, a: PendingArticle, vec: number[] 
     [eventId],
   );
 
+  // Triage priority is the distinct-source count: corroborated events are scored first.
   if (isNew) {
     if (!triage) return;
-    await enqueue(tx, 'triage', { event_id: eventId, n: 1 }, triageKey(eventId, 1));
+    await enqueue(tx, 'triage', { event_id: eventId, n: 1 }, triageKey(eventId, 1), undefined, sourceCount);
   } else {
+    if (sourceCount > cur.source_count) {
+      await tx.query('UPDATE jobs SET priority = $2 WHERE dedupe_key = $1 AND locked_at IS NULL AND priority < $2', [
+        triageKey(eventId, 1),
+        sourceCount,
+      ]);
+    }
     for (const m of crossedMilestones(cur.source_count, sourceCount)) {
-      await enqueue(tx, 're-triage', { event_id: eventId, n: m }, triageKey(eventId, m));
+      await enqueue(tx, 're-triage', { event_id: eventId, n: m }, triageKey(eventId, m), undefined, m);
     }
   }
 }

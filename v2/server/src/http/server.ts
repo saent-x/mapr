@@ -79,26 +79,34 @@ export async function health(o: ApiOptions): Promise<{ status: number; body: Rec
 }
 
 export interface EventCursor {
-  at: Date;
+  /** ISO 8601 UTC with microseconds, as Postgres stores it; milliseconds would repeat the last row. */
+  at: string;
   id: number;
 }
 
 /** Opaque paging cursor: "<updated_at ISO>~<event id>". */
 export function encodeCursor(c: EventCursor): string {
-  return `${c.at.toISOString()}~${c.id}`;
+  return `${c.at}~${c.id}`;
 }
 
+const CURSOR_AT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
+
 export function decodeCursor(raw: string): EventCursor | null {
-  const [iso, id] = raw.split('~');
-  const at = new Date(iso ?? '');
+  const [at, id] = raw.split('~');
   const n = Number(id);
-  return Number.isNaN(at.getTime()) || !Number.isInteger(n) ? null : { at, id: n };
+  if (!at || !CURSOR_AT.test(at) || Number.isNaN(Date.parse(at.replace(/(\.\d{3})\d+Z$/, '$1Z'))) || !Number.isInteger(n)) return null;
+  return { at, id: n };
 }
 
 /** Events changed after the cursor, oldest change first, so paging forward never skips a row. */
-export async function listEvents(db: Db, after: EventCursor, limit: number): Promise<Array<Record<string, unknown> & { id: number; updated_at: Date }>> {
+export async function listEvents(
+  db: Db,
+  after: EventCursor,
+  limit: number,
+): Promise<{ events: Array<Record<string, unknown> & { id: number; updated_at: Date }>; next: EventCursor }> {
   const r = await db.query(
-    `SELECT e.id, e.title, e.summary, e.first_seen, e.last_seen, ea.updated_at,
+    `SELECT to_char(ea.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_at,
+            e.id, e.title, e.summary, e.first_seen, e.last_seen, ea.updated_at,
             e.severity, e.severity_conf, e.relevant, e.relevance_conf, e.category, e.place, e.country, e.lat, e.lon,
             e.facts, e.source_count, e.article_count, e.triaged_at, e.pinned,
             COALESCE((
@@ -109,12 +117,14 @@ export async function listEvents(db: Db, after: EventCursor, limit: number): Pro
               FROM event_sources es JOIN sources s ON s.id = es.source_id
               WHERE es.event_id = e.id), '[]'::json) AS sources
      FROM event_activity ea JOIN events e ON e.id = ea.event_id
-     WHERE (ea.updated_at, ea.event_id) > ($1, $2)
+     WHERE (ea.updated_at, ea.event_id) > ($1::timestamptz, $2)
      ORDER BY ea.updated_at, ea.event_id
      LIMIT $3`,
     [after.at, after.id, limit],
   );
-  return r.rows.map((row) => ({ ...row, id: Number(row.id) }));
+  const events = r.rows.map(({ cursor_at: _, ...row }) => ({ ...row, id: Number(row.id) }));
+  const last = r.rows.at(-1);
+  return { events, next: last ? { at: last.cursor_at, id: Number(last.id) } : after };
 }
 
 export function createApiServer(o: ApiOptions): http.Server {
@@ -144,15 +154,13 @@ export function createApiServer(o: ApiOptions): http.Server {
             const sinceRaw = url.searchParams.get('since');
             const since = sinceRaw ? new Date(sinceRaw) : new Date(Date.now() - 24 * 3_600_000);
             if (Number.isNaN(since.getTime())) return send(res, 400, { error: 'since must be an ISO 8601 timestamp' });
-            after = { at: since, id: 0 };
+            after = { at: since.toISOString(), id: 0 };
           }
           const limitRaw = Number(url.searchParams.get('limit') ?? 100);
           if (!Number.isInteger(limitRaw) || limitRaw < 1) return send(res, 400, { error: 'limit must be a positive integer' });
           const limit = Math.min(limitRaw, MAX_LIMIT);
-          const events = await listEvents(o.db, after, limit);
-          const last = events.at(-1);
-          const next = encodeCursor(last ? { at: last.updated_at, id: last.id } : after);
-          return send(res, 200, { count: events.length, next, more: events.length === limit, events });
+          const { events, next } = await listEvents(o.db, after, limit);
+          return send(res, 200, { count: events.length, next: encodeCursor(next), more: events.length === limit, events });
         }
       }
       return send(res, 404, { error: 'not found' });

@@ -1,6 +1,8 @@
 // Workers AI budget gate. Before any AI job runs, today's (UTC) neuron use is
 // compared with the ceiling. Over the ceiling, the job is held until the next
-// 00:00 UTC reset: nothing is ever skipped or downgraded.
+// 00:00 UTC reset: nothing is ever skipped or downgraded. When paced, the day's
+// ceiling is released evenly over the day (plus a head start), so the budget is
+// spent on fresh news all day instead of in one burst after midnight.
 
 import type { Queryable } from '../db.js';
 
@@ -16,8 +18,18 @@ export interface BudgetDecision {
   open: boolean;
   used: number;
   ceiling: number;
-  /** When a closed gate opens again (next 00:00 UTC). */
+  /** When a closed gate opens again: next 00:00 UTC, or when the paced allowance passes `used`. */
   resumeAt: Date | null;
+  /** Closed only by pacing: the daily ceiling still has room later today. */
+  paced: boolean;
+}
+
+const DAY_MS = 86_400_000;
+
+/** How much of `ceiling` is released by `now`: an even share per second of the UTC day, plus `headStartMs`. */
+export function pacedAllowance(ceiling: number, now: Date, headStartMs: number): number {
+  const sinceMidnight = now.getTime() - Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return ceiling * Math.min(1, (sinceMidnight + headStartMs) / DAY_MS);
 }
 
 export function utcDay(now: Date): string {
@@ -33,12 +45,17 @@ export function nextUtcMidnight(now: Date): Date {
  * that figure was read; MAPR's own counter alone when the account is unknown.
  * Closed when used >= ceiling.
  */
-export function budgetDecision(usage: AiUsage | null, ceiling: number, now: Date): BudgetDecision {
+export function budgetDecision(usage: AiUsage | null, ceiling: number, now: Date, paceHeadStartMs?: number): BudgetDecision {
   const mapr = usage?.maprNeurons ?? 0;
   const account = usage?.accountNeurons ?? null;
   const used = account === null ? mapr : Math.max(mapr, account + Math.max(0, mapr - (usage?.maprNeuronsAtRead ?? 0)));
-  const open = used < ceiling;
-  return { open, used, ceiling, resumeAt: open ? null : nextUtcMidnight(now) };
+  if (used >= ceiling) return { open: false, used, ceiling, resumeAt: nextUtcMidnight(now), paced: false };
+  if (paceHeadStartMs !== undefined && used >= pacedAllowance(ceiling, now, paceHeadStartMs)) {
+    const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const at = midnight + Math.ceil((used / ceiling) * DAY_MS - paceHeadStartMs);
+    return { open: false, used, ceiling, resumeAt: new Date(Math.max(at, now.getTime() + 1000)), paced: true };
+  }
+  return { open: true, used, ceiling, resumeAt: null, paced: false };
 }
 
 export async function readUsage(q: Queryable, now: Date): Promise<AiUsage | null> {
@@ -57,10 +74,12 @@ export class BudgetGate {
   constructor(
     private readonly q: Queryable,
     readonly ceiling: number,
+    /** Spread the ceiling over the UTC day with this head start; undefined spends it as soon as jobs arrive. */
+    readonly paceHeadStartMs?: number,
   ) {}
 
   async check(now: Date = new Date()): Promise<BudgetDecision> {
-    return budgetDecision(await readUsage(this.q, now), this.ceiling, now);
+    return budgetDecision(await readUsage(this.q, now), this.ceiling, now, this.paceHeadStartMs);
   }
 }
 
