@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": true,
-  // "routes": [{ "pattern": "mapr.stbrn.studio", "custom_domain": true }],
+  "routes": [{ "pattern": "mapr.stbrn.studio", "custom_domain": true }],
 
   "build": { "command": "node scripts/build-client.mjs" },
   "assets": {
