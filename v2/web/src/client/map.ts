@@ -1,7 +1,7 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { AttributionControl, Map as GlMap, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl';
-import type { MaprEvent } from '../types';
-import { borders, land } from 'virtual:basemap';
+import { AttributionControl, LngLatBounds, Map as GlMap, type GeoJSONSource, type MapGeoJSONFeature, type StyleSpecification } from 'maplibre-gl';
+import { borders } from 'virtual:basemap';
+import { countryShapes } from './geo';
 import baseStyle from './style.json';
 
 export type Projection = 'mercator' | 'globe';
@@ -20,26 +20,24 @@ function graticule() {
 function deskStyle(): StyleSpecification {
   const s = structuredClone(baseStyle) as unknown as StyleSpecification;
   const set = (id: string, data: unknown) => ((s.sources[id] as { data: unknown }).data = data);
-  set('ne_land', land);
+  set('ne_countries', countryShapes);
   set('ne_borders', borders);
   set('graticule', graticule());
   return s;
 }
 
-interface EventFeature {
-  type: 'Feature';
-  id: number;
-  geometry: { type: 'Point'; coordinates: [number, number] };
-  properties: { id: number; sev: number };
-}
-interface EventCollection {
-  type: 'FeatureCollection';
-  features: EventFeature[];
+/** A mark on the map: one event with coordinates, or one country holding events placed only by country. */
+export interface Mark {
+  key: string;
+  at: [number, number];
+  /** 0–4. */
+  sev: number;
+  count: number;
+  eventId: number | null;
+  country: string | null;
 }
 
 const PROJECTION_KEY = 'mapr.projection';
-const SEV = ['#8A8A8A', '#7C8794', '#E8B23A', '#F07F2D', '#F2463A'];
-const RADIUS = [4, 4, 5, 6, 7.5];
 // Required by the OpenMapTiles / ODbL licences. Set on the control so it shows even before tiles load.
 const ATTRIBUTION = [
   '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>',
@@ -47,7 +45,7 @@ const ATTRIBUTION = [
   '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>',
 ];
 
-function storedProjection(): Projection {
+export function storedProjection(): Projection {
   try {
     return localStorage.getItem(PROJECTION_KEY) === 'globe' ? 'globe' : 'mercator';
   } catch {
@@ -55,35 +53,43 @@ function storedProjection(): Projection {
   }
 }
 
-function storeProjection(p: Projection) {
-  try {
-    localStorage.setItem(PROJECTION_KEY, p);
-  } catch {
-    // private window or blocked storage: the choice lasts this visit only
-  }
+export interface DeskMapHandlers {
+  onEvent(id: number): void;
+  onCountry(a2: string): void;
+  /** Pointer over a country (or off all countries: null), with the pointer's position in the map box. */
+  onHover(a2: string | null, x: number, y: number): void;
 }
-
-const bySev = (values: Array<number | string>) =>
-  ['match', ['get', 'sev'], 1, values[1], 2, values[2], 3, values[3], 4, values[4], values[0]] as unknown as string;
 
 export interface DeskMap {
-  setEvents(events: MaprEvent[]): void;
-  setSelected(id: number | null, fly: boolean): void;
+  setMarks(marks: Mark[]): void;
+  /** Country fill strength 0–1, by ISO alpha-2. */
+  setTint(values: Map<string, number>): void;
+  setSelected(key: string | null): void;
+  setHover(a2: string | null): void;
+  fit(points: Array<[number, number]>): void;
+  home(): void;
+  zoom(by: number): void;
+  setProjection(p: Projection): void;
 }
 
-export function createMap(container: HTMLElement, onSelect: (id: number) => void): DeskMap {
+export function createMap(container: HTMLElement, on: DeskMapHandlers): DeskMap {
   let projection = storedProjection();
-  let selected: number | null = null;
-  let pending: EventCollection = { type: 'FeatureCollection', features: [] };
+  let selected: string | null = null;
+  let hovered: string | null = null;
+  let marks: GeoJSON = { type: 'FeatureCollection', features: [] };
+  let tint = new Map<string, number>();
   let ready = false;
-  const coords = new Map<number, [number, number]>();
+  /** Globe sized to ~85% of the free height (a globe's diameter is 512·2^z/π px); flat at world view. */
+  const narrow = () => container.clientWidth < 900;
+  const globeZoom = () => Math.log2((0.85 * Math.min(container.clientWidth, narrow() ? container.clientHeight * 0.55 : container.clientHeight - 120) * Math.PI) / 512);
+  const home = { center: [15, 20] as [number, number], zoom: () => (projection === 'globe' ? globeZoom() : container.clientWidth < 600 ? 0.9 : 1.4) };
 
   const map = new GlMap({
     container,
     style: deskStyle(),
-    center: [20, 20],
-    zoom: projection === 'globe' ? 1.6 : 1.1,
-    minZoom: 0.5,
+    center: home.center,
+    zoom: home.zoom(),
+    minZoom: 0,
     maxZoom: 12,
     attributionControl: false,
     dragRotate: false,
@@ -91,102 +97,148 @@ export function createMap(container: HTMLElement, onSelect: (id: number) => void
     renderWorldCopies: true,
   });
   map.touchZoomRotate.disableRotation();
-  map.keyboard.disable(); // j/k belong to the list
+  // On a phone the feed and chat input cover the lower part: centre the map in the space above.
+  if (narrow()) map.setPadding({ top: 48, bottom: Math.round(container.clientHeight * 0.4), left: 0, right: 0 });
+  map.keyboard.disable(); // j/k belong to the feed
   map.addControl(new AttributionControl({ compact: true, customAttribution: ATTRIBUTION }), 'bottom-right');
+  // Start the credits folded to their (i) button; they open on click.
+  map.once('load', () => container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
+
+  const applyTint = () => {
+    if (!ready) return;
+    map.removeFeatureState({ source: 'ne_countries' });
+    for (const [a2, v] of tint) map.setFeatureState({ source: 'ne_countries', id: a2 }, { v });
+    if (hovered) map.setFeatureState({ source: 'ne_countries', id: hovered }, { hover: true });
+  };
+  const applySelected = () => {
+    if (!ready) return;
+    map.setFilter('mark-ring', ['==', ['get', 'key'], selected ?? '']);
+  };
 
   map.on('style.load', () => {
     map.setProjection({ type: projection });
-    map.addSource('events', { type: 'geojson', data: pending, promoteId: 'id' });
+    map.addSource('marks', { type: 'geojson', data: marks });
+    const base = ['min', 16, ['+', 2.5, ['*', 0.8, ['get', 'sev']], ['*', 1.4, ['sqrt', ['-', ['get', 'count'], 1]]]]];
+    // Smaller marks on a world-sized map so countries stay readable; full size from zoom 3.
+    const sized = (k: number, add = 0) => ['interpolate', ['linear'], ['zoom'], 0, ['+', add, ['*', 0.55 * k, base]], 3, ['+', add, ['*', k, base]]];
     map.addLayer({
-      id: 'event-ring',
+      id: 'mark-halo',
       type: 'circle',
-      source: 'events',
+      source: 'marks',
       paint: {
-        'circle-radius': ['+', bySev(RADIUS) as unknown as number, 4] as unknown as number,
-        'circle-color': 'rgba(0,0,0,0)',
-        'circle-stroke-color': '#EDEDED',
-        'circle-stroke-width': 2,
-        'circle-stroke-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 1, 0] as unknown as number,
-        'circle-pitch-alignment': 'viewport',
+        'circle-radius': sized(2.2) as never,
+        'circle-color': '#FF5A1F',
+        'circle-opacity': ['interpolate', ['linear'], ['get', 'sev'], 0, 0.04, 4, 0.12] as never,
+        'circle-pitch-alignment': 'map',
       },
     });
     map.addLayer({
-      id: 'event-dot',
+      id: 'mark-ring',
       type: 'circle',
-      source: 'events',
-      layout: { 'circle-sort-key': ['get', 'sev'] as unknown as number },
+      source: 'marks',
+      filter: ['==', ['get', 'key'], ''],
       paint: {
-        'circle-radius': bySev(RADIUS) as unknown as number,
-        'circle-color': ['case', ['==', ['get', 'sev'], 0], 'rgba(0,0,0,0)', bySev(SEV)] as unknown as string,
-        'circle-stroke-color': ['case', ['==', ['get', 'sev'], 0], SEV[0]!, '#101010'] as unknown as string,
-        'circle-stroke-width': ['case', ['==', ['get', 'sev'], 0], 1.5, 1] as unknown as number,
-        'circle-pitch-alignment': 'viewport',
+        'circle-radius': sized(1, 5) as never,
+        'circle-color': 'rgba(0,0,0,0)',
+        'circle-stroke-color': '#141414',
+        'circle-stroke-width': 2,
+        'circle-pitch-alignment': 'map',
+      },
+    });
+    map.addLayer({
+      id: 'mark-dot',
+      type: 'circle',
+      source: 'marks',
+      layout: { 'circle-sort-key': ['get', 'sev'] as never },
+      paint: {
+        'circle-radius': sized(1) as never,
+        'circle-color': '#FF5A1F',
+        'circle-opacity': ['interpolate', ['linear'], ['get', 'sev'], 0, 0.45, 1, 0.6, 4, 1] as never,
+        'circle-stroke-color': '#FFFFFF',
+        'circle-stroke-width': 1.5,
+        'circle-pitch-alignment': 'map',
       },
     });
     ready = true;
-    if (selected !== null) map.setFeatureState({ source: 'events', id: selected }, { sel: true });
+    applyTint();
+    applySelected();
   });
 
-  map.on('click', 'event-dot', (e) => {
-    const id = Number(e.features?.[0]?.properties?.id);
-    if (Number.isFinite(id)) onSelect(id);
+  map.on('click', 'mark-dot', (e) => {
+    const p = e.features?.[0]?.properties as { eventId?: number; country?: string } | undefined;
+    if (!p) return;
+    if (typeof p.eventId === 'number' && p.eventId >= 0) on.onEvent(p.eventId);
+    else if (p.country) on.onCountry(p.country);
   });
-  map.on('mouseenter', 'event-dot', () => (map.getCanvas().style.cursor = 'pointer'));
-  map.on('mouseleave', 'event-dot', () => (map.getCanvas().style.cursor = ''));
-
-  // 2D / 3D switch, glyph only.
-  const toggle = document.createElement('div');
-  toggle.className = 'proj';
-  toggle.setAttribute('role', 'group');
-  toggle.setAttribute('aria-label', 'Projection');
-  const buttons = (['mercator', 'globe'] as const).map((p) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = p === 'mercator' ? '2D' : '3D';
-    b.addEventListener('click', () => {
-      projection = p;
-      storeProjection(p);
-      map.setProjection({ type: p });
-      // A globe at world zoom is a small disc; open it at a size that fills the panel.
-      if (p === 'globe' && map.getZoom() < 1.6) map.easeTo({ zoom: 1.6, duration: 400 });
-      sync();
-    });
-    toggle.append(b);
-    return [p, b] as const;
+  map.on('click', 'tint', (e) => {
+    if (map.queryRenderedFeatures(e.point, { layers: ['mark-dot'] }).length) return;
+    const a2 = (e.features?.[0] as MapGeoJSONFeature | undefined)?.id;
+    if (typeof a2 === 'string') on.onCountry(a2);
   });
-  const sync = () => {
-    for (const [p, b] of buttons) b.setAttribute('aria-pressed', String(p === projection));
-  };
-  sync();
-  container.append(toggle);
+  map.on('mousemove', 'tint', (e) => {
+    const a2 = (e.features?.[0] as MapGeoJSONFeature | undefined)?.id;
+    map.getCanvas().style.cursor = 'pointer';
+    on.onHover(typeof a2 === 'string' ? a2 : null, e.point.x, e.point.y);
+  });
+  map.on('mouseleave', 'tint', () => {
+    map.getCanvas().style.cursor = '';
+    on.onHover(null, 0, 0);
+  });
 
   return {
-    setEvents(events) {
-      coords.clear();
-      const features: EventFeature[] = [];
-      for (const e of events) {
-        if (e.lat === null || e.lon === null) continue;
-        coords.set(e.id, [e.lon, e.lat]);
-        features.push({
+    setMarks(list) {
+      marks = {
+        type: 'FeatureCollection',
+        features: list.map((m) => ({
           type: 'Feature',
-          id: e.id,
-          geometry: { type: 'Point', coordinates: [e.lon, e.lat] },
-          properties: { id: e.id, sev: e.severity ?? 0 },
-        });
-      }
-      pending = { type: 'FeatureCollection', features };
-      if (ready) {
-        (map.getSource('events') as GeoJSONSource).setData(pending);
-        if (selected !== null) map.setFeatureState({ source: 'events', id: selected }, { sel: true });
-      }
+          geometry: { type: 'Point', coordinates: m.at },
+          properties: { key: m.key, sev: m.sev, count: m.count, eventId: m.eventId ?? -1, country: m.country ?? '' },
+        })),
+      };
+      if (ready) (map.getSource('marks') as GeoJSONSource).setData(marks);
     },
-    setSelected(id, fly) {
-      if (ready && selected !== null) map.setFeatureState({ source: 'events', id: selected }, { sel: false });
-      selected = id;
-      if (id === null) return;
-      if (ready) map.setFeatureState({ source: 'events', id }, { sel: true });
-      const c = coords.get(id);
-      if (fly && c) map.flyTo({ center: c, zoom: Math.max(map.getZoom(), 3), speed: 1.6, essential: false });
+    setTint(values) {
+      tint = values;
+      applyTint();
+    },
+    setSelected(key) {
+      selected = key;
+      applySelected();
+    },
+    setHover(a2) {
+      if (a2 === hovered) return;
+      if (ready && hovered) map.setFeatureState({ source: 'ne_countries', id: hovered }, { hover: false });
+      hovered = a2;
+      if (ready && a2) map.setFeatureState({ source: 'ne_countries', id: a2 }, { hover: true });
+    },
+    fit(points) {
+      if (!points.length) return;
+      const b = new LngLatBounds(points[0], points[0]);
+      for (const p of points) b.extend(p);
+      map.fitBounds(b, {
+        padding: narrow() ? { top: 40, bottom: 40, left: 24, right: 24 } : { top: 90, bottom: 150, left: 340, right: 300 },
+        maxZoom: 5,
+        duration: 900,
+      });
+    },
+    home() {
+      map.easeTo({ center: home.center, zoom: home.zoom(), duration: 700 });
+    },
+    zoom(by) {
+      map.easeTo({ zoom: map.getZoom() + by, duration: 250 });
+    },
+    setProjection(p) {
+      projection = p;
+      try {
+        localStorage.setItem(PROJECTION_KEY, p);
+      } catch {
+        // private window or blocked storage: the choice lasts this visit only
+      }
+      map.setProjection({ type: p });
+      // A globe at world zoom is a small disc; open it at a size that fills the box.
+      if (p === 'globe' && map.getZoom() < globeZoom()) map.easeTo({ zoom: globeZoom(), duration: 400 });
     },
   };
 }
+
+type GeoJSON = { type: 'FeatureCollection'; features: Array<{ type: 'Feature'; geometry: { type: 'Point'; coordinates: [number, number] }; properties: Record<string, unknown> }> };
