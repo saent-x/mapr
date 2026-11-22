@@ -20,6 +20,7 @@ from .text import normalize, variants
 
 SPECIFICITY = {"city": 3, "admin1": 2, "region": 2, "water": 1, "country": 1}
 CONTEXT_BONUS = 2.0
+NAME_BONUS = 1.0  # the mention is the place's own name, not one of its alternate names
 SOURCE_BONUS = 0.3
 MIN_SCORE = 0.5  # NER confidence below this is mostly noise on headlines
 
@@ -88,6 +89,8 @@ def mentions_for(gaz: Gazetteer, entities: list[tuple[Entity, float]]) -> list[M
 def _pick(m: Mention, context: set[str], sources: set[str]) -> Place:
     def score(p: Place) -> float:
         s = base_score(p)
+        if normalize(p.name) == m.key:
+            s += NAME_BONUS
         if p.cc and p.cc in context:
             s += CONTEXT_BONUS
         if p.cc and p.cc in sources:

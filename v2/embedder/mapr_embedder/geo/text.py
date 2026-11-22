@@ -28,10 +28,20 @@ _TRAILING = (
 )  # fmt: skip
 
 
+_CJK_SUFFIXES = ("市", "省", "县", "縣")  # city, province, county: 台北市 -> 台北 (not 州: 广州 is a name)
+_TAI = str.maketrans({"台": "臺", "臺": "台"})  # simplified and traditional forms of "Tai" both occur
+
+
 def variants(key: str) -> list[str]:
     """The key itself, then looser forms tried only when it has no match ("eastern ukraine" -> "ukraine")."""
     out = [key]
     k = key
+    if "台" in k or "臺" in k:
+        out.append(k.translate(_TAI))
+    for suf in _CJK_SUFFIXES:
+        if k.endswith(suf) and len(k) > 1:
+            out += [k[:-1], k[:-1].translate(_TAI)]
+            break
     for p in _LEADING:
         if k.startswith(p) and len(k) > len(p) + 2:
             k = k[len(p) :]

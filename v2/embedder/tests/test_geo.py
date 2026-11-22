@@ -65,6 +65,36 @@ ROWS = [
     ("3017382", "France", "France", "Frankreich,Francia,Франция", 46, 2, "A", "PCLI", "FR", "", "00", 66000000),
     ("294640", "Israel", "Israel", "Israël,Isreal,Израиль", 31.5, 34.75, "A", "PCLI", "IL", "", "00", 8800000),
     ("350155", "Red Sea", "Red Sea", "Mer Rouge,Rotes Meer,Mar Rojo", 20, 38, "H", "SEA", "", "", "", 0),
+    (
+        "1733037",
+        "Selangor",
+        "Selangor",
+        "Negeri Selangor,Selangor Darul Ehsan",
+        3.33,
+        101.5,
+        "A",
+        "ADM1",
+        "MY",
+        "",
+        "12",
+        5400000,
+    ),
+    (
+        "1732905",
+        "Kuala Selangor",
+        "Kuala Selangor",
+        "Selangor,Kuala Selangor Town",
+        3.34,
+        101.25,
+        "P",
+        "PPLA2",
+        "MY",
+        "",
+        "12",
+        60000,
+    ),
+    ("1668341", "Taipei", "Taipei", "Taipei City,臺北市,台北", 25.05, 121.53, "P", "PPLC", "TW", "", "03", 7871900),
+    ("1675151", "Hsinchu", "Hsinchu", "新竹市,新竹", 24.8, 120.97, "P", "PPLA", "TW", "", "04", 404109),
     ("123", "Tinyville", "Tinyville", "Tiny Town", 10, 10, "P", "PPL", "FR", "", "11", 300),
     ("124", "Smalltown", "Smalltown", "Petite Ville,Kleinstadt", 11, 11, "P", "PPL", "FR", "", "11", 8000),
 ]
@@ -170,6 +200,17 @@ def test_majority_country_wins(gaz):
     r = go(gaz, [("Kyiv", "LOC", 3), ("Paris", "LOC", 1), ("Kharkiv", "LOC", 1)])
     assert r.country == "UA" and r.place in ("Kyiv", "Kharkiv")
     assert r.confidence == pytest.approx(4 / 5, abs=0.01)
+
+
+def test_own_name_beats_alternate_name(gaz):
+    r = go(gaz, [("Selangor", "LOC", 3)])
+    assert (r.place, r.precision) == ("Selangor", "admin1")
+
+
+def test_cjk_city_suffix_and_tai_forms(gaz):
+    assert "台北" in variants("台北市") and "臺北市" in variants("台北市")
+    r = go(gaz, [("台北市", "LOC", 3), ("新竹", "LOC", 0.5)])
+    assert (r.place, r.country) == ("Taipei", "TW")
 
 
 def test_variants_and_admin1(gaz):
