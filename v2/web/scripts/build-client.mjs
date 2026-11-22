@@ -1,27 +1,25 @@
 // Builds the desk page into dist/public: bundles src/client/main.ts with MapLibre GL
 // (JS -> app.js, its CSS -> app.css) and copies the page, styles, headers and Geist fonts.
 // Nothing loads from a CDN; only map tiles and glyphs come from tiles.openfreemap.org.
-// A low-detail basemap (Natural Earth 1:110m land + country borders, public domain, via
-// world-atlas) is baked in as GeoJSON so the map is never blank when tiles fail.
+// A low-detail basemap (Natural Earth 1:110m countries and borders, public domain) is baked
+// in as GeoJSON so the map is never blank when tiles fail.
 import { build } from 'esbuild';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { feature, mesh } from 'topojson-client';
+import { mesh } from 'topojson-client';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(root, 'dist/public');
 const require = createRequire(import.meta.url);
 
-/** Land polygons and internal country borders at 1:110m, coordinates rounded to 0.01° (~1 km). */
+/** Internal country borders at 1:110m, coordinates rounded to 0.01° (~1 km). Country fills come from src/client/countries.json. */
 function basemap() {
   const load = (f) => JSON.parse(readFileSync(require.resolve(`world-atlas/${f}`), 'utf8'));
-  const land = load('land-110m.json');
   const countries = load('countries-110m.json');
   const round = (g) => JSON.parse(JSON.stringify(g, (_, v) => (typeof v === 'number' ? Math.round(v * 100) / 100 : v)));
   return {
-    land: round(feature(land, land.objects.land)),
     borders: round({ type: 'Feature', properties: {}, geometry: mesh(countries, countries.objects.countries, (a, b) => a !== b) }),
   };
 }
