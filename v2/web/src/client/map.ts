@@ -66,7 +66,8 @@ export interface DeskMap {
   setTint(values: Map<string, number>): void;
   setSelected(key: string | null): void;
   setHover(a2: string | null): void;
-  fit(points: Array<[number, number]>): void;
+  /** Fit the map to points; `cover` is how many px a bottom sheet hides on a phone. */
+  fit(points: Array<[number, number]>, cover?: number): void;
   home(): void;
   zoom(by: number): void;
   setProjection(p: Projection): void;
@@ -81,7 +82,7 @@ export function createMap(container: HTMLElement, on: DeskMapHandlers): DeskMap 
   let ready = false;
   /** Globe sized to ~85% of the free height (a globe's diameter is 512·2^z/π px); flat at world view. */
   const narrow = () => container.clientWidth < 900;
-  const globeZoom = () => Math.log2((0.85 * Math.min(container.clientWidth, narrow() ? container.clientHeight * 0.55 : container.clientHeight - 120) * Math.PI) / 512);
+  const globeZoom = () => Math.log2((0.85 * Math.min(container.clientWidth, narrow() ? container.clientHeight - 220 : container.clientHeight - 120) * Math.PI) / 512);
   const home = { center: [15, 20] as [number, number], zoom: () => (projection === 'globe' ? globeZoom() : container.clientWidth < 600 ? 0.9 : 1.4) };
 
   const map = new GlMap({
@@ -98,11 +99,13 @@ export function createMap(container: HTMLElement, on: DeskMapHandlers): DeskMap 
   });
   map.touchZoomRotate.disableRotation();
   // On a phone the feed and chat input cover the lower part: centre the map in the space above.
-  if (narrow()) map.setPadding({ top: 48, bottom: Math.round(container.clientHeight * 0.4), left: 0, right: 0 });
+  if (narrow()) map.setPadding({ top: 56, bottom: 150, left: 0, right: 0 });
   map.keyboard.disable(); // j/k belong to the feed
   map.addControl(new AttributionControl({ compact: true, customAttribution: ATTRIBUTION }), 'bottom-right');
   // Start the credits folded to their (i) button; they open on click.
-  map.once('load', () => container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show'));
+  const fold = () => container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
+  map.once('load', fold);
+  map.once('idle', fold);
 
   const applyTint = () => {
     if (!ready) return;
@@ -211,12 +214,12 @@ export function createMap(container: HTMLElement, on: DeskMapHandlers): DeskMap 
       hovered = a2;
       if (ready && a2) map.setFeatureState({ source: 'ne_countries', id: a2 }, { hover: true });
     },
-    fit(points) {
+    fit(points, cover = 0) {
       if (!points.length) return;
       const b = new LngLatBounds(points[0], points[0]);
       for (const p of points) b.extend(p);
       map.fitBounds(b, {
-        padding: narrow() ? { top: 40, bottom: 40, left: 24, right: 24 } : { top: 90, bottom: 150, left: 340, right: 300 },
+        padding: narrow() ? { top: 40, bottom: 40 + Math.max(0, cover - 150), left: 24, right: 24 } : { top: 90, bottom: 150, left: 340, right: 300 },
         maxZoom: 5,
         duration: 900,
       });
