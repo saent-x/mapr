@@ -1,7 +1,7 @@
 import type { Db } from '../db.js';
 import type { Logger } from '../log.js';
 import { sleep } from '../util/pool.js';
-import type { BudgetGate } from './budget.js';
+import type { BudgetDecision, BudgetGate } from './budget.js';
 import { backoffMs, MAX_ATTEMPTS } from './queue.js';
 
 export interface Job {
@@ -28,11 +28,15 @@ export interface RunnerOptions {
   staleLockMs?: number;
 }
 
+const HOLD_LOG_EVERY_MS = 3_600_000;
+
 export type RunOutcome = 'idle' | 'done' | 'retry' | 'dead' | 'deferred';
 
 export class JobRunner {
   private readonly handlers = new Map<string, JobHandler>();
   private lastStaleSweep = 0;
+  /** Budget-hold logging: once when the gate closes, then at most hourly with the running total. */
+  private holdLog = { resumeAt: 0, at: 0, held: 0 };
 
   constructor(
     private readonly db: Db,
@@ -63,6 +67,22 @@ export class JobRunner {
     return r.rowCount ?? 0;
   }
 
+  private logHold(gate: BudgetDecision, rows: number): void {
+    const resumeAt = gate.resumeAt?.getTime() ?? 0;
+    const h = this.holdLog;
+    const first = h.resumeAt !== resumeAt;
+    if (first) Object.assign(h, { resumeAt, at: 0, held: 0 });
+    h.held += rows;
+    if (!first && Date.now() - h.at < HOLD_LOG_EVERY_MS) return;
+    h.at = Date.now();
+    this.o.log.warn('ai budget reached; holding ai jobs until reset', {
+      used: gate.used,
+      ceiling: gate.ceiling,
+      resume_at: gate.resumeAt?.toISOString(),
+      held: h.held,
+    });
+  }
+
   /** Claim and run at most one ready job. Only kinds with a registered handler are claimed. */
   async runOnce(signal: AbortSignal = new AbortController().signal): Promise<RunOutcome> {
     if (Date.now() - this.lastStaleSweep > 60_000) {
@@ -82,14 +102,7 @@ export class JobRunner {
              WHERE locked_at IS NULL AND run_after < $1 AND attempts < $2 AND kind = ANY($3::text[])`,
             [gate.resumeAt, this.maxAttempts, aiKinds],
           );
-          if (held.rowCount) {
-            this.o.log.warn('ai budget reached; holding ai jobs until reset', {
-              used: gate.used,
-              ceiling: gate.ceiling,
-              resume_at: gate.resumeAt?.toISOString(),
-              held: held.rowCount,
-            });
-          }
+          if (held.rowCount) this.logHold(gate, held.rowCount);
         }
         // Paced: AI jobs simply wait their turn; other kinds still run.
         kinds = kinds.filter((k) => !aiKinds.includes(k));

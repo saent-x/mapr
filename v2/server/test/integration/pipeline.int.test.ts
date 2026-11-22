@@ -211,7 +211,9 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
 
   it('runs triage jobs through the budget gate, holding them when the ceiling is reached', async () => {
     const seen: TriageEvent[] = [];
-    const runner = new JobRunner(db, { budget: new BudgetGate(db, 9000), log, baseBackoffMs: 1000 });
+    const warns: string[] = [];
+    const spy = { ...log, warn: (m: string, f?: Record<string, unknown>) => { warns.push(m); log.warn(m, f); } };
+    const runner = new JobRunner(db, { budget: new BudgetGate(db, 9000), log: spy, baseBackoffMs: 1000 });
     for (const h of triageHandlers(db, { triageEvent: async (e) => void seen.push(e) })) runner.register(h);
 
     await recordNeurons(db, 6000);
@@ -230,6 +232,12 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
       expect(j.locked_at).toBeNull();
     }
     expect(await runner.runOnce()).toBe('deferred');
+    // New jobs arriving while closed are held too, but the warning is not repeated.
+    await enqueue(db, 'triage', { event_id: 1, n: 99 }, 'late:1');
+    expect(await runner.runOnce()).toBe('deferred');
+    expect((await db.query(`SELECT run_after FROM jobs WHERE dedupe_key = 'late:1'`)).rows[0].run_after.getTime()).toBe(midnight.getTime());
+    expect(warns.filter((m) => m.startsWith('ai budget reached'))).toHaveLength(1);
+    await db.query(`DELETE FROM jobs WHERE dedupe_key = 'late:1'`);
 
     // Next UTC day: budget resets.
     await db.query(`UPDATE ai_usage SET mapr_neurons = 0, account_neurons = 0`);
