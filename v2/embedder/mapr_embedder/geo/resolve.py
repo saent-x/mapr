@@ -85,6 +85,11 @@ def mentions_for(gaz: Gazetteer, entities: list[tuple[Entity, float]]) -> list[M
                     cands = [c]
                 if cands:
                     break
+            if not cands and _cjk(key):
+                # No spaces in CJK: the entity can run on past the name (台北市長 = "Taipei mayor").
+                for n in range(len(key) - 1, 1, -1):
+                    if cands := next((c for k in variants(key[:n]) if (c := gaz.lookup(k))), []):
+                        break
         if not cands and key in DEMONYMS and (c := gaz.country(DEMONYMS[key])):
             cands = [c]
         if cands:

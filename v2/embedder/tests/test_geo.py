@@ -420,3 +420,8 @@ def test_build_writes_version_stamp(tmp_path, monkeypatch):
     assert build.main(["--dump", str(dump), "--out", str(out)]) == 0
     assert (tmp_path / "gaz.tsv.gz.version").read_text().strip() == build.VERSION
     assert build.main(["--version"]) == 0
+
+
+def test_cjk_entity_running_past_the_name(gaz):
+    r = go(gaz, [("台北市長", "LOC", 3), ("新竹", "LOC", 1)])
+    assert (r.place, r.country) == ("Taipei", "TW")
