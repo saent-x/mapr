@@ -43,6 +43,7 @@ const ATTRIBUTION = [
   '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>',
   '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a>',
   '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>',
+  '<a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a>',
 ];
 
 export function storedProjection(): Projection {

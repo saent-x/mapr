@@ -114,7 +114,11 @@ export function place(e: MaprEvent): Placed {
 }
 
 function locate(e: MaprEvent): Placed {
-  const point: [number, number] | null = e.lat !== null && e.lon !== null ? [e.lon, e.lat] : null;
+  // A point only when it names a real place: country- or outlet-level coordinates are a
+  // centroid, which the map shows as the country instead.
+  const precision = (e as { geo_precision?: string | null }).geo_precision;
+  const exact = precision !== 'country' && precision !== 'source';
+  const point: [number, number] | null = exact && e.lat !== null && e.lon !== null ? [e.lon, e.lat] : null;
   if (e.country) {
     const up = e.country.toUpperCase();
     if (countries.has(up)) return { point, country: up };
