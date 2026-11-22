@@ -31,6 +31,7 @@ services:
       # Geocoding (POST /geocode): multilingual NER + GeoNames gazetteer, built once by deploy.sh.
       NER_MODEL_ID: ${NER_MODEL_ID:-Babelscape/wikineural-multilingual-ner}
       NER_MODEL_REVISION: ${NER_MODEL_REVISION:-}
+      NER_SCRIPT_MODEL_ID: ${NER_SCRIPT_MODEL_ID:-Davlan/xlm-roberta-base-ner-hrl}
       GAZETTEER_PATH: /models/geonames/gazetteer.tsv.gz
     volumes:
       - /data/mapr/models:/models

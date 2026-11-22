@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from .demonyms import ALIAS_KEYS, DEMONYMS
 from .gazetteer import Gazetteer, Place
+from .landmarks import LANDMARKS
 from .text import normalize, variants
 
 SPECIFICITY = {"city": 3, "admin1": 2, "region": 2, "water": 1, "country": 1}
@@ -72,7 +73,9 @@ def mentions_for(gaz: Gazetteer, entities: list[tuple[Entity, float]]) -> list[M
         if not key:
             continue
         cands: list[Place] = []
-        if e.label == "LOC":
+        if e.label in ("LOC", "ORG", "MISC") and key in LANDMARKS:
+            cands = landmark(gaz, key)
+        if not cands and e.label == "LOC":
             for k in variants(key):
                 cands = gaz.lookup(k)
                 if not cands and k in ALIAS_KEYS and (c := gaz.country(ALIAS_KEYS[k])):
@@ -84,6 +87,17 @@ def mentions_for(gaz: Gazetteer, entities: list[tuple[Entity, float]]) -> list[M
         if cands:
             out.append(Mention(key, weight * e.score, tuple(cands)))
     return out
+
+
+def landmark(gaz: Gazetteer, key: str) -> list[Place]:
+    cc, city = LANDMARKS[key]
+    found = [p for p in gaz.lookup(normalize(city)) if p.cc == cc and p.kind == "city"] if city else []
+    if city and not found:  # the gazetteer spells it differently ("Washington, D.C."): the capital is meant
+        found = [p for p in gaz.places if p.cc == cc and p.capital]
+    if found:
+        return [max(found, key=lambda p: p.population)]
+    c = gaz.country(cc)
+    return [c] if c else []
 
 
 def _pick(m: Mention, context: set[str], sources: set[str]) -> Place:

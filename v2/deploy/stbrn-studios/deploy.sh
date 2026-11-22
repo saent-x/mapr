@@ -33,7 +33,7 @@ docker compose build ingestor embedder
 if ! sudo test -s /data/mapr/models/geonames/gazetteer.tsv.gz; then
   docker compose run --rm --no-deps embedder python -m mapr_embedder.geo.build --download /models/geonames --out /models/geonames/gazetteer.tsv.gz
 fi
-docker compose run --rm --no-deps -e HF_HUB_OFFLINE=0 embedder python -c 'from mapr_embedder.geo.ner import Ner; Ner(cache_dir="/models")' 2>&1 | tail -1
+docker compose run --rm --no-deps -e HF_HUB_OFFLINE=0 embedder python -c 'from mapr_embedder.geo.ner import Ner; print(Ner(cache_dir="/models").model_id)' 2>&1 | tail -1
 docker compose up -d db
 docker compose run --rm ingestor node dist/seed.js
 docker compose up -d

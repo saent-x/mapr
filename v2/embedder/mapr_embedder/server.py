@@ -54,6 +54,7 @@ class Settings:
     gazetteer_path: str = ""
     ner_model_id: str = ""
     ner_revision: str | None = None
+    ner_script_model_id: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -80,6 +81,8 @@ class Settings:
             gazetteer_path=env("GAZETTEER_PATH", "/models/geonames/gazetteer.tsv.gz"),
             ner_model_id=env("NER_MODEL_ID", "Babelscape/wikineural-multilingual-ner"),
             ner_revision=env("NER_MODEL_REVISION") or None,
+            # Chinese, Japanese and Arabic texts; empty sends them to NER_MODEL_ID too.
+            ner_script_model_id=env("NER_SCRIPT_MODEL_ID", "Davlan/xlm-roberta-base-ner-hrl"),
         )
 
 
@@ -205,7 +208,10 @@ def _default_geo_factory(s: Settings):
 
     gaz = Gazetteer.load(s.gazetteer_path)
     log.info("gazetteer: %d places, %d names", len(gaz), len(gaz.index))
-    return GeoService(Ner(s.ner_model_id, cache_dir=s.cache_dir, revision=s.ner_revision), gaz)
+    ner = Ner(
+        s.ner_model_id, script_model_id=s.ner_script_model_id or None, cache_dir=s.cache_dir, revision=s.ner_revision
+    )
+    return GeoService(ner, gaz)
 
 
 def create_app(

@@ -95,6 +95,35 @@ ROWS = [
     ),
     ("1668341", "Taipei", "Taipei", "Taipei City,臺北市,台北", 25.05, 121.53, "P", "PPLC", "TW", "", "03", 7871900),
     ("1675151", "Hsinchu", "Hsinchu", "新竹市,新竹", 24.8, 120.97, "P", "PPLA", "TW", "", "04", 404109),
+    (
+        "4140963",
+        "Washington, D.C.",
+        "Washington, D.C.",
+        "Washington,Vashington",
+        38.9,
+        -77.04,
+        "P",
+        "PPLC",
+        "US",
+        "",
+        "DC",
+        689545,
+    ),
+    (
+        "3530597",
+        "Casa Blanca",
+        "Casa Blanca",
+        "البيت الأبيض,White House MX",
+        20.0,
+        -100.0,
+        "P",
+        "PPL",
+        "MX",
+        "",
+        "11",
+        9000,
+    ),
+    ("524901", "Moscow", "Moscow", "Moskva,Москва", 55.75, 37.62, "P", "PPLC", "RU", "", "48", 10381222),
     ("123", "Tinyville", "Tinyville", "Tiny Town", 10, 10, "P", "PPL", "FR", "", "11", 300),
     ("124", "Smalltown", "Smalltown", "Petite Ville,Kleinstadt", 11, 11, "P", "PPL", "FR", "", "11", 8000),
 ]
@@ -310,3 +339,46 @@ def test_build_cli_refuses_a_tiny_dump(tmp_path):
     with pytest.raises(SystemExit, match="gazetteer not replaced"):
         main(["--dump", str(dump), "--out", str(out)])
     assert not out.exists()
+
+
+def test_landmarks_resolve_to_their_city(gaz):
+    r = go(gaz, [("البيت الأبيض", "LOC", 3)])
+    assert (r.place, r.country) == ("Washington, D.C.", "US")  # capital fallback: "Washington" is spelled differently
+    assert go(gaz, [("Kremlin", "ORG", 3)]).place == "Moscow"
+    assert go(gaz, [("Casa Blanca", "LOC", 3)]).country == "US"
+
+
+def test_script_routing():
+    from mapr_embedder.geo.ner import Ner, script_of
+
+    assert script_of("台北2026世界郵展開幕") == "CJK"
+    assert script_of("اليمين يقترب من حكم إسبانيا") == "ARABIC"
+    assert script_of("Strike on Kharkiv") is None
+    assert script_of("LIVE - 沈伯洋出席百工百業後援會") == "CJK"
+
+    calls = {}
+
+    def loader(model_id, cache_dir, revision):
+        def pipe(texts, batch_size=16):
+            calls.setdefault(model_id, []).extend(texts)
+            return [[{"entity_group": "LOC", "score": 0.9, "start": 0, "end": 2}] for _ in texts]
+
+        return pipe
+
+    ner = Ner("main", script_model_id="script", loader=loader)
+    out = ner.extract(["Kyiv hit", "台北開幕", "Paris"])
+    assert calls == {"main": ["Kyiv hit", "Paris"], "script": ["台北開幕"]}
+    assert [e[0].text for e in out] == ["Ky", "台北", "Pa"]
+
+
+def test_script_model_failure_falls_back_to_main():
+    from mapr_embedder.geo.ner import Ner
+
+    def loader(model_id, cache_dir, revision):
+        if model_id == "script":
+            raise OSError("not on the hub")
+        return lambda texts, batch_size=16: [[] for _ in texts]
+
+    ner = Ner("main", script_model_id="script", loader=loader)
+    assert ner.script_pipe is None and ner.model_id == "main"
+    assert ner.extract(["台北"]) == [[]]
