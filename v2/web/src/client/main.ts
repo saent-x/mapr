@@ -12,6 +12,8 @@ const el = {
   map: $('map'),
   feed: $('feed'),
   rate: $('rate'),
+  feedN: $('feed-n'),
+  feedHead: $<HTMLButtonElement>('feed-head'),
   panel: $('panel'),
   hover: $('hover'),
   pills: $('pills'),
@@ -134,6 +136,7 @@ function renderFeed() {
   const now = Date.now();
   const lastHour = shown.filter((e) => ts(e.last_seen) >= now - HOUR).length;
   el.rate.textContent = lastHour ? `+${lastHour}/h` : '';
+  el.feedN.textContent = fmt(shown.length);
   const rows = shown.slice(0, 80);
   el.feed.innerHTML = rows.length
     ? rows
@@ -267,6 +270,7 @@ function renderPanel() {
   const html = e ? renderEvent(e) : renderAnswer();
   el.panel.hidden = !html;
   el.panel.innerHTML = html;
+  document.body.classList.toggle('has-panel', !!html);
 }
 
 function render() {
@@ -288,7 +292,7 @@ function fitToShown() {
     const at = p.point ?? (p.country ? countries.get(p.country)?.at : undefined);
     if (at) pts.push(at);
   }
-  if (pts.length) deskMap.fit(pts);
+  if (pts.length) deskMap.fit(pts, el.panel.hidden ? 0 : el.panel.offsetHeight);
 }
 
 function ask(text: string) {
@@ -314,7 +318,7 @@ function select(id: number | null, scroll = true) {
   if (e) {
     const p = place(e);
     const at = p.point ?? (p.country ? countries.get(p.country)?.at : undefined);
-    if (at) deskMap.fit([at]);
+    if (at) deskMap.fit([at], el.panel.hidden ? 0 : el.panel.offsetHeight);
   }
 }
 
@@ -379,6 +383,13 @@ el.panel.addEventListener('click', (ev) => {
   if (act === 'close') return select(null);
   const c = t.closest<HTMLElement>('[data-country]')?.dataset.country;
   if (c) ask(countries.get(c)?.name ?? c);
+});
+
+// On a phone the feed is a sheet: its head opens and closes it.
+el.feedHead.addEventListener('click', () => {
+  const sheet = el.feedHead.parentElement!;
+  const open = sheet.classList.toggle('open');
+  el.feedHead.setAttribute('aria-expanded', String(open));
 });
 
 el.feed.addEventListener('click', (ev) => {

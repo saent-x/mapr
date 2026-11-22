@@ -76,7 +76,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* Cards */
 .card { position: absolute; z-index: 2; background: var(--surface); border: 1px solid var(--line); }
-.card-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); font-size: 11px; font-weight: 500; letter-spacing: .06em; }
+.card-head { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; font: 500 11px var(--font-mono); letter-spacing: .06em; text-align: left; cursor: default; }
+.feed-n { display: none; font-weight: 400; color: var(--muted); }
 
 .feed { top: 52px; right: var(--gap); width: 260px; max-height: calc(100% - 52px - 112px); display: flex; flex-direction: column; }
 .feed-list { overflow-y: auto; scrollbar-width: thin; min-height: 0; }
@@ -174,11 +175,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .status .stat:nth-of-type(n+2) { display: none; }
   .legend { display: none; }
 }
+/* Phone and small tablet: the map takes the screen. The chat input sits in a bar at the
+   bottom; the feed, the answer and event details share one sheet just above it. */
 @media (max-width: 900px) {
-  .status, .chart { display: none; }
-  .feed { top: auto; bottom: 100px; left: var(--gap); right: var(--gap); width: auto; max-height: 24%; }
-  .panel { left: var(--gap); right: var(--gap); width: auto; max-height: 40%; }
+  :root { --dock-h: calc(94px + env(safe-area-inset-bottom, 0px)); }
+  .status, .chart, .legend, .zoom, .hovercard { display: none !important; }
+  .top { padding: calc(10px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 10px max(12px, env(safe-area-inset-left, 0px)); }
+  .pop { top: calc(48px + env(safe-area-inset-top, 0px)); }
+
+  .dock { left: 0; right: 0; bottom: 0; width: auto; transform: none; padding: 10px max(12px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); background: var(--surface); border-top: 1px solid var(--line); align-items: stretch; }
   .pills { flex-wrap: nowrap; justify-content: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .zoom { bottom: 108px; display: none; }
-  .map .maplibregl-ctrl-bottom-right { bottom: 96px; }
+  .pills::-webkit-scrollbar { display: none; }
+  .ask { height: 40px; box-shadow: none; }
+  .ask input { font-size: 16px; } /* 16px keeps iOS from zooming on focus */
+
+  .feed, .panel { left: 0; right: 0; bottom: var(--dock-h); top: auto; width: auto; border-width: 1px 0 0; box-shadow: 0 -6px 20px rgba(20, 20, 20, .06); }
+  .feed { max-height: 41px; overflow: hidden; transition: max-height var(--t) var(--ease); }
+  .feed.open { max-height: 52%; }
+  .feed .card-head { cursor: pointer; padding: 12px 16px; border-bottom-color: transparent; }
+  .feed.open .card-head { border-bottom-color: var(--line-soft); }
+  .feed-n { display: inline; }
+  .feed .card-head::after { content: ""; width: 8px; height: 8px; margin-left: 10px; border: solid var(--ink); border-width: 1.5px 1.5px 0 0; transform: rotate(-45deg) translateY(2px); transition: transform var(--t) var(--ease); }
+  .feed.open .card-head::after { transform: rotate(135deg) translateY(2px); }
+  .feed .card-head .accent { margin-left: auto; }
+  .row { padding: 10px 16px; }
+  .panel { max-height: 46%; z-index: 4; }
+  .has-panel .feed { display: none; }
+  .map .maplibregl-ctrl-bottom-right { bottom: calc(var(--dock-h) + 48px); }
 }

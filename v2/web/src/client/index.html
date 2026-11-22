@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MAPR</title>
 <meta name="color-scheme" content="light">
 <link rel="preload" href="/fonts/geist-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -62,7 +62,7 @@
   <section class="card panel" id="panel" aria-live="polite" hidden></section>
 
   <section class="card feed" aria-label="Live feed">
-    <div class="card-head num"><span>LIVE FEED</span><span class="accent" id="rate"></span></div>
+    <button class="card-head num" id="feed-head" type="button" aria-expanded="false" aria-controls="feed"><span>LIVE FEED <b class="feed-n" id="feed-n"></b></span><span class="accent" id="rate"></span></button>
     <div class="feed-list" id="feed" role="listbox" aria-label="Events" tabindex="0"></div>
   </section>
 
