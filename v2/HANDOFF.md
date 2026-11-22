@@ -1,4 +1,4 @@
-# MAPR v2: handoff (2026-10-26)
+# MAPR v2: handoff (2026-11-22)
 
 Read this first when picking the work up in a Claude Code terminal. Branch `claude/project-thread-2c1zbj`, draft PR #38 (saent-x/mapr). Everything new lives under `v2/`.
 
@@ -54,7 +54,8 @@ Previews: `/mnt/project-files/mapr-v2/desk-*.png`.
 Done: Workers AI token + `CF_ACCOUNT_ID` (1), server synced and redeployed with triage running (2), stall warning (6). KV namespace `mapr-snapshot` created (2026-11-17) and wired into `v2/web/wrangler.jsonc`.
 
 3. **Tunnel:** done 2026-11-21. Tunnel `mapr-ai` (locally managed, so the dashboard cannot add routes) runs as the `tunnel` compose service with its token in `/data/mapr/secrets/tunnel_token`; the hostname rule is `v2/deploy/stbrn-studios/tunnel.yml`. DNS once from the Mac: `cloudflared tunnel route dns mapr-ai mapr-api.stbrn.studio`. Check: `curl -s -o /dev/null -w '%{http_code}' https://mapr-api.stbrn.studio/healthz` gives 200.
-4. **Deploy the Worker** (`v2/web`, from the Mac, wrangler already logged in): `ssh stbrn-studios 'sudo cat /data/mapr/secrets/api_token' | npx wrangler secret put INGEST_TOKEN` (does not print it), then `npx wrangler deploy`. Check the workers.dev URL shows events, then uncomment the `mapr.stbrn.studio` custom-domain route and deploy again.
+4. **Deploy the Worker:** done 2026-11-21 at `mapr.stbrn-studios.workers.dev` (INGEST_TOKEN secret set). The desk keeps relevant events only (source cap 6, 20 MiB size guard). 2026-11-22 (88d211e): triage paced over the day under the 9,000 ceiling, events with more sources first, microsecond cursor, no KV write when nothing changed. Roll out: sync to the server + `deploy.sh`, then `npx wrangler deploy`. After that, uncomment the `mapr.stbrn.studio` route and deploy again.
+   - Open: the budget counts only MAPR's own neurons, not other projects on the account (no account-wide reader yet). At $0, about 3k events/day get scored (all multi-source + newest single-source); scoring all would be ~$6.5/mo. `/data` grew to 26 GB (16 GB in Oct): find out why.
 5. Check Cloudflare vs local bge-m3 vectors match (cosine ≈ 1) before turning on `EMBED_PROVIDER=cloudflare`.
 7. Later: watches + Clef matching, Clairic facts, D1 auth (Better Auth), alert email, AI search answers, real analysis charts.
 8. **Open decisions for tor:** pricing / revenue model (see `revenue-review.md`) and the AI budget for answers and briefs.
