@@ -168,3 +168,18 @@ pip install -r requirements-dev.txt      # no torch needed
 python -m pytest                          # 45 tests: metrics vs brute force, builder, dims, service, bake-off scoring/resume
 ruff check . && ruff format --check .
 ```
+
+## Geocoding (`POST /geocode`)
+
+Places each event: a multilingual NER model (`NER_MODEL_ID`, default `Babelscape/wikineural-multilingual-ner`) finds
+place names and demonyms in the event's title, headlines and opening lines; `mapr_embedder/geo/resolve.py` picks one
+location from a GeoNames gazetteer (countries, first-level regions, places with 5,000+ people or an admin seat,
+notable regions, seas and islands). Free and local; the ingestor calls it once per new event and again when more
+outlets join.
+
+- Gazetteer: `/data/mapr/models/geonames/gazetteer.tsv.gz`, built by `deploy.sh` on first run
+  (`python -m mapr_embedder.geo.build --download /models/geonames --out ...`). GeoNames data is CC BY 4.0:
+  credit "GeoNames" wherever locations are shown.
+- `precision` says how exact the point is: `city`, `admin1`, `region`, `water`, `country`, or `source` (nothing was
+  named, so the outlet's own country).
+- Until the gazetteer and model are loaded, `/geocode` answers 503 and `/embed` keeps working.

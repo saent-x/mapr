@@ -27,6 +27,13 @@ if sudo test -s /data/mapr/secrets/tunnel_token; then export COMPOSE_PROFILES=tu
 
 df -h / /data | sed 's/^/before: /'
 docker compose build ingestor embedder
+# Geocoding: GeoNames gazetteer (CC BY 4.0), built once into /data/mapr/models/geonames (~400 MB download,
+# deleted after the build), and the NER model fetched into the model cache, so the embedder can start
+# offline. Rebuild with: sudo rm /data/mapr/models/geonames/gazetteer.tsv.gz && bash deploy.sh
+if ! sudo test -s /data/mapr/models/geonames/gazetteer.tsv.gz; then
+  docker compose run --rm --no-deps embedder python -m mapr_embedder.geo.build --download /models/geonames --out /models/geonames/gazetteer.tsv.gz
+fi
+docker compose run --rm --no-deps -e HF_HUB_OFFLINE=0 embedder python -c 'from mapr_embedder.geo.ner import Ner; Ner(cache_dir="/models")' 2>&1 | tail -1
 docker compose up -d db
 docker compose run --rm ingestor node dist/seed.js
 docker compose up -d

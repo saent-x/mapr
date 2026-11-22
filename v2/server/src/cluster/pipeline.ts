@@ -11,6 +11,7 @@ import type { Embedder } from '../embed/client.js';
 import { embedText } from '../embed/client.js';
 import type { Logger } from '../log.js';
 import { bandKeys, similarity } from '../dedup/minhash.js';
+import { enqueueGeocode } from '../jobs/geocode.js';
 import { enqueue, triageKey } from '../jobs/queue.js';
 import { crossedMilestones, decideCluster, type Candidate, updateCentroid } from './decide.js';
 
@@ -165,6 +166,7 @@ async function attach(tx: Tx, eventId: number, a: PendingArticle, vec: number[] 
   // Triage priority is the distinct-source count: corroborated events are scored first.
   if (isNew) {
     if (!triage) return;
+    await enqueueGeocode(tx, eventId, 1);
     await enqueue(tx, 'triage', { event_id: eventId, n: 1 }, triageKey(eventId, 1), undefined, sourceCount);
   } else {
     if (sourceCount > cur.source_count) {
@@ -174,6 +176,7 @@ async function attach(tx: Tx, eventId: number, a: PendingArticle, vec: number[] 
       ]);
     }
     for (const m of crossedMilestones(cur.source_count, sourceCount)) {
+      await enqueueGeocode(tx, eventId, m);
       await enqueue(tx, 're-triage', { event_id: eventId, n: m }, triageKey(eventId, m), undefined, m);
     }
   }

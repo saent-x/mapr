@@ -28,6 +28,8 @@ export interface MaprEvent {
   country: string | null;
   lat: number | null;
   lon: number | null;
+  /** How exact lat/lon is: a city, a region (admin1, region, water), the country, or only the outlet's country (source). */
+  geo_precision?: 'city' | 'admin1' | 'region' | 'water' | 'country' | 'source' | null;
   facts: Record<string, unknown> | null;
   source_count: number;
   article_count: number;

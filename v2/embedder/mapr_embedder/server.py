@@ -2,6 +2,9 @@
 
 POST /embed   {"texts": [...], "input_type": "document"|"query"}  (input_type optional, default document)
           ->  {"vectors": [[...]], "model": "<id>", "dims": 1024}
+POST /geocode {"events": [{"texts": [{"text": "...", "weight": 3}], "source_countries": ["UA"]}]}
+          ->  {"results": [{"place", "country", "lat", "lon", "precision", "confidence"}]}
+          503 until the NER model and gazetteer are loaded (the embedding side does not wait for them).
 GET  /healthz -> 200 {"status": "ok", ...} once the model is loaded, 503 before.
 
 Requests are queued and coalesced into batches of up to BATCH_SIZE texts so many
@@ -48,6 +51,9 @@ class Settings:
     matryoshka: bool | None
     query_prompt_name: str | None
     doc_prompt_name: str | None
+    gazetteer_path: str = ""
+    ner_model_id: str = ""
+    ner_revision: str | None = None
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -70,12 +76,30 @@ class Settings:
             matryoshka=opt_bool("MATRYOSHKA"),
             query_prompt_name=env("QUERY_PROMPT_NAME"),
             doc_prompt_name=env("DOC_PROMPT_NAME"),
+            # Empty disables /geocode.
+            gazetteer_path=env("GAZETTEER_PATH", "/models/geonames/gazetteer.tsv.gz"),
+            ner_model_id=env("NER_MODEL_ID", "Babelscape/wikineural-multilingual-ner"),
+            ner_revision=env("NER_MODEL_REVISION") or None,
         )
 
 
 class EmbedRequest(BaseModel):
     texts: list[str] = Field(min_length=1)
     input_type: Literal["document", "query"] = "document"
+
+
+class GeoText(BaseModel):
+    text: str
+    weight: float = Field(default=1.0, gt=0, le=10)
+
+
+class GeoEvent(BaseModel):
+    texts: list[GeoText] = Field(min_length=1, max_length=32)
+    source_countries: list[str] = Field(default_factory=list, max_length=32)
+
+
+class GeocodeRequest(BaseModel):
+    events: list[GeoEvent] = Field(min_length=1, max_length=64)
 
 
 class EmbedResponse(BaseModel):
@@ -174,12 +198,31 @@ def _default_encoder_factory(s: Settings) -> EncoderLike:
     )
 
 
+def _default_geo_factory(s: Settings):
+    from .geo.gazetteer import Gazetteer
+    from .geo.ner import Ner
+    from .geo.service import GeoService
+
+    gaz = Gazetteer.load(s.gazetteer_path)
+    log.info("gazetteer: %d places, %d names", len(gaz), len(gaz.index))
+    return GeoService(Ner(s.ner_model_id, cache_dir=s.cache_dir, revision=s.ner_revision), gaz)
+
+
 def create_app(
     settings: Settings | None = None,
     encoder_factory: Callable[[Settings], EncoderLike] = _default_encoder_factory,
+    geo_factory: Callable[[Settings], object] | None = _default_geo_factory,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
-    state: dict = {"encoder": None, "batcher": None, "error": None}
+    state: dict = {"encoder": None, "batcher": None, "error": None, "geo": None, "geo_error": None}
+    geo_lock = asyncio.Lock()
+
+    async def load_geo(loop: asyncio.AbstractEventLoop) -> None:
+        try:
+            state["geo"] = await loop.run_in_executor(None, geo_factory, settings)
+        except Exception as exc:  # geocoding is optional: embeddings keep working
+            state["geo_error"] = f"{type(exc).__name__}: {exc}"
+            log.exception("geocoder load failed")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -196,7 +239,14 @@ def create_app(
         batcher = Batcher(enc, settings.batch_size, settings.batch_wait_ms)
         batcher.start()
         state["batcher"] = batcher
+        geo_task = None
+        if geo_factory and settings.gazetteer_path:
+            geo_task = asyncio.create_task(load_geo(loop))
         yield
+        if geo_task:
+            geo_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await geo_task
         await batcher.stop()
 
     app = FastAPI(title="mapr-embedder", lifespan=lifespan)
@@ -206,7 +256,27 @@ def create_app(
         enc = state["encoder"]
         if enc is None:
             return JSONResponse({"status": "loading", "error": state["error"]}, status_code=503)
-        return {"status": "ok", "model": enc.model_id, "dims": enc.dims}
+        out = {"status": "ok", "model": enc.model_id, "dims": enc.dims}
+        if geo_factory and settings.gazetteer_path:
+            out["geo"] = "ok" if state["geo"] else ("error" if state["geo_error"] else "loading")
+        return out
+
+    @app.post("/geocode")
+    async def geocode(req: GeocodeRequest):
+        geo = state["geo"]
+        if geo is None:
+            raise HTTPException(503, state["geo_error"] or "geocoder not loaded")
+        events = [
+            (
+                [(t.text.strip()[:1000], t.weight) for t in e.texts if t.text.strip()],
+                [c.upper() for c in e.source_countries if len(c) == 2 and c.isalpha()],
+            )
+            for e in req.events
+        ]
+        loop = asyncio.get_running_loop()
+        async with geo_lock:
+            results = await loop.run_in_executor(None, geo.geocode, events)
+        return {"results": results}
 
     @app.post("/embed", response_model=EmbedResponse)
     async def embed(req: EmbedRequest):

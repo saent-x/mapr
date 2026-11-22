@@ -8,6 +8,8 @@ import { createApiServer, type AppState } from './http/server.js';
 import { pollAll } from './ingest/poller.js';
 import { BudgetGate, recordNeurons } from './jobs/budget.js';
 import { ClefTriager } from './jobs/clef.js';
+import { backfillGeocode, geocodeHandler } from './jobs/geocode.js';
+import { HttpGeocoder } from './geo/client.js';
 import { JobRunner } from './jobs/runner.js';
 import { dropAgedTriageJobs, triageHandlers } from './jobs/triage.js';
 import { log, setLogLevel, type Logger } from './log.js';
@@ -95,6 +97,9 @@ async function main() {
     log: log.child({ task: 'jobs' }),
     pollMs: cfg.jobPollMs,
   });
+  runner.register(geocodeHandler(db, new HttpGeocoder(cfg.embedderUrl)));
+  const queued = await backfillGeocode(db);
+  if (queued) log.info('geocode backfill queued', { events: queued });
   // Without Workers AI credentials, triage jobs are held in the queue, never run by a stub or dropped.
   if (cfg.cfAccountId && cfg.cfApiToken) {
     const triager = new ClefTriager(db, { accountId: cfg.cfAccountId, apiToken: cfg.cfApiToken });

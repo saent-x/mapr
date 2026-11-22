@@ -107,7 +107,7 @@ export async function listEvents(
   const r = await db.query(
     `SELECT to_char(ea.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_at,
             e.id, e.title, e.summary, e.first_seen, e.last_seen, ea.updated_at,
-            e.severity, e.severity_conf, e.relevant, e.relevance_conf, e.category, e.place, e.country, e.lat, e.lon,
+            e.severity, e.severity_conf, e.relevant, e.relevance_conf, e.category, e.place, e.country, e.lat, e.lon, e.geo_precision,
             e.facts, e.source_count, e.article_count, e.triaged_at, e.pinned,
             COALESCE((
               SELECT json_agg(json_build_object(

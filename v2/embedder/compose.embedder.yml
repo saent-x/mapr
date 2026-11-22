@@ -28,11 +28,15 @@ services:
       HF_HUB_OFFLINE: ${EMBED_HF_OFFLINE:-0}
       # Only gated models (embeddinggemma) need a token; pass it from the shell, never commit it.
       HF_TOKEN: ${HF_TOKEN:-}
+      # Geocoding (POST /geocode): multilingual NER + GeoNames gazetteer, built once by deploy.sh.
+      NER_MODEL_ID: ${NER_MODEL_ID:-Babelscape/wikineural-multilingual-ner}
+      NER_MODEL_REVISION: ${NER_MODEL_REVISION:-}
+      GAZETTEER_PATH: /models/geonames/gazetteer.tsv.gz
     volumes:
       - /data/mapr/models:/models
     ports:
       - "127.0.0.1:8788:8788"
-    mem_limit: 8g
+    mem_limit: 10g  # bge-m3 + the NER model + the gazetteer index
     # Matches the torch thread count, so the embedder cannot starve Postgres and the ingestor.
     cpus: ${EMBED_THREADS:-8}
     healthcheck:

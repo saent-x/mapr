@@ -135,8 +135,11 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
 
     const jobs = await db.query(`SELECT kind, dedupe_key, payload FROM jobs ORDER BY id`);
     expect(jobs.rows.map((j) => [j.kind, j.dedupe_key])).toEqual([
+      ['geocode', `geo:${quake.id}:1`],
       ['triage', `triage:${quake.id}:1`],
+      ['geocode', `geo:${quake.id}:3`],
       ['re-triage', `triage:${quake.id}:3`],
+      ['geocode', `geo:${budget.id}:1`],
       ['triage', `triage:${budget.id}:1`],
     ]);
     const pending = await db.query('SELECT count(*)::int AS n FROM articles WHERE event_id IS NULL');
@@ -149,7 +152,9 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     const before = await snap();
     expect(await run()).toEqual({ created: 0, joined: 0, nearDup: 0, skipped: 0, failed: 0 });
     expect(await snap()).toEqual(before);
-    expect((await db.query('SELECT count(*)::int AS n FROM jobs')).rows[0].n).toBe(3);
+    expect((await db.query('SELECT count(*)::int AS n FROM jobs')).rows[0].n).toBe(6);
+    // Geocoding has its own tests (geocode.int.test.ts); the rest of this file is about triage.
+    await db.query(`DELETE FROM jobs WHERE kind = 'geocode'`);
   });
 
   it('stores back-catalogue stories older than 48h without triaging them', async () => {
@@ -216,6 +221,7 @@ describe.skipIf(!HAVE_DB)('pipeline against ParadeDB', () => {
     const runner = new JobRunner(db, { budget: new BudgetGate(db, 9000), log: spy, baseBackoffMs: 1000 });
     for (const h of triageHandlers(db, { triageEvent: async (e) => void seen.push(e) })) runner.register(h);
 
+    await db.query(`DELETE FROM jobs WHERE kind = 'geocode'`); // not an AI job: never held
     await recordNeurons(db, 6000);
     await db.query(`INSERT INTO ai_usage (day, account_neurons) VALUES ((now() AT TIME ZONE 'UTC')::date, 3000)
                     ON CONFLICT (day) DO UPDATE SET account_neurons = 3000`);
