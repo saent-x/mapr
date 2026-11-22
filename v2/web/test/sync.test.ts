@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { reset } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SNAPSHOT_KEY, type StoredSnapshot } from '../src/snapshot';
-import { cursorTime, runSync, type EventsPage, type PageQuery } from '../src/sync';
+import { cursorTime, encodeSnapshot, runSync, type EventsPage, type PageQuery } from '../src/sync';
 import type { LiveMessage, MaprEvent } from '../src/types';
 import { ev, hoursAgo, NOW } from './fixtures';
 
@@ -144,5 +144,18 @@ describe('runSync', () => {
     const sent: LiveMessage[] = [];
     await runSync({ kv: env.SNAPSHOT, fetchPage: up.fetchPage, notify: async (m) => void sent.push(m), now: NOW });
     expect(sent.map((m) => m.upsert.length)).toEqual([100, 100, 50]);
+  });
+});
+
+describe('encodeSnapshot', () => {
+  it('keeps everything when it fits, and drops the lowest-ranked events when it does not', () => {
+    const snap: StoredSnapshot = { v: 1, cursor: 'c', written_at: hoursAgo(0), events: [ev(3, { severity: 4 }), ev(2, { severity: 2 }), ev(1, { severity: 1 })] };
+    expect(encodeSnapshot(snap).dropped).toBe(0);
+    const one = JSON.stringify({ ...snap, events: snap.events.slice(0, 1) }).length;
+    const r = encodeSnapshot(snap, one + 10);
+    expect(r.dropped).toBe(2);
+    const out = JSON.parse(r.body) as StoredSnapshot;
+    expect(out.cursor).toBe('c');
+    expect(out.events.map((e) => e.id)).toEqual([3]);
   });
 });

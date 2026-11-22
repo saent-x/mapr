@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { merge, prune, sortEvents } from '../src/snapshot';
+import { MAX_SOURCES, merge, prune, sortEvents } from '../src/snapshot';
 import { ev, hoursAgo, NOW } from './fixtures';
 
 describe('merge', () => {
@@ -22,8 +22,15 @@ describe('merge', () => {
     expect(r2.upsert).toEqual([]);
   });
 
-  it('keeps untriaged events (relevant === null)', () => {
-    expect(merge([], [ev(1, { relevant: null, severity: null })], NOW).events).toHaveLength(1);
+  it('leaves untriaged events (relevant === null) out until triage marks them relevant', () => {
+    expect(merge([], [ev(1, { relevant: null, severity: null })], NOW).events).toHaveLength(0);
+    expect(merge([], [ev(1, { relevant: true })], NOW).events).toHaveLength(1);
+  });
+  it('keeps only the first MAX_SOURCES sources', () => {
+    const many = Array.from({ length: MAX_SOURCES + 4 }, (_, i) => ({ ...ev(1).sources[0]!, url: `https://example.com/s${i}` }));
+    const [e] = merge([], [ev(1, { sources: many, source_count: many.length })], NOW).events;
+    expect(e!.sources).toHaveLength(MAX_SOURCES);
+    expect(e!.source_count).toBe(many.length);
   });
 
   it('expires events whose updated_at is older than 24h', () => {

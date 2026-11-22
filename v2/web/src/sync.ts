@@ -27,6 +27,8 @@ export interface SyncResult {
   upserted: number;
   removed: number;
   more: boolean;
+  /** Events left out of KV because the snapshot was over MAX_SNAPSHOT_BYTES. */
+  dropped: number;
 }
 
 /** Cursor format is "<updated_at ISO>~<id>" (server.ts encodeCursor); only its time is read here. */
@@ -38,6 +40,23 @@ export function cursorTime(cursor: string): number {
 export async function readSnapshot(kv: KVNamespace, cacheTtl?: number): Promise<StoredSnapshot | null> {
   const s = await kv.get<StoredSnapshot>(SNAPSHOT_KEY, cacheTtl ? { type: 'json', cacheTtl } : { type: 'json' });
   return s && s.v === 1 ? s : null;
+}
+
+/** KV caps one value at 25 MiB; stay well under it so the cursor is always saved. */
+export const MAX_SNAPSHOT_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Serialise the snapshot, dropping the lowest-ranked events (events are kept sorted by
+ * compareEvents) until it fits. Returns the JSON and how many events were left out.
+ */
+export function encodeSnapshot(snap: StoredSnapshot, maxBytes = MAX_SNAPSHOT_BYTES): { body: string; dropped: number } {
+  let body = JSON.stringify(snap);
+  let keep = snap.events.length;
+  while (body.length > maxBytes && keep > 0) {
+    keep = Math.floor(keep * Math.min(0.95, maxBytes / body.length));
+    body = JSON.stringify({ ...snap, events: snap.events.slice(0, keep) });
+  }
+  return { body, dropped: snap.events.length - keep };
 }
 
 /** Live messages go out in chunks so one socket frame stays small. */
@@ -91,9 +110,13 @@ export async function runSync(d: SyncDeps): Promise<SyncResult> {
   }
 
   const wrote = received > 0;
+  let dropped = 0;
   if (wrote) {
     const snap: StoredSnapshot = { v: 1, cursor, written_at: new Date(now).toISOString(), events: prune(events, now) };
-    await d.kv.put(SNAPSHOT_KEY, JSON.stringify(snap));
+    const enc = encodeSnapshot(snap);
+    dropped = enc.dropped;
+    if (dropped) console.warn(JSON.stringify({ msg: 'snapshot over size, lowest-ranked events left out', dropped }));
+    await d.kv.put(SNAPSHOT_KEY, enc.body);
   }
 
   if (upsert.size || remove.size) {
@@ -105,7 +128,7 @@ export async function runSync(d: SyncDeps): Promise<SyncResult> {
   }
 
   if (failure) throw failure;
-  return { pages, received, wrote, upserted: upsert.size, removed: remove.size, more };
+  return { pages, received, wrote, upserted: upsert.size, removed: remove.size, more, dropped };
 }
 
 /** fetchPage against the ingestor API (through the tunnel). */

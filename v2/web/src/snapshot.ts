@@ -11,6 +11,14 @@ export interface StoredSnapshot {
 
 export const SNAPSHOT_KEY = 'snapshot:v1';
 
+/** Sources kept per event in the snapshot; source_count still gives the total. */
+export const MAX_SOURCES = 6;
+
+/** The desk carries what triage marked relevant, with its first sources. */
+export function slim(e: MaprEvent): MaprEvent {
+  return e.sources.length > MAX_SOURCES ? { ...e, sources: e.sources.slice(0, MAX_SOURCES) } : e;
+}
+
 export interface MergeResult {
   events: MaprEvent[];
   upsert: MaprEvent[];
@@ -30,8 +38,9 @@ export function prune(events: MaprEvent[], now: number): MaprEvent[] {
 }
 
 /**
- * Merge a batch from /v1/events into the window. relevant === false removes an event;
- * anything older than 24h is dropped. upsert/remove list only real changes.
+ * Merge a batch from /v1/events into the window. Only events triage marked relevant are kept:
+ * untriaged (null) ones wait for their verdict, and relevant === false removes an event.
+ * Anything older than 24h is dropped. upsert/remove list only real changes.
  */
 export function merge(prev: MaprEvent[], incoming: MaprEvent[], now: number): MergeResult {
   const byId = new Map<number, MaprEvent>();
@@ -40,9 +49,10 @@ export function merge(prev: MaprEvent[], incoming: MaprEvent[], now: number): Me
   const upsert = new Map<number, MaprEvent>();
   const remove = new Set<number>();
 
-  for (const e of incoming) {
+  for (const raw of incoming) {
+    const e = slim(raw);
     const had = byId.get(e.id);
-    if (e.relevant === false || !isFresh(e, now)) {
+    if (e.relevant !== true || !isFresh(e, now)) {
       if (had) {
         byId.delete(e.id);
         upsert.delete(e.id);
