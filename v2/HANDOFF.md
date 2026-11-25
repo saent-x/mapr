@@ -12,7 +12,7 @@ Rebuild MAPR (live OSINT watch desk: feeds → events → map-first console with
 - **Scope:** keep all 382 feeds, AI search and live updates. No quality-reducing fallbacks (no keyword-only or rule-based scoring when caps hit). Cut retention instead.
 - **Keep facts, not articles:** article text 72h, article metadata 7d, events + vectors 30d (unless saved to a case; was 90d until 2026-11-22).
 - **Budget gate:** AI jobs pause when the account reaches 9,000 Workers AI neurons/day and resume at 00:00 UTC. Nothing is skipped or downgraded.
-- **Design:** "Instrument" colours on the dense watch-desk layout. No blue accent. No taglines, helper text or secondary labels; fix the layout instead. Tokens in `/mnt/project-files/mapr-design/` (copy also in the canvas artifact). Analysis charts are placeholders.
+- **Design (v4, 2026-11-25):** "field atlas": ink on paper, stippled land, hairline square panels, one blue `signal` accent for anything live, yellow `flash` for the newest event only. Geist + Geist Mono. Paper and Night themes. No taglines, helper text or secondary labels; fix the layout instead. Design system and prototype in `/mnt/project-files/mapr-design-v4/`. Built in `v2/web/src/client` (globe.ts, flat.ts, main.ts, atlas.css).
 - **Git:** commit as `Vangerwua Tor <45785419+saent-x@users.noreply.github.com>`. Never add Claude as author, co-author or any attribution line.
 - **Secrets:** never paste tokens in chat. They go straight into files on the server under `/data/mapr/secrets/`.
 
@@ -25,7 +25,7 @@ Rebuild MAPR (live OSINT watch desk: feeds → events → map-first console with
 | Clustering | `CLUSTER_THRESHOLD=0.71` (tuned for bge-m3) |
 | Triage | Clef-flash (`@cf/cloudflare/clef-flash`): relevant (yes/no), category (10 types), severity (4 levels). Only events newer than 48h are triaged |
 | Later AI | Clef for watch matching; Clairic (preview) for typed facts on alerted events; Claude via AI Gateway for answers/briefs, capped |
-| Map | MapLibre 5.24 + OpenFreeMap tiles (free, no key), 2D/3D globe toggle, bundled Natural Earth outline as fallback so the map is never blank |
+| Map | three.js globe + d3 Equal Earth sheet on a bundled Natural Earth 1:110m basemap; no tiles, no third-party requests |
 | Server access | Only through tor's Mac (`ssh stbrn-studios`). Server root `/` is nearly full: everything goes under `/data/mapr/{src,pg,secrets,models}` |
 
 Full plan: `/mnt/project-files/mapr-review/lean-architecture.md` (its embeddings row still says harrier; bge-m3 replaced it). Reviews and revenue notes are in the same folder.
