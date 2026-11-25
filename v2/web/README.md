@@ -6,7 +6,7 @@ Cloudflare Worker for the MAPR watch desk.
 - `GET /api/events`: the window, severity desc then `updated_at` desc. Cached 15s.
 - `GET /live`: WebSocket (hibernating). Messages: `{ type: "events", upsert: Event[], remove: id[] }`. Send `ping`, get `pong`.
 - `GET /healthz`: `{ ok, snapshot_age_s, events, cursor }`. Snapshot age grows while nothing changes upstream.
-- Everything else: the desk page from `dist/public`, built by `scripts/build-client.mjs`. MapLibre GL (flat and globe), a Natural Earth 1:110m land/borders basemap (drawn under the tiles, so the map is never blank) and the fonts are bundled. The only third-party requests are vector tiles and glyphs from OpenFreeMap (`tiles.openfreemap.org`, free, no key), styled by `src/client/style.json`. `src/client/_headers` sets the CSP.
+- Everything else: the desk page from `dist/public`, built by `scripts/build-client.mjs`. The v4 "field atlas" desk: a three.js globe and a d3 Equal Earth sheet (`src/client/globe.ts`, `flat.ts`), drawn from a bundled Natural Earth 1:110m basemap (land, coast, borders, country shapes). Ask the map (`query.ts`) flies the view to the place, shades the matching countries, dims other events, pins numbered callouts and answers in the left panel. No third-party requests: map data and fonts are bundled. `src/client/_headers` sets the CSP.
 
 ## Develop
 

@@ -3,93 +3,113 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>MAPR</title>
-<meta name="color-scheme" content="light">
+<title>mapr</title>
+<meta name="color-scheme" content="light dark">
 <link rel="preload" href="/fonts/geist-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/app.css">
-<link rel="stylesheet" href="/desk.css">
+<link rel="stylesheet" href="/atlas.css">
 <script type="module" src="/app.js"></script>
 </head>
 <body>
-<div class="stage">
-  <section class="map" id="map" aria-label="Map"></section>
-
-  <header class="top">
-    <div class="top-left">
-      <button class="icon-btn" id="menu-btn" type="button" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu">
-        <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 4h10M2 7h10M2 10h10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      </button>
-      <span class="mark">MAPR</span>
-    </div>
-    <div class="status num" role="status">
-      <span class="live" id="link">OFFLINE</span>
-      <span class="sep"></span>
-      <time id="clock"></time>
-      <span class="sep"></span>
-      <span class="stat"><b id="n-events">0</b> <span>events 24h</span></span>
-      <span class="stat"><b id="n-sources">0</b> <span>sources</span></span>
-      <span class="stat"><b id="n-countries">0</b> <span>countries</span></span>
-    </div>
-    <div class="top-right">
-      <div class="seg" role="group" aria-label="Map view">
-        <button type="button" data-proj="mercator">Flat</button>
-        <button type="button" data-proj="globe">Globe</button>
-      </div>
-      <button class="avatar" id="acct-btn" type="button" aria-label="Account" aria-haspopup="true" aria-expanded="false" aria-controls="acct">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="5.5" r="2.8" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 14c.8-2.8 3-4 5.5-4s4.7 1.2 5.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+<div class="desk">
+  <nav class="m-nav">
+    <div class="m-nav__l">
+      <span class="m-word">mapr</span>
+      <button class="m-status m-link--off" id="status" type="button" style="all:unset;cursor:pointer" aria-label="Live feed">
+        <span class="m-status"><span class="m-live m-live--off" id="live" role="img" aria-label="Offline"></span><strong id="link">Offline</strong><span>— <span data-n id="n-sources">0</span> sources · <span data-n id="n-events">0</span> events 24h · <span class="m-num" id="clock"></span></span></span>
       </button>
     </div>
-  </header>
-
-  <nav class="pop pop-left" id="menu" aria-label="Pages" hidden>
-    <a href="/" aria-current="page"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M2 8h12M8 2c2 2 2 10 0 12M8 2c-2 2-2 10 0 12" stroke="currentColor" stroke-width="1.1"/></svg>Map</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 8s2.5-4.5 6-4.5S14 8 14 8s-2.5 4.5-6 4.5S2 8 2 8z" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="8" r="1.8" stroke="currentColor" stroke-width="1.3"/></svg>Watchlists</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 11V7a4 4 0 018 0v4l1 1.5H3L4 11zM6.5 14h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/></svg>Alerts</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 2h6l3 3v9H4z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6.5 8.5h4M6.5 11h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Reports</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 4h10M3 8h10M3 12h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Sources</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/></svg>History</a>
+    <div class="m-nav__r">
+      <span class="m-views" id="views"><button class="m-link" type="button" data-view="globe">Globe</button><span class="m-slash">/</span><button class="m-link m-link--off" type="button" data-view="flat">Flat</button></span>
+      <button class="m-btn m-btn--icon" id="menu-btn" type="button" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="menu"><svg class="m-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12"/></svg></button>
+      <button class="m-avatar" id="acct-btn" type="button" aria-label="Account" aria-haspopup="true" aria-expanded="false" aria-controls="acct"><svg class="m-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 14c.8-2.6 2.7-3.8 5-3.8s4.2 1.2 5 3.8"/></svg></button>
+    </div>
   </nav>
 
-  <nav class="pop pop-right" id="acct" aria-label="Account" hidden>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="5.5" r="2.8" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 14c.8-2.8 3-4 5.5-4s4.7 1.2 5.5 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Account settings</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="1.8" y="3.5" width="12.4" height="9" rx="1.6" stroke="currentColor" stroke-width="1.3"/><path d="M1.8 6.5h12.4" stroke="currentColor" stroke-width="1.3"/></svg>Billing</a>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2v2M8 12v2M2 8h2M12 8h2M3.8 3.8l1.4 1.4M10.8 10.8l1.4 1.4M3.8 12.2l1.4-1.4M10.8 5.2l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/></svg>Preferences</a>
+  <ul class="m-menu d-menu is-right" id="menu" role="menu" aria-label="Pages" hidden style="right:60px">
+    <li role="menuitem" aria-current="page">Map</li>
+    <li role="menuitem" aria-disabled="true">Watchlists</li>
+    <li role="menuitem" aria-disabled="true">Alerts</li>
+    <li role="menuitem" aria-disabled="true">Reports</li>
+    <li role="menuitem" aria-disabled="true">Sources</li>
+  </ul>
+  <ul class="m-menu d-menu is-right" id="acct" role="menu" aria-label="Account" hidden>
+    <li role="menuitem" id="theme-item" tabindex="0">Night <kbd id="theme-state">Off</kbd></li>
     <hr>
-    <a aria-disabled="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.5 2.5H3.5v11h3M10 5l3 3-3 3M13 8H6.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Sign out</a>
-  </nav>
+    <li role="menuitem" aria-disabled="true">Account settings</li>
+    <li role="menuitem" aria-disabled="true">Billing</li>
+    <li role="menuitem" aria-disabled="true">Sign out</li>
+  </ul>
 
-  <section class="card panel" id="panel" aria-live="polite" hidden></section>
+  <main class="d-stage" id="stage">
+    <div class="d-map" id="map" aria-label="Map"></div>
+    <div class="d-strip"><button class="m-status" id="strip-live" type="button" style="all:unset;cursor:pointer"><span class="m-status"><strong id="strip-link">Offline</strong><span>— <span data-n id="n-today">0</span> today</span></span></button><span class="m-views"><button class="m-link" type="button" data-view="globe">Globe</button><span class="m-slash">/</span><button class="m-link m-link--off" type="button" data-view="flat">Flat</button></span></div>
 
-  <section class="card feed" aria-label="Live feed">
-    <button class="card-head num" id="feed-head" type="button" aria-expanded="false" aria-controls="feed"><span>LIVE FEED <b class="feed-n" id="feed-n"></b></span><span class="accent" id="rate"></span></button>
-    <div class="feed-list" id="feed" role="listbox" aria-label="Events" tabindex="0"></div>
-  </section>
+    <section class="d-left is-feed" id="feed-box" aria-label="Live feed">
+      <div class="d-sheethead"><span class="m-status"><span class="m-live"></span><strong>Live</strong></span><button class="m-link m-link--off" type="button" data-close-sheet style="font-size:12px">Close</button></div>
+      <div class="m-feed__time m-num" id="feed-time"></div>
+      <ol class="m-feed" id="feed" style="margin-top:10px" aria-label="Events"></ol>
+    </section>
+    <section class="d-left is-answer" id="answer" aria-live="polite" hidden></section>
+    <div class="d-hudwrap" id="hud" hidden></div>
 
-  <section class="card chart" aria-label="Activity, last 24 hours">
-    <div class="chart-head"><span><b class="chart-total" id="chart-total">0</b> <span class="accent num" id="chart-delta"></span></span><span class="num muted">24H</span></div>
-    <div class="bars" id="bars"></div>
-    <div class="axis num" id="axis"></div>
-  </section>
+    <aside class="d-right is-layers" id="layers">
+      <div class="m-panel" id="panel">
+        <div class="m-panel__head"><h3>Layers</h3><button class="m-link m-link--off" type="button" id="panel-toggle" style="font-size:12px">Hide</button></div>
+        <div class="m-panel__sec"><span>Category</span><div class="m-seg" id="f-cat"></div></div>
+        <div class="m-panel__sec"><span>Map</span><div class="m-seg" id="f-layers">
+          <button class="m-chip" type="button" data-layer="events" aria-pressed="true">Events</button>
+          <button class="m-chip" type="button" data-layer="density" aria-pressed="true">Density</button>
+          <button class="m-chip" type="button" data-layer="flows" aria-pressed="true">Sources</button>
+          <button class="m-chip" type="button" data-layer="night" aria-pressed="true">Night</button>
+          <button class="m-chip" type="button" data-layer="labels" aria-pressed="true">Labels</button>
+        </div></div>
+        <div class="m-panel__sec"><span>Severity</span><div class="m-seg m-seg--fill" id="f-sev">
+          <button class="m-chip" type="button" data-sev="0" aria-pressed="true">All</button>
+          <button class="m-chip" type="button" data-sev="3" aria-pressed="false">High+</button>
+          <button class="m-chip" type="button" data-sev="4" aria-pressed="false">Critical</button>
+        </div></div>
+        <div class="m-panel__sec"><span>Window</span><div class="m-seg m-seg--fill" id="f-win">
+          <button class="m-chip" type="button" data-hours="1" aria-pressed="false">1h</button>
+          <button class="m-chip" type="button" data-hours="6" aria-pressed="false">6h</button>
+          <button class="m-chip" type="button" data-hours="24" aria-pressed="true">24h</button>
+        </div></div>
+        <div class="m-panel__sec"><span>Camera</span><div class="m-seg m-seg--fill" id="f-cam">
+          <button class="m-chip" type="button" data-cam="free" aria-pressed="true">Free</button>
+          <button class="m-chip" type="button" data-cam="follow" aria-pressed="false">Follow new</button>
+        </div></div>
+      </div>
+    </aside>
+    <aside class="d-right is-detail" id="detail" hidden></aside>
 
-  <div class="dock">
-    <div class="pills" id="pills"></div>
-    <form class="ask" id="ask" role="search">
-      <label class="sr" for="q">Ask the map</label>
-      <input id="q" name="q" type="text" autocomplete="off" spellcheck="false" enterkeyhint="search">
-      <button class="mic" id="mic" type="button" aria-label="Dictate" hidden>
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="5.5" y="1.5" width="5" height="8.5" rx="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M3 7.5a5 5 0 0010 0M8 12.5v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-      </button>
-    </form>
-  </div>
+    <section class="d-chart" aria-label="Events per hour">
+      <div class="m-chart">
+        <div class="m-chart__head"><h4>Events per hour</h4><span class="m-readout"><b class="m-num" id="chart-total">0</b> · <span id="chart-win">24h</span></span></div>
+        <svg id="chart" viewBox="0 0 288 96" role="img" aria-label="Events per hour, last 24 hours"></svg>
+      </div>
+    </section>
 
-  <div class="legend num" aria-hidden="true"><span class="muted">Low</span><i></i><span>High</span></div>
-  <div class="zoom">
-    <button type="button" id="zoom-in" aria-label="Zoom in"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
-    <button type="button" id="zoom-out" aria-label="Zoom out"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 6h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
-  </div>
+    <div class="d-chat">
+      <form class="m-chat" id="ask" role="search">
+        <span class="m-chat__scope" id="scope" hidden></span>
+        <input id="q" name="q" type="text" placeholder="Ask the map" aria-label="Ask the map" autocomplete="off" spellcheck="false" enterkeyhint="search">
+        <button type="button" class="m-chat__mic" id="mic" aria-label="Speak" hidden><svg class="m-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="1.5" width="5" height="8" rx="2.5"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2"/></svg></button>
+        <button type="submit" class="m-chat__send" id="send" aria-label="Ask" disabled><svg class="m-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></svg></button>
+      </form>
+    </div>
 
-  <div class="card hovercard" id="hover" hidden></div>
+    <div class="d-legend" aria-hidden="true">
+      <div><svg width="22" height="22"><path class="spk" d="M11 20V5"/><circle class="spk-c" cx="11" cy="5" r="2.6"/></svg><span>sources</span></div>
+      <div><svg width="22" height="22"><path class="spk crit" d="M11 20V9"/><circle class="spk-c crit" cx="11" cy="9" r="2.6"/></svg><span>critical</span></div>
+      <div><svg width="22" height="22"><circle class="den" cx="11" cy="11" r="8"/><circle class="den" cx="11" cy="11" r="4"/></svg><span>density</span></div>
+      <div><svg width="26" height="22"><path class="flw" d="M2 18Q13 0 24 18"/></svg><span>reported from</span></div>
+      <div><svg width="22" height="22"><circle class="nit" cx="11" cy="11" r="8"/><path class="nit2" d="M11 3a8 8 0 0 1 0 16Z"/></svg><span>night</span></div>
+    </div>
+    <div class="d-zoom">
+      <button class="m-btn m-btn--icon" type="button" id="zoom-in" aria-label="Zoom in"><svg class="m-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10M8 3v10"/></svg></button>
+      <button class="m-btn m-btn--icon" type="button" id="zoom-out" aria-label="Zoom out"><svg class="m-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button>
+    </div>
+  </main>
 </div>
 </body>
 </html>
